@@ -255,6 +255,14 @@ function toApiSession(row: {
   terminated_at?: string | null;
   input_tokens?: number;
   output_tokens?: number;
+  // Run-summary rollup columns maintained by RuntimeAdapterImpl.endTurn /
+  // .terminate (packages/session-runtime/src/adapter.ts) on every turn
+  // transition. Declared explicitly — not just carried anonymously through
+  // `...rest` — because the Console dashboard + sessions list now render
+  // them as columns, so they are part of this endpoint's contract.
+  message_count?: number;
+  tool_call_count?: number;
+  stop_reason?: string | null;
 }): Record<string, unknown> {
   const {
     tenant_id: _t,
@@ -266,11 +274,25 @@ function toApiSession(row: {
     metadata,
     input_tokens,
     output_tokens,
+    message_count,
+    tool_call_count,
     ...rest
   } = row;
   const createdMs = Date.parse(row.created_at);
   const terminatedMs = row.terminated_at ? Date.parse(row.terminated_at) : null;
-  const refMs = terminatedMs ?? Date.now();
+  const updatedMs = row.updated_at ? Date.parse(row.updated_at) : null;
+  // Wall-clock end reference, in priority order:
+  //   terminated_at — the session is over; its duration is final.
+  //   now           — the session is mid-turn, so it is still accruing.
+  //   updated_at    — idle: the clock stopped at the last turn transition.
+  // The last case is why this isn't just `terminated_at ?? now`: an idle
+  // session created a week ago and untouched since did nothing for that
+  // week, and reporting "7d" for it is simply wrong.
+  const idleEndMs =
+    row.status !== "running" && updatedMs !== null && Number.isFinite(updatedMs)
+      ? updatedMs
+      : null;
+  const refMs = terminatedMs ?? idleEndMs ?? Date.now();
   const durationSeconds = Number.isFinite(createdMs)
     ? Math.max(0, Math.round((refMs - createdMs) / 1000))
     : undefined;
@@ -284,6 +306,8 @@ function toApiSession(row: {
     metadata: metadata ?? {},
     input_tokens: input_tokens ?? 0,
     output_tokens: output_tokens ?? 0,
+    message_count: message_count ?? 0,
+    tool_call_count: tool_call_count ?? 0,
     resources: [] as unknown[],
     outcome_evaluations: [] as unknown[],
     usage: {} as Record<string, unknown>,

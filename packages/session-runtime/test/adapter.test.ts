@@ -525,3 +525,106 @@ describe("RuntimeAdapter — run-history summary (issue #21)", () => {
   });
 });
 
+// Session summary backfill: the sessions list / dashboard needs a
+// human-readable label per row, and the only cheap source of one is the
+// session's own first user message. It rides the run-summary event scan
+// that endTurn/terminate already perform — no extra query, and explicitly
+// no model call. The invariant that matters is that it fills ONLY an empty
+// title: a caller who named their session must never have it overwritten.
+describe("RuntimeAdapter — session summary backfill from the first user message", () => {
+  let f: Fixture;
+  beforeEach(async () => {
+    f = await newFixture();
+  });
+
+  async function readTitle(): Promise<string | null> {
+    const row = await f.sql
+      .prepare(`SELECT title FROM sessions WHERE id = ?`)
+      .bind("sess_test")
+      .first<{ title: string | null }>();
+    return row?.title ?? null;
+  }
+
+  async function appendUserMessage(text: string) {
+    await f.eventLog.appendAsync({
+      type: "user.message",
+      content: [{ type: "text", text }],
+    } as unknown as SessionEvent);
+  }
+
+  it("endTurn backfills an empty title with the first user message", async () => {
+    await f.adapter.beginTurn("sess_test", "turn_a");
+    await appendUserMessage("Summarize the Q3 revenue spreadsheet");
+    await f.adapter.endTurn("sess_test", "turn_a", "idle");
+    expect(await readTitle()).toBe("Summarize the Q3 revenue spreadsheet");
+  });
+
+  it("never overwrites a caller-supplied title", async () => {
+    // The whole point of the CASE WHEN guard. If this regresses, users
+    // silently lose the names they gave their sessions.
+    await f.sql
+      .prepare(`UPDATE sessions SET title='Nightly digest' WHERE id=?`)
+      .bind("sess_test")
+      .run();
+    await f.adapter.beginTurn("sess_test", "turn_a");
+    await appendUserMessage("Post the digest to #general");
+    await f.adapter.endTurn("sess_test", "turn_a", "idle");
+    expect(await readTitle()).toBe("Nightly digest");
+  });
+
+  it("keeps the FIRST user message as the session summary across later turns", async () => {
+    // Summary describes what the session is about, so it's anchored to
+    // the opening ask — a later follow-up must not rewrite it. (Turn 2
+    // re-scans the whole log, so without the ordering guard the last
+    // message would win.)
+    await f.adapter.beginTurn("sess_test", "turn_a");
+    await appendUserMessage("Investigate the checkout 500s");
+    await f.adapter.endTurn("sess_test", "turn_a", "idle");
+
+    await f.adapter.beginTurn("sess_test", "turn_b");
+    await appendUserMessage("now also check the refund path");
+    await f.adapter.endTurn("sess_test", "turn_b", "idle");
+
+    expect(await readTitle()).toBe("Investigate the checkout 500s");
+  });
+
+  it("collapses whitespace and truncates a long message to 200 chars", async () => {
+    await f.adapter.beginTurn("sess_test", "turn_a");
+    await appendUserMessage(`Refactor   the\n\n  billing module.\t${"x".repeat(400)}`);
+    await f.adapter.endTurn("sess_test", "turn_a", "idle");
+    const title = await readTitle();
+    expect(title).toHaveLength(200);
+    expect(title?.startsWith("Refactor the billing module. ")).toBe(true);
+    expect(title?.endsWith("…")).toBe(true);
+  });
+
+  it("leaves the title empty when the opening message carries no text blocks", async () => {
+    // Image-only opening message: no honest label available, so leave it
+    // empty and let the UI render its own "Untitled" rather than
+    // inventing a summary.
+    await f.adapter.beginTurn("sess_test", "turn_a");
+    await f.eventLog.appendAsync({
+      type: "user.message",
+      content: [{ type: "image", source: { type: "base64", data: "AAAA" } }],
+    } as unknown as SessionEvent);
+    await f.adapter.endTurn("sess_test", "turn_a", "idle");
+    expect(await readTitle() ?? "").toBe("");
+  });
+
+  it("terminate() also backfills the summary", async () => {
+    await appendUserMessage("Draft the launch post");
+    await f.adapter.terminate("sess_test", "user requested");
+    expect(await readTitle()).toBe("Draft the launch post");
+  });
+
+  it("a session with no user messages keeps an empty title", async () => {
+    await f.adapter.beginTurn("sess_test", "turn_a");
+    await f.eventLog.appendAsync({
+      type: "agent.message",
+      content: [{ type: "text", text: "hello" }],
+    } as unknown as SessionEvent);
+    await f.adapter.endTurn("sess_test", "turn_a", "idle");
+    expect(await readTitle() ?? "").toBe("");
+  });
+});
+

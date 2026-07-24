@@ -8,7 +8,7 @@ import { Skeleton } from "../components/Skeleton";
 import { StackedAssembly } from "../components/StackedAssembly";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
-import { formatSandboxTime } from "../lib/format";
+import { formatCompact, formatSandboxTime, formatSessionDuration } from "../lib/format";
 import { rowActivateKeyDown } from "@/lib/utils";
 
 interface Stats {
@@ -27,10 +27,30 @@ interface Stats {
 
 interface RecentSession {
   id: string;
+  /** Doubles as the session summary: when the caller didn't set a title,
+   *  the runtime backfills it with the session's first user message
+   *  (truncated) at the first turn transition — see
+   *  RuntimeAdapterImpl.tryComputeRunSummary. No model call involved. */
   title: string;
   agent_id: string;
   status: string;
   created_at: string;
+  /** Everything below arrives on the SAME /v1/sessions page request —
+   *  they're columns on the session row, refreshed per turn, so enriching
+   *  this table costs zero extra round-trips and no per-row fan-out. */
+  stats?: { duration_seconds?: number };
+  message_count?: number | null;
+  tool_call_count?: number | null;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+}
+
+/** A session that has never completed a turn has no rollup to show. `0`
+ *  would be a lie (the turn may be in flight); an em-dash reads as
+ *  "nothing recorded yet", which is the truth. */
+function countLabel(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n) || n <= 0) return "—";
+  return formatCompact(n);
 }
 
 export function Dashboard() {
@@ -177,11 +197,17 @@ export function Dashboard() {
           {sessionsQuery.isLoading ? (
             <div className="border border-border rounded-lg divide-y divide-border">
               {Array.from({ length: 4 }).map((_, i) => (
+                /* Mirrors the loaded row: summary, status, agent, then the
+                   right-aligned numeric block, so the panel doesn't jump
+                   shape when the data lands. */
                 <div key={i} className="flex items-center gap-4 px-4 py-3">
-                  <Skeleton className="h-3.5 w-[40%]" rounded="sm" />
+                  <Skeleton className="h-3.5 w-[30%]" rounded="sm" />
                   <Skeleton className="h-3.5 w-16" rounded="sm" />
-                  <Skeleton className="h-3.5 w-32" rounded="sm" />
-                  <Skeleton className="h-3.5 w-20 ml-auto" rounded="sm" />
+                  <Skeleton className="h-3.5 w-24 hidden lg:block" rounded="sm" />
+                  <Skeleton className="h-3.5 w-12 ml-auto" rounded="sm" />
+                  <Skeleton className="h-3.5 w-10 hidden md:block" rounded="sm" />
+                  <Skeleton className="h-3.5 w-10 hidden md:block" rounded="sm" />
+                  <Skeleton className="h-3.5 w-12 hidden sm:block" rounded="sm" />
                 </div>
               ))}
             </div>
@@ -210,38 +236,114 @@ export function Dashboard() {
               }
             />
           ) : (
+            /* The table — not the page — owns the horizontal overflow, so a
+               narrow viewport scrolls this panel instead of the whole
+               document. Secondary columns drop out below `md` rather than
+               being squeezed; the primary summary + status + duration
+               survive at every width. */
             <div className="border border-border rounded-lg overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-bg-surface/40 text-fg-subtle text-[11px] uppercase tracking-[0.08em]">
-                    <th className="text-left px-4 py-2.5 font-medium">Title</th>
+                    <th className="text-left px-4 py-2.5 font-medium">Session</th>
                     <th className="text-left px-4 py-2.5 font-medium">Status</th>
-                    <th className="text-left px-4 py-2.5 font-medium">Agent</th>
-                    <th className="text-left px-4 py-2.5 font-medium">Created</th>
+                    <th className="text-left px-4 py-2.5 font-medium hidden lg:table-cell">Agent</th>
+                    <th className="text-right px-4 py-2.5 font-medium">Duration</th>
+                    <th className="text-right px-4 py-2.5 font-medium hidden md:table-cell">
+                      Messages
+                    </th>
+                    <th className="text-right px-4 py-2.5 font-medium hidden md:table-cell">
+                      Tools
+                    </th>
+                    <th className="text-right px-4 py-2.5 font-medium hidden sm:table-cell">
+                      Tokens
+                    </th>
+                    <th className="text-left px-4 py-2.5 font-medium hidden lg:table-cell">
+                      Created
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {recentSessions.map((s) => (
-                    <tr
-                      key={s.id}
-                      onClick={() => nav(`/sessions/${s.id}`)}
-                      onKeyDown={rowActivateKeyDown(() => nav(`/sessions/${s.id}`))}
-                      tabIndex={0}
-                      role="button"
-                      className="border-t border-border hover:bg-bg-surface/40 cursor-pointer transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
-                    >
-                      <td className="px-4 py-2.5 text-fg">{s.title || "Untitled"}</td>
-                      <td className="px-4 py-2.5">
-                        <StatusPill status={s.status || "idle"} />
-                      </td>
-                      <td className="px-4 py-2.5 text-fg-muted font-mono text-[12px]">
-                        {s.agent_id}
-                      </td>
-                      <td className="px-4 py-2.5 text-fg-muted text-[12px]">
-                        {new Date(s.created_at).toLocaleDateString()}
-                      </td>
-                    </tr>
-                  ))}
+                  {recentSessions.map((s) => {
+                    const inTok = s.input_tokens ?? 0;
+                    const outTok = s.output_tokens ?? 0;
+                    const totalTok = inTok + outTok;
+                    // A running session's duration is still accruing — the
+                    // server's value is a snapshot taken at request time, so
+                    // mark it rather than implying it's final.
+                    const isRunning = s.status === "running";
+                    return (
+                      <tr
+                        key={s.id}
+                        onClick={() => nav(`/sessions/${s.id}`)}
+                        onKeyDown={rowActivateKeyDown(() => nav(`/sessions/${s.id}`))}
+                        tabIndex={0}
+                        role="button"
+                        className="border-t border-border hover:bg-bg-surface/40 cursor-pointer transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
+                      >
+                        {/* Summary. Truncated to one line so a long opening
+                            message can't blow the row height out; the full
+                            text stays reachable via the native tooltip. */}
+                        <td className="px-4 py-2.5 text-fg max-w-[22rem]">
+                          <span
+                            className="block truncate"
+                            title={s.title || undefined}
+                          >
+                            {s.title || (
+                              <span className="text-fg-subtle">Untitled</span>
+                            )}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <StatusPill status={s.status || "idle"} />
+                        </td>
+                        <td className="px-4 py-2.5 text-fg-muted font-mono text-[12px] hidden lg:table-cell">
+                          {s.agent_id}
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-fg-muted text-[12px] tabular-nums whitespace-nowrap">
+                          {formatSessionDuration(s.stats?.duration_seconds)}
+                          {isRunning && s.stats?.duration_seconds != null ? (
+                            <span className="text-fg-subtle" title="Still running">
+                              +
+                            </span>
+                          ) : null}
+                        </td>
+                        <td
+                          className="px-4 py-2.5 text-right text-fg-muted text-[12px] tabular-nums hidden md:table-cell"
+                          title={
+                            s.message_count
+                              ? `${s.message_count.toLocaleString()} agent messages`
+                              : undefined
+                          }
+                        >
+                          {countLabel(s.message_count)}
+                        </td>
+                        <td
+                          className="px-4 py-2.5 text-right text-fg-muted text-[12px] tabular-nums hidden md:table-cell"
+                          title={
+                            s.tool_call_count
+                              ? `${s.tool_call_count.toLocaleString()} tool calls`
+                              : undefined
+                          }
+                        >
+                          {countLabel(s.tool_call_count)}
+                        </td>
+                        <td
+                          className="px-4 py-2.5 text-right text-fg-muted text-[12px] tabular-nums hidden sm:table-cell"
+                          title={
+                            totalTok
+                              ? `${inTok.toLocaleString()} in · ${outTok.toLocaleString()} out`
+                              : undefined
+                          }
+                        >
+                          {countLabel(totalTok)}
+                        </td>
+                        <td className="px-4 py-2.5 text-fg-muted text-[12px] whitespace-nowrap hidden lg:table-cell">
+                          {new Date(s.created_at).toLocaleDateString()}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
