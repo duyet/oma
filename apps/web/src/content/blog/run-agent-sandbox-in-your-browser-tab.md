@@ -4,7 +4,7 @@ description: "OMA's new browser-vm provider runs the agent's shell inside a WASM
 publishedAt: 2026-07-24
 author: OMA
 tags: ["browser-vm", "sandbox", "wasm", "v86", "cloudflare", "announcement"]
-draft: true
+draft: false
 ---
 
 Every OMA session needs somewhere to run `bash` / `read` / `write`. Until

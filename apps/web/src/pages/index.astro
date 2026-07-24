@@ -79,77 +79,42 @@ const explore = [
   keywords="open managed agents, oma agent platform, self host ai agent, any llm provider agent platform, byok ai agent, claude agent sdk, mcp server host, ai agent cloudflare workers, self host claude code, claude code skills, claude managed agents alternative, claude tag alternative, open source claude tag"
   schemas={schemas}
 >
-  {/* Hero — copy left, real terminal right. The pitch leads; the schematic
-      moves to its own section below, so the page says what it is before it
-      draws how it works. */}
-  <section class:list={[container, "pt-12 pb-12 sm:pt-16 sm:pb-16 lg:pt-20 lg:pb-24"]}>
-    <div class="grid items-center gap-10 md:grid-cols-[1.02fr_0.98fr] lg:gap-14">
-      <div class="min-w-0">
-        <h1
-          class="text-balance text-[2.125rem] font-semibold leading-[1.08] tracking-tighter text-[var(--color-fg)] sm:text-[2.75rem] lg:text-[3.25rem]"
-        >
-          The self-hosted agent platform for any LLM provider and any sandbox
-        </h1>
-        <p
-          class="mt-5 max-w-xl text-pretty text-base leading-relaxed text-[var(--color-fg-muted)] sm:text-lg"
-        >
-          Run your own agents on any model, in any sandbox. Deploy to Cloudflare
-          Workers, or run it yourself with Docker.
-        </p>
-
-        <div class="mt-8 flex flex-wrap items-center gap-3">
-          <a
-            href="https://github.com/duyet/oma"
-            target="_blank"
-            rel="noopener noreferrer"
-            class={btnPrimary}><Icon name="download" size={16} /> Clone the repo</a
-          >
-          <a href="https://docs.oma.duyet.net" class={btnOutline}
-            ><Icon name="book" size={16} /> Read the docs</a
-          >
-        </div>
-
-        <p class="mt-6 text-sm text-[var(--color-fg-subtle)]">
-          Apache 2.0 · self-hostable · no vendor lock-in
-        </p>
-      </div>
-
-      {/* Real commands are the hero art — a developer wants to see the actual
-          quickstart before any diagram. Ports match the dev script. */}
-      <div class="min-w-0">
-        <div
-          class="overflow-hidden rounded-xl border border-border bg-[var(--color-card)] shadow-sm"
-        >
-          <div class="flex items-center gap-2 border-b border-border px-4 py-2.5">
-            <span class="size-2.5 rounded-full bg-[var(--color-border-strong)]"></span>
-            <span class="size-2.5 rounded-full bg-[var(--color-border-strong)]"></span>
-            <span class="size-2.5 rounded-full bg-[var(--color-border-strong)]"></span>
-            <span class="ml-1.5 font-mono text-xs text-[var(--color-fg-subtle)]">quickstart</span>
-          </div>
-          <pre
-            class="overflow-x-auto px-4 py-4 font-mono text-[0.8rem] leading-[1.75] text-[var(--color-fg)]"><code><span class="text-[var(--color-fg-subtle)]">$</span> git clone https://github.com/duyet/oma
-<span class="text-[var(--color-fg-subtle)]">$</span> cd oma && pnpm install
-<span class="text-[var(--color-fg-subtle)]">$</span> pnpm dev
-
-<span class="text-[var(--color-brand)]">→</span> API      http://localhost:8787
-<span class="text-[var(--color-brand)]">→</span> Console  http://localhost:5173</code></pre>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  {/* How it fits — the Console's assembly diagram, full width. */}
-  <section class={section} data-reveal id="how-it-fits">
-    <div class={container}>
-      <header class="mb-8 sm:mb-10">
-        <p class={eyebrow}>How it fits</p>
-        <h2 class={sectionTitle}>Compose an agent, then run it</h2>
-        <p class={sectionIntro}>
-          Configure what the agent has — model, skills, MCP, keys — then hand it
-          a session and an environment. The platform owns everything between.
-        </p>
-      </header>
+  {/* Hero — the assembly diagram leads, full width: it is the product's
+      mental model and the thing worth seeing first. The pitch sits directly
+      under it. Breaks out wider than the text column on large screens. */}
+  <section class:list={[container, "pt-10 pb-12 sm:pt-12 sm:pb-16 lg:pt-14 lg:pb-24"]}>
+    <div class="mb-12 lg:-mx-20 xl:-mx-32">
       <HowItFits />
+    </div>
+
+    <div class="max-w-3xl">
+      <h1
+        class="text-balance text-[2.125rem] font-semibold leading-[1.08] tracking-tighter text-[var(--color-fg)] sm:text-[2.75rem] lg:text-[3.25rem]"
+      >
+        The self-hosted agent platform for any LLM provider and any sandbox
+      </h1>
+      <p
+        class="mt-5 max-w-xl text-pretty text-base leading-relaxed text-[var(--color-fg-muted)] sm:text-lg"
+      >
+        Run your own agents on any model, in any sandbox. Deploy to Cloudflare
+        Workers, or run it yourself with Docker.
+      </p>
+
+      <div class="mt-8 flex flex-wrap items-center gap-3">
+        <a
+          href="https://github.com/duyet/oma"
+          target="_blank"
+          rel="noopener noreferrer"
+          class={btnPrimary}><Icon name="download" size={16} /> Clone the repo</a
+        >
+        <a href="https://docs.oma.duyet.net" class={btnOutline}
+          ><Icon name="book" size={16} /> Read the docs</a
+        >
+      </div>
+
+      <p class="mt-6 text-sm text-[var(--color-fg-subtle)]">
+        Apache 2.0 · self-hostable · no vendor lock-in
+      </p>
     </div>
   </section>
 
