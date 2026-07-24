@@ -152,6 +152,13 @@ export class BrowserVmRelaySandbox implements SandboxExecutor {
   }
 
   async destroy(): Promise<void> {
+    // Join a connect that's still in flight. Dropping the promise instead
+    // would let it finish after us and leave an orphaned RuntimeRoom socket
+    // open with nobody holding a reference to close it. Bounded by the 5s
+    // handshake timeout inside #doConnect.
+    if (this.#connectPromise) {
+      await this.#connectPromise.catch(() => null);
+    }
     // Only destroy an already-live tab — never connect just to tear down.
     const sandbox = this.#sandbox;
     this.#sandbox = null;
@@ -213,10 +220,11 @@ export class BrowserVmRelaySandbox implements SandboxExecutor {
     }
 
     // Drop the inner sandbox + connect promise on close/error so the next op
-    // reconnects. In-flight ops fail via BrowserVmSandbox's own per-op
-    // timeouts (this transport doesn't proactively reject them).
-    ws.addEventListener("close", () => this.#onDisconnect());
-    ws.addEventListener("error", () => this.#onDisconnect());
+    // reconnects, and fail whatever was in flight — a tab that goes away
+    // mid-op can never answer, so waiting out the per-op timeout would just
+    // stall the turn (up to exec's timeout + 15s).
+    ws.addEventListener("close", () => this.#onDisconnect(new Error("browser-vm tab WS closed")));
+    ws.addEventListener("error", () => this.#onDisconnect(new Error("browser-vm tab WS error")));
 
     const transport = new RuntimeRoomTransport(ws);
     const sandbox = new BrowserVmSandbox({ transport, sessionId: this.#sessionId });
@@ -225,10 +233,12 @@ export class BrowserVmRelaySandbox implements SandboxExecutor {
     return sandbox;
   }
 
-  #onDisconnect(): void {
+  #onDisconnect(err: Error): void {
+    const sandbox = this.#sandbox;
     this.#ws = null;
     this.#sandbox = null;
     this.#connectPromise = null;
+    sandbox?.rejectPending(err);
   }
 
   async #openSandboxWs(

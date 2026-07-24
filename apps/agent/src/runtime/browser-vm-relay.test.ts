@@ -6,7 +6,7 @@
 // round-trip asserting the frozen browser-vm frame shape, and the per-op
 // timeout path. Runs in the Workers pool so `WebSocketPair` is real.
 
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import type { Env } from "@duyet/oma-shared";
 import { BrowserVmRelaySandbox } from "./browser-vm-relay";
 import { pickOnlineRuntimeId } from "./bridge-relay";
@@ -204,6 +204,54 @@ describe("BrowserVmRelaySandbox", () => {
     ));
     // A short per-op timeout (ms) so the test doesn't wait the 120s default.
     await expect(sandbox.exec("slow", 50)).rejects.toThrow(/timed out/);
+  });
+
+  it("rejects an in-flight op when the tab disconnects mid-op", async () => {
+    const sandbox = track(new BrowserVmRelaySandbox(
+      envWith({
+        run: (server) => {
+          server.send(JSON.stringify({ type: "attached", daemon_online: true }));
+          // Tab goes away mid-op: the op frame lands, then the socket drops
+          // with no reply. Without a disconnect-driven rejection the caller
+          // would sit here for exec's timeout + 15s.
+          server.addEventListener("message", () => {
+            try { server.close(1001, "tab gone"); } catch { /* already closing */ }
+          });
+        },
+      }),
+      "sess_1",
+      "t1",
+    ));
+    await expect(sandbox.exec("echo hi")).rejects.toThrow(/WS closed/);
+  });
+
+  it("destroy() during an in-flight connect closes the relay socket", async () => {
+    let serverClosed = false;
+    const sandbox = new BrowserVmRelaySandbox(
+      envWith({
+        run: (server) => {
+          server.addEventListener("close", () => { serverClosed = true; });
+          server.send(JSON.stringify({ type: "attached", daemon_online: true }));
+          server.addEventListener("message", (ev: MessageEvent) => {
+            const m = JSON.parse(ev.data as string) as Record<string, unknown>;
+            // Ack only destroy — the exec stays in flight so we can assert
+            // it's rejected rather than left hanging.
+            if (m.op !== "destroy") return;
+            server.send(JSON.stringify({ type: "sandbox.result", request_id: m.request_id, ok: true, result: {} }));
+          });
+        },
+      }),
+      "sess_1",
+      "t1",
+    );
+    // Kick off the connect but don't await it — destroy() lands while
+    // #connectPromise is still pending. Dropping that promise would let the
+    // connect finish afterwards and orphan an open RuntimeRoom socket.
+    const op = sandbox.exec("echo hi");
+    await sandbox.destroy();
+    await expect(op).rejects.toThrow(/destroyed/);
+    // The close frame reaches the tab end asynchronously.
+    await vi.waitFor(() => expect(serverClosed).toBe(true));
   });
 
   it("propagates a tab error result as a rejected op", async () => {

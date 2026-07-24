@@ -152,6 +152,25 @@ export class BrowserVmSandbox implements SandboxExecutor {
     } catch {
       /* already closed */
     }
+    // Any op still in flight can never be answered once the transport is
+    // closed — fail them now instead of letting each wait out its own
+    // timeout. Mirrors BridgeRelaySandbox's #rejectAll on destroy.
+    this.rejectPending(new Error("browser-vm sandbox destroyed"));
+  }
+
+  /**
+   * Fail every in-flight op. The transport owner calls this when the
+   * underlying socket drops: the tab can never answer a request sent over a
+   * dead socket, and without this each pending call sits until its own
+   * timeout fires (up to `exec`'s timeout + 15s), stalling the turn.
+   * Mirrors BridgeRelaySandbox's #rejectAll on disconnect.
+   */
+  rejectPending(err: Error): void {
+    for (const pending of this.#pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(err);
+    }
+    this.#pending.clear();
   }
 
   // ── relay plumbing ─────────────────────────────────────────────────────

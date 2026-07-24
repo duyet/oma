@@ -222,6 +222,53 @@ describe("BrowserVmSandbox", () => {
     expect(await execPromise).toBe("exit=0\nhi\n");
   });
 
+  it("rejectPending() fails every in-flight op", async () => {
+    const transport = new MockTransport();
+    const sandbox = new BrowserVmSandbox({ transport, sessionId: "sess_1" });
+
+    const p1 = sandbox.exec("one");
+    const p2 = sandbox.readFile("/workspace/x");
+
+    // Attach both rejection handlers *before* rejecting. rejectPending()
+    // settles every pending op synchronously, so awaiting the assertions one
+    // at a time would leave the second rejection unhandled for a microtask
+    // tick — Vitest reports that as an unhandled error and exits non-zero even
+    // though every assertion passes.
+    const rejected1 = expect(p1).rejects.toThrow(/tab WS closed/);
+    const rejected2 = expect(p2).rejects.toThrow(/tab WS closed/);
+
+    // The transport owner (BrowserVmRelaySandbox) calls this when the tab's
+    // socket drops — a request sent over a dead socket can never be answered,
+    // so waiting out the per-op timeout would just stall the turn.
+    sandbox.rejectPending(new Error("browser-vm tab WS closed"));
+
+    await rejected1;
+    await rejected2;
+
+    // A late reply for a rejected request must not throw or double-settle.
+    transport.reply(transport.sent[0].request_id as string, {
+      ok: true,
+      result: { exit_code: 0, stdout: "late\n", stderr: "" },
+    });
+  });
+
+  it("destroy() rejects ops still in flight instead of leaving them hanging", async () => {
+    const transport = new MockTransport();
+    const sandbox = new BrowserVmSandbox({ transport, sessionId: "sess_1" });
+
+    const execPromise = sandbox.exec("slow");
+    // Handler attached before destroy() rejects it, for the same
+    // unhandled-rejection reason as the rejectPending() case above.
+    const stranded = expect(execPromise).rejects.toThrow(/destroyed/);
+    const destroyPromise = sandbox.destroy();
+    // Ack only the destroy op — the exec is the one left stranded.
+    transport.replyToLast({ ok: true, result: {} });
+
+    await destroyPromise;
+    await stranded;
+    expect(transport.closed).toBe(true);
+  });
+
   it("ignores frames of the wrong type", async () => {
     const transport = new MockTransport();
     const sandbox = new BrowserVmSandbox({ transport, sessionId: "sess_1" });

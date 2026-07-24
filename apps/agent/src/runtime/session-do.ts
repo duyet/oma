@@ -3174,6 +3174,14 @@ export class SessionDO extends DurableObject<Env> {
           break;
         } catch (err: any) {
           lastError = err?.message || String(err);
+          // Relay providers (browser-vm tab, subprocess bridge daemon) throw
+          // this on the first op when no runtime is online. Retrying can't
+          // conjure one up, and falling through would spend ~33s of backoff
+          // only to bury the actionable "open your sandbox tab" / "run bridge
+          // setup" text under a generic "container failed to start". Fail
+          // fast with the original typed error — callers (runSubAgent) also
+          // branch on `instanceof SandboxProviderUnavailableError`.
+          if (err instanceof SandboxProviderUnavailableError) throw err;
           if (attempt === NUKE_AFTER_ATTEMPT && !destroyed) {
             console.warn(
               `[warmup] container unhealthy after ${attempt + 1} probes ` +
@@ -4871,7 +4879,16 @@ export class SessionDO extends DurableObject<Env> {
           // dedicated container's identity is stable for the lifetime of
           // this single delegate call (no retries reuse it — a fresh
           // runSubAgent call always mints a fresh threadId).
-          subSandbox = createSandbox(this.env, `${this.state.session_id}:sub-${threadId}`, childEnv.config);
+          // tenant_id is load-bearing for relay providers (browser-vm /
+          // subprocess): it's how the relay finds the tenant's online
+          // runtime. Omitting it made every dedicated sub-agent sandbox on
+          // those providers fail with a misleading "no runtime connected".
+          subSandbox = createSandbox(
+            this.env,
+            `${this.state.session_id}:sub-${threadId}`,
+            childEnv.config,
+            this.state.tenant_id,
+          );
           dedicatedChildSandbox = true;
           subAgentEnv = childEnv;
           // Bare createSandbox() skips everything getOrCreateSandbox's lazy-

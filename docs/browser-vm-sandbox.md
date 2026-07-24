@@ -274,6 +274,31 @@ points:
 - Console: the Runtimes page shows a `browser-vm` provider card with an
   "Open sandbox tab" action (mints a pairing code, opens `/sandbox-tab`).
 
+**VM image configuration.** The pairing code is all the Console passes, so the
+tab asks for the engine assets itself: when no image is configured it shows a
+setup card for the `libv86.js` URL and the image URL (an `.iso` cdrom, or a
+`.bin`/`.bin.zst` saved state), persists them in `localStorage`, and reloads.
+`?lib=&image=` query params still work and take precedence. Both assets must be
+CORS-accessible because the page is cross-origin isolated. Until an image is
+configured the tab reports `no image configured` and every sandbox op fails
+fast with that message rather than hanging.
+
+**Serial-console framing constraints.** The v86 driver talks to the guest over
+one serial line, which forces three rules the engine encodes:
+
+- *One op at a time.* Agent ops (several sessions can share a tab), the monitor
+  poll and the terminal REPL all share that line, so every op is serialized
+  through a promise queue — concurrent commands would interleave on the same
+  shell.
+- *Markers are never typed literally.* A canonical-mode TTY echoes what we
+  send, so a sentinel that appears verbatim in the command comes back in the
+  echo. Markers are emitted via two adjacent shell-quoted halves
+  (`'_''_oma_rc_x_'`), which the guest concatenates but our keystrokes never
+  contain contiguously.
+- *Lines stay under ~1.8 KB.* The guest's line-discipline buffer is typically
+  4096 bytes and silently truncates beyond it, so base64 file payloads are
+  split across round trips and over-long commands are staged as a script file.
+
 **Deferred (follow-ups):**
 
 - The Tailscale/WISP exit-node for CheerpX full-network mode, and routing the
