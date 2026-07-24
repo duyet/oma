@@ -6,82 +6,90 @@
    ring-bg) are never generated and borders fall back to currentColor. */
 @source "../../../../packages/fit-diagram/src";
 
-/* Brand fonts: Geist (Vercel) — same family Cursor.com ships. Self-hosted
-   via @fontsource-variable so there's no external font request and the
-   marketing site matches the console's type. Geist Sans for everything,
-   Geist Mono for code / terminal / ASCII art. */
-@import "@fontsource-variable/geist/index.css";
-@import "@fontsource-variable/geist-mono/index.css";
+/* Brand fonts — matched to AnyRouter's type stack: Inter Variable for all
+   text, JetBrains Mono for code / terminal / ASCII art, Instrument Serif
+   for italic display accents. Self-hosted via fontsource, no external
+   font request. */
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+@import "@fontsource/instrument-serif/latin-400.css";
+@import "@fontsource/instrument-serif/latin-400-italic.css";
+
+/* Metric-compatible fallback for Inter Variable so the font-display:swap
+   repaint is size-stable (values match next/font's Inter fallback). */
+@font-face {
+  font-family: "Inter Fallback";
+  src: local("Arial");
+  ascent-override: 90.44%;
+  descent-override: 22.52%;
+  line-gap-override: 0.00%;
+  size-adjust: 107.12%;
+}
+
+@custom-variant dark (&:is(.dark *));
 
 /* ===========================================================================
-   Design system — 2026 redesign.
+   Design system — AnyRouter/shadcn alignment (preset b1HXwyDE8).
 
-   Prior identity leaned warm-craft (cream #faf9f5 ground, terracotta #d97757
-   chrome, soft pill cards) which read as an Anthropic clone. New identity is a
-   neutral, engineering-tool language: a zinc greyscale ground, a single
-   near-mono primary (ink in light, paper in dark), crisp 1px hairline borders,
-   tight radii, and restrained shadows. The three warm/cool hues (orange, blue,
-   green) survive ONLY as *functional* data-viz accents inside the interactive
-   architecture diagram, lifecycle, badges and use-case tabs — never as page
-   chrome. Type voice stays Geist (the neutral grotesk shadcn/Vercel ship).
+   The shadcn preset (bottom of this file) is the single source of truth:
+   neutral scale + amber primary oklch(0.555 0.163 49), radius 0.625rem,
+   Inter Variable type. The legacy site tokens (bg/fg/brand/…) used across
+   every page are aliased onto those shadcn variables here so the whole
+   site restyles from one token set. */
+@theme inline {
+  --font-sans: "Inter Variable", "Inter Fallback", ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-sans);
+  --font-serif: "Instrument Serif", Georgia, serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 
-   Retired warm anchors kept here for reference (and so the palette history is
-   greppable): ink #141413, paper #faf9f5, stone #b0aea5, sand #e8e6dc,
-   orange #d97757, blue #6a9bcc, green #788c5d. */
+  /* Legacy aliases → shadcn preset variables. */
+  --color-bg: var(--background);
+  --color-bg-surface: var(--muted);
+  --color-bg-elevated: var(--secondary);
+  --color-fg: var(--foreground);
+  --color-fg-muted: var(--legacy-fg-muted);
+  --color-fg-subtle: var(--muted-foreground);
+  --color-border-strong: var(--legacy-border-strong);
+
+  /* Brand = shadcn primary (amber). */
+  --color-brand: var(--primary);
+  --color-brand-hover: var(--legacy-brand-hover);
+  --color-brand-subtle: var(--legacy-brand-subtle);
+  --color-brand-fg: var(--primary-foreground);
+
+  /* Functional data-viz accents — diagrams/badges/tabs only. Remapped onto
+     the shadcn chart ramp (amber family) + cool complements. */
+  --color-dv-accent: var(--chart-3);
+  --color-accent-subtle: var(--legacy-accent-subtle);
+  --color-blue: var(--legacy-blue);
+  --color-blue-subtle: var(--legacy-blue-subtle);
+  --color-green: var(--legacy-green);
+  --color-green-subtle: var(--legacy-green-subtle);
+
+  /* Status dot colors for the shared @duyet/oma-fit-diagram component. */
+  --color-success: var(--legacy-success);
+  --color-warning: var(--legacy-warning);
+}
+
+:root {
+  --legacy-fg-muted: oklch(0.44 0 0);
+  --legacy-border-strong: oklch(0.87 0 0);
+  --legacy-brand-hover: var(--chart-5);
+  --legacy-brand-subtle: color-mix(in oklch, var(--primary) 9%, var(--background));
+  --legacy-accent-subtle: color-mix(in oklch, var(--chart-3) 10%, var(--background));
+  --legacy-blue: #6a9bcc;
+  --legacy-blue-subtle: #eaf2f8;
+  --legacy-green: #788c5d;
+  --legacy-green-subtle: #eef1ea;
+  --legacy-success: oklch(0.596 0.145 163.2);
+  --legacy-warning: oklch(0.79 0.184 86);
+}
+
 @theme {
-  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-
-  /* Neutral ground — zinc greyscale. */
-  --color-bg: #ffffff;
-  --color-bg-surface: #fafafa;
-  --color-bg-elevated: #f4f4f5;
-  --color-fg: #18181b;
-  --color-fg-muted: #52525b;
-  --color-fg-subtle: #71717a;
-  --color-border: #e4e4e7;
-  --color-border-strong: #d4d4d8;
-
-  /* Primary — warm orange, one confident ownable accent. Carries all chrome:
-     logo, links, focus ring, section-marker icons, highlight borders,
-     primary buttons. Tuned to sit in the same family as the AnyRouter /
-     Cloudflare "gateway" language — a saturated, engineering-warm orange used
-     flat, not a washed AI-purple gradient.
-     #c2560d on #ffffff = 5.4:1 (AA text); #ffffff on #c2560d = 5.4:1. */
-  --color-brand: #c2560d;
-  --color-brand-hover: #a8480a;
-  --color-brand-subtle: #fdf1e7;
-  --color-brand-fg: #ffffff;
-
-  /* Functional data-viz accents — used inside diagrams/badges/tabs only. */
-  --color-accent: #d97757;
-  --color-accent-subtle: #fbf1ee;
-  --color-blue: #6a9bcc;
-  --color-blue-subtle: #eaf2f8;
-  --color-green: #788c5d;
-  --color-green-subtle: #eef1ea;
-
-  /* Status dot colors for the shared @duyet/oma-fit-diagram component —
-     mirrors console's --color-success/--color-warning tokens. */
-  --color-success: #22c55e;
-  --color-warning: #d97706;
-
-  /* shadcn/ui semantic aliases + radius scale. The site already uses the
-     shadcn CSS-variable token model (bg/fg/border/brand); these map the
-     shadcn card/muted names onto it and add a single radius scale so cards,
-     badges and framed diagrams share one "New York"-style radius rhythm. */
-  --color-card: var(--color-bg);
-  --color-muted: var(--color-bg-surface);
-  --color-muted-foreground: var(--color-fg-muted);
-  --radius: 0.625rem;
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-
   /* Motion tokens the shared fit-diagram (and its card transitions)
-     reference — mirrors console's --dur-*/--ease-* values. */
+     reference — mirrors console's --dur- and --ease- values. */
   --dur-quick: 100ms;
   --dur-base: 150ms;
   --dur-slow: 220ms;
@@ -90,29 +98,46 @@
 }
 
 .dark {
-  --color-bg: #09090b;
-  --color-bg-surface: #131316;
-  --color-bg-elevated: #1c1c20;
-  --color-fg: #fafafa;
-  --color-fg-muted: #a1a1aa;
-  --color-fg-subtle: #71717a;
-  --color-border: #27272a;
-  --color-border-strong: #3f3f46;
-
-  /* Orange lifts to Cloudflare-bright in dark for contrast on the near-black
-     ground: #f6821f on #09090b ≈ 8:1; dark ink text on the button = ~8:1. */
-  --color-brand: #f6821f;
-  --color-brand-hover: #ff9a44;
-  --color-brand-subtle: #2a1a0d;
-  --color-brand-fg: #1a0f06;
-
-  --color-accent: #e08a68;
-  --color-accent-subtle: #2d1a15;
-  --color-blue-subtle: #16232f;
-  --color-green-subtle: #1a2016;
-
-  --color-success: #4ade80;
-  --color-warning: #f59e0b;
+  --legacy-fg-muted: oklch(0.78 0 0);
+  --legacy-border-strong: oklch(1 0 0 / 18%);
+  --legacy-brand-hover: var(--chart-3);
+  --legacy-brand-subtle: color-mix(in oklch, var(--primary) 16%, var(--background));
+  --legacy-accent-subtle: color-mix(in oklch, var(--chart-3) 14%, var(--background));
+  --legacy-blue-subtle: #16232f;
+  --legacy-green-subtle: #1a2016;
+  --legacy-success: oklch(0.696 0.17 162.5);
+  --legacy-warning: oklch(0.828 0.176 83.8);
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.473 0.137 46.201);
+  --primary-foreground: oklch(0.987 0.022 95.277);
+  --secondary: oklch(0.274 0.006 286.033);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.879 0.169 91.605);
+  --chart-2: oklch(0.769 0.188 70.08);
+  --chart-3: oklch(0.666 0.179 58.318);
+  --chart-4: oklch(0.555 0.163 48.998);
+  --chart-5: oklch(0.473 0.137 46.201);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.769 0.188 70.08);
+  --sidebar-primary-foreground: oklch(0.279 0.077 45.635);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
 }
 
 html {
@@ -210,6 +235,15 @@ code, pre, kbd, samp,
   }
   /* No hover underline — nav/footer/CTA links signal hover via color
      transitions instead; prose links are always-underlined below. */
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
 }
 
 /* Inline body links: text inherits fg (passes AA-normal at 14:1+), brand
@@ -1181,4 +1215,82 @@ input:focus-visible,
   letter-spacing: 0.14em;
   font-variant-numeric: tabular-nums;
   color: color-mix(in srgb, var(--color-brand) 75%, var(--color-fg-subtle));
+}
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: 'Inter Variable', sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.555 0.163 48.998);
+  --primary-foreground: oklch(0.987 0.022 95.277);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.879 0.169 91.605);
+  --chart-2: oklch(0.769 0.188 70.08);
+  --chart-3: oklch(0.666 0.179 58.318);
+  --chart-4: oklch(0.555 0.163 48.998);
+  --chart-5: oklch(0.473 0.137 46.201);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.666 0.179 58.318);
+  --sidebar-primary-foreground: oklch(0.987 0.022 95.277);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
 }

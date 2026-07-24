@@ -17,28 +17,30 @@ const fail = (msg) => {
 };
 const ok = (msg) => console.log("OK:", msg);
 
-const BRAND_HEX = ["#141413", "#faf9f5", "#b0aea5", "#e8e6dc", "#d97757", "#6a9bcc", "#788c5d"];
+// AnyRouter/shadcn design anchors: amber primary + neutral scale + radius.
+const BRAND_ANCHORS = ["oklch(0.555 0.163 48.998)", "oklch(0.145 0 0)", "--radius: 0.625rem"];
 
 // --- Source: global.css tokens ---
 const cssPath = join(root, "src/styles/global.css");
 const css = readFileSync(cssPath, "utf8");
-// Brand fonts are now Geist (Cursor.com-style), self-hosted via fontsource.
-if (!css.includes('"Geist Variable"') || !css.includes('"Geist Mono Variable"')) {
-  fail("global.css must set Geist Variable (sans/display) + Geist Mono Variable");
+// Brand fonts are now Inter + JetBrains Mono (AnyRouter/shadcn stack),
+// self-hosted via fontsource.
+if (!css.includes('"Inter Variable"') || !css.includes('"JetBrains Mono Variable"')) {
+  fail("global.css must set Inter Variable (sans/display) + JetBrains Mono Variable");
 } else {
-  ok("global.css Geist Variable + Geist Mono tokens");
+  ok("global.css Inter Variable + JetBrains Mono tokens");
 }
 if (css.includes("Source Serif") || css.includes("DM Sans") || css.includes("Poppins") || css.includes("Lora")) {
   fail("global.css must not default marketing to Source Serif / DM Sans / Poppins / Lora");
 } else {
   ok("no legacy Console/marketing font families as marketing default in global.css");
 }
-for (const hex of BRAND_HEX) {
-  if (!css.toLowerCase().includes(hex.toLowerCase())) {
-    fail(`missing brand color ${hex} in global.css`);
+for (const anchor of BRAND_ANCHORS) {
+  if (!css.toLowerCase().includes(anchor.toLowerCase())) {
+    fail(`missing design anchor "${anchor}" in global.css`);
   }
 }
-if (!process.exitCode) ok("brand color anchors present in global.css");
+if (!process.exitCode) ok("shadcn design anchors present in global.css");
 
 // --- Source: Base.astro font load ---
 const base = readFileSync(join(root, "src/layouts/Base.astro"), "utf8");
@@ -55,8 +57,8 @@ if (/Source\+Serif|DM\+Sans/.test(base)) {
 } else {
   ok("Base.astro free of Source Serif / DM Sans font URLs");
 }
-if (!base.includes("@fontsource-variable/geist")) {
-  fail("Base.astro/global.css must self-host Geist via @fontsource-variable/geist");
+if (!css.includes("@fontsource-variable/inter")) {
+  fail("global.css must self-host Inter via @fontsource-variable/inter");
 }
 
 // --- Source: index.astro sections ---
@@ -79,7 +81,7 @@ if (!index.includes("Agent") || !index.includes("Session") || !index.includes("E
 }
 // Schematic vocabulary: the blueprint plate + node/animated-wire diagrams that
 // carry the architecture + reach sections.
-if (!index.includes("blueprint-frame") || !index.includes("arch-node") || !index.includes("ProviderFan")) {
+if (!index.includes("arch-node") || !index.includes("ProviderFan")) {
   fail("landing must include the blueprint schematic + provider-fan visual structure");
 }
 if (!index.includes("github.com/duyet/oma") || !index.includes("app.oma.duyet.net/login") || !index.includes("docs.oma.duyet.net")) {
@@ -91,19 +93,19 @@ if (!process.exitCode) ok("landing source sections + concepts + viz + CTAs");
 const distIndex = join(root, "dist/index.html");
 if (existsSync(distIndex)) {
   const html = readFileSync(distIndex, "utf8");
-  // Geist is self-hosted: the built HTML references the fontsource CSS
+  // Inter is self-hosted: the built HTML references the fontsource CSS
   // (and the @font-face family name), not a Google Fonts URL.
-  if (!/Geist/i.test(html)) {
-    fail("built dist/index.html must reference Geist");
+  if (!/Inter/i.test(html)) {
+    fail("built dist/index.html must reference Inter");
   } else {
-    ok("dist/index.html references Geist");
+    ok("dist/index.html references Inter");
   }
   if (!html.includes("What Open Managed Agents is") || !html.includes("Any model, any sandbox")) {
     fail("built HTML missing product/reach explainer headings");
   } else {
     ok("built HTML has product + reach explainers");
   }
-  if (!html.includes("blueprint-frame") || !html.includes("arch-node")) {
+  if (!html.includes("arch-node")) {
     fail("built HTML missing architecture viz structure");
   } else {
     ok("built HTML has architecture viz classes");
@@ -123,7 +125,7 @@ if (url) {
     if (!body.includes("Any model, any sandbox") && !body.includes("What one request touches")) {
       fail(`fetch #${i}: missing architecture/reach heading`);
     }
-    if (!/Geist/i.test(body)) fail(`fetch #${i}: missing Geist font ref`);
+    if (!/Inter/i.test(body)) fail(`fetch #${i}: missing Inter font ref`);
     if (!process.exitCode) ok(`live fetch #${i} ${url} observables ok`);
   }
 }

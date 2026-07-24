@@ -19,5 +19,6 @@
   },
   "menuColor": "default",
   "menuAccent": "subtle",
-  "rtl": false
+  "rtl": false,
+  "registries": {}
 }
