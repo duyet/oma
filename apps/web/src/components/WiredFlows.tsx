@@ -81,6 +81,13 @@ const STROKE_GLYPHS: Record<string, ReactNode> = {
       <path d="M1.5 13.5h13" />
     </>
   ),
+  browser: (
+    <>
+      <path d="M1.5 3.5h13v9.5h-13z" />
+      <path d="M1.5 6h13" />
+      <path d="M4 4.75h2.2" />
+    </>
+  ),
   cluster: (
     <>
       <path d="M8 1.5 13.8 5v6L8 14.5 2.2 11V5z" />
@@ -116,6 +123,7 @@ const GLYPH_COLORS: Record<string, string> = {
   pr: "#22c55e",
   check: "#22c55e",
   laptop: "#64748b",
+  browser: "#14b8a6",
 };
 
 function Icon({ name, size = 14 }: { name: string; size?: number }) {
@@ -272,6 +280,16 @@ const FLOWS: Flow[] = [
     outputs: [{ icon: "check", label: "isolated runs" }],
     note: "Each session provisions a pod in your cluster via the k8s bridge.",
   },
+  {
+    name: "Browser sandbox",
+    inputs: [{ icon: "browser", label: "browser tab", sub: "pairs as a runtime" }],
+    layers: [
+      { icon: "terminal", label: "sandbox: browser tab (v86)" },
+      { icon: "doc", label: "ops relayed over WebSocket" },
+    ],
+    outputs: [{ icon: "check", label: "isolated runs" }],
+    note: "Open the sandbox tab — a v86 Linux VM boots in-browser; files stay local, no server cost.",
+  },
 ];
 
 /* ── Diagram pieces ─────────────────────────────────────────────────── */
@@ -281,7 +299,8 @@ const nodeStyle: React.CSSProperties = {
   alignItems: "center",
   gap: "0.5rem",
   border: "1px solid var(--color-border)",
-  background: "var(--color-bg-surface)",
+  background: "var(--color-card)",
+  boxShadow: "0 1px 2px rgba(24, 24, 27, 0.05)",
   borderRadius: "0.5rem",
   padding: "0.5rem 0.7rem",
   fontFamily: "var(--font-mono)",
@@ -359,7 +378,7 @@ export default function WiredFlows() {
           flex-wrap: wrap;
           gap: 0.6rem 0.5rem;
           padding: 1.25rem 1rem;
-          border: 1px dashed var(--color-border);
+          border: 1px solid var(--color-border);
           border-radius: 0.75rem;
         }
         @media (max-width: 639px) {
@@ -415,7 +434,7 @@ export default function WiredFlows() {
             style={{
               fontSize: "11px",
               padding: "0.3rem 0.65rem",
-              borderRadius: "999px",
+              borderRadius: "0.5rem",
               cursor: "pointer",
               border: `1px solid ${i === active ? "var(--color-brand)" : "var(--color-border)"}`,
               background: i === active ? "color-mix(in srgb, var(--color-brand) 10%, transparent)" : "transparent",

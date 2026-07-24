@@ -97,7 +97,13 @@
   --ease-snap: cubic-bezier(0.5, 0, 0.1, 1);
 }
 
-.dark {
+/* `:root.dark`, not `.dark` — the shadcn preset appends its own `:root` token
+   block to the BOTTOM of this file. `:root` and `.dark` are both specificity
+   (0,1,0), so on `<html class="dark">` the later-declared preset `:root` won
+   every tie and silently reset all of these to their light values (dark mode
+   was fully dead sitewide). (0,2,0) wins regardless of source order, which
+   survives the preset being regenerated at the bottom again. */
+:root.dark {
   --legacy-fg-muted: oklch(0.78 0 0);
   --legacy-border-strong: oklch(1 0 0 / 18%);
   --legacy-brand-hover: var(--chart-3);
@@ -373,10 +379,13 @@ input:focus-visible,
   border-radius: 0.3rem;
   border: 1px solid transparent;
 }
+/* `--color-accent` is shadcn's *surface* token (a near-white neutral), not a
+   foreground — using it as `color` rendered the label invisible against its
+   own subtle fill. The orange variant is the brand accent. */
 .arch-badge-orange {
-  color: var(--color-accent);
-  background: var(--color-accent-subtle);
-  border-color: color-mix(in srgb, var(--color-accent) 24%, transparent);
+  color: var(--color-brand);
+  background: var(--color-brand-subtle);
+  border-color: color-mix(in srgb, var(--color-brand) 24%, transparent);
 }
 .arch-badge-blue {
   color: var(--color-blue);
@@ -574,70 +583,6 @@ input:focus-visible,
     grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
     gap: 3rem;
   }
-}
-.hero-pitch {
-  min-width: 0;
-}
-/* Emphasis on the headline's closing phrase. Monochrome now: the phrase
-   stays full-strength ink and picks up a thin accent underline so the
-   emphasis reads as intent, not as a colored word dropped into a headline. */
-.hero-accent {
-  color: var(--color-fg);
-  box-shadow: inset 0 -0.12em 0 color-mix(in srgb, var(--color-brand) 60%, transparent);
-}
-/* Rotating headline phrase ("any LLM provider" ⇄ "any Sandbox").
-   The .tw-rot span is driven by the shared data-rotate script in Base.astro;
-   these overrides tune the caret + phrase for display type. */
-.hero-rotate .tw-rot {
-  color: inherit;
-  font-weight: inherit;
-}
-.hero-rotate .typewriter-caret {
-  width: 0.09em;
-  height: 0.82em;
-  margin-left: 0.06em;
-  vertical-align: -0.08em;
-  background: var(--color-brand);
-  box-shadow: none;
-}
-/* Primary CTA row in the hero pitch. */
-.hero-cta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-top: 2rem;
-}
-
-/* Proof chips: compact, scannable differentiators under the CTAs. No
-   bullets, soft pill borders, mono label so they share the terminal
-   vocabulary. */
-.hero-chips {
-  list-style: none;
-  /* Top margin lives here (not a Tailwind utility) — this component class
-     loads after the utilities layer and would silently override mt-*. Sits
-     directly under the CTA row, so the gap is tighter than the CTA's own. */
-  margin: 1.25rem 0 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-.hero-chips li {
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--color-fg-muted);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-surface);
-  padding: 0.28rem 0.6rem;
-  border-radius: 0.3rem;
-}
-
-.hero-visual {
-  min-width: 0;
-  display: flex;
-  justify-content: center;
 }
 
 /* ── Hero use-case flow diagrams ─────────────────────────────────────────
@@ -878,24 +823,6 @@ input:focus-visible,
   color: var(--color-fg-subtle);
 }
 
-/* Typewriter caret for the rotating tagline in the hero. */
-.typewriter-caret {
-  display: inline-block;
-  width: 0.55ch;
-  height: 1.05em;
-  background: var(--color-accent);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--color-accent) 55%, transparent);
-  animation: tw-blink 1.05s steps(1, end) infinite;
-}
-@keyframes tw-blink {
-  50% { opacity: 0; }
-}
-
-/* Typewriter rotate: the terminal prompt's verb cycles through a list of
-   verbs pulled from the element's data-rotate JSON. Pure CSS can't swap text,
-   so a tiny inline script (Base.astro) drives .tw-rot; this just styles it. */
-.tw-rot { color: var(--color-fg); font-weight: 600; }
-
 /* Pixel-art sandbox fleet — small icons row in the fleet section, given a
    subtle brand halo so the band feels like part of the same system. */
 .pixel-fleet {
@@ -917,14 +844,12 @@ input:focus-visible,
   color: var(--color-fg-subtle);
 }
 
-/* Reduced-motion: kill the blink / caret / scanline animation, keep static
-   art. The reveal observer already has its own reduced-motion guard. */
+/* Reduced-motion: kill the scanline animation, keep static art. The reveal
+   observer already has its own reduced-motion guard. */
 @media (prefers-reduced-motion: reduce) {
-  .pa-eye,
-  .typewriter-caret {
+  .pa-eye {
     animation: none;
   }
-  .typewriter-caret { opacity: 1; }
 }
 
 /* ── Use cases: interactive tabs + animated visual ────────────────────── */
@@ -1105,18 +1030,45 @@ input:focus-visible,
   border-right: 1.5px solid;
 }
 
-/* Animated schematic wire — a dashed brand rail with a traveling packet dot,
-   the AnyRouter / Cloudflare "gateway" edge. Joins nodes in the architecture
-   schematic. Motion gated on reduced-motion (static dashed rail otherwise). */
-.bp-wire {
+/* Architecture pipeline — equal-width nodes joined by a dashed rail that
+   actually touches the glyphs.
+
+   The rail is drawn by each node's own ::before rather than as a free-standing
+   flex item. The previous .bp-wire was a sibling sized to the inter-node gap,
+   but each node was a fixed 8rem box holding a 3rem glyph — so ~2.5rem of empty
+   node padding sat between every glyph and the wire, and the connector visibly
+   floated free of the boxes. With equal-width items, ±50% resolves to the
+   neighbouring node's centre, so ±(50% ∓ 1.5rem) lands exactly on the adjacent
+   glyph edges regardless of how wide the row gets. */
+.arch-path {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  /* Keeps the pipeline legible on narrow screens — the wrapper scrolls, the
+     page does not. */
+  min-width: 42rem;
+}
+.arch-node {
   position: relative;
-  /* Pin to the glyph row's vertical center (half of the 3rem glyph), not the
-     row's cross-axis center — otherwise a node whose sub-label wraps to two
-     lines grows the row and drags the wire below the glyphs. */
-  align-self: flex-start;
-  margin-top: calc(1.5rem - 1px);
-  flex: 1 1 1.75rem;
-  min-width: 1.5rem;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  text-align: center;
+}
+.arch-node + .arch-node::before {
+  content: "";
+  position: absolute;
+  /* Half the 3rem glyph, less half the 2px rail. */
+  top: calc(1.5rem - 1px);
+  left: calc(-50% + 1.5rem);
+  right: calc(50% + 1.5rem);
   height: 2px;
   background-image: repeating-linear-gradient(
     to right,
@@ -1126,59 +1078,15 @@ input:focus-visible,
   background-size: 12px 2px;
   background-repeat: repeat-x;
 }
-.bp-wire::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: 5px;
-  height: 5px;
-  margin-top: -2.5px;
-  border-radius: 999px;
-  background: var(--color-brand);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--color-brand) 60%, transparent);
-  opacity: 0;
-}
 @keyframes bp-wire-flow {
   to {
     background-position-x: 12px;
   }
 }
-@keyframes bp-wire-packet {
-  0% {
-    left: 0;
-    opacity: 0;
-  }
-  15% {
-    opacity: 1;
-  }
-  85% {
-    opacity: 1;
-  }
-  100% {
-    left: 100%;
-    opacity: 0;
-  }
-}
 @media (prefers-reduced-motion: no-preference) {
-  .bp-wire {
+  .arch-node + .arch-node::before {
     animation: bp-wire-flow 0.9s linear infinite;
   }
-  .bp-wire::after {
-    animation: bp-wire-packet 1.7s linear infinite;
-  }
-}
-
-/* Node in the architecture schematic — fixed-width so the row stays a clean
-   pipeline; the row scrolls horizontally on narrow screens rather than wrap. */
-.arch-node {
-  flex: none;
-  width: 8rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.4rem;
-  text-align: center;
 }
 .arch-node-glyph {
   display: grid;
@@ -1202,19 +1110,6 @@ input:focus-visible,
   font-size: 0.62rem;
   line-height: 1.35;
   color: var(--color-fg-subtle);
-}
-
-/* Editorial section index marker — a mono "01" ordinal set before the
-   eyebrow label, mirroring AnyRouter's SectionShell index/eyebrow rhythm.
-   Brand-tinted, tabular, hairline separator dot handled by the flex gap. */
-.section-index {
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  font-weight: 600;
-  line-height: 1;
-  letter-spacing: 0.14em;
-  font-variant-numeric: tabular-nums;
-  color: color-mix(in srgb, var(--color-brand) 75%, var(--color-fg-subtle));
 }
 
 @theme inline {

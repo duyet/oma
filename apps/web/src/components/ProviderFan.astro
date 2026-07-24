@@ -80,8 +80,8 @@ const RIGHT = [
 // /`to` are node indices into RIGHT (inclusive); the box spans their rows.
 const NODE_H = 44;
 const RIGHT_GROUPS = [
-  { label: "cloud · provisioned", from: 0, to: 3 },
-  { label: "your hardware · relay", from: 4, to: 5 },
+  { label: "Cloud · provisioned", from: 0, to: 3 },
+  { label: "Your hardware · relay", from: 4, to: 5 },
 ];
 
 // What the control plane owns regardless of model or sandbox — rendered as
@@ -92,12 +92,28 @@ const SPINE = [
   { label: "memory", sub: "/mnt stores" },
 ];
 
-// Cubic edge from a left node's right edge (x=165) into the hub's left edge.
-const leftEdge = (y: number) => `M165 ${y} C242 ${y} 242 ${HUB.cy} ${HUB.x} ${HUB.cy}`;
-// Cubic edge from the hub's right edge out to a right node's left edge.
-const rightEdge = (y: number) => `M${HUB_RIGHT} ${HUB.cy} C540 ${HUB.cy} 540 ${y} 595 ${y}`;
+// Node anchor rails — where left/right nodes meet the hub's fan edges. These
+// stay fixed regardless of node width: LEFT nodes grow away from the hub
+// (their right edge stays pinned to LEFT_EDGE_X), RIGHT nodes grow away from
+// the hub too (their left edge stays pinned to RIGHT_EDGE_X) — so widening a
+// box to fit its label never has to touch the hub or edge geometry.
+const LEFT_EDGE_X = 165;
+const RIGHT_EDGE_X = 595;
 
-const NODE_W = 150;
+// Cubic edge from a left node's right edge into the hub's left edge.
+const leftEdge = (y: number) => `M${LEFT_EDGE_X} ${y} C242 ${y} 242 ${HUB.cy} ${HUB.x} ${HUB.cy}`;
+// Cubic edge from the hub's right edge out to a right node's left edge.
+const rightEdge = (y: number) => `M${HUB_RIGHT} ${HUB.cy} C540 ${HUB.cy} 540 ${y} ${RIGHT_EDGE_X} ${y}`;
+
+// Node box sizing. Widened from the original 150 (which let "OpenAI-compatible"
+// spill past its card) and paired with tighter internal insets so every
+// current label clears the right edge with margin — not a one-off fix for
+// that string: the same box/inset/font applies to every node on both sides.
+const NODE_W = 156;
+const LEFT_X = LEFT_EDGE_X - NODE_W;
+const LOGO_INSET = 10;
+const TEXT_INSET = 32;
+const GROUP_PAD = 12;
 
 // Hub pill geometry.
 const PILL_X = HUB.x + 12;
@@ -108,7 +124,7 @@ const PILL_GAP = 6;
 ---
 
 <figure class="pf">
-  <svg viewBox="0 0 760 384" role="img" aria-label="Any LLM provider routes through the OMA control plane — which owns context, state, and memory — out to any sandbox provider">
+  <svg viewBox="0 0 772 384" role="img" aria-label="Any LLM provider routes through the OMA control plane — which owns context, state, and memory — out to any sandbox provider">
     <!-- Edges: static rail + animated dashed overlay + traveling packet -->
     {LEFT.map((n) => (
       <g>
@@ -130,8 +146,8 @@ const PILL_GAP = 6;
       const m = MARK[n.mark];
       return (
         <g class="pf-node">
-          <rect x="15" y={n.y - NODE_H / 2} width={NODE_W} height={NODE_H} rx="9" />
-          <svg class="pf-logo" x="27" y={n.y - 9} width="18" height="18" viewBox="0 0 24 24" style={m.color ? `color:${m.color}` : undefined}>
+          <rect x={LEFT_X} y={n.y - NODE_H / 2} width={NODE_W} height={NODE_H} rx="9" />
+          <svg class="pf-logo" x={LEFT_X + LOGO_INSET} y={n.y - 9} width="18" height="18" viewBox="0 0 24 24" style={m.color ? `color:${m.color}` : undefined}>
             <path
               d={m.path}
               fill={m.mode === "fill" ? "currentColor" : "none"}
@@ -141,8 +157,8 @@ const PILL_GAP = 6;
               stroke-linejoin="round"
             />
           </svg>
-          <text class="pf-name" x="53" y={n.y - 3}>{n.name}</text>
-          <text class="pf-sub" x="53" y={n.y + 12}>{n.sub}</text>
+          <text class="pf-name" x={LEFT_X + TEXT_INSET} y={n.y - 3}>{n.name}</text>
+          <text class="pf-sub" x={LEFT_X + TEXT_INSET} y={n.y + 12}>{n.sub}</text>
         </g>
       );
     })}
@@ -169,8 +185,8 @@ const PILL_GAP = 6;
       const bottom = RIGHT[grp.to].y + NODE_H / 2 + 8;
       return (
         <g class="pf-group">
-          <rect x="583" y={top} width={NODE_W + 24} height={bottom - top} rx="12" />
-          <text class="pf-group-label" x="595" y={top + 14}>{grp.label}</text>
+          <rect x={RIGHT_EDGE_X - GROUP_PAD} y={top} width={NODE_W + GROUP_PAD * 2} height={bottom - top} rx="12" />
+          <text class="pf-group-label" x={RIGHT_EDGE_X} y={top + 14}>{grp.label}</text>
         </g>
       );
     })}
@@ -180,8 +196,8 @@ const PILL_GAP = 6;
       const m = MARK[n.mark];
       return (
         <g class="pf-node">
-          <rect x="595" y={n.y - NODE_H / 2} width={NODE_W} height={NODE_H} rx="9" />
-          <svg class="pf-logo" x="607" y={n.y - 9} width="18" height="18" viewBox="0 0 24 24" style={m.color ? `color:${m.color}` : undefined}>
+          <rect x={RIGHT_EDGE_X} y={n.y - NODE_H / 2} width={NODE_W} height={NODE_H} rx="9" />
+          <svg class="pf-logo" x={RIGHT_EDGE_X + LOGO_INSET} y={n.y - 9} width="18" height="18" viewBox="0 0 24 24" style={m.color ? `color:${m.color}` : undefined}>
             <path
               d={m.path}
               fill={m.mode === "fill" ? "currentColor" : "none"}
@@ -191,8 +207,8 @@ const PILL_GAP = 6;
               stroke-linejoin="round"
             />
           </svg>
-          <text class="pf-name" x="633" y={n.y - 3}>{n.name}</text>
-          <text class="pf-sub" x="633" y={n.y + 12}>{n.sub}</text>
+          <text class="pf-name" x={RIGHT_EDGE_X + TEXT_INSET} y={n.y - 3}>{n.name}</text>
+          <text class="pf-sub" x={RIGHT_EDGE_X + TEXT_INSET} y={n.y + 12}>{n.sub}</text>
         </g>
       );
     })}
@@ -270,8 +286,8 @@ const PILL_GAP = 6;
   }
   .pf-name {
     fill: var(--color-fg);
-    font-family: var(--font-mono);
-    font-size: 11px;
+    font-family: var(--font-sans);
+    font-size: 10.5px;
     font-weight: 600;
   }
   .pf-sub {
@@ -286,21 +302,20 @@ const PILL_GAP = 6;
     opacity: 0.92;
   }
 
-  /* Sandbox family frames — a hairline group box + a small caption tab that
-     labels which nodes are cloud-provisioned vs relayed to your hardware. */
+  /* Sandbox family frames — a hairline group box (no fill) + a small caption
+     label that names which nodes are cloud-provisioned vs relayed to your
+     hardware. */
   .pf-group rect {
-    fill: color-mix(in srgb, var(--color-fg) 2.5%, transparent);
-    stroke: color-mix(in srgb, var(--color-border) 90%, transparent);
+    fill: none;
+    stroke: var(--color-border);
     stroke-width: 1;
     stroke-dasharray: 3 3;
   }
   .pf-group-label {
     fill: var(--color-fg-subtle);
-    font-family: var(--font-mono);
-    font-size: 8.5px;
+    font-family: var(--font-sans);
+    font-size: 9px;
     font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
   }
 
   /* Hub */
@@ -311,7 +326,7 @@ const PILL_GAP = 6;
   }
   .pf-hub-name {
     fill: var(--color-brand);
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     font-size: 12.5px;
     font-weight: 700;
   }
@@ -324,7 +339,7 @@ const PILL_GAP = 6;
   }
   .pf-pill-name {
     fill: var(--color-fg);
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     font-size: 11px;
     font-weight: 600;
   }
