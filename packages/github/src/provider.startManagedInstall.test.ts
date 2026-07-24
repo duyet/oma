@@ -73,8 +73,22 @@ describe("GitHubProvider.startManagedInstall", () => {
     expect(data.appSlug).toBe("oma-managed-bot");
     expect(data.botLogin).toBe("oma-managed-bot[bot]");
     expect(data.url).toContain("oma-managed-bot");
-    expect(data.setupUrl).toContain(data.publicationId);
+    // The managed App is shared and has exactly ONE Setup URL on github.com,
+    // so the reported setupUrl must be the fixed managed callback — NOT the
+    // per-publication one a BYOA App uses. Wiring the per-publication URL
+    // onto the shared App would break every other managed install.
+    expect(data.setupUrl).toBe("https://gw.example.com/github/managed/callback");
     expect(data.webhookUrl).toContain(data.appOmaId);
+
+    // The managed callback dispatches on the state JWT's `kind` and reads
+    // the publication id off it (there's no pub id in that URL's path), so
+    // both fields have to be present for the install to complete.
+    const installState = new URL(data.url).searchParams.get("state")!;
+    const decoded = await container.jwt.verify<{ kind: string; publicationId: string }>(
+      installState,
+    );
+    expect(decoded.kind).toBe("github.install.pub");
+    expect(decoded.publicationId).toBe(data.publicationId);
 
     // Publication shell is created and immediately promoted to
     // awaiting_install — no user credentials-paste step needed.

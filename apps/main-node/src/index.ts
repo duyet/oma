@@ -2274,6 +2274,9 @@ if (installBridge) {
         slack: (req) => buildNodeProvidersForRequest(installBridge!, gatewayOrigin).slack.handleWebhook(req),
       },
       internalSecret: integrationsInternalToken,
+      // Self-host serves the Console off the same origin as this gateway, so
+      // PUBLIC_BASE_URL is the console origin too.
+      consoleOrigin: process.env.CONSOLE_ORIGIN ?? process.env.PUBLIC_BASE_URL ?? null,
       // Node has no per-tenant rate-limit binding by default; soft-pass.
       rateLimit: undefined,
     }),

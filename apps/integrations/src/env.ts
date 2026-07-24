@@ -22,6 +22,15 @@ export interface Env {
   // No trailing slash. e.g. "https://integrations.example.com".
   GATEWAY_ORIGIN: string;
 
+  // Public origin of the Console (e.g. "https://app.example.com"). No
+  // trailing slash. Optional — used only to absolutize the fallback console
+  // path when an install callback's state carried no returnUrl (expired
+  // state, or an install started from the App's own github.com page). This
+  // gateway runs on its own origin and serves no Console, so without it the
+  // browser resolves the fallback path here and hits a 404 instead of
+  // landing back in OMA.
+  CONSOLE_ORIGIN?: string;
+
   // Signs short-lived JWTs handed to agent sessions for MCP tool calls.
   // Also used as the seed for AES-GCM token-at-rest encryption (with a
   // distinct label per use, so JWT signing keys ≠ token encryption keys).

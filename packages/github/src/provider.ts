@@ -255,7 +255,14 @@ export class GitHubProvider implements IntegrationProvider {
         appOmaId,
         appSlug: managedApp.appSlug,
         botLogin: managedApp.botLogin,
-        setupUrl: this.publicationCallbackUri(publication.id),
+        // The managed App is shared, so it has exactly ONE Setup URL on
+        // github.com — the per-publication callback a BYOA App uses can't
+        // apply here. GitHub sends every managed install (workspace connect
+        // AND agent bind) to `/github/managed/callback`, which dispatches on
+        // the state JWT's `kind`. Reporting the per-publication URL here was
+        // misleading: an operator wiring it onto the managed App would break
+        // the workspace connect flow.
+        setupUrl: this.managedCallbackUri(),
         webhookUrl: this.dedicatedWebhookUri(appOmaId),
       },
     };
@@ -894,6 +901,12 @@ export class GitHubProvider implements IntegrationProvider {
   }
   private manifestRedirectUri(): string {
     return `${this.config.gatewayOrigin}/github/manifest/callback`;
+  }
+  /** Fixed Setup URL for the shared managed App — the single value that must
+   *  be configured on github.com for `GITHUB_MANAGED_APP_SLUG`. Serves both
+   *  managed flows; the gateway route dispatches on the state JWT's `kind`. */
+  private managedCallbackUri(): string {
+    return `${this.config.gatewayOrigin}/github/managed/callback`;
   }
 
   /**

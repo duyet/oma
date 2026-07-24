@@ -64,6 +64,14 @@ export interface IntegrationsGatewayDeps {
    *  endpoint). Same secret CF used for the `INTEGRATIONS_INTERNAL_SECRET`
    *  service-binding gate. */
   internalSecret: string | null;
+  /** Public origin of the Console (e.g. `https://app.example.com`). Used to
+   *  absolutize a relative return path when an install callback has no
+   *  usable `returnUrl` — the gateway runs on its OWN origin
+   *  (`integrations.<domain>`), which serves no Console, so a bare
+   *  `/integrations/github` redirect would strand the user on a 404 instead
+   *  of taking them back to OMA. Optional: when unset the relative path is
+   *  emitted unchanged (previous behavior). */
+  consoleOrigin?: string | null;
   /** Optional rate-limit hooks. Soft-pass when absent. */
   rateLimit?: RateLimitHooks;
 }
@@ -144,24 +152,12 @@ export function buildIntegrationsGatewayRoutes(deps: IntegrationsGatewayDeps) {
         state,
         extra: { installationId, setupAction, publicationFirst: true },
       });
-      if (!result.returnUrl) {
-        return c.json({
-          ok: true,
-          publicationId: result.publicationId,
-          capabilityProbe: result.capabilityProbe ?? null,
-        });
-      }
-      const target = new URL(result.returnUrl);
-      target.searchParams.set("publication_id", result.publicationId);
-      target.searchParams.set("install", "ok");
-      const probe = result.capabilityProbe;
-      if (probe) {
-        target.searchParams.set("probe_kind", probe.kind);
-        target.searchParams.set("probe_ok", probe.ok ? "1" : "0");
-        if (probe.message) target.searchParams.set("probe_message", probe.message);
-        if (probe.fixUrl) target.searchParams.set("probe_fix_url", probe.fixUrl);
-      }
-      return c.redirect(target.toString(), 302);
+      return redirectPublicationInstall(c, {
+        returnUrl: result.returnUrl,
+        publicationId: result.publicationId,
+        probe: result.capabilityProbe,
+        consoleOrigin: deps.consoleOrigin,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.warn({ op: "github.oauth.pub.callback.failed", pubId, err: msg }, "github callback failed");
@@ -170,13 +166,26 @@ export function buildIntegrationsGatewayRoutes(deps: IntegrationsGatewayDeps) {
   });
 
   // GET /github/managed/callback?installation_id=&setup_action=&state=
-  // Managed workspace install callback. This is the ONE fixed Setup URL
-  // configured on the shared managed GitHub App (github.com → the App's
-  // "Setup URL"); GitHub hits it after the user installs the App on an org.
-  // Unlike the publication callbacks there's no agent/publication — the
-  // bridge records only a github_installations row + credential vault, then
-  // we redirect the browser back to the state's returnUrl with
-  // `?managed_install=ok` (+ `&login=<org login>` when known).
+  // The ONE fixed Setup URL configured on the shared managed GitHub App
+  // (github.com → the App's "Setup URL"); GitHub hits it after the user
+  // installs the App on an org. A managed App has exactly one Setup URL no
+  // matter how many flows use it, so BOTH managed install flows land here
+  // and we dispatch on the state JWT's `kind`:
+  //
+  //   github.install.workspace — "Connect" (no agent bound). The bridge
+  //     records only a github_installations row + credential vault; we send
+  //     the browser back to the state's returnUrl with `?managed_install=ok`
+  //     (+ `&login=<org login>` when known).
+  //   github.install.pub — "Bind an agent" via the managed App. Identical
+  //     completion to the dedicated `/github/oauth/pub/:pubId/callback`
+  //     route; the publication id isn't in the path here so we read it off
+  //     the state. Redirects with `?install=ok&publication_id=…`, which is
+  //     what the Console wizard listens for.
+  //
+  // Before this dispatch a managed agent-bind install always failed here
+  // with "invalid state kind" and bounced the user to
+  // `?managed_install=error`, leaving the publication stuck in
+  // `awaiting_install`.
   app.get("/github/managed/callback", async (c) => {
     const url = new URL(c.req.url);
     const installationId = url.searchParams.get("installation_id");
@@ -184,26 +193,67 @@ export function buildIntegrationsGatewayRoutes(deps: IntegrationsGatewayDeps) {
     const state = url.searchParams.get("state");
     const error = url.searchParams.get("error");
 
-    // Best-effort decode of returnUrl so error/denied paths can still land
-    // the user back on the console. Falls back to a same-origin path.
-    let returnUrl: string | null = null;
+    // Best-effort decode: the state carries both the flow kind and the
+    // returnUrl, so error/denied paths can still land the user back on the
+    // console. GitHub also hits this URL with NO state at all — installs
+    // started from the App's own github.com page, and `setup_on_update`
+    // permission-change redirects — in which case we fall back to the
+    // console's GitHub integrations page.
+    let decoded: { kind?: string; returnUrl?: string; publicationId?: string } | null = null;
     if (state) {
       try {
-        const decoded = await deps.jwt.verify<{ returnUrl?: string }>(state);
-        returnUrl = decoded.returnUrl ?? null;
+        decoded = await deps.jwt.verify<{
+          kind?: string;
+          returnUrl?: string;
+          publicationId?: string;
+        }>(state);
       } catch {
-        returnUrl = null;
+        decoded = null;
       }
     }
+    const returnUrl = decoded?.returnUrl ?? null;
+    const consoleOrigin = deps.consoleOrigin;
 
-    if (error) return redirectManagedInstall(c, returnUrl, "error");
+    if (error) return redirectManagedInstall(c, returnUrl, "error", null, consoleOrigin);
     if (setupAction === "request") {
       // Org admin requested the install but it's pending approval.
       return c.html(githubRequestPendingPage(setupAction), 200);
     }
     if (!installationId || !state) {
-      return redirectManagedInstall(c, returnUrl, "error");
+      return redirectManagedInstall(c, returnUrl, "error", null, consoleOrigin);
     }
+
+    if (decoded?.kind === "github.install.pub") {
+      if (!decoded.publicationId) {
+        log.warn(
+          { op: "github.managed.callback.failed", err: "state missing publicationId" },
+          "github managed publication callback failed",
+        );
+        return redirectManagedInstall(c, returnUrl, "error", null, consoleOrigin);
+      }
+      try {
+        const result = await deps.installBridge.continueInstall({
+          provider: "github",
+          providerInstallationId: decoded.publicationId,
+          state,
+          extra: { installationId, setupAction, publicationFirst: true },
+        });
+        return redirectPublicationInstall(c, {
+          returnUrl: result.returnUrl ?? returnUrl,
+          publicationId: result.publicationId,
+          probe: result.capabilityProbe,
+          consoleOrigin,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.warn(
+          { op: "github.managed.callback.failed", pubId: decoded.publicationId, err: msg },
+          "github managed publication callback failed",
+        );
+        return redirectManagedInstall(c, returnUrl, "error", null, consoleOrigin);
+      }
+    }
+
     try {
       const result = await deps.installBridge.continueInstall({
         provider: "github",
@@ -215,6 +265,7 @@ export function buildIntegrationsGatewayRoutes(deps: IntegrationsGatewayDeps) {
         result.returnUrl ?? returnUrl,
         "ok",
         result.login ?? null,
+        consoleOrigin,
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -222,7 +273,7 @@ export function buildIntegrationsGatewayRoutes(deps: IntegrationsGatewayDeps) {
         { op: "github.managed.callback.failed", err: msg },
         "github managed workspace callback failed",
       );
-      return redirectManagedInstall(c, returnUrl, "error");
+      return redirectManagedInstall(c, returnUrl, "error", null, consoleOrigin);
     }
   });
 
@@ -251,27 +302,15 @@ export function buildIntegrationsGatewayRoutes(deps: IntegrationsGatewayDeps) {
         state,
         extra: { installationId, setupAction },
       });
-      if (!result.returnUrl) {
-        return c.json({
-          ok: true,
-          publicationId: result.publicationId,
-          capabilityProbe: result.capabilityProbe ?? null,
-        });
-      }
-      const target = new URL(result.returnUrl);
-      target.searchParams.set("publication_id", result.publicationId);
-      target.searchParams.set("install", "ok");
       // Surface the vendor capability probe (e.g. Slack MCP toggle) as
       // query params so the wizard's success page can show the right
       // green-check or warning-with-deeplink banner.
-      const probe = result.capabilityProbe;
-      if (probe) {
-        target.searchParams.set("probe_kind", probe.kind);
-        target.searchParams.set("probe_ok", probe.ok ? "1" : "0");
-        if (probe.message) target.searchParams.set("probe_message", probe.message);
-        if (probe.fixUrl) target.searchParams.set("probe_fix_url", probe.fixUrl);
-      }
-      return c.redirect(target.toString(), 302);
+      return redirectPublicationInstall(c, {
+        returnUrl: result.returnUrl,
+        publicationId: result.publicationId,
+        probe: result.capabilityProbe,
+        consoleOrigin: deps.consoleOrigin,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.warn({ op: "github.install.callback.failed", appOmaId, err: msg }, "github callback failed");
@@ -1063,31 +1102,104 @@ function safeJsonField(body: string, field: string): string | null {
   }
 }
 
+/** Console path an install callback falls back to when the state carried no
+ *  usable returnUrl (missing / expired / install started from GitHub's own
+ *  App page). */
+const CONSOLE_GITHUB_PATH = "/integrations/github";
+
 /**
- * Build the 302 back to the console after a managed workspace install. The
- * returnUrl may be absolute (console origin the frontend supplied) or a
- * relative path (`/integrations/github` fallback); both are handled. Appends
- * `?managed_install=<status>` (+ `&login=<login>` on success).
+ * Resolve a console target that may be absolute (the returnUrl the frontend
+ * supplied) or relative (our fallback path). A relative path left as-is is
+ * resolved by the browser against the *gateway* origin
+ * (`integrations.<domain>`), which serves no Console — the user lands on a
+ * 404 instead of back in OMA. `consoleOrigin` fixes that; when it's unset we
+ * emit the relative path unchanged rather than guessing.
+ */
+function resolveConsoleTarget(
+  base: string,
+  consoleOrigin: string | null | undefined,
+): string {
+  try {
+    return new URL(base).toString();
+  } catch {
+    if (consoleOrigin) {
+      try {
+        return new URL(base, consoleOrigin).toString();
+      } catch {
+        // Misconfigured consoleOrigin — fall through to the relative path.
+      }
+    }
+    return base;
+  }
+}
+
+/** Append query params to a console target, absolute or relative. */
+function redirectToConsole(
+  c: import("hono").Context,
+  base: string,
+  consoleOrigin: string | null | undefined,
+  params: Record<string, string>,
+): Response {
+  const resolved = resolveConsoleTarget(base, consoleOrigin);
+  try {
+    const target = new URL(resolved);
+    for (const [key, value] of Object.entries(params)) {
+      target.searchParams.set(key, value);
+    }
+    return c.redirect(target.toString(), 302);
+  } catch {
+    // Relative path — build the query string by hand.
+    const query = new URLSearchParams(params).toString();
+    const sep = resolved.includes("?") ? "&" : "?";
+    return c.redirect(`${resolved}${sep}${query}`, 302);
+  }
+}
+
+/**
+ * Build the 302 back to the console after a managed workspace install.
+ * Appends `?managed_install=<status>` (+ `&login=<login>` on success).
  */
 function redirectManagedInstall(
   c: import("hono").Context,
   returnUrl: string | null | undefined,
   status: "ok" | "error",
   login?: string | null,
+  consoleOrigin?: string | null,
 ): Response {
-  const base = returnUrl && returnUrl.trim() ? returnUrl : "/integrations/github";
-  try {
-    const target = new URL(base);
-    target.searchParams.set("managed_install", status);
-    if (login) target.searchParams.set("login", login);
-    return c.redirect(target.toString(), 302);
-  } catch {
-    // Relative path — build the query string by hand.
-    const sep = base.includes("?") ? "&" : "?";
-    let query = `managed_install=${encodeURIComponent(status)}`;
-    if (login) query += `&login=${encodeURIComponent(login)}`;
-    return c.redirect(`${base}${sep}${query}`, 302);
+  const base = returnUrl && returnUrl.trim() ? returnUrl : CONSOLE_GITHUB_PATH;
+  const params: Record<string, string> = { managed_install: status };
+  if (login) params.login = login;
+  return redirectToConsole(c, base, consoleOrigin, params);
+}
+
+/**
+ * Build the 302 back to the console after a publication-first install
+ * completes. Appends `?install=ok&publication_id=…` plus the vendor
+ * capability probe params the wizard's success banner reads.
+ */
+function redirectPublicationInstall(
+  c: import("hono").Context,
+  opts: {
+    returnUrl: string | null | undefined;
+    publicationId: string;
+    probe?: { kind: string; ok: boolean; message?: string; fixUrl?: string } | null;
+    consoleOrigin?: string | null;
+  },
+): Response {
+  const base =
+    opts.returnUrl && opts.returnUrl.trim() ? opts.returnUrl : CONSOLE_GITHUB_PATH;
+  const params: Record<string, string> = {
+    publication_id: opts.publicationId,
+    install: "ok",
+  };
+  const probe = opts.probe;
+  if (probe) {
+    params.probe_kind = probe.kind;
+    params.probe_ok = probe.ok ? "1" : "0";
+    if (probe.message) params.probe_message = probe.message;
+    if (probe.fixUrl) params.probe_fix_url = probe.fixUrl;
   }
+  return redirectToConsole(c, base, opts.consoleOrigin, params);
 }
 
 // ─── Setup-page HTML (verbatim from CF impl) ─────────────────────────
