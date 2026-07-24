@@ -1,6 +1,7 @@
 // "One agent, wired to your stack" — tabbed use-case diagrams. Each tab is
 // one real agent template drawn as a pipeline of nodes: input(s) → the agent
-// (with its sandbox / skills / memory / MCP layers visible) → outputs.
+// (with its sandbox / skills / memory / MCP layers visible) → optionally a
+// delegation fan-out to child agent thread(s) → outputs.
 // Brand marks (GitHub, Slack, Linear, Sentry, Kubernetes) are simple-icons
 // paths rendered in official brand colors; the rest are stroke glyphs tinted
 // per function so every node reads at a glance.
@@ -171,12 +172,33 @@ interface DiagramNode {
   sub?: string;
 }
 
+/** A child agent thread spawned via call_agent_* / call_agents_parallel. Rendered
+ * with the same diamond marker as the parent "agent" box (no icon) so it reads
+ * as "also an agent", not a data node. */
+interface SubAgentCall {
+  label: string;
+  /** smaller second line, e.g. the task slice this call was given */
+  sub?: string;
+}
+
+/** A delegation stage: the generated tool name plus the child thread(s) it
+ * spawns. Renders as its own fan-out column between the agent box and
+ * outputs — a single call_agent_* delegate is just a column of one. */
+interface Delegation {
+  tool: string;
+  /** small annotation under the tool name, e.g. the concurrency cap */
+  note?: string;
+  agents: SubAgentCall[];
+}
+
 interface Flow {
   name: string;
   every?: string;
   inputs: DiagramNode[];
   /** layer chips shown inside the agent box */
   layers: { icon: string; label: string }[];
+  /** child agent thread(s) this flow delegates to */
+  delegates?: Delegation;
   outputs: DiagramNode[];
   /** one-line caption under the diagram */
   note?: string;
@@ -290,6 +312,34 @@ const FLOWS: Flow[] = [
     outputs: [{ icon: "check", label: "isolated runs" }],
     note: "Open the sandbox tab — a v86 Linux VM boots in-browser; files stay local, no server cost.",
   },
+  {
+    name: "Parallel research",
+    inputs: [{ icon: "doc", label: "research task", sub: "3 sub-topics" }],
+    layers: [{ icon: "doc", label: "skills: synthesis" }],
+    delegates: {
+      tool: "call_agents_parallel",
+      note: "≤5 concurrent · ceiling 10",
+      agents: [
+        { label: "researcher", sub: "topic A" },
+        { label: "researcher", sub: "topic B" },
+        { label: "writer", sub: "outline topic C" },
+      ],
+    },
+    outputs: [{ icon: "doc", label: "synthesized report" }],
+    note: "Each child returns its own success + response — one failure doesn't lose the batch.",
+  },
+  {
+    name: "Lead + specialist",
+    inputs: [{ icon: "github", label: "GitHub issue", sub: "needs research" }],
+    layers: [{ icon: "terminal", label: "sandbox" }],
+    delegates: {
+      tool: "call_agent_researcher",
+      note: "one at a time, blocks until idle",
+      agents: [{ label: "researcher", sub: "own thread" }],
+    },
+    outputs: [{ icon: "github", label: "issue comment" }],
+    note: "Runs as a child thread in the same session — shares /workspace, own message history.",
+  },
 ];
 
 /* ── Diagram pieces ─────────────────────────────────────────────────── */
@@ -321,6 +371,59 @@ function Node({ node }: { node: DiagramNode }) {
           </span>
         )}
       </span>
+    </div>
+  );
+}
+
+// A child agent chip — a smaller echo of the "agent" box's own diamond
+// marker (not a data icon) so a delegation column reads as "these are also
+// agents", distinct from the plain data nodes in the input/output columns.
+const subAgentStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "0.4rem",
+  border: "1px solid color-mix(in srgb, var(--color-brand) 30%, var(--color-border))",
+  background: "color-mix(in srgb, var(--color-brand) 4%, var(--color-card))",
+  borderRadius: "0.5rem",
+  padding: "0.4rem 0.6rem",
+  fontFamily: "var(--font-mono)",
+  fontSize: "0.64rem",
+  lineHeight: 1.25,
+  color: "var(--color-fg)",
+};
+
+function DelegateGroup({ delegation }: { delegation: Delegation }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.4rem" }}>
+      <div className="font-mono" style={{ fontSize: "0.6rem", textAlign: "center", lineHeight: 1.3 }}>
+        <span style={{ color: "var(--color-brand)" }}>{delegation.tool}</span>
+        {delegation.note && <span style={{ display: "block", color: "var(--color-fg-subtle)" }}>{delegation.note}</span>}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: "0.4rem" }}>
+        {delegation.agents.map((a, i) => (
+          <div key={`${a.label}-${i}`} style={subAgentStyle}>
+            <span
+              aria-hidden="true"
+              style={{
+                width: "0.32rem",
+                height: "0.32rem",
+                borderRadius: "1px",
+                background: "var(--color-brand)",
+                transform: "rotate(45deg)",
+                flex: "none",
+              }}
+            ></span>
+            <span style={{ minWidth: 0 }}>
+              <span style={{ display: "block", whiteSpace: "nowrap" }}>{a.label}</span>
+              {a.sub && (
+                <span style={{ display: "block", color: "var(--color-fg-subtle)", fontSize: "0.58rem", whiteSpace: "nowrap" }}>
+                  {a.sub}
+                </span>
+              )}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -528,6 +631,17 @@ export default function WiredFlows() {
             </div>
           ))}
         </div>
+
+        {/* Delegation: fan-out to child agent thread(s) via call_agent_* /
+            call_agents_parallel — its own stage, not folded into the layers
+            list, so a delegation flow visibly branches instead of reading
+            as just another linear pipeline. */}
+        {flow.delegates && (
+          <>
+            <Arrow />
+            <DelegateGroup delegation={flow.delegates} />
+          </>
+        )}
 
         <Arrow />
 
