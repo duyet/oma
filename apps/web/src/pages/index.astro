@@ -46,7 +46,7 @@ const explore = [
   { title: "Features", href: "/features/", icon: "grid", body: "Everything the platform gives you — and why it's drop-in compatible." },
   { title: "Use cases", href: "/use-cases/", icon: "workflow", body: "Real workflows: ship code, run production, answer customers, work a thread." },
   { title: "Infrastructure", href: "/infrastructure/", icon: "server", body: "Multi-agent fleets, any sandbox provider, and bridging your own machine." },
-];
+] as const;
 ---
 
 <Base
@@ -88,7 +88,7 @@ const explore = [
         <!-- Pitch -->
         <div class="hero-pitch text-left">
           <h1 class="font-display text-4xl sm:text-5xl md:text-[3.1rem] lg:text-[3.4rem] font-bold tracking-tight leading-[1.07]">
-            The self-hosted agent platform for
+            The <em class="font-serif italic">self-hosted</em> agent platform for
             <span
               class="hero-accent hero-rotate"
               data-rotate='["LLM provider","Sandbox"]'
@@ -108,12 +108,12 @@ const explore = [
               href="https://github.com/duyet/oma"
               target="_blank"
               rel="noopener noreferrer"
-              class="inline-flex items-center gap-2 px-5 py-3 rounded-md bg-[var(--color-brand)] text-[var(--color-brand-fg)] font-medium font-display no-underline hover:no-underline hover:bg-[var(--color-brand-hover)] transition-colors"
+              class="inline-flex items-center justify-center rounded-2xl border border-transparent text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px disabled:pointer-events-none disabled:opacity-50 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 bg-primary text-primary-foreground hover:bg-primary/80 h-9 gap-1.5 px-4 font-display no-underline hover:no-underline"
               ><Icon name="download" size={16} /> Clone the repo</a
             >
             <a
               href="https://docs.oma.duyet.net"
-              class="inline-flex items-center gap-2 px-5 py-3 rounded-md border border-[var(--color-border-strong)] font-medium font-display no-underline hover:no-underline hover:bg-[var(--color-bg-surface)] transition-colors"
+              class="inline-flex items-center justify-center rounded-2xl border border-transparent text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px disabled:pointer-events-none disabled:opacity-50 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 border-border bg-background hover:bg-muted hover:text-foreground dark:bg-transparent dark:hover:bg-input/30 h-9 gap-1.5 px-4 font-display no-underline hover:no-underline"
               ><Icon name="book" size={16} /> Read the docs</a
             >
           </div>
@@ -334,17 +334,17 @@ const explore = [
           href="https://github.com/duyet/oma"
           target="_blank"
           rel="noopener noreferrer"
-          class="inline-flex items-center gap-2 px-5 py-3 rounded-md bg-[var(--color-brand)] text-[var(--color-brand-fg)] font-medium font-display no-underline hover:no-underline hover:bg-[var(--color-brand-hover)] transition-colors"
+          class="inline-flex items-center justify-center rounded-2xl border border-transparent text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px disabled:pointer-events-none disabled:opacity-50 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 bg-primary text-primary-foreground hover:bg-primary/80 h-9 gap-1.5 px-4 font-display no-underline hover:no-underline"
           ><Icon name="download" size={16} /> Clone the repo</a
         >
         <a
           href="https://docs.oma.duyet.net"
-          class="inline-flex items-center gap-2 px-5 py-3 rounded-md border border-[var(--color-border-strong)] font-medium font-display no-underline hover:no-underline hover:bg-[var(--color-bg-surface)] transition-colors"
+          class="inline-flex items-center justify-center rounded-2xl border border-transparent text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px disabled:pointer-events-none disabled:opacity-50 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 border-border bg-background hover:bg-muted hover:text-foreground dark:bg-transparent dark:hover:bg-input/30 h-9 gap-1.5 px-4 font-display no-underline hover:no-underline"
           ><Icon name="book" size={16} /> Read the docs</a
         >
         <a
           href="https://app.oma.duyet.net/login"
-          class="inline-flex items-center gap-2 px-5 py-3 rounded-md border border-[var(--color-border-strong)] font-medium font-display no-underline hover:no-underline hover:bg-[var(--color-bg-surface)] transition-colors"
+          class="inline-flex items-center justify-center rounded-2xl border border-transparent text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px disabled:pointer-events-none disabled:opacity-50 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 border-border bg-background hover:bg-muted hover:text-foreground dark:bg-transparent dark:hover:bg-input/30 h-9 gap-1.5 px-4 font-display no-underline hover:no-underline"
           ><Icon name="server" size={16} /> Try hosted</a
         >
       </div>

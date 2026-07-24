@@ -103,7 +103,7 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
         notifications to GitHub, Slack, and Matrix.
       </p>
       <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10 text-left">
-        <article data-lift class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5 hover:border-[var(--color-border-strong)]">
+        <article data-lift class="rounded-xl border border-[var(--color-border)] bg-card p-5 hover:border-[var(--color-border-strong)]">
           <span class="arch-badge arch-badge-green mb-3">any sandbox</span>
           <h3 class="font-display text-base font-semibold mb-2 tracking-tight">Run on any sandbox</h3>
           <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed">
@@ -111,7 +111,7 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
             swappable without touching agents.
           </p>
         </article>
-        <article data-lift class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5 hover:border-[var(--color-border-strong)]">
+        <article data-lift class="rounded-xl border border-[var(--color-border)] bg-card p-5 hover:border-[var(--color-border-strong)]">
           <span class="arch-badge arch-badge-orange mb-3">cost control</span>
           <h3 class="font-display text-base font-semibold mb-2 tracking-tight">Pause &amp; resume</h3>
           <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed">
@@ -119,7 +119,7 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
             restores it exactly, so idle agents cost nothing.
           </p>
         </article>
-        <article data-lift class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5 hover:border-[var(--color-border-strong)]">
+        <article data-lift class="rounded-xl border border-[var(--color-border)] bg-card p-5 hover:border-[var(--color-border-strong)]">
           <span class="arch-badge arch-badge-blue mb-3">coding agents</span>
           <h3 class="font-display text-base font-semibold mb-2 tracking-tight">Coding agents inside</h3>
           <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed">
@@ -127,7 +127,7 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
             sandbox, one Docker image per runtime.
           </p>
         </article>
-        <article data-lift class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5 hover:border-[var(--color-border-strong)]">
+        <article data-lift class="rounded-xl border border-[var(--color-border)] bg-card p-5 hover:border-[var(--color-border-strong)]">
           <span class="arch-badge arch-badge-green mb-3">delegation</span>
           <h3 class="font-display text-base font-semibold mb-2 tracking-tight">Cross-sandbox sub-agents</h3>
           <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed">
@@ -137,7 +137,7 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
         </article>
       </div>
 
-      <!-- Sandbox-provider fleet — real brand marks, monochrome, iris on hover -->
+      <!-- Sandbox-provider fleet — real brand marks, monochrome, amber on hover -->
       <div class="pixel-fleet">
         {
           fleetLogos.map((f) => (
@@ -180,7 +180,7 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
       {sandboxProviders.map((p) => {
         const mark = fleetLogos.find((f) => f.label === p.logo);
         return (
-          <article class="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-4 hover:border-[var(--color-border-strong)]">
+          <article class="rounded-lg border border-[var(--color-border)] bg-card p-4 hover:border-[var(--color-border-strong)]">
             <div class="flex items-center gap-2.5 mb-2">
               {mark ? (
                 <svg
