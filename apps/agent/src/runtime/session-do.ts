@@ -1827,6 +1827,59 @@ export class SessionDO extends DurableObject<Env> {
       return new Response("ok");
     }
 
+    // POST /runtime-settings — change the session-level model /
+    // reasoning-effort override mid-session. Writes the same two state
+    // slots the create-time `model` + `reasoning_effort` init params seed,
+    // so `resolveModelForTurn` picks the new value up on the next turn
+    // with no other plumbing. Deliberately NOT an event: the override is
+    // resolution input, never conversation history (appending it would
+    // change the cached prompt prefix for no reason).
+    //
+    // Refused (409) while a turn is in flight — swapping providers under a
+    // running harness would split a single turn across two models and
+    // invalidate the prompt cache mid-stream.
+    if (request.method === "POST" && url.pathname === "/runtime-settings") {
+      if (this.deriveStatus() === "running") {
+        return new Response(
+          JSON.stringify({
+            type: "error",
+            error: {
+              type: "invalid_request_error",
+              message: "Cannot change model while a turn is in flight",
+            },
+          }),
+          { status: 409, headers: { "content-type": "application/json" } },
+        );
+      }
+      let body: { model?: string | null; reasoning_effort?: string | null } = {};
+      try {
+        body = (await request.json()) as typeof body;
+      } catch {
+        return new Response(
+          JSON.stringify({
+            type: "error",
+            error: { type: "invalid_request_error", message: "Invalid JSON body" },
+          }),
+          { status: 400, headers: { "content-type": "application/json" } },
+        );
+      }
+      const next = { ...this.state };
+      // `null` clears the override (falls back to the agent's own model);
+      // omitting the key leaves the current value untouched.
+      if (body.model !== undefined) {
+        next.model_override = body.model === null ? undefined : body.model;
+      }
+      if (body.reasoning_effort !== undefined) {
+        next.reasoning_effort_override =
+          body.reasoning_effort === null ? undefined : body.reasoning_effort;
+      }
+      this.setState(next);
+      return Response.json({
+        model: next.model_override ?? null,
+        reasoning_effort: next.reasoning_effort_override ?? null,
+      });
+    }
+
     // POST /pause — snapshot + destroy the sandbox container to save cost
     // while keeping the session resumable. Refuses while a turn is
     // in-flight (mid-turn pause would race the harness's own sandbox
