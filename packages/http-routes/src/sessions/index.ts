@@ -720,6 +720,65 @@ export function buildSessionRoutes(deps: SessionRoutesDeps) {
     return c.json({ id, sandbox_status: "running" as const });
   });
 
+  // PATCH /:id/runtime — change the session-level model / reasoning-effort
+  // override mid-session. Scoped to this session only: the agent record is
+  // shared by every other session, so switching models here must never
+  // write back to it. `null` clears an override and falls back to the
+  // agent's configured model.
+  app.patch("/:id/runtime", async (c) => {
+    const services = resolveServices(deps.services, c);
+    const router = resolveRouter(deps.router, c);
+    const id = c.req.param("id");
+    const sess = await services.sessions.get({ tenantId: c.var.tenant_id, sessionId: id });
+    if (!sess) return c.json({ error: "Session not found" }, 404);
+
+    let body: { model?: string | null; reasoning_effort?: string | null };
+    try {
+      body = (await c.req.json()) as typeof body;
+    } catch {
+      return c.json(
+        { type: "error", error: { type: "invalid_request_error", message: "Invalid JSON body" } },
+        400,
+      );
+    }
+    const badField = (["model", "reasoning_effort"] as const).find((f) => {
+      const v = body[f];
+      return v !== undefined && v !== null && (typeof v !== "string" || v.trim() === "");
+    });
+    if (badField) {
+      return c.json(
+        {
+          type: "error",
+          error: {
+            type: "invalid_request_error",
+            message: `${badField} must be a non-empty string or null`,
+          },
+        },
+        422,
+      );
+    }
+    if (!router.updateRuntimeSettings) {
+      return c.json(
+        {
+          type: "error",
+          error: {
+            type: "not_supported_error",
+            message: "This runtime does not support changing the model mid-session",
+          },
+        },
+        501,
+      );
+    }
+    const r = await router.updateRuntimeSettings(id, {
+      ...(body.model !== undefined ? { model: body.model } : {}),
+      ...(body.reasoning_effort !== undefined ? { reasoningEffort: body.reasoning_effort } : {}),
+    });
+    return new Response(r.body, {
+      status: r.status,
+      headers: { "content-type": "application/json" },
+    });
+  });
+
   app.post("/:id/archive", async (c) => {
     const services = resolveServices(deps.services, c);
     try {
