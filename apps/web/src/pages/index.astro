@@ -6,6 +6,8 @@ import HowItFits from "../components/HowItFits.astro";
 import WiredFlows from "../components/WiredFlows.tsx";
 import RequestFlowInteractive from "../components/RequestFlowInteractive.tsx";
 import ProviderFan from "../components/ProviderFan.astro";
+import BuildingBlocks from "../components/BuildingBlocks.astro";
+import ControlPlaneFlow from "../components/ControlPlaneFlow.astro";
 import Icon from "../components/Icon.astro";
 
 // SoftwareApplication is the homepage-only schema — anchors the
@@ -157,6 +159,9 @@ const explore = [
     </div>
   </section>
 
+  {/* Building blocks — Skills, MCP, Artifacts: what an agent wires together. */}
+  <BuildingBlocks />
+
   {/* Anatomy — the durable request path, now an interactive walkthrough that
       explains what actually runs at each step. It autoplays, pauses on hover,
       and click-to-pin lets you read a step in full. The replayable event log
@@ -193,6 +198,25 @@ const explore = [
         </p>
       </header>
       <ProviderFan />
+    </div>
+  </section>
+
+  {/* Layers — the three routing layers the fan routes across: control plane,
+      the sandbox platform, and AnyRouter models. Bare viz, no border/scroll. */}
+  <section class={section} data-reveal id="layers">
+    <div class={container}>
+      <header class="mb-6 sm:mb-8">
+        <p class={eyebrow}>Layers</p>
+        <h2 class={sectionTitle}>Control plane → Sandbox platform → AnyRouter models</h2>
+        <p class={sectionIntro}>
+          The interchangeability in the fan above is real because these three
+          layers are independently swappable: OMA's durable spine (context, state,
+          memory) lives in the control plane, your pick of sandbox runs the tools,
+          and AnyRouter routes the model calls — swap any layer without touching
+          the others.
+        </p>
+      </header>
+      <ControlPlaneFlow />
     </div>
   </section>
 

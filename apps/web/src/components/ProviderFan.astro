@@ -100,10 +100,25 @@ const SPINE = [
 const LEFT_EDGE_X = 165;
 const RIGHT_EDGE_X = 595;
 
-// Cubic edge from a left node's right edge into the hub's left edge.
-const leftEdge = (y: number) => `M${LEFT_EDGE_X} ${y} C242 ${y} 242 ${HUB.cy} ${HUB.x} ${HUB.cy}`;
+// The hub rect (x:300..460, y:104..256). Every edge now terminates at a
+// distinct point along the hub's left/right edge instead of all piling onto
+// the vertical center — that single change is what makes the fan read as a
+// real fan-in / fan-out rather than three lines stacked on one pixel.
+const HUB_TOP = 104;
+const HUB_BOT = 256; // HUB_TOP + 152
+const hubExitY = (i: number, n: number) => {
+  const pad = 16; // keep the connection point off the hub's rounded caps
+  const span = HUB_BOT - HUB_TOP - pad * 2;
+  return HUB_TOP + pad + (n > 1 ? (i / (n - 1)) * span : span / 2);
+};
+
+// Cubic edge from a left node's right edge into the hub's left edge, landing
+// at a spread hub-edge point (hy) rather than the center.
+const leftEdge = (y: number, hy: number) =>
+  `M${LEFT_EDGE_X} ${y} C220 ${y} 280 ${hy} ${HUB.x} ${hy}`;
 // Cubic edge from the hub's right edge out to a right node's left edge.
-const rightEdge = (y: number) => `M${HUB_RIGHT} ${HUB.cy} C540 ${HUB.cy} 540 ${y} ${RIGHT_EDGE_X} ${y}`;
+const rightEdge = (hy: number, y: number) =>
+  `M${HUB_RIGHT} ${hy} C520 ${hy} 560 ${y} ${RIGHT_EDGE_X} ${y}`;
 
 // Node box sizing. Widened from the original 150 (which let "OpenAI-compatible"
 // spill past its card) and paired with tighter internal insets so every
@@ -124,22 +139,31 @@ const PILL_GAP = 6;
 ---
 
 <figure class="pf">
-  <svg viewBox="0 0 772 384" role="img" aria-label="Any LLM provider routes through the OMA control plane — which owns context, state, and memory — out to any sandbox provider">
-    <!-- Edges: static rail + animated dashed overlay + traveling packet -->
-    {LEFT.map((n) => (
-      <g>
-        <path class="pf-rail" d={leftEdge(n.y)} />
-        <path class="pf-flow" d={leftEdge(n.y)} />
-        <circle class="pf-packet" r="2.6" style={`offset-path:path('${leftEdge(n.y)}')`} />
-      </g>
-    ))}
-    {RIGHT.map((n) => (
-      <g>
-        <path class="pf-rail" d={rightEdge(n.y)} />
-        <path class="pf-flow" d={rightEdge(n.y)} />
-        <circle class="pf-packet" r="2.6" style={`offset-path:path('${rightEdge(n.y)}')`} />
-      </g>
-    ))}
+  <svg viewBox="0 0 772 384" class="pf-diagram" role="img" aria-label="Any LLM provider routes through the OMA control plane — which owns context, state, and memory — out to any sandbox provider">
+    <!-- Edges: one quiet track + one staggered traveler per edge. The triple
+         (rail + animated dash overlay + packet) became a clean single line so
+         the fan reads as a flow, not a tangle. Delays stagger the dots so the
+         inbound/outbound traffic feels like real concurrent requests. -->
+    {LEFT.map((n, i) => {
+      const hy = hubExitY(i, LEFT.length);
+      const d = leftEdge(n.y, hy);
+      return (
+        <g>
+          <path class="pf-edge" d={d} />
+          <circle class="pf-packet" r="2.4" style={`offset-path:path('${d}'); animation-delay: ${i * 260}ms`} />
+        </g>
+      );
+    })}
+    {RIGHT.map((n, i) => {
+      const hy = hubExitY(i, RIGHT.length);
+      const d = rightEdge(hy, n.y);
+      return (
+        <g>
+          <path class="pf-edge" d={d} />
+          <circle class="pf-packet" r="2.4" style={`offset-path:path('${d}'); animation-delay: ${i * 260}ms`} />
+        </g>
+      );
+    })}
 
     <!-- Left column: LLM providers (logo coin + left-aligned label) -->
     {LEFT.map((n) => {
@@ -223,55 +247,45 @@ const PILL_GAP = 6;
 </figure>
 
 <style>
+  /* The diagram breathes bare — no plate border, no scrollbox around it. The
+     SVG is full-width and scales with the column; on narrow screens it simply
+     shrinks (its blueprint-grid background lives in global.css via .pf-plate,
+     applied only where a frame is wanted, not here). */
   .pf {
     margin: 0;
     width: 100%;
   }
-  .pf svg {
+  .pf-diagram {
     width: 100%;
+    max-width: 772px;
     height: auto;
     display: block;
+    margin: 0 auto;
     overflow: visible;
   }
 
-  /* Edges */
-  .pf-rail {
+  /* Edges — one quiet track + one traveling packet per edge. */
+  .pf-edge {
     fill: none;
-    stroke: color-mix(in srgb, var(--color-brand) 30%, var(--color-border));
+    stroke: color-mix(in srgb, var(--color-brand) 22%, var(--color-border));
     stroke-width: 1.5;
-  }
-  .pf-flow {
-    fill: none;
-    stroke: var(--color-brand);
-    stroke-width: 1.5;
-    stroke-dasharray: 5 6;
-    opacity: 0.8;
   }
   .pf-packet {
     fill: var(--color-brand);
     offset-distance: 0%;
     filter: drop-shadow(0 0 3px color-mix(in srgb, var(--color-brand) 60%, transparent));
   }
-  @keyframes pf-dash {
-    to {
-      stroke-dashoffset: -11;
-    }
-  }
   @keyframes pf-move {
-    from {
-      offset-distance: 0%;
-    }
-    to {
-      offset-distance: 100%;
-    }
+    from { offset-distance: 0%; }
+    to { offset-distance: 100%; }
   }
   @media (prefers-reduced-motion: no-preference) {
-    .pf-flow {
-      animation: pf-dash 1s linear infinite;
-    }
     .pf-packet {
-      animation: pf-move 1.9s linear infinite;
+      animation: pf-move 2.6s linear infinite;
     }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pf-packet { animation: none; }
   }
 
   /* Nodes */
