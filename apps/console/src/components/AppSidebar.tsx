@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import { useMemo } from "react";
 import { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import {
@@ -51,6 +52,12 @@ import {
 import { consolePlugins } from "../plugins/registry";
 import { useApiQuery } from "../lib/useApiQuery";
 import { cn } from "@/lib/utils";
+import { IntegrationsApi } from "../integrations/api/client";
+import type {
+  LinearInstallation,
+  GitHubInstallation,
+  SlackInstallation,
+} from "../integrations/api/types";
 
 /* ── Sidebar counters ──
  * Two cheap reads back every badge: `/v1/stats` (one covering-index
@@ -91,6 +98,9 @@ interface NavItem {
   icon: ComponentType<{ className?: string }>;
   end?: boolean;
   badge?: BadgeKey;
+  /** When set, renders a connection-status badge for the given integration
+   *  provider (dot + count when at least one installation exists). */
+  integrationStatus?: "linear" | "github" | "slack";
   /** Sub-destinations nested under this item, revealed via a chevron toggle
    *  next to the (still directly clickable) parent link. */
   children?: NavItem[];
@@ -99,6 +109,12 @@ interface NavItem {
 interface NavGroup {
   label: string;
   items: NavItem[];
+}
+
+interface IntegrationStatusMap {
+  linear?: number;
+  github?: number;
+  slack?: number;
 }
 
 /* ── Navigation — single source of truth for sidebar items ──
@@ -114,7 +130,7 @@ const navGroups: NavGroup[] = [
   {
     label: "Workspace",
     items: [
-      { to: "/", label: "Dashboard", icon: DashboardIcon, end: true },
+      { to: "/", label: "Overview", icon: DashboardIcon, end: true },
       {
         to: "/agents",
         label: "Agents",
@@ -140,9 +156,9 @@ const navGroups: NavGroup[] = [
   {
     label: "Integrations",
     items: [
-      { to: "/integrations/linear", label: "Linear", icon: LinearIcon },
-      { to: "/integrations/github", label: "GitHub", icon: GitHubIcon },
-      { to: "/integrations/slack", label: "Slack", icon: SlackIcon },
+      { to: "/integrations/linear", label: "Linear", icon: LinearIcon, integrationStatus: "linear" },
+      { to: "/integrations/github", label: "GitHub", icon: GitHubIcon, integrationStatus: "github" },
+      { to: "/integrations/slack", label: "Slack", icon: SlackIcon, integrationStatus: "slack" },
     ],
   },
   {
@@ -173,6 +189,39 @@ export function AppSidebar() {
     { staleTime: 30_000, refetchInterval: 60_000 },
   );
 
+  // Integration installation counts for sidebar badges. Failed/absent fetches
+  // leave the badges off; never errors the sidebar.
+  const integrationsApi = useMemo(() => new IntegrationsApi(), []);
+  const { data: linearInstalls } = useApiQuery<LinearInstallation[]>(
+    "/v1/integrations/linear/installations",
+    undefined,
+    { staleTime: 60_000 },
+  );
+  const { data: githubInstalls } = useApiQuery<GitHubInstallation[]>(
+    "/v1/integrations/github/installations",
+    undefined,
+    { staleTime: 60_000 },
+  );
+  const { data: slackInstalls } = useApiQuery<SlackInstallation[]>(
+    "/v1/integrations/slack/installations",
+    undefined,
+    { staleTime: 60_000 },
+  );
+  const integrationStatus: IntegrationStatusMap = useMemo(
+    () => ({
+      ...(Array.isArray(linearInstalls) && linearInstalls.length
+        ? { linear: linearInstalls.length }
+        : {}),
+      ...(Array.isArray(githubInstalls) && githubInstalls.length
+        ? { github: githubInstalls.length }
+        : {}),
+      ...(Array.isArray(slackInstalls) && slackInstalls.length
+        ? { slack: slackInstalls.length }
+        : {}),
+    }),
+    [linearInstalls, githubInstalls, slackInstalls],
+  );
+
   const runtimes = runtimesRes?.runtimes;
   const runtimesOnline = runtimes?.filter((r) => r.status === "online").length;
 
@@ -180,7 +229,7 @@ export function AppSidebar() {
   // (or is zero — a "0" badge is visual noise, the empty page says it
   // better). Runtimes is the one status badge: a dot that goes green only
   // when at least one machine is actually attached.
-  const renderBadge = (key: BadgeKey) => {
+  const renderBadge = (key: BadgeKey | undefined, integrationStatus?: "linear" | "github" | "slack") => {
     if (key === "runtimes") {
       if (runtimes === undefined || runtimes.length === 0) return null;
       return (
@@ -195,9 +244,22 @@ export function AppSidebar() {
         </SidebarMenuBadge>
       );
     }
-    const count = stats?.[key];
-    if (!count) return null;
-    return <SidebarMenuBadge className="text-fg-subtle">{count}</SidebarMenuBadge>;
+    if (key && stats) {
+      const count = stats?.[key];
+      if (!count) return null;
+      return <SidebarMenuBadge className="text-fg-subtle">{count}</SidebarMenuBadge>;
+    }
+    if (integrationStatus) {
+      const count = integrationStatus[integrationStatus];
+      if (count == null) return null;
+      return (
+        <SidebarMenuBadge className="gap-1 text-success">
+          <span className="size-1.5 rounded-full bg-success" />
+          {count}
+        </SidebarMenuBadge>
+      );
+    }
+    return null;
   };
 
   const matchesPrefix = (base: string) =>
@@ -269,7 +331,7 @@ export function AppSidebar() {
       return (
         <SidebarMenuItem key={item.to}>
           {button}
-          {item.badge ? renderBadge(item.badge) : null}
+          {(item.badge || item.integrationStatus) ? renderBadge(item.badge, item.integrationStatus) : null}
         </SidebarMenuItem>
       );
     }

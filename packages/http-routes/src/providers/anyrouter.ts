@@ -100,10 +100,19 @@ interface Vars {
 
 const KV_CLIENT_KEY = "anyrouter:oauth_client";
 const KV_PENDING_PREFIX = "anyrouter:oauth_pending:";
+/** Global models catalog cache — the upstream /models catalog is the same
+ *  for every account, so caching it globally is a pure win (one upstream
+ *  call per hour across all tenants instead of N). */
 const KV_MODELS_CACHE_KEY = "anyrouter:models_cache";
+/** Per-tenant presets cache — saved presets are account-specific (each
+ *  AnyRouter user curates their own), so caching them globally would leak
+ *  one tenant's presets into another's picker. Separate key prefix keeps
+ *  the shared catalog cold-free while keeping presets isolated. */
+const KV_PRESETS_CACHE_PREFIX = "anyrouter:presets_cache:";
 const KV_CREDITS_CACHE_PREFIX = "anyrouter:credits_cache:";
 const PENDING_TTL_SECONDS = 10 * 60;
 const MODELS_CACHE_TTL_MS = 60 * 60 * 1000;
+const PRESETS_CACHE_TTL_MS = 15 * 60 * 1000;
 const CREDITS_CACHE_TTL_MS = 60 * 1000;
 const VAULT_NAME = "AnyRouter";
 const CREDENTIAL_DISPLAY_NAME = "AnyRouter inference key";
@@ -477,22 +486,40 @@ export function buildAnyRouterRoutes(deps: AnyRouterRoutesDeps) {
   });
 
   // ── Model catalog (for a model picker) ──────────────────────────────────
+  //
+  // Cache strategy: models are shared globally (the upstream catalog is the
+  // same for every account), presets are per-tenant (each AnyRouter user
+  // curates their own saved presets). Splitting them avoids leaking one
+  // tenant's presets into another's picker while still letting the catalog
+  // ride a single global hourly fetch across the whole deployment.
   app.get("/models", async (c) => {
     const services = resolveServices(deps.services, c);
     const tenantId = c.var.tenant_id;
     if (!tenantId) return c.json({ error: "authentication required" }, 401);
 
-    const cached = await services.kv.get(KV_MODELS_CACHE_KEY);
-    if (cached) {
-      // Old cache entries predate presets — treat a missing `presets` as [].
-      const parsed = JSON.parse(cached) as {
-        fetchedAt: number;
-        models: AnyRouterModel[];
-        presets?: AnyRouterPreset[];
-      };
-      if (Date.now() - parsed.fetchedAt < MODELS_CACHE_TTL_MS) {
-        return c.json({ data: parsed.models, presets: parsed.presets ?? [], cached: true });
-      }
+    const now = Date.now();
+
+    // ── Read both caches ──────────────────────────────────────────────────
+    const cachedModelsRaw = await services.kv.get(KV_MODELS_CACHE_KEY);
+    const presetsCacheKey = `${KV_PRESETS_CACHE_PREFIX}${tenantId}`;
+    const cachedPresetsRaw = await services.kv.get(presetsCacheKey);
+
+    const cachedModels = cachedModelsRaw
+      ? (JSON.parse(cachedModelsRaw) as { fetchedAt: number; models: AnyRouterModel[] })
+      : null;
+    const cachedPresets = cachedPresetsRaw
+      ? (JSON.parse(cachedPresetsRaw) as { fetchedAt: number; presets: AnyRouterPreset[] })
+      : null;
+
+    const modelsFresh = cachedModels && now - cachedModels.fetchedAt < MODELS_CACHE_TTL_MS;
+    const presetsFresh = cachedPresets && now - cachedPresets.fetchedAt < PRESETS_CACHE_TTL_MS;
+
+    if (modelsFresh && presetsFresh) {
+      return c.json({
+        data: cachedModels.models,
+        presets: cachedPresets.presets,
+        cached: true,
+      });
     }
 
     const hit = await findCredential(services, tenantId);
@@ -502,12 +529,15 @@ export function buildAnyRouterRoutes(deps: AnyRouterRoutesDeps) {
     const res = await fetchImpl(req.url, { headers: req.headers });
     if (!res.ok) return c.json({ data: [], error: `HTTP ${res.status}` }, 502);
     // AnyRouter's authenticated /models response carries both the catalog
-    // (`data`) and the account's saved presets (`presets`) — cache them
-    // together off one read of the body.
+    // (`data`) and the account's saved presets (`presets`) — cache them into
+    // their respective stores off one read of the body.
     const body = await res.text();
     const models = parseModelsResponse(body);
     const presets = parsePresetsResponse(body);
-    await services.kv.put(KV_MODELS_CACHE_KEY, JSON.stringify({ fetchedAt: Date.now(), models, presets }));
+
+    await services.kv.put(KV_MODELS_CACHE_KEY, JSON.stringify({ fetchedAt: now, models }));
+    await services.kv.put(presetsCacheKey, JSON.stringify({ fetchedAt: now, presets }));
+
     return c.json({ data: models, presets });
   });
 

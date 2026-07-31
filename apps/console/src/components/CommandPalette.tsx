@@ -44,7 +44,7 @@ interface NavCommand {
 // intentionally don't auto-derive from Layout's navGroups because the
 // palette wants slightly different ordering and aliases.)
 const COMMANDS: NavCommand[] = [
-  { label: "Dashboard",          to: "/",                          group: "Overview",       icon: DashboardIcon },
+  { label: "Overview",           to: "/",                          group: "Overview",       icon: DashboardIcon },
   { label: "Agents",             to: "/agents",                    group: "Managed Agents", icon: AgentIcon },
   { label: "Sessions",           to: "/sessions",                  group: "Managed Agents", icon: SessionsIcon },
   { label: "Kanban Board",       to: "/kanban",                    group: "Managed Agents", icon: SessionsIcon, aliases: "board queued running blocked done" },

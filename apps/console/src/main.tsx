@@ -154,7 +154,7 @@ const SETTINGS_HUB: HubConfig = {
 };
 
 const protectedRoutes: RouteObject[] = [
-  { index: true, element: <Dashboard />, handle: { crumb: "Dashboard" } },
+  { index: true, element: <Dashboard />, handle: { crumb: "Overview" } },
   // Nested route groups so detail pages publish a proper hierarchy
   // through `useMatches()` — `/agents/:id` resolves to
   // [agents-parent, agents/:id], so AppBreadcrumb renders

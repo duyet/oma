@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useNavigate } from "react-router";
 import { TriangleAlertIcon } from "lucide-react";
 import { useAuth } from "../lib/auth";
@@ -10,6 +11,23 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import { formatCompact, formatSandboxTime, formatSessionDuration } from "../lib/format";
 import { rowActivateKeyDown } from "@/lib/utils";
+
+// ── Usage wire shapes (mirror Usage.tsx) ──────────────────────────────────
+interface DailyBucket {
+  date: string;
+  active_seconds: number;
+  runs: number;
+}
+interface UsageByKind {
+  kind: string;
+  total: number;
+}
+interface UsageSummary {
+  daily: DailyBucket[];
+  by_kind: UsageByKind[];
+  total_sessions: number;
+  total_active_seconds: number;
+}
 
 interface Stats {
   agents: number;
@@ -77,6 +95,16 @@ export function Dashboard() {
   }>("/v1/sessions", { status: "running", limit: "100" });
   const stats = statsQuery.data ?? null;
   const recentSessions = sessionsQuery.data?.data.slice(0, 5) ?? [];
+
+  // Mini analytics for the Overview — small inline SVG charts that give a
+  // pulse without replacing the full Usage page. Two lightweight reads:
+  //   - /v1/usage (all-time) for a 7-day activity sparkline and token mix
+  //   - /v1/stats already in flight above for the "Sessions run" headline
+  const usageQuery = useApiQuery<UsageSummary>("/v1/usage", {
+    days: "7",
+    group_by: "agent",
+  });
+  const usage = usageQuery.data ?? null;
 
   const runningCount = runningSessionsQuery.data?.data.length;
   const runningHasMore = Boolean(runningSessionsQuery.data?.next_page);
@@ -169,6 +197,52 @@ export function Dashboard() {
                 </CardContent>
               </Card>
             ))}
+          </div>
+        </section>
+
+        {/* Mini analytics — inline SVG, no chart library. Each mini card
+            rides its own query so one flaky endpoint doesn't hide the
+            other; failed/empty fetches fall back to a quiet empty state
+            rather than erroring the page. */}
+        <section>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 max-w-5xl">
+            {/* 7-day activity sparkline */}
+            <Card title="Last 7 days">
+              {usageQuery.isLoading && !usage ? (
+                <Skeleton className="h-[120px] w-full" rounded="sm" />
+              ) : usageQuery.error ? (
+                <EmptyState
+                  size="sm"
+                  title="Couldn't load activity"
+                  body={formatQueryError(usageQuery.error)}
+                  tone="danger"
+                  action={<Button onClick={() => usageQuery.refetch()}>Retry</Button>}
+                />
+              ) : usage && usage.daily.length > 0 ? (
+                <MiniSparkline data={usage.daily.slice(-7)} />
+              ) : (
+                <p className="text-sm text-fg-subtle">No sessions in the last 7 days.</p>
+              )}
+            </Card>
+
+            {/* Token mix — input vs output vs reasoning */}
+            <Card title="Token mix">
+              {usageQuery.isLoading && !usage ? (
+                <Skeleton className="h-[120px] w-full" rounded="sm" />
+              ) : usageQuery.error ? (
+                <EmptyState
+                  size="sm"
+                  title="Couldn't load tokens"
+                  body={formatQueryError(usageQuery.error)}
+                  tone="danger"
+                  action={<Button onClick={() => usageQuery.refetch()}>Retry</Button>}
+                />
+              ) : usage ? (
+                <MiniTokenBar usage={usage} />
+              ) : (
+                <p className="text-sm text-fg-subtle">No token usage recorded.</p>
+              )}
+            </Card>
           </div>
         </section>
 
@@ -349,6 +423,147 @@ export function Dashboard() {
             </div>
           )}
         </section>
+      </div>
+    </div>
+  );
+}
+
+// ── Mini chart helpers ───────────────────────────────────────────────────
+
+function fmtTokenValue(v: number): string {
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}k`;
+  return String(v);
+}
+
+function kindValue(byKind: UsageByKind[], kind: string): number {
+  return byKind.find((k) => k.kind === kind)?.total ?? 0;
+}
+
+/** 7-day area sparkline for daily active seconds. Mirrors Usage.tsx's
+ *  DailyChart in spirit (inline SVG, tooltips) but is more compact and
+ *  drives off active_seconds only. */
+function MiniSparkline({ data }: { data: DailyBucket[] }) {
+  const n = data.length;
+  if (n === 0) return <p className="text-sm text-fg-subtle">No data.</p>;
+
+  const max = Math.max(1, ...data.map((d) => d.active_seconds));
+  const slot = 12;
+  const barW = 8;
+  const chartTop = 8;
+  const chartH = 80;
+  const baseline = chartTop + chartH;
+  const totalW = n * slot;
+
+  const fmtDate = (iso: string) => {
+    const d = new Date(iso);
+    return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+  };
+
+  return (
+    <div className="overflow-x-auto">
+      <svg
+        viewBox={`0 0 ${totalW} ${baseline + 16}`}
+        width="100%"
+        height={baseline + 16}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label="7-day activity"
+      >
+        <line x1={0} y1={baseline} x2={totalW} y2={baseline} stroke="var(--color-border)" strokeWidth={1} />
+        {data.map((d, i) => {
+          const h = max > 0 ? (d.active_seconds / max) * chartH : 0;
+          const x = i * slot + (slot - barW) / 2;
+          const y = baseline - h;
+          return (
+            <g key={d.date}>
+              <rect
+                x={x}
+                y={y}
+                width={barW}
+                height={Math.max(h, d.active_seconds > 0 ? 1 : 0)}
+                rx={1.5}
+                fill="var(--color-brand)"
+                opacity={0.85}
+              >
+                <title>{`${fmtDate(d.date)}: ${formatSandboxTime(d.active_seconds)} · ${d.runs} run${d.runs === 1 ? "" : "s"}`}</title>
+              </rect>
+              {i % 2 === 0 && (
+                <text
+                  x={i * slot + slot / 2}
+                  y={baseline + 12}
+                  textAnchor="middle"
+                  fontSize={7}
+                  fill="var(--color-fg-subtle)"
+                >
+                  {fmtDate(d.date)}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+/** Horizontal stacked bar showing the mix between input, output, and
+ *  reasoning tokens. Pure decoration; empty/zero usage collapses to a
+ *  quiet empty state. */
+function MiniTokenBar({ usage }: { usage: UsageSummary }) {
+  const input = kindValue(usage.by_kind, "model_input_tokens");
+  const output = kindValue(usage.by_kind, "model_output_tokens");
+  const reasoning = kindValue(usage.by_kind, "model_reasoning_tokens");
+  const total = input + output + reasoning;
+  if (total === 0) return <p className="text-sm text-fg-subtle">No token usage recorded.</p>;
+
+  const W = 100;
+  const H = 12;
+  const segments = [
+    { key: "input", value: input, color: "var(--color-brand)", label: "Input" },
+    { key: "output", value: output, color: "var(--color-success)", label: "Output" },
+    { key: "reasoning", value: reasoning, color: "var(--color-fg-subtle)", label: "Reasoning" },
+  ].filter((s) => s.value > 0);
+
+  let x = 0;
+  return (
+    <div className="space-y-2">
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="img" aria-label="Token mix">
+        {segments.map((s) => {
+          const w = (s.value / total) * W;
+          const rx = x === 0 ? H / 2 : 0;
+          return (
+            <rect
+              key={s.key}
+              x={x}
+              y={0}
+              width={w}
+              height={H}
+              rx={rx}
+              fill={s.color}
+              opacity={0.9}
+            >
+              <title>{`${s.label}: ${fmtTokenValue(s.value)} (${((s.value / total) * 100).toFixed(0)}%)`}</title>
+            </rect>
+          );
+        })}
+      </svg>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-fg-subtle">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2 rounded-sm" style={{ backgroundColor: "var(--color-brand)" }} />
+          In {fmtTokenValue(input)}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2 rounded-sm" style={{ backgroundColor: "var(--color-success)" }} />
+          Out {fmtTokenValue(output)}
+        </span>
+        {reasoning > 0 && (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-2 rounded-sm" style={{ backgroundColor: "var(--color-fg-subtle)" }} />
+            Reason {fmtTokenValue(reasoning)}
+          </span>
+        )}
+        <span className="text-fg-muted tabular-nums ml-auto">{fmtTokenValue(total)} total</span>
       </div>
     </div>
   );
