@@ -4,6 +4,7 @@ import { softwareApplicationSchema } from "../lib/seo";
 import Logo from "../components/Logo.astro";
 import HowItFits from "../components/HowItFits.astro";
 import WiredFlows from "../components/WiredFlows.tsx";
+import RequestFlowInteractive from "../components/RequestFlowInteractive.tsx";
 import ProviderFan from "../components/ProviderFan.astro";
 import Icon from "../components/Icon.astro";
 
@@ -20,18 +21,18 @@ const btnPrimary =
 const btnOutline =
   "inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground no-underline transition-colors hover:bg-muted hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 [&_svg]:shrink-0";
 
-// Section frame — mirrors AnyRouter's SectionShell rhythm: hairline top
-// border, generous vertical padding, left-aligned mono eyebrow + tight
-// semibold title + max-w-2xl intro. No banded fills; the page is white
-// throughout and sections are separated by the hairline alone.
-const section = "border-t border-border py-12 sm:py-16 lg:py-24";
+// Section frame — the page is white throughout and sections are separated by a
+// hairline top border. Padding is deliberately tighter than the previous
+// rhythm so the body reads as one compact scroll, not a stack of billboard
+// sections.
+const section = "border-t border-border py-10 sm:py-12";
 const container = "max-w-5xl mx-auto px-4";
 const eyebrow =
   "font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--color-brand)]";
 const sectionTitle =
-  "mt-3 max-w-2xl text-balance text-[1.625rem] font-semibold tracking-tighter text-[var(--color-fg)] sm:text-3xl lg:text-4xl";
+  "mt-3 text-balance text-[1.6rem] font-semibold tracking-tighter text-[var(--color-fg)] sm:text-[2.1rem]";
 const sectionIntro =
-  "mt-3 max-w-2xl text-pretty text-sm leading-relaxed text-[var(--color-fg-muted)] sm:text-base";
+  "mt-2 max-w-2xl text-pretty text-sm leading-relaxed text-[var(--color-fg-muted)] sm:text-base";
 
 const concepts = [
   {
@@ -52,16 +53,6 @@ const concepts = [
   },
 ];
 
-// The durable request path, as an ordered pipeline. Rendered as a node row
-// joined by connector rails.
-const requestPath = [
-  { icon: "workflow", name: "Request", sub: "user.message (SSE)" },
-  { icon: "layers", name: "Session", sub: "event log · DO-SQLite" },
-  { icon: "repeat", name: "Harness", sub: "model loop · tools" },
-  { icon: "box", name: "Sandbox", sub: "bash · read · write · MCP" },
-  { icon: "globe", name: "Vault proxy", sub: "injects creds" },
-] as const;
-
 // Deep-dive pages split off the landing page — a compact link row so the
 // relocated sections stay discoverable.
 const explore = [
@@ -81,7 +72,8 @@ const explore = [
 >
   {/* Hero — the assembly diagram leads, full width: it is the product's
       mental model and the thing worth seeing first. The pitch sits directly
-      under it. Breaks out wider than the text column on large screens. */}
+      under it. Breaks out wider than the text column on large screens.
+      (Kept verbatim from the previous rebuild.) */}
   <section class:list={[container, "pt-10 pb-12 sm:pt-12 sm:pb-16 lg:pt-14 lg:pb-24"]}>
     <div class="mb-12 lg:-mx-20 xl:-mx-32">
       <HowItFits />
@@ -118,10 +110,11 @@ const explore = [
     </div>
   </section>
 
-  {/* Primitives — the four objects that carry the whole model. */}
+  {/* Primitives — the four objects that carry the whole model, as a compact
+      four-up card row. Tighter than before: no banded fills, reduced padding. */}
   <section class={section} data-reveal id="what-is-oma">
     <div class={container}>
-      <header class="mb-8 sm:mb-10">
+      <header class="mb-6 sm:mb-8">
         <p class={eyebrow}>Product</p>
         <h2 class={sectionTitle}>What Open Managed Agents is</h2>
         <p class={sectionIntro}>
@@ -129,17 +122,17 @@ const explore = [
           carry the whole model.
         </p>
       </header>
-      <div class="grid gap-5 sm:grid-cols-2">
+      <div class="grid gap-4 sm:grid-cols-2">
         {
           concepts.map((c) => (
             <article
               data-lift
-              class="rounded-xl border border-border bg-[var(--color-card)] p-6"
+              class="rounded-xl border border-border bg-[var(--color-card)] p-5"
             >
               <h3 class="text-lg font-semibold tracking-tight text-[var(--color-fg)]">
                 {c.name}
               </h3>
-              <p class="mt-2.5 text-sm leading-relaxed text-[var(--color-fg-muted)]">
+              <p class="mt-2 text-sm leading-relaxed text-[var(--color-fg-muted)]">
                 {c.body}
               </p>
             </article>
@@ -149,10 +142,10 @@ const explore = [
     </div>
   </section>
 
-  {/* Example — the interactive flow demo. */}
+  {/* Example — the interactive use-case flow demo. */}
   <section class={section} data-reveal id="example">
     <div class={container}>
-      <header class="mb-8 sm:mb-10">
+      <header class="mb-6 sm:mb-8">
         <p class={eyebrow}>Example</p>
         <h2 class={sectionTitle}>See it run</h2>
         <p class={sectionIntro}>
@@ -164,10 +157,13 @@ const explore = [
     </div>
   </section>
 
-  {/* Anatomy — the durable request path as an ordered pipeline. */}
+  {/* Anatomy — the durable request path, now an interactive walkthrough that
+      explains what actually runs at each step. It autoplays, pauses on hover,
+      and click-to-pin lets you read a step in full. The replayable event log
+      is what makes a crashed turn resumable. */}
   <section class={section} data-reveal id="architecture">
     <div class={container}>
-      <header class="mb-8 sm:mb-10">
+      <header class="mb-6 sm:mb-8">
         <p class={eyebrow}>Anatomy</p>
         <h2 class={sectionTitle}>What one request touches</h2>
         <p class={sectionIntro}>
@@ -177,29 +173,14 @@ const explore = [
           sandbox never sees.
         </p>
       </header>
-      <div class="overflow-x-auto pb-2">
-        <ol class="arch-path">
-          {
-            requestPath.map((n) => (
-              <li class="arch-node">
-                <span class="arch-node-glyph"><Icon name={n.icon} size={20} /></span>
-                <span class="arch-node-name">{n.name}</span>
-                <span class="arch-node-sub">{n.sub}</span>
-              </li>
-            ))
-          }
-        </ol>
-      </div>
-      <p class="mt-6 text-sm text-[var(--color-fg-subtle)]">
-        The replayable event log is what makes a crashed turn resumable.
-      </p>
+      <RequestFlowInteractive client:load />
     </div>
   </section>
 
   {/* Reach — any provider in, any sandbox out. */}
   <section class={section} data-reveal id="reach">
     <div class={container}>
-      <header class="mb-8 sm:mb-10">
+      <header class="mb-6 sm:mb-8">
         <p class={eyebrow}>Reach</p>
         <h2 class={sectionTitle}>Any model, any sandbox</h2>
         <p class={sectionIntro}>
@@ -218,20 +199,20 @@ const explore = [
   {/* Explore — links into the deep-dive pages split off this page. */}
   <section class={section} data-reveal id="explore">
     <div class={container}>
-      <header class="mb-8 sm:mb-10">
+      <header class="mb-6 sm:mb-8">
         <p class={eyebrow}>Explore</p>
         <h2 class={sectionTitle}>Dig deeper</h2>
         <p class={sectionIntro}>
           The details live on their own pages — pick a thread to pull.
         </p>
       </header>
-      <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {
           explore.map((e) => (
             <a
               href={e.href}
               data-lift
-              class="block rounded-xl border border-border bg-[var(--color-card)] p-6 no-underline hover:no-underline"
+              class="block rounded-xl border border-border bg-[var(--color-card)] p-5 no-underline hover:no-underline"
             >
               <div class="mb-2 flex items-center gap-2.5">
                 <Icon name={e.icon} size={18} class="text-[var(--color-brand)]" />
@@ -252,13 +233,13 @@ const explore = [
   <section class={section} data-reveal id="get-started">
     <div class:list={[container, "text-center"]}>
       <Logo size={56} class="mx-auto mb-6 block text-[var(--color-brand)]" />
-      <h2 class="text-[1.625rem] font-semibold tracking-tighter text-[var(--color-fg)] sm:text-3xl">
+      <h2 class="text-[1.6rem] font-semibold tracking-tighter text-[var(--color-fg)] sm:text-2xl">
         Get started
       </h2>
-      <p class="mx-auto mt-3 max-w-md text-pretty text-sm leading-relaxed text-[var(--color-fg-muted)] sm:text-base">
+      <p class="mx-auto mt-2 max-w-md text-pretty text-sm leading-relaxed text-[var(--color-fg-muted)] sm:text-base">
         Clone, deploy, or try the hosted deployment of the same codebase.
       </p>
-      <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
+      <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
         <a
           href="https://github.com/duyet/oma"
           target="_blank"

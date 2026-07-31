@@ -79,10 +79,12 @@ for (const h of requiredHeadings) {
 if (!index.includes("Agent") || !index.includes("Session") || !index.includes("Environment") || !index.includes("Vault")) {
   fail("landing must explain Agent / Session / Environment / Vault");
 }
-// Schematic vocabulary: the blueprint plate + node/animated-wire diagrams that
-// carry the architecture + reach sections.
-if (!index.includes("arch-node") || !index.includes("ProviderFan")) {
-  fail("landing must include the blueprint schematic + provider-fan visual structure");
+// Schematic vocabulary: the interactive request-path walkthrough (which
+// renders the blueprint .arch-node pipeline) + the provider-fan visual that
+// carry the architecture + reach sections. The arch-node markup now lives in
+// the RequestFlowInteractive island, not inline in index.astro.
+if (!index.includes("RequestFlowInteractive") || !index.includes("ProviderFan")) {
+  fail("landing must include the interactive request-path + provider-fan visual structure");
 }
 if (!index.includes("github.com/duyet/oma") || !index.includes("app.oma.duyet.net/login") || !index.includes("docs.oma.duyet.net")) {
   fail("primary CTAs (GitHub, hosted, docs) must remain");
