@@ -114,6 +114,9 @@ importers:
       '@duyet/oma-credentials-store':
         specifier: workspace:*
         version: link:../../packages/credentials-store
+      '@duyet/oma-email':
+        specifier: workspace:*
+        version: link:../../packages/email
       '@duyet/oma-environments-store':
         specifier: workspace:*
         version: link:../../packages/environments-store
@@ -514,6 +517,9 @@ importers:
       '@duyet/oma-dreams-store':
         specifier: workspace:*
         version: link:../../packages/dreams-store
+      '@duyet/oma-email':
+        specifier: workspace:*
+        version: link:../../packages/email
       '@duyet/oma-environments-store':
         specifier: workspace:*
         version: link:../../packages/environments-store

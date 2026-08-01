@@ -95,6 +95,7 @@ import {
 import type { SessionNotifyEvent, SessionNotifyStatus } from "@duyet/oma-integrations-core";
 import { WorkerHttpClient } from "@duyet/oma-integrations-adapters-cf";
 import { dispatchSessionNotifications } from "./notify-dispatch";
+import { senderFromCfBinding, type CfSendEmailBinding } from "@duyet/oma-email/adapters/cf";
 import { meterTurnDebit } from "./turn-metering";
 import { resolveSessionMetadata, walletFromMetadata } from "./resolve-session-metadata";
 import { generateSessionTitle, shouldGenerateSessionTitle } from "./session-title";
@@ -3778,6 +3779,10 @@ export class SessionDO extends DurableObject<Env> {
         resolveCredentialToken: (id) => this.resolveCredentialToken(id),
         resolveSecret: (ref) => this.resolveWebhookSecret(ref),
         resolveTelegramBotToken: () => (this.env as { TELEGRAM_BOT_TOKEN?: string }).TELEGRAM_BOT_TOKEN ?? null,
+        // `email` targets (issue #317) ride the CF Email Workers binding.
+        // Unbound (deploys without email configured) ⇒ null sender ⇒ the
+        // target is skipped with a warning, never a throw.
+        resolveEmailSender: () => senderFromCfBinding(this.env.SEND_EMAIL as CfSendEmailBinding | undefined),
         tenantId: this.state.tenant_id,
         webhookRateLimitGate: this.webhookRateLimitGate(),
         httpClient: new WorkerHttpClient(),
