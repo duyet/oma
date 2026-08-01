@@ -79,6 +79,20 @@ export type NotificationTarget =
     }
   | {
       /**
+       * Deliver the session-status summary as an email. Auth/transport is
+       * the deployment's configured email sender (packages/email — the CF
+       * `SEND_EMAIL` binding, or SMTP/nodemailer on self-host Node), not a
+       * vault credential. When no sender is configured the delivery is
+       * skipped with a logged warning (fail-open).
+       */
+      type: "email";
+      /** Recipient address. */
+      to: string;
+      /** Optional prefix prepended to the generated subject line. */
+      subject_prefix?: string;
+    }
+  | {
+      /**
        * POST a signed JSON envelope to an arbitrary customer URL. Used by
        * creators integrating duyetbot with their own backend. The body is
        * HMAC-SHA256 signed over the raw payload with `X-OMA-Signature`.

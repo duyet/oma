@@ -34,6 +34,7 @@ import { SqlClientScheduledDeploymentRunsStore } from "@duyet/oma-scheduler/jobs
 import { withHealthchecks } from "@duyet/oma-shared";
 import { dispatchSessionNotifications } from "@duyet/oma-agent/runtime/notify-dispatch";
 import { WorkerHttpClient } from "@duyet/oma-integrations-adapters-cf";
+import { senderFromCfBinding, type CfSendEmailBinding } from "@duyet/oma-email/adapters/cf";
 import type { SessionNotifyEvent } from "@duyet/oma-integrations-core";
 import { tickEvalRuns } from "../eval-runner";
 import { createInternalSession } from "../routes/internal";
@@ -274,6 +275,9 @@ async function notifyScheduleRun(
     resolveSecret: (ref) => resolveCredentialToken(ref),
     resolveTelegramBotToken: () =>
       (env as unknown as { TELEGRAM_BOT_TOKEN?: string }).TELEGRAM_BOT_TOKEN ?? null,
+    // `email` targets (issue #317) — CF Email Workers binding; unbound ⇒
+    // null sender ⇒ target skipped with a warning (fail-open).
+    resolveEmailSender: () => senderFromCfBinding(env.SEND_EMAIL as CfSendEmailBinding | undefined),
     tenantId: schedule.tenantId,
     httpClient: new WorkerHttpClient(),
     onError: (target, err) =>

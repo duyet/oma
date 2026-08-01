@@ -38,6 +38,10 @@ No linter or formatter is configured — match surrounding code: 2-space indent,
 - `BETTER_AUTH_SECRET` — signs Console sessions (`openssl rand -hex 32`).
 - `PLATFORM_ROOT_SECRET` — at-rest encryption for stored credentials; **back it up — losing it makes every encrypted row unreadable** (`openssl rand -base64 32`). Also required by the test bindings.
 
+## Docs & landing page must track features
+
+Every PR that adds, changes, or removes a user-facing feature must update the matching docs in the same PR: `AGENTS.md` (domain reference), the relevant `docs/*.md` page, and — when the feature is marketable (new harness, tool, sandbox provider, integration, schedule/deployment capability) — the landing page in `apps/web` (feature lists, provider/harness rosters, `src/pages/features/`). Before finishing any feature work, grep docs and `apps/web` for stale claims about the touched area and fix drift; never let the landing page advertise less (or more) than what's shipped.
+
 ## Commits
 
 Conventional Commits with a scope: `feat(agent):`, `fix(harness):`, `ci:`, `test:`, `docs:`. PRs squash-merge with a `(#NNN)` suffix. A changeset is needed **only** when `@getoma/cli` or `@getoma/sdk` changed — use `/changeset`.

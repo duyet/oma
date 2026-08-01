@@ -160,6 +160,7 @@ export default defineConfig({
       { find: "@duyet/oma-auth-config", replacement: "./packages/auth-config/src/index.ts" },
       { find: "@duyet/oma-email/adapters/nodemailer", replacement: "./packages/email/src/adapters/nodemailer.ts" },
       { find: "@duyet/oma-email/adapters/cf-send-email", replacement: "./packages/email/src/adapters/cf-send-email.ts" },
+      { find: "@duyet/oma-email/adapters/cf", replacement: "./packages/email/src/adapters/cf.ts" },
       { find: "@duyet/oma-email", replacement: "./packages/email/src/index.ts" },
       { find: "@duyet/oma-kv-store/adapters/sql", replacement: "./packages/kv-store/src/adapters/sql.ts" },
       { find: "@duyet/oma-kv-store/adapters/in-memory", replacement: "./packages/kv-store/src/adapters/in-memory.ts" },

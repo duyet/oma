@@ -35,6 +35,15 @@ const telegramMessageTarget = z.object({
   chat_id: z.number().int(),
 });
 
+// No `credential_id` — email delivery uses the deployment's configured
+// email sender seam (packages/email: CF `SEND_EMAIL` binding / self-host
+// nodemailer SMTP), not a per-target vault credential.
+const emailTarget = z.object({
+  type: z.literal("email"),
+  to: z.string().email(),
+  subject_prefix: z.string().optional(),
+});
+
 const webhookTarget = z.object({
   type: z.literal("webhook"),
   url: z.string().url(),
@@ -49,6 +58,7 @@ export const notificationTargetSchema = z.discriminatedUnion("type", [
   slackMessageTarget,
   matrixMessageTarget,
   telegramMessageTarget,
+  emailTarget,
   webhookTarget,
 ]);
 

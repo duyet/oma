@@ -47,7 +47,7 @@ const STEPS: Step[] = [
     icon: "repeat",
     name: "Harness",
     sub: "model loop · tools",
-    body: "The harness reads the log, rebuilds context, calls the LLM, and routes tool calls into the sandbox. It's the swappable brain — default, claude-agent-sdk, or acp-proxy — and the loop that drives the whole turn.",
+    body: "The harness reads the log, rebuilds context, calls the LLM, and routes tool calls into the sandbox. It's the swappable brain — default, claude-agent-sdk, acp-proxy, long-running, or poolside — and the loop that drives the whole turn.",
   },
   {
     icon: "box",

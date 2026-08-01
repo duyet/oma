@@ -35,6 +35,7 @@
     "@duyet/oma-credentials-store": "workspace:*",
     "@duyet/oma-environments-store": "workspace:*",
     "@duyet/oma-event-log": "workspace:*",
+    "@duyet/oma-email": "workspace:*",
     "@duyet/oma-files-store": "workspace:*",
     "@duyet/oma-github": "workspace:*",
     "@duyet/oma-integrations-adapters-cf": "workspace:*",

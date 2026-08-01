@@ -1593,7 +1593,7 @@ it's unit-testable without a Durable Object) and never throws back into the
 session loop — a misconfigured target is logged and skipped, it never blocks the
 session.
 
-Four target variants:
+Target variants:
 
 ```json
 { "type": "github_comment", "credential_id": "cred_xxx", "owner": "acme", "repo": "widgets", "issue_number": 7 }
@@ -1606,6 +1606,39 @@ Four target variants:
 ```json
 { "type": "matrix_message", "credential_id": "cred_xxx", "homeserver_url": "https://matrix.example.com", "room_id": "!room:example.com" }
 ```
+
+```json
+{ "type": "telegram_message", "chat_id": -1001234567890 }
+```
+
+### `email` — transactional email (issue #317)
+
+Delivers the same status summary every other provider renders, as an email:
+
+```json
+{ "type": "email", "to": "ops@example.com", "subject_prefix": "[oma]" }
+```
+
+- **`to`** is zod-validated as an email address; **`subject_prefix`** is
+  optional and prepended to the generated subject
+  (`<prefix> Agent "<name>" session <id>: <status>`). The body carries the
+  shared summary line, the final agent message when present, and the session
+  deep link.
+- **No vault credential.** Unlike `github_comment` / `slack_message` /
+  `matrix_message`, email auth is the *deployment's* email transport — the same
+  `packages/email` seam the auth magic-links and tenant invites use:
+  **Cloudflare** = the `SEND_EMAIL` Email Workers binding (declared on both the
+  `main` and `agent` workers); **self-host Node** = SMTP via nodemailer
+  (`SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM`).
+- **Fail-open.** With no transport configured (binding unbound, or `SMTP_HOST`
+  unset) the delivery is skipped and a warning is logged through the same
+  `onError` sink as any other target failure — it never throws into the session
+  loop or a scheduler tick.
+- **Runtime coverage.** Fires from the session-status fan-out (Cloudflare
+  `SessionDO`) and from per-schedule run alerts on **both** runtimes. Node has
+  no session-status notify fan-out at all yet (not email-specific — no target
+  type fires there), so on self-host today `email` reaches you via schedule
+  alerts.
 
 ### `webhook` — generic outbound webhook
 

@@ -197,7 +197,9 @@ const schemas = [
         <p class="text-[var(--color-fg-muted)] leading-relaxed">
           A cron expression bound directly to an agent and environment —
           fires a fresh session with a fixed opening message on a
-          timezone-aware cadence. Good for a single recurring maintenance
+          timezone-aware cadence. Update any field later with a partial
+          PATCH, wire per-schedule alerts for failures, and read back a
+          paginated run history. Good for a single recurring maintenance
           job.
         </p>
       </div>
