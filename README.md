@@ -213,21 +213,7 @@ For long-lived sessions use `GET /v1/sessions/$SESSION/events/stream` — replay
 
 ### Deploying the website
 
-`apps/web` (the marketing site) auto-deploys to `oma.duyet.net` via
-[`.github/workflows/deploy-website.yml`](.github/workflows/deploy-website.yml)
-on every push to `main` that touches `apps/web/**`. One-time manual setup:
-
-1. Create a Cloudflare API token with Workers Scripts (edit) + Account
-   Settings (read) permissions, and set it as the `CLOUDFLARE_API_TOKEN`
-   repo secret. Set `CLOUDFLARE_ACCOUNT_ID` (from the CF dashboard) as
-   the `CLOUDFLARE_ACCOUNT_ID` repo secret.
-2. In the Cloudflare dashboard, add `oma.duyet.net` as a Custom Domain /
-   DNS record on the account that owns `duyet.net` — `wrangler deploy`
-   provisions the route from `apps/web/wrangler.jsonc`, but the zone
-   itself must already be on that account.
-
-No other manual steps are required; `workflow_dispatch` is also available
-for manual re-runs.
+The marketing site (`apps/web`) auto-deploys via CI. See [docs/website-deploy.md](docs/website-deploy.md).
 
 ---
 
@@ -245,654 +231,89 @@ See [`examples/README.md`](examples/README.md).
 
 ## Architecture
 
-A **meta-harness** is not an agent — it's the platform that runs agents. It defines stable interfaces for everything an agent needs, and stays out of the way of the agent loop:
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  Harness (the brain — your code)                        │
-│  - Reads events, builds context, calls the model        │
-│  - Decides HOW: caching, compaction, tool delivery      │
-│  - Stateless: crash → rebuild from event log → resume   │
-├─────────────────────────────────────────────────────────┤
-│  Meta-Harness (the platform — SessionDO)                │
-│  - Prepares WHAT is available: tools, skills, history   │
-│  - Manages lifecycle: sandbox, events, WebSocket        │
-│  - Crash recovery, credential isolation, usage tracking │
-├─────────────────────────────────────────────────────────┤
-│  Infrastructure (Cloudflare or Node self-host)          │
-│  - Event log: Durable-Object SQLite (CF) or SQLite/Pg   │
-│  - Sandbox: CF Containers / subprocess / LiteBox / E2B  │
-│  - Storage: KV + R2 (CF) or local FS (self-host)        │
-└─────────────────────────────────────────────────────────┘
-```
-
-**The platform prepares _what_ is available. The harness decides _how_ to deliver it to the model.**
-
-| Platform manages | Harness decides |
-|---|---|
-| Event log persistence (SQLite) | Context engineering (filtering, ordering) |
-| Sandbox lifecycle (containers) | Caching strategy (cache breakpoints) |
-| Tool registration (built-in + MCP) | Compaction strategy (when to compress) |
-| WebSocket broadcast | Retry strategy (backoff, transient detection) |
-| Crash recovery | Stop conditions (max steps, completion signals) |
-| Credential isolation (vaults) | System prompt construction |
-| Memory (file-backed stores, versioned) | Tool delivery (all at once vs. progressive) |
-
----
+A **meta-harness** is not an agent — it's the platform that runs agents: the
+platform prepares *what* is available (tools, skills, history, sandbox), a
+pluggable harness decides *how* to deliver it to the model. Full write-up,
+diagrams, and the platform-vs-harness responsibility split:
+**[docs/architecture.md](docs/architecture.md)**.
 
 ## Write a Harness
 
-The default harness works out of the box. When you need custom behavior — different caching, compaction, context engineering — implement `HarnessInterface` and register it by name:
-
-```typescript
-// apps/agent/src/harness/research-loop.ts
-import type { HarnessInterface, HarnessContext } from "./interface";
-import { generateText, stepCountIs } from "ai";
-
-export class ResearchHarness implements HarnessInterface {
-  async run(ctx: HarnessContext): Promise<void> {
-    const messages = ctx.runtime.history.getMessages();
-
-    // Your context engineering, caching strategy, loop — tools, sandbox,
-    // and broadcast are platform-provided via ctx.
-    const result = await generateText({
-      model: ctx.model,
-      system: ctx.systemPrompt,
-      messages,
-      tools: ctx.tools,
-      stopWhen: stepCountIs(50),
-    });
-
-    ctx.runtime.broadcast({
-      type: "agent.message",
-      content: [{ type: "text", text: result.text }],
-    });
-  }
-}
-```
-
-Register it in `apps/agent/src/index.ts`, next to the built-in harnesses:
-
-```typescript
-import { ResearchHarness } from "./harness/research-loop";
-registerHarness("research", () => new ResearchHarness());
-```
-
-Point an agent at it and redeploy the agent worker (self-host, or your fork's CI):
-
-```json
-{ "name": "Researcher", "model": "claude-sonnet-4-6", "harness": "research" }
-```
-
-There's no standalone harness-deploy path today — a custom harness lives in the
-agent worker's source tree and ships with it. Full contract (the optional
-`onSessionInit` / `shouldCompact` / `compact` / `deriveModelContext` hooks) and
-a worked example: [AGENTS.md § Custom Harness](AGENTS.md#custom-harness). The
-`/new-harness` skill in this repo scaffolds the file and registration for you.
+The default harness works out of the box. When you need custom behavior —
+different caching, compaction, context engineering — implement
+`HarnessInterface` and register it by name. Worked example, the full hook
+contract, and the `/new-harness` scaffold: [docs/architecture.md § Implications for Custom Harnesses](docs/architecture.md#implications-for-custom-harnesses)
+and [AGENTS.md § Custom Harness](AGENTS.md#custom-harness).
 
 ---
 
 ## API
 
-Compatible with the [Claude Managed Agents API](https://docs.anthropic.com/en/docs/agents/managed-agents). Same endpoints, same event types, works with existing SDKs.
-
-<details>
-<summary><strong>Agents</strong> — Create and manage agent configurations</summary>
-
-```http
-POST   /v1/agents                          # Create agent
-GET    /v1/agents                          # List agents
-GET    /v1/agents/:id                      # Get agent
-PUT    /v1/agents/:id                      # Update agent
-DELETE /v1/agents/:id                      # Delete agent
-POST   /v1/agents/:id/archive             # Archive agent
-GET    /v1/agents/:id/versions            # Version history
-GET    /v1/agents/:id/versions/:version   # Get specific version
-```
-
-</details>
-
-<details>
-<summary><strong>Environments</strong> — Sandbox execution environments</summary>
-
-```http
-POST   /v1/environments                   # Create environment
-GET    /v1/environments                   # List environments
-GET    /v1/environments/:id               # Get environment
-PUT    /v1/environments/:id               # Update environment
-DELETE /v1/environments/:id               # Delete environment
-```
-
-</details>
-
-<details>
-<summary><strong>Sessions</strong> — Run agent conversations</summary>
-
-```http
-POST   /v1/sessions                        # Create session
-GET    /v1/sessions                        # List sessions
-GET    /v1/sessions/:id                    # Get session
-POST   /v1/sessions/:id                    # Update session
-DELETE /v1/sessions/:id                    # Delete session
-POST   /v1/sessions/:id/archive           # Archive session
-
-POST   /v1/sessions/:id/events            # Send events (user messages)
-GET    /v1/sessions/:id/events             # Get events (JSON or SSE)
-GET    /v1/sessions/:id/events/stream      # SSE stream
-
-POST   /v1/sessions/:id/resources          # Attach resource
-GET    /v1/sessions/:id/resources          # List resources
-DELETE /v1/sessions/:id/resources/:resId   # Remove resource
-```
-
-</details>
-
-<details>
-<summary><strong>Vaults</strong> — Secure credential storage</summary>
-
-```http
-POST   /v1/vaults                          # Create vault
-POST   /v1/vaults/:id/credentials          # Add credential
-GET    /v1/vaults/:id/credentials          # List (secrets stripped)
-```
-
-</details>
-
-<details>
-<summary><strong>Memory Stores</strong> — persistent storage; Claude Managed Agents Memory contract</summary>
-
-When attached to a session, each store is mounted into the sandbox at
-`/mnt/memory/<store_name>/`. The agent reads and writes it with the
-**standard file tools** (bash/read/write/edit/glob/grep) — there are no
-bespoke `memory_*` tools.
-
-R2 holds the bytes-of-truth (key `<store_id>/<memory_path>`); D1 holds the
-index + audit, kept eventually consistent via R2 Event Notifications →
-Cloudflare Queue → Consumer.
-
-```http
-POST   /v1/memory_stores                                        # Create store
-GET    /v1/memory_stores                                        # List stores
-GET    /v1/memory_stores/:id                                    # Retrieve store
-POST   /v1/memory_stores/:id/archive                            # Archive (one-way)
-DELETE /v1/memory_stores/:id                                    # Delete store + memories + versions
-
-POST   /v1/memory_stores/:id/memories                           # Create/upsert memory {path, content, precondition?}
-GET    /v1/memory_stores/:id/memories?path_prefix=&depth=N      # List memories (metadata)
-GET    /v1/memory_stores/:id/memories/:mid                      # Retrieve memory (with content)
-POST   /v1/memory_stores/:id/memories/:mid                      # Update memory {path?, content?, precondition?}
-DELETE /v1/memory_stores/:id/memories/:mid                      # Delete memory
-
-GET    /v1/memory_stores/:id/memory_versions?memory_id=         # Audit history (newest first)
-GET    /v1/memory_stores/:id/memory_versions/:ver_id            # Single version (with snapshot content)
-POST   /v1/memory_stores/:id/memory_versions/:ver_id/redact     # Redact prior version (refuses live head)
-```
-
-CAS via `precondition: { type: "content_sha256", content_sha256 }`. 100KB
-cap per memory. 30-day version retention with the most-recent version per
-memory always preserved. Rollback = retrieve a version and write its
-content as a new memory revision (no special endpoint).
-
-CLI:
-```bash
-oma memory stores create "User Preferences"
-oma memory write <store-id> /preferences/formatting.md --content "Always use tabs."
-oma memory ls <store-id> --prefix /preferences/
-oma memory versions <store-id> --memory-id <mem-id>
-```
-
-</details>
-
-<details>
-<summary><strong>Files & Skills</strong></summary>
-
-```http
-POST   /v1/files                           # Upload file
-GET    /v1/files/:id/content               # Download file
-POST   /v1/skills                          # Create skill
-GET    /v1/skills                          # List skills
-```
-
-</details>
+Compatible with the [Claude Managed Agents API](https://docs.anthropic.com/en/docs/agents/managed-agents). Same endpoints, same event types, works with existing SDKs. Full route reference (Agents, Environments, Sessions, Vaults, Memory Stores, Files & Skills): **[docs/api-reference.md](docs/api-reference.md)**.
 
 ---
 
 ## Built-in Tools
 
-The `agent_toolset_20260401` provides:
-
-| Tool | Description |
-|---|---|
-| `bash` | Execute commands in the sandbox |
-| `read` | Read files from sandbox filesystem |
-| `write` | Write/create files (auto-creates directories) |
-| `edit` | Surgical string replacement in files |
-| `glob` | Find files matching a pattern |
-| `grep` | Search file contents with regex |
-| `web_fetch` | URL → markdown via Workers AI; auto-summarized when `agent.aux_model` is set, raw saved to `/workspace/.web/` |
-| `web_search` | Web search. Defaults to DuckDuckGo (free, no key). Optional backends via tool `type`: `web_search_20250305` (Anthropic server-side, Claude models only), `web_search_tavily` (requires `TAVILY_API_KEY`) |
-| `schedule` / `cancel_schedule` / `list_schedules` | Cron-style self-wakeup for long-running agents |
-| `browser` (opt-in) | Headless browser session — navigate, click, screenshot. Opt-in via `tools: [{ name: "browser", enabled: true }]` so the default-tool list nudges agents toward cheaper `web_fetch` |
-
-Derived tools are auto-generated based on session config:
-
-| Tool | Source |
-|---|---|
-| `call_agent_*` | Callable Agents (multi-agent delegation) |
-| `mcp__<server>__<tool>` | MCP Servers (double underscore is the actual separator) |
-
-(Memory Stores do **not** add bespoke tools — agents access them as filesystem
-mounts at `/mnt/memory/<store_name>/` via the standard file tools above.)
+`agent_toolset_20260401` ships `bash`, `read`, `write`, `edit`, `glob`, `grep`, `web_fetch`, `web_search`, plus scheduling and opt-in `browser`/derived tools (`call_agent_*`, `mcp__<server>__<tool>`). Full catalog and behavior details: **[docs/tools.md](docs/tools.md)**.
 
 ---
 
 ## MCP servers
 
-OMA registers any [Model Context Protocol](https://modelcontextprotocol.io) server attached to an agent. Each upstream tool surfaces to the model as `mcp__<server>__<tool>` (double underscore — copy the name exactly). Up to 20 servers per agent.
-
-| Transport | When to use | How |
-|---|---|---|
-| HTTP / SSE | Hosted MCP servers (Linear, GitHub Copilot, Notion, …) | `{"type":"url","url":"https://mcp.linear.app/mcp"}` |
-| stdio | npm / PyPI MCP packages with no hosted endpoint | `{"type":"stdio","command":"uvx","args":[...],"port":8765}` — OMA spawns inside the sandbox container, talks to `127.0.0.1:port/sse` |
-
-Credentials never enter the sandbox; the outbound resolver matches by host and injects at forward time.
-
-| Auth mode | Configured as | Refresh |
-|---|---|---|
-| none | no `authorization_token`, no matching vault credential | n/a |
-| inline bearer | `"authorization_token": "..."` on the server entry | no |
-| vault static bearer | session vault has a `static_bearer` credential whose `mcp_server_url` matches | no |
-| vault OAuth | session vault has an `mcp_oauth` credential (with `refresh_token` + `token_endpoint`) | yes — on 401 **and 403** (Airtable/Asana/Sentry use 403 for expired tokens), CAS-writes new token to D1, retries once |
-
-```bash
-# Servers attach to the agent (not the session)
-curl -X PUT $BASE/v1/agents/$AGENT -H "x-api-key: $KEY" -H "content-type: application/json" \
-  -d '{"mcp_servers":[{"name":"linear","type":"url","url":"https://mcp.linear.app/mcp"}]}'
-
-# Bind an OAuth credential via Vault
-oma connect linear --vault $VAULT_ID
-```
-
-Tool discovery is bounded at 15 s per server; one bad server logs and skips, the rest stay live. Full design: [docs.oma.duyet.net/build/vault-and-mcp](https://docs.oma.duyet.net/build/vault-and-mcp/).
-
-**Tenant-level registry.** Register a server once (`POST /v1/mcp_servers`,
-optionally pinning a vault `credential_id`) and reference it from any agent by
-`registry_id` instead of repeating the inline `url`. An inline `url` always
-wins; `GET /v1/mcp-proxy/_health/:sid` reports per-server credential
-resolution for the sandbox status page.
+OMA registers any [Model Context Protocol](https://modelcontextprotocol.io) server attached to an agent (`mcp__<server>__<tool>`, up to 20 per agent), with a tenant-level registry and credential-resolving outbound proxy. Full guide: **[docs/mcp-servers.md](docs/mcp-servers.md)**.
 
 ---
 
 ## Skills
 
-A skill is a `SKILL.md` plus reference files (templates, schemas, examples). At session start the platform mounts everything under `/home/user/.skills/{name}/` in the sandbox **and inlines the SKILL.md body directly into the system prompt** — no lazy read, no follow-up `read` tool call. Format is compatible with Anthropic's [Claude Code skills](https://github.com/anthropics/skills).
-
-Create a skill (JSON; files inlined):
-
-```http
-POST /v1/skills
-{
-  "files": [
-    { "filename": "SKILL.md", "content": "---\nname: invoice-parser\ndescription: Parse supplier invoices.\n---\n\n# Steps\n1. ..." },
-    { "filename": "schema.json", "content": "{...}" }
-  ]
-}
-```
-
-For large skills with binaries: `POST /v1/skills/upload` multipart with `file=<my-skill.zip>`.
-
-Attach to an agent with the **object form** — a bare string array silently does not bind:
-
-```json
-{ "skills": [{ "skill_id": "skill_abc123", "type": "custom" }] }
-```
-
-The agent's system prompt then receives, at session start:
-
-```text
-<source name="skill:skill_abc123">
-<skill name="invoice-parser">
-{full SKILL.md body}
-</skill>
-</source>
-```
-
-and the files appear at `/home/user/.skills/invoice-parser/SKILL.md` etc.
-
-Four built-in skills ship ready to attach (no upload): `xlsx`, `pdf`, `docx`, `pptx`. Reference them with `{"skill_id":"builtin_pdf","type":"anthropic"}`.
-
-Six more prompt-fragment skills ship as ready-to-seed folders in [`examples/skills/`](examples/skills/) — `data-viz`, `generate-html`, `query-sql`, `github`, `git-commit`, `spreadsheet-xlsx`. Load them into a deployment with `./scripts/seed-skills.sh` (add `SEED_ANTHROPIC=1` to also import Anthropic's public catalog), then attach with `{"skill_id":"<id>","type":"custom"}`.
+A skill is a `SKILL.md` plus reference files, mounted into the sandbox and inlined into the system prompt at session start. Format is compatible with Anthropic's [Claude Code skills](https://github.com/anthropics/skills). Full guide: **[docs/skills.md](docs/skills.md)**.
 
 ---
 
 ## Vaults & outbound credentials
 
-**Tools never see your tokens.** When a sandbox makes an HTTP request, an outbound resolver — `oma-vault` sidecar on self-host (mockttp HTTPS proxy with a trusted self-signed CA), the agent worker's `outboundByHost` interceptor on Cloudflare — matches the request hostname against the session's vaults, **strips any inbound `Authorization`/`x-api-key`/`x-goog-api-key`**, injects the real credential, and forwards. A prompt-injected agent has nothing to leak; `env | grep TOKEN` returns nothing inside the sandbox.
-
-```bash
-# Create a vault and add a static bearer bound to api.github.com
-VID=$(curl -sX POST $BASE/v1/vaults -H "x-api-key: $KEY" \
-  -d '{"name":"github-prod"}' | jq -r .id)
-
-curl -sX POST $BASE/v1/vaults/$VID/credentials -H "x-api-key: $KEY" -d '{
-  "display_name": "gh-pat",
-  "auth": {
-    "type": "static_bearer",
-    "token": "ghp_xxx",
-    "mcp_server_url": "https://api.github.com"
-  }
-}'
-
-# Bind on session create
-curl -sX POST $BASE/v1/sessions -H "x-api-key: $KEY" \
-  -d "{\"agent\":\"$AGENT\",\"vault_ids\":[\"$VID\"]}"
-
-# Inside the sandbox: curl https://api.github.com/user → 200, Authorization injected at the network layer
-```
-
-Three credential types share one resolver:
-
-| Type | Match by | Refresh |
-|---|---|---|
-| `static_bearer` | request host matches `mcp_server_url` | never |
-| `mcp_oauth` | request host matches `mcp_server_url` | on 401 / 403 via `token_endpoint`, CAS-writes new token to D1 |
-| `cap_cli` | sandbox CLI invocations match `cli_id` in the cap registry (`gh`, `glab`, `aws`, …) | per-CLI |
-
-Max 20 credentials per vault. Each forward emits a structured `op:"mcp_proxy.forward"` log. Full design: [`docs/mcp-credential-architecture.md`](docs/mcp-credential-architecture.md), [docs.oma.duyet.net/build/vault-and-mcp](https://docs.oma.duyet.net/build/vault-and-mcp/).
+**Tools never see your tokens.** An outbound resolver matches request hostnames against the session's vaults and injects credentials at the network layer — a prompt-injected agent has nothing to leak. Full guide: **[docs/vaults-and-credentials.md](docs/vaults-and-credentials.md)** (design deep-dive: [docs/mcp-credential-architecture.md](docs/mcp-credential-architecture.md)).
 
 ---
 
 ## Integrations
 
-Publish an agent into a third-party tool and have it act as a real teammate there — assigned, mentioned, replied to like any other user.
-
-### Linear
-
-Make an agent a member of your Linear workspace with its own identity, avatar, and `@autocomplete` slot. The agent appears in the assignee dropdown, gets pinged on `@mentions`, replies in the Agent panel, and pushes status back to issues it's working on.
-
-Two install kinds:
-
-| Kind | When to pick | Setup |
-|---|---|---|
-| **`personal_token`** (PAT) | Single workspace, fastest path, no OAuth App | `oma linear install-pat --workspace <slug> --pat <linear-pat>` |
-| **`dedicated`** (OAuth App) | Multi-workspace, proper bot identity, OAuth refresh | Console **Integrations → Linear → Publish agent** (wizard issues per-publication callback + webhook URLs to paste into your own Linear OAuth App at `linear.app/settings/api`) |
-
-The full agent-side playbook (when to ask the human, how to offer browser automation, exactly what to paste into Linear's form) lives at [`skills/oma/integrations-linear.md`](skills/oma/integrations-linear.md).
-
-PAT-mode autopilot — let the bot pick up unassigned issues by label/state/project:
-
-```bash
-oma linear rules create <pub-id> --label triage --state Backlog --project "Inbox"
-oma linear rules list <pub-id>
-oma linear rules delete <rule-id>
-```
-
-Inspect / manage:
-
-```bash
-oma linear list                                       # workspaces
-oma linear pubs <installation-id>                     # publications (status=live, persona, caps)
-oma linear get <pub-id>                               # single publication
-oma linear update <pub-id> --caps issue.read,comment.write,issue.update,…
-oma linear unpublish <pub-id>
-```
-
-How it works:
-
-| Piece | What it does |
-|---|---|
-| **Per-publication identity** | `dedicated` registers a per-agent Linear OAuth App; `personal_token` shares the human's PAT (no App registered) |
-| **Inbound webhook** | Linear events become user messages on a session — assigned, `@mention`, comment-mention, new comment in an active thread, **Agent panel** (`agentSessionCreated` / `agentSessionPrompted`, `commentReply` for threaded continuation) |
-| **Outbound MCP** | The agent talks back through `mcp.linear.app/mcp` with its own bearer (PAT or OAuth-refreshed), so writes are attributed to the persona |
-| **Capability gate** | Per-publication allowlist (issues / comments / labels / assignment / triage) limits what the agent can do |
-
-The Linear integration ships in `packages/linear/` (provider logic, webhook signing, MCP wiring) with thin CF wrappers in `apps/integrations/src/routes/linear/publications.ts`.
-
-### GitHub
-
-Give an agent its own GitHub App with a real bot identity — assignable on issues, requestable as a reviewer on PRs, posts comments under its own `@<slug>[bot]` handle. Each agent is a separate App on github.com (per-publication, not a shared marketplace bot), so credentials and audit trails stay isolated.
-
-```bash
-# (1) Console — humans clicking through a wizard
-Integrations → GitHub → Publish agent
-
-# (2) CLI — agents driving oma on a user's behalf
-oma github bind <agent-id> --env <env-id>       # → opens one-click GitHub App Manifest flow
-oma github handoff <form-token>                 # alt: 7-day URL for an org admin to complete
-oma github list
-oma github pubs <installation-id>
-oma github update <pub-id> --caps pr.read,pr.review.write,issue.comment.write,…
-oma github unpublish <pub-id>
-```
-
-`bind` returns a `manifestStartUrl`; opening it auto-POSTs an App manifest to `github.com/settings/apps/new` with redirect URL + webhook URL + recommended permissions baked in. After confirming, GitHub redirects through to "Install on org" and the publication flips to `live`. Manual fallback: `oma github submit <form-token> --app-id … --private-key-file … --webhook-secret …` if you registered the App by hand.
-
-**Engagement is label-based.** On install OMA auto-creates a label (default: lowercased persona name) in every selected repo. Add the label to any issue/PR to engage the bot for every subsequent activity on that thread; remove the label to mute. `@<slug>[bot]` mention in body or comment is the fallback path (GitHub's `@` autocomplete excludes Bot accounts, so it's plain-text).
-
-How it works:
-
-| Piece | What it does |
-|---|---|
-| **Per-publication App** | Each agent registers its own GitHub App via Manifest flow; credentials stored encrypted per-publication |
-| **Inbound webhook** | `issues`, `issue_comment`, `pull_request`, `pull_request_review`, `pull_request_review_comment` become user messages on a session (one per `<repo>#<num>`) |
-| **Outbound MCP** | Agent talks to GitHub's hosted MCP at `api.githubcopilot.com/mcp/` with the installation token; same token also injected as `GITHUB_TOKEN` for sandbox `gh` / `git` |
-| **Token rotation** | 1-hour installation token auto-refreshed via App JWT on every webhook dispatch |
-| **Capability gate** | Per-publication allowlist; destructive ops (`pr.merge`, `repo.branch.delete`, `workflow.dispatch`, `release.create`, `*.delete`) require explicit opt-in |
-
-The GitHub integration ships in `packages/github/` with thin CF wrappers in `apps/integrations/src/routes/github/`.
-
-### Slack
-
-Publish an agent into a Slack workspace as a dedicated bot — `@mention`able in channels, replies in threads, joins DMs, hosts the AI assistant pane. Per-channel sessions: one running session per `(publication, channel)`, with all events in that channel converging on the same session id.
-
-```bash
-# (1) Console — humans clicking through a wizard
-Integrations → Slack → Publish agent   # ↑ opens api.slack.com with a pre-filled manifest
-
-# (2) CLI — agents driving oma on a user's behalf
-oma slack publish <agent-id> --env <env-id>    # → returns manifestLaunchUrl + formToken (60 min TTL)
-oma slack submit <form-token> --client-id … --client-secret … --signing-secret …
-oma slack handoff <form-token>                 # alt: 7-day shareable URL for a workspace admin
-oma slack list
-oma slack pubs <installation-id>
-oma slack update <pub-id> --caps message.write,thread.reply,reaction.add,…
-oma slack unpublish <pub-id>
-```
-
-**One-click managed install.** When the operator configures a single distributable Slack App (`SLACK_MANAGED_CLIENT_ID` / `SLACK_MANAGED_CLIENT_SECRET` / `SLACK_MANAGED_SIGNING_SECRET`), the publish wizard shows an **Add to Slack** button that skips the manifest + paste-credentials steps and goes straight to OAuth (`POST /slack/publications/start-managed`). One app installs into **many** workspaces from one events URL — inbound events fan in by `team_id` to the right per-workspace installation. Without the three secrets it falls back to the bring-your-own-App manifest flow above. Full operator + end-user guide: [`docs/slack-integration.md`](docs/slack-integration.md).
-
-The full agent-side playbook (manifest-flow caveats, `GATEWAY_ORIGIN` HTTPS requirement, what to paste where, MCP toggle probe) lives at [`skills/oma/integrations-slack.md`](skills/oma/integrations-slack.md).
-
-How it works:
-
-| Piece | What it does |
-|---|---|
-| **Per-publication App** | Each agent registers as its own dedicated Slack App via the "Create from manifest" URL flow — own client id, signing secret, bot user; no shared marketplace App |
-| **Inbound webhook** | `app_mention` / DM / thread reply → `direct_invocation` signal; top-level channel post → debounced `channel_scan_armed` (90 s window); reactions on bot-authored messages → `reaction_on_bot_message`; `member_joined`/`member_left_channel` for the bot → `joined_channel` / `session_closed`; `channel_archive` / `channel_unarchive` → close / reopen |
-| **Dual-token outbound** | OAuth v2 yields both bot (`xoxb-`) and user (`xoxp-`) tokens. The `xoxp-` vault binds to `mcp.slack.com/mcp` for typed `mcp__slack__*` tools (search, history, canvases); the `xoxb-` vault binds to `slack.com/api` for `chat.postMessage`, reactions, etc. Bot replies default to in-thread |
-| **Capability gate** | Per-publication allowlist (`message.read/write/update/delete`, `thread.reply`, `reaction.add/remove`, `user.read`, `search.read`, `canvas.write`) |
-| **Resumable install** | Publication-first — the row exists from minute one with callback + webhook URLs baked into the manifest. Mid-flow failures stay resumable from Console (`pending_setup` → `credentials_filled` → `awaiting_install` → `live`) |
-
-The Slack integration ships in `packages/slack/` with thin CF wrappers in `apps/integrations/src/routes/slack/`.
-
-**Operator setup:** the integrations gateway needs `GATEWAY_ORIGIN` pointing at a publicly-reachable HTTPS host — Slack verifies both the OAuth redirect URL and the Events Request URL before letting an install complete.
-
-### Telegram
-
-Run a Telegram bot backed by an OMA agent. Unlike the OAuth integrations above,
-this is a single deployment-level bot wired entirely through env vars on the
-integrations gateway — set `TELEGRAM_BOT_TOKEN` (BotFather) plus `TELEGRAM_AGENT_ID`
-(and optionally `TELEGRAM_VAULT_IDS` / `TELEGRAM_ENVIRONMENT_ID`), then point
-BotFather's webhook at `/telegram/webhook`. One session per chat.
-
-- **Attachments** — inbound photos and documents are downloaded and forwarded to
-  the agent as image / document content blocks (caption becomes the text); an
-  oversized or expired file degrades to a text placeholder so the turn still lands.
-- **Auto-idle** — a periodic sweep pauses the sandbox of any chat idle longer than
-  `TELEGRAM_IDLE_TIMEOUT_MS` (default 5 minutes) to stop paying for idle
-  containers. The next message implicitly resumes it (the sandbox warms lazily),
-  so no explicit resume is needed.
+Publish an agent into Linear, GitHub, Slack, or Telegram and have it act as a real teammate there — assigned, mentioned, replied to like any other user. Full guide: **[docs/integrations.md](docs/integrations.md)** (Slack operator setup detail: [docs/slack-integration.md](docs/slack-integration.md)).
 
 ---
 
 ## Publish an agent to consumers
 
-Publish an agent as a standalone bot that end users talk to without an OMA
-account — a hosted chat page at `/p/<slug>`, an embeddable widget, guest access,
-and optional per-message billing.
-
-- **Widget embed** — `<script src="https://<host>/p/<slug>/widget.js" async></script>`
-  drops a floating chat launcher onto any site. The Console **My Bots** page
-  (`/my-bots`) surfaces the public URL, a QR code, and the copy-paste snippet.
-- **Consumer auth** (`/v1/public/auth/*`) — magic-link, one-tap **guest** mode,
-  and in-place **upgrade** (guest → email, history preserved). Creators see who
-  used their bot via `GET /v1/publications/:id/users`.
-- **Metering & paywall** (`@duyet/oma-payments`) — per-publication pricing
-  (`free` / `per_message` / `per_1k_tokens` / `subscription`) over a credit
-  wallet. Blocked turns return HTTP 402; top-ups run through Stripe Checkout
-  (`POST /webhooks/stripe`). Kill-switch via `PAYMENTS_DISABLED`.
+Publish an agent as a standalone bot end users talk to without an OMA account — hosted chat page, embeddable widget, guest auth, optional per-message billing. Full guide: **[docs/publishing.md](docs/publishing.md)**.
 
 ## Schedule an agent
 
-Fire sessions on a cron cadence with no human turn — digests, polling, recurring
-maintenance:
-
-```bash
-curl -s $BASE/v1/agents/$AGENT/schedules -H "x-api-key: $KEY" \
-  -d '{"cron_expression":"0 9 * * 1","timezone":"America/New_York",
-       "environment_id":"env_xxx","input":"Post the weekly digest."}'
-```
-
-`next_run_at` advances via an atomic compare-and-set on each per-minute tick
-(no double-fire); `POST .../schedules/:id/run` fires immediately. Cloudflare
-deployment only for now. Full reference in [`AGENTS.md`](AGENTS.md).
+Fire sessions on a cron cadence with no human turn — digests, polling, recurring maintenance. Full guide: **[docs/schedules.md](docs/schedules.md)**.
 
 ---
 
 ## Project Structure
 
-```
-open-managed-agents/
-├── apps/
-│   ├── main/              # API worker (Cloudflare) — Hono routes, auth, rate limiting
-│   ├── main-node/         # apps/main-node — the self-host Node.js server (same control-plane API as apps/main, packaged for docker compose)
-│   ├── agent/             # Agent worker — SessionDO + harness + sandbox
-│   ├── integrations/      # Integrations gateway — Linear / GitHub / Slack OAuth + webhooks
-│   ├── oma-vault/         # Vault sidecar — outbound auth-header injection (per-host secrets)
-│   ├── console/           # Web dashboard — React + Vite + Tailwind v4
-│   ├── docs/              # Docs site (Astro Starlight) — published to docs.oma.duyet.net
-│   └── web/               # Marketing site (Astro) — published to oma.duyet.net
-├── packages/
-│   ├── cli/                       # `oma` CLI — agent / session / integration commands
-│   ├── sdk/                       # TypeScript SDK — typed REST + SSE client (`Oma` class)
-│   ├── api-types/                 # Shared TypeScript types (config schemas, events)
-│   ├── http-routes/               # Public REST route definitions (shared by main + main-node)
-│   ├── session-runtime/           # Harness runtime — event log, broadcast, recovery
-│   ├── sandbox/                   # Sandbox adapters (subprocess / litebox / daytona / e2b / boxrun)
-│   ├── credentials-store/         # Encrypted credentials (AES-GCM under PLATFORM_ROOT_SECRET)
-│   ├── model-cards-store/         # Encrypted model-card API keys
-│   ├── vaults-store/              # Vault definitions + outbound auth wiring
-│   ├── linear/  github/  slack/   # Provider logic (OAuth, webhook signing, MCP wiring)
-│   ├── integrations-core/         # Provider-neutral persistence interfaces
-│   └── integrations-adapters-{cf,node}/  # D1 / KV / Workers + Postgres / FS implementations
-├── docs/                  # Internal design RFCs (not the user-facing site)
-├── examples/              # Copy-paste agent/environment configs + ready-to-use Docker images
-├── test/                  # Unit + integration tests
-└── scripts/               # Deployment + maintenance scripts
-```
+See **[docs/project-structure.md](docs/project-structure.md)** for the full `apps/` and `packages/` layout.
 
 ---
 
 ## Configuration
 
-The variables that gate boot and at-rest safety:
-
-| Variable | Required | Description |
-|---|---|---|
-| `PLATFORM_ROOT_SECRET` | **Yes** | AES-GCM key for `credentials.auth`, `model_cards.api_key_cipher`, and integration tokens. Workers refuse to start without it. **Back this up** — losing it makes every encrypted row unreadable. Generate with `openssl rand -base64 32`. |
-| `BETTER_AUTH_SECRET` | **Yes** (prod) | better-auth session signing key. Sessions don't survive restart if missing. Generate with `openssl rand -hex 32`. |
-| `API_KEY` | Yes | Bootstrap key for the REST API in dev / first-run. Once the Console is up, prefer per-tenant API keys minted from there. |
-| `INTEGRATIONS_INTERNAL_SECRET` | Yes (if `apps/integrations` runs) | Shared secret between `apps/main` and `apps/integrations`. |
-| `ANTHROPIC_API_KEY` | No | Fallback LLM credential used when a tenant has not added a Model Card. **In production, add a Model Card per tenant from the Console** — the key is encrypted at rest under `PLATFORM_ROOT_SECRET`, scoped to the tenant, and rotatable without redeploy. |
-| `ANTHROPIC_BASE_URL` | No | Override for Anthropic-compatible proxies. |
-| `PUBLIC_BASE_URL` | No (dev) / Yes (prod) | Cookie domain + OAuth redirect base. Defaults to `*` trusted-origins — only safe for local dev. |
-| `SANDBOX_PROVIDER` | No | Fallback default when an environment has no explicit provider selection. See multi-provider docs below for per-environment `config.sandbox_provider` and BYOK registration. |
-| `TAVILY_API_KEY` | No | Only needed for the `web_search_tavily` tool-type variant — `web_search` defaults to free DuckDuckGo with no key required. |
-| `DAYTONA_API_KEY` | No | Enables Daytona sandbox provider (seeded at startup). |
-| `E2B_API_KEY` | No | Enables E2B sandbox provider (seeded at startup). |
-| `BOXRUN_URL` | No | Enables BoxRun sandbox provider (seeded at startup). |
-| `OMA_TELEMETRY_DISABLED` | No | Set to `1` to fully opt out of anonymous install telemetry (see **[Telemetry](#telemetry)**). `OMA_TELEMETRY=0` and `DO_NOT_TRACK=1` are honored too. |
-| `OMA_DEPLOYMENT_KIND` | No | Overrides the reported deployment kind (`cloudflare` / `node-docker` / `k8s`). |
-| `OMA_TELEMETRY_ENDPOINT` | No | Override the collector URL (default `https://app.oma.duyet.net`). Point at your own instance to keep telemetry private. |
-
-Multi-provider sandbox: providers can be seeded from env vars (system) or added
-via `POST /v1/sandbox_providers` (BYOK). Environments select a provider by ID
-via `config.sandbox_provider` — fallback chain: per-environment ID → legacy
-`config.type` → `SANDBOX_PROVIDER` env → `subprocess`.
-
-Full list (integrations OAuth credentials, Postgres URL, sandbox tunables, memory-bucket config, Google sign-in, etc.) — see **[docs.oma.duyet.net/reference/configuration](https://docs.oma.duyet.net/reference/configuration/)** and `.env.example` / `.dev.vars.example`.
+The variables that gate boot and at-rest safety (`PLATFORM_ROOT_SECRET`, `BETTER_AUTH_SECRET`, `API_KEY`, sandbox provider keys, telemetry toggles, …): **[docs/configuration.md](docs/configuration.md)**.
 
 ---
 
 ## Telemetry
 
-OMA collects **anonymous, opt-out** usage telemetry to guide development. A
-self-hosted install phones home every 6 hours with aggregate counts only —
-the public numbers are visible at **[oma.duyet.net/stats](https://oma.duyet.net/stats/)**.
-
-**What is collected (and nothing else):**
-
-- A random instance UUID generated + persisted locally on first run (no
-  hostname, username, IP, or any PII).
-- The OMA version and deployment kind (`cloudflare` / `node-docker` / `k8s`).
-- Aggregate counts: total/active agents, total/running sessions, total &
-  average session duration, sandbox launches grouped by provider kind, and
-  the set of model **ids** in use (names only).
-
-**What is never collected:** prompts, messages, tool inputs/outputs, file
-contents or paths, agent/tenant names, credentials, or any user data.
-
-**Opt out** at any time — honored everywhere (self-host Node, Cloudflare, and
-the CLI):
-
-```bash
-export OMA_TELEMETRY_DISABLED=1        # or OMA_TELEMETRY=0, or DO_NOT_TRACK=1
-```
-
-The ingest endpoint is `POST /v1/telemetry/ingest` (public, unauthenticated,
-rate-limited, zod-validated); the schema and aggregation live in
-`packages/http-routes/src/telemetry/`. Point `OMA_TELEMETRY_ENDPOINT` at your
-own instance to keep the data entirely private to your deployment.
+OMA collects **anonymous, opt-out** usage telemetry (instance UUID, version, aggregate counts only — never prompts, messages, or credentials). Opt out with `OMA_TELEMETRY_DISABLED=1`. Full details: **[docs/telemetry.md](docs/telemetry.md)**.
 
 ---
 
 ## Model Cards
 
-Per-tenant LLM credentials. An agent references one by setting `agent.model = "<model_id>"` — the worker looks up the card and signs the outbound request with its api_key, base_url, and headers. This is the canonical replacement for the global `ANTHROPIC_API_KEY` env var.
-
-Providers (wire tag → request shape):
-
-| tag | shape | typical use |
-|---|---|---|
-| `ant` | Anthropic `/v1/messages` | Claude on `api.anthropic.com` |
-| `ant-compatible` | Anthropic shape, custom `base_url` | Bedrock proxy, self-hosted Anthropic-compatible |
-| `oai` | OpenAI `/v1/chat/completions` | OpenAI, Azure OpenAI |
-| `oai-compatible` | OpenAI shape, custom `base_url` | vLLM, OpenRouter, Groq, etc. |
-
-Add one from **Console → Model Cards**, or via CLI:
-
-```bash
-oma models create \
-  --model-id claude-prod \
-  --provider ant \
-  --model claude-sonnet-4-6 \
-  --api-key sk-ant-...
-oma models list
-```
-
-REST: `POST /v1/model_cards`, `GET /v1/model_cards`, `POST /v1/model_cards/:id` (rotate), `DELETE /v1/model_cards/:id`. Create runs a 6-second probe so a bad key fails loudly, not at first turn.
-
-Keys are AES-256-GCM-encrypted at rest under `PLATFORM_ROOT_SECRET` (label `model.cards.keys`); list responses surface only the last-4 preview. Rotate by POSTing a new `api_key` — no redeploy, no key versioning (re-run the backfill script if you rotate `PLATFORM_ROOT_SECRET` itself).
+Per-tenant LLM credentials — an agent references one via `agent.model = "<model_id>"`; the worker signs the outbound request with its api_key/base_url/headers. Supports `ant` / `ant-compatible` / `oai` / `oai-compatible`. Full guide: **[docs/model-cards.md](docs/model-cards.md)**.
 
 ---
 
@@ -915,7 +336,27 @@ pnpm build:docs     # static build into apps/docs/dist/
 pnpm deploy:docs    # build + wrangler deploy (Cloudflare Worker static assets)
 ```
 
-The `docs/` folder at the repo root contains **internal design RFCs** — not the user-facing site.
+The `docs/` folder at the repo root contains **internal design RFCs** — not the user-facing site, but useful reference while working in this repo:
+
+| Topic | Doc |
+|---|---|
+| Architecture (meta-harness design) | [docs/architecture.md](docs/architecture.md) · [docs/architecture-overview.md](docs/architecture-overview.md) (中文, deep dive) |
+| API reference | [docs/api-reference.md](docs/api-reference.md) |
+| Built-in tools | [docs/tools.md](docs/tools.md) |
+| MCP servers | [docs/mcp-servers.md](docs/mcp-servers.md) · [docs/mcp-credential-architecture.md](docs/mcp-credential-architecture.md) |
+| Skills | [docs/skills.md](docs/skills.md) |
+| Vaults & outbound credentials | [docs/vaults-and-credentials.md](docs/vaults-and-credentials.md) |
+| Integrations (Linear, GitHub, Slack, Telegram) | [docs/integrations.md](docs/integrations.md) · [docs/slack-integration.md](docs/slack-integration.md) |
+| Publishing agents to consumers | [docs/publishing.md](docs/publishing.md) |
+| Scheduling agents | [docs/schedules.md](docs/schedules.md) |
+| Project structure | [docs/project-structure.md](docs/project-structure.md) |
+| Configuration / env vars | [docs/configuration.md](docs/configuration.md) |
+| Telemetry | [docs/telemetry.md](docs/telemetry.md) |
+| Model Cards | [docs/model-cards.md](docs/model-cards.md) |
+| Deployment topologies | [docs/deployment.md](docs/deployment.md) · [docs/self-host.md](docs/self-host.md) · [docs/runtimes.md](docs/runtimes.md) |
+| Quickstart (step-by-step) | [docs/quickstart.md](docs/quickstart.md) |
+| Advanced / fleet features | [docs/features.md](docs/features.md) |
+| Website deploy | [docs/website-deploy.md](docs/website-deploy.md) |
 
 ---
 

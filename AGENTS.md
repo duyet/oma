@@ -968,6 +968,32 @@ Use it:
 
 The platform handles everything else — tool construction, skill mounting, sandbox lifecycle, event persistence, crash recovery, and WebSocket broadcasting.
 
+### Poolside models (`harness: "poolside"`)
+
+Drives a turn against a [poolside.ai](https://poolside.ai) model (the
+`laguna` / `malibu` agentic-coding family). Poolside exposes plain
+**OpenAI-compatible** `/chat/completions` inference, so `PoolsideHarness`
+extends `DefaultHarness` and swaps only the resolved model — the tool loop,
+compaction, and event emission are entirely the default harness's. It is
+pure `fetch` (no Node builtins), so it is registered on **both** runtimes.
+
+```json
+{
+  "name": "Poolside coder",
+  "model": "poolside/laguna-s-2.1",
+  "system": "You are a careful coding assistant.",
+  "tools": [{ "type": "agent_toolset_20260401" }],
+  "harness": "poolside"
+}
+```
+
+`POOLSIDE_API_KEY` is required (mint one at platform.poolside.ai);
+`POOLSIDE_BASE_URL` defaults to `https://inference.poolside.ai/v1` and should
+be set to `https://<api-domain>/openai/v1` when pointing at a self-hosted
+poolside deployment. `agent.model` is passed through verbatim, including the
+`provider/model` prefix. Poolside's separate `pool` ACP coding agent is not
+this harness — drive that through `acp-proxy` + a local runtime binding.
+
 ### Local ACP Runtime (`harness: "acp-proxy"`)
 
 Instead of running in OMA's cloud sandbox, an agent can delegate its whole
@@ -1275,14 +1301,17 @@ curl -s $BASE/v1/agents/$AGENT_ID/schedules \
 | `timezone` | No | IANA zone, default `UTC` — DST-correct next-run math (via `croner`) |
 | `max_sessions` | No | Concurrency cap 1–100, default 1 |
 | `enabled` | No | Default true |
+| `notify` | No | Per-schedule alert config — `{ on?, targets }`. See [Per-schedule alerts](#per-schedule-alerts) |
 
 Routes (all tenant-scoped):
 
 ```http
 POST   /v1/agents/:agentId/schedules                    # Create (201)
 GET    /v1/agents/:agentId/schedules                    # List
+PATCH  /v1/agents/:agentId/schedules/:scheduleId        # Partial update
 DELETE /v1/agents/:agentId/schedules/:scheduleId        # Delete
 POST   /v1/agents/:agentId/schedules/:scheduleId/run    # Run now → {status:"queued", next_run_at}
+GET    /v1/agents/:agentId/schedules/:scheduleId/runs   # Durable run history — cursor-paginated
 ```
 
 `next_run_at` is seeded at create from the cron + timezone and advanced to the
@@ -1291,6 +1320,67 @@ ticks or replicas never double-fire. Each firing records
 `last_run_at` / `last_run_status` / `last_run_error` / `last_session_id`; a
 failing run is fail-open (logged, next occurrence still scheduled). An
 unparseable cron leaves `next_run_at` null and the schedule never fires.
+
+### Per-schedule alerts
+
+A schedule can raise its own alerts, independent of the agent's `notify`
+(which fires for *every* session that agent runs). Set `notify` on the
+schedule with the same [`NotificationTarget`](#notify-targets) shapes:
+
+```json
+{
+  "notify": {
+    "on": ["error", "skipped_concurrency"],
+    "targets": [
+      { "type": "slack_message", "credential_id": "cred_xxx", "channel": "C123" }
+    ]
+  }
+}
+```
+
+- **`on`** filters which firing outcomes alert — any of `ok` | `error` |
+  `skipped_concurrency`. **When omitted it defaults to
+  `["error", "skipped_concurrency"]`**: the two outcomes an operator usually
+  wants paged about. Success alerts are opt-in via an explicit `on`.
+- The filter is applied **before** dispatch, in the tick
+  (`shouldNotifyRun`), so it is independent of a `webhook` target's own
+  `events` filter — that enum stays session-only and schedule deliveries
+  bypass it.
+- Deliveries reuse the agent runtime's notify dispatcher, so a schedule
+  firing surfaces as a `schedule_ok` / `schedule_error` /
+  `schedule_skipped` status ("Scheduled run succeeded", …) and a `webhook`
+  envelope gains a trailing `schedule_id` field (appended last, so existing
+  receivers' signature reproduction is unchanged).
+- Credentials resolve across the **tenant's vaults** (a schedule has no
+  `vault_ids` of its own). Alerting is purely observational and fail-open —
+  an unresolvable credential or a dead endpoint is logged and never affects
+  the firing. `PATCH` with `"notify": null` clears the config.
+
+### Run history
+
+`agent_schedules`' `last_run_*` columns only ever hold the *latest* firing —
+they don't answer "what happened over the last week." Every firing (a normal
+success, a launch error, or a `skipped_concurrency` skip) also appends an
+immutable row to `agent_schedule_runs` (`srun_*` ids, issue #312 WP3):
+`schedule_id`, `tenant_id`, `agent_id`, `session_id`, `status`, `error`,
+`summary`, `started_at`, `created_at`. History writes are best-effort — a
+failed INSERT is logged and swallowed so it can never break `last_run_*`
+recording or the tick's concurrency gate.
+
+`GET /v1/agents/:agentId/schedules/:scheduleId/runs` reads it back, following
+the repo's standard cursor contract: `WHERE schedule_id = ? AND tenant_id = ?`,
+ordered `(created_at, id) DESC`, opaque `next_cursor`, `{ data, next_cursor }`
+response shape (`buildScheduleRoutes` in
+`packages/http-routes/src/schedules/index.ts`). `summary` is currently always
+`null` — a nullable slot reserved for a follow-up that fills in a short
+human-readable description of what the run did.
+
+`PATCH` takes any subset of `cron_expression` / `input` / `environment_id` /
+`timezone` / `max_sessions` / `enabled` (at least one required; empty body →
+400). When `cron_expression` or `timezone` is in the patch, `next_run_at` is
+recomputed atomically in the same request from the new value (or the
+existing row's, for the field not patched) — same seeding logic as create,
+including the "unparseable cron → null → never fires" fallback.
 
 Fires on **both runtimes** (issue #262). Cloudflare evaluates the tick via
 the per-minute cron in `apps/main/src/lib/cf-scheduler-jobs.ts`; the self-host

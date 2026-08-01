@@ -62,6 +62,7 @@ import {
 } from "@duyet/oma-shared";
 import { DefaultHarness } from "@duyet/oma-agent/harness/default-loop";
 import { ClaudeAgentSdkHarness } from "@duyet/oma-agent/harness/claude-agent-sdk-loop";
+import { PoolsideHarness } from "@duyet/oma-agent/harness/poolside-loop";
 import { buildTools } from "@duyet/oma-agent/harness/tools";
 import { resolveModel } from "@duyet/oma-agent/harness/provider";
 import { composeSystemPrompt } from "@duyet/oma-agent/harness/platform-guidance";
@@ -137,8 +138,11 @@ import {
   SqlSlackAppRepo,
   WebCryptoAesGcm,
   CryptoIdGenerator,
+  WorkerHttpClient,
   type NodeReposEnv,
 } from "@duyet/oma-integrations-adapters-node";
+import { dispatchSessionNotifications } from "@duyet/oma-agent/runtime/notify-dispatch";
+import type { SessionNotifyEvent } from "@duyet/oma-integrations-core";
 import {
   NodeInstallBridge,
   buildNodeProvidersForRequest,
@@ -175,7 +179,11 @@ import {
 import type { BrowserHarness } from "@duyet/oma-browser-harness";
 import { startMemoryBlobWatcher } from "./lib/memory-blob-watcher.js";
 import { buildNodeScheduler } from "./lib/node-scheduler-jobs.js";
-import type { ScheduledRunLauncher } from "@duyet/oma-scheduler/jobs/scheduled-agent-runs";
+import type {
+  ClaimedSchedule,
+  RecordRunInput,
+  ScheduledRunLauncher,
+} from "@duyet/oma-scheduler/jobs/scheduled-agent-runs";
 import type { ScheduledDeploymentRunLauncher } from "@duyet/oma-scheduler/jobs/scheduled-deployment-runs";
 import { startNodeMemoryQueue } from "./lib/node-memory-queue.js";
 import { mkdirSync, readFileSync } from "node:fs";
@@ -841,9 +849,20 @@ function resolveProviderCreds(
     return { apiKey: "", baseUrl: process.env.ANTHROPIC_BASE_URL };
   }
 
+  // Same escape for the "poolside" harness: it resolves its own
+  // OpenAI-compatible model from POOLSIDE_API_KEY/POOLSIDE_BASE_URL inside
+  // run() and never reads ctx.model, so an Anthropic key is not required.
+  if (
+    selectHarnessName(agent?.metadata?.harness, process.env.DEFAULT_HARNESS) === "poolside" &&
+    process.env.POOLSIDE_API_KEY
+  ) {
+    return { apiKey: "", baseUrl: undefined };
+  }
+
   throw new Error(
     "ANTHROPIC_API_KEY env var required for harness turns (or connect AnyRouter via the Console, " +
-      "or set CLAUDE_CODE_OAUTH_TOKEN for a claude-agent-sdk agent)",
+      "or set CLAUDE_CODE_OAUTH_TOKEN for a claude-agent-sdk agent, " +
+      "or POOLSIDE_API_KEY for a poolside agent)",
   );
 }
 
@@ -942,12 +961,19 @@ const sessionRegistry = new SessionRegistry({
     // rationale.
     const def = new DefaultHarness();
     const claudeAgentSdk = new ClaudeAgentSdkHarness();
+    // PoolsideHarness is plain-fetch (OpenAI-compatible) with no node
+    // builtins, so unlike claude-agent-sdk it is ALSO registered on the CF
+    // worker registry (apps/agent/src/index.ts). It is wired here too
+    // because main-node routes harnesses through this switch rather than
+    // through that registry.
+    const poolside = new PoolsideHarness();
     return {
       run: (ctx: unknown) => {
         const c = ctx as HarnessContext;
         const meta = (c.agent as { metadata?: Record<string, unknown> })?.metadata;
         const harnessName = selectHarnessName(meta?.harness, process.env.DEFAULT_HARNESS);
         if (harnessName === "claude-agent-sdk") return claudeAgentSdk.run(c);
+        if (harnessName === "poolside") return poolside.run(c);
         return def.run(c);
       },
     };
@@ -2473,6 +2499,70 @@ const scheduledRunLauncher: ScheduledRunLauncher = {
   },
 };
 
+// Per-schedule alerts (issue #313) — fan a recorded schedule firing out to
+// the schedule's own `notify.targets`, reusing the agent runtime's notify
+// dispatcher so target formatting/signing lives in one place (the CF twin is
+// `notifyScheduleRun` in apps/main/src/lib/cf-scheduler-jobs.ts). The tick
+// already applied the schedule's `on` filter and swallows anything thrown
+// here, so this is deliberately best-effort. A schedule has no vault_ids of
+// its own (unlike a session), so credentials resolve across the tenant's
+// vaults.
+const scheduleRunNotifier = async (
+  schedule: ClaimedSchedule,
+  run: RecordRunInput,
+): Promise<void> => {
+  const targets = schedule.notify?.targets ?? [];
+  if (!targets.length) return;
+
+  const resolveCredentialToken = async (credentialId?: string): Promise<string | null> => {
+    if (!credentialId) return null;
+    const vaults = await vaultService.list({ tenantId: schedule.tenantId });
+    const grouped = await credentialService.listByVaults({
+      tenantId: schedule.tenantId,
+      vaultIds: vaults.map((v) => v.id),
+    });
+    for (const { credentials } of grouped) {
+      for (const cred of credentials) {
+        if (cred.id === credentialId) {
+          const auth = cred.auth as { token?: string; access_token?: string } | undefined;
+          return auth?.token || auth?.access_token || null;
+        }
+      }
+    }
+    return null;
+  };
+
+  const event: SessionNotifyEvent = {
+    sessionId: run.sessionId ?? schedule.id,
+    status:
+      run.status === "ok"
+        ? "schedule_ok"
+        : run.status === "error"
+          ? "schedule_error"
+          : "schedule_skipped",
+    scheduleId: schedule.id,
+    ...(run.error ? { detail: run.error } : {}),
+  };
+
+  await dispatchSessionNotifications(event, targets, {
+    resolveCredentialToken,
+    resolveSecret: (ref) => resolveCredentialToken(ref),
+    resolveTelegramBotToken: () => process.env.TELEGRAM_BOT_TOKEN ?? null,
+    tenantId: schedule.tenantId,
+    httpClient: new WorkerHttpClient(),
+    onError: (target, err) =>
+      logger.warn(
+        {
+          err,
+          op: "main-node.scheduled_agent_runs.notify_failed",
+          schedule_id: schedule.id,
+          target_type: target.type,
+        },
+        "per-schedule notification failed",
+      ),
+  });
+};
+
 // Scheduled-deployment-runs launcher (issue #262) — mirrors the CF
 // launchDeploymentSession, carrying the deployment's vaults + memory stores
 // into each fired session. Node has no deployment CRUD routes yet, so no rows
@@ -2550,6 +2640,7 @@ const scheduler = buildNodeScheduler({
   omaVersion: nodeOmaVersion(),
   scheduledRunLauncher,
   scheduledDeploymentRunLauncher,
+  scheduleRunNotifier,
 });
 await scheduler.start();
 logger.info({ op: "main-node.scheduler.started" }, "scheduler started");

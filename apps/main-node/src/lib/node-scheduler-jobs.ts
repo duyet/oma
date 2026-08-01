@@ -26,6 +26,8 @@ import {
 } from "@duyet/oma-scheduler/jobs/linear-dispatch";
 import {
   scheduledAgentRunsTick,
+  type ClaimedSchedule,
+  type RecordRunInput,
   type ScheduledRunLauncher,
 } from "@duyet/oma-scheduler/jobs/scheduled-agent-runs";
 import { SqlClientScheduledRunsStore } from "@duyet/oma-scheduler/jobs/scheduled-agent-runs-store";
@@ -74,6 +76,13 @@ export interface NodeSchedulerDeps {
    *  this fires nothing until deployment rows exist, but the tick + CAS are
    *  wired identically to CF. */
   scheduledDeploymentRunLauncher?: ScheduledDeploymentRunLauncher | null;
+  /** Per-schedule alert dispatcher (issue #313). Built in
+   *  apps/main-node/src/index.ts where the vault + credential services are in
+   *  scope; the tick only calls it for firings the schedule's `notify.on`
+   *  filter selects, and swallows anything it throws. */
+  scheduleRunNotifier?:
+    | ((schedule: ClaimedSchedule, run: RecordRunInput) => Promise<void>)
+    | null;
   /** Override defaults via env so an operator can quiet noisy crons
    *  during a maintenance window without a code change. */
   env?: NodeJS.ProcessEnv;
@@ -197,6 +206,9 @@ export function buildNodeScheduler(deps: NodeSchedulerDeps) {
         scheduledAgentRunsTick({
           resolveStore: async () => store,
           resolveLauncher: async () => launcher,
+          ...(deps.scheduleRunNotifier
+            ? { onRunRecorded: deps.scheduleRunNotifier }
+            : {}),
         }),
       ),
     });

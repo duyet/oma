@@ -17,6 +17,7 @@ import type { SqlClient } from "@duyet/oma-sql-client";
 import { clampLimit, encodeCursor, decodeCursor } from "@duyet/oma-shared";
 import { getLogger } from "@duyet/oma-observability";
 import { computeNextRunAsync } from "@duyet/oma-scheduler/jobs/scheduled-agent-runs";
+import { scheduleNotifySchema } from "@duyet/oma-api-types";
 
 const log = getLogger("schedules");
 
@@ -36,6 +37,26 @@ function resolveDb(arg: ScheduleDbArg, c: Context): SqlClient {
   return typeof arg === "function" ? arg(c) : arg;
 }
 
+/**
+ * Hydrate the `notify` column (JSON text) into a parsed object on the way
+ * out (issue #313). Unparseable/legacy garbage degrades to `null` rather
+ * than failing the read — the column is purely an alerting convenience.
+ */
+function hydrateRow<T>(row: T): T {
+  if (!row || typeof row !== "object") return row;
+  const raw = (row as { notify?: unknown }).notify;
+  if (typeof raw !== "string") return row;
+  try {
+    return { ...row, notify: JSON.parse(raw) };
+  } catch {
+    return { ...row, notify: null };
+  }
+}
+
+function hydrateRows<T>(rows: readonly T[]): T[] {
+  return rows.map((r) => hydrateRow(r));
+}
+
 const createSchema = z.object({
   cron_expression: z.string().regex(/^(\S+\s+){4}\S+$/, "Must be a valid 5-field cron expression"),
   input: z.string().min(1).max(10000),
@@ -45,11 +66,26 @@ const createSchema = z.object({
   timezone: z.string().min(1).max(64).optional().default("UTC"),
   max_sessions: z.number().int().positive().max(100).optional().default(1),
   enabled: z.boolean().optional().default(true),
+  // Per-schedule alert targets (issue #313). Stored as JSON text in the
+  // `notify` column; absent = no alerts for this schedule.
+  notify: scheduleNotifySchema.optional(),
 });
 
-const updateSchema = z.object({
-  enabled: z.boolean(),
-});
+const updateSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    cron_expression: z
+      .string()
+      .regex(/^(\S+\s+){4}\S+$/, "Must be a valid 5-field cron expression")
+      .optional(),
+    input: z.string().min(1).max(10000).optional(),
+    environment_id: z.string().min(1).optional(),
+    timezone: z.string().min(1).max(64).optional(),
+    max_sessions: z.number().int().positive().max(100).optional(),
+    // `null` clears the per-schedule alert config (issue #313).
+    notify: scheduleNotifySchema.nullable().optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, "At least one field must be provided");
 
 /**
  * Tenant-wide schedule list — `GET /v1/schedules`, mounted separately from the
@@ -99,7 +135,7 @@ export function buildTenantScheduleRoutes(deps: ScheduleRoutesDeps) {
         ? encodeCursor({ createdAt: new Date(last.created_at).getTime(), id: last.id })
         : undefined;
 
-    return c.json({ data: items, next_cursor: nextCursor });
+    return c.json({ data: hydrateRows(items), next_cursor: nextCursor });
   });
 
   return app;
@@ -131,8 +167,8 @@ export function buildScheduleRoutes(deps: ScheduleRoutesDeps) {
     await db
       .prepare(
         `INSERT INTO agent_schedules
-           (id, agent_id, tenant_id, cron_expression, input, environment_id, user_id, timezone, next_run_at, max_sessions, enabled, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, agent_id, tenant_id, cron_expression, input, environment_id, user_id, timezone, next_run_at, max_sessions, enabled, notify, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         id,
@@ -146,6 +182,7 @@ export function buildScheduleRoutes(deps: ScheduleRoutesDeps) {
         nextRunAt,
         parsed.data.max_sessions,
         parsed.data.enabled ? 1 : 0,
+        parsed.data.notify ? JSON.stringify(parsed.data.notify) : null,
         now,
         now,
       )
@@ -163,6 +200,7 @@ export function buildScheduleRoutes(deps: ScheduleRoutesDeps) {
       next_run_at: nextRunAt,
       max_sessions: parsed.data.max_sessions,
       enabled: parsed.data.enabled,
+      notify: parsed.data.notify ?? null,
       created_at: now,
       updated_at: now,
     }, 201);
@@ -200,13 +238,54 @@ export function buildScheduleRoutes(deps: ScheduleRoutesDeps) {
       .bind(agentId, tenantId)
       .all();
 
-    return c.json({ data: rows.results });
+    return c.json({ data: hydrateRows(rows.results ?? []) });
   });
 
-  // Partial update. Deliberately narrow: only `enabled` is settable, which is
-  // the one transition a UI needs (the Kanban board's Scheduled ↔ Paused drag,
-  // issue #22 follow-up). Changing cron/input/environment stays a
-  // delete-and-recreate so `next_run_at` can never drift from the cron.
+  // Durable run history — GET /:agentId/schedules/:scheduleId/runs
+  // (issue #312, WP3). Reads agent_schedule_runs, one row per firing (ok /
+  // error / skipped_concurrency), independent of the single-row
+  // last_run_* summary on agent_schedules. Same cursor contract as every
+  // other paginated table in this repo: ordered (created_at, id) DESC,
+  // opaque cursor, stale cursor silently restarts from page 1.
+  app.get("/:agentId/schedules/:scheduleId/runs", async (c) => {
+    const scheduleId = c.req.param("scheduleId");
+    const tenantId = c.var.tenant_id;
+    const db = resolveDb(deps.db, c);
+    const limit = clampLimit(c.req.query("limit") ? Number(c.req.query("limit")) : undefined);
+    const after = decodeCursor(c.req.query("cursor"));
+
+    let where = "schedule_id = ? AND tenant_id = ?";
+    const binds: unknown[] = [scheduleId, tenantId];
+    if (after) {
+      where += " AND (created_at < ? OR (created_at = ? AND id < ?))";
+      const afterIso = new Date(after.createdAt).toISOString();
+      binds.push(afterIso, afterIso, after.id);
+    }
+    binds.push(limit + 1);
+
+    const res = await db
+      .prepare(
+        `SELECT * FROM agent_schedule_runs WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT ?`,
+      )
+      .bind(...binds)
+      .all<{ id: string; created_at: string }>();
+
+    const rows = res.results ?? [];
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, limit) : rows;
+    const last = items[items.length - 1];
+    const nextCursor =
+      hasMore && last
+        ? encodeCursor({ createdAt: new Date(last.created_at).getTime(), id: last.id })
+        : undefined;
+
+    return c.json({ data: items, next_cursor: nextCursor });
+  });
+
+  // Partial update. Any of cron_expression/input/environment_id/timezone/
+  // max_sessions/enabled may be patched. When cron_expression or timezone
+  // changes, next_run_at is recomputed atomically in the same request so it
+  // can never drift from the cron (mirrors create's seeding logic).
   app.patch("/:agentId/schedules/:scheduleId", async (c) => {
     const scheduleId = c.req.param("scheduleId");
     const tenantId = c.var.tenant_id;
@@ -217,23 +296,84 @@ export function buildScheduleRoutes(deps: ScheduleRoutesDeps) {
     }
 
     const db = resolveDb(deps.db, c);
-    const now = new Date().toISOString();
-    const res = await db
-      .prepare("UPDATE agent_schedules SET enabled = ?, updated_at = ? WHERE id = ? AND tenant_id = ?")
-      .bind(parsed.data.enabled ? 1 : 0, now, scheduleId, tenantId)
-      .run();
 
-    if ((res.meta?.changes ?? 0) === 0) {
+    const existing = await db
+      .prepare("SELECT * FROM agent_schedules WHERE id = ? AND tenant_id = ?")
+      .bind(scheduleId, tenantId)
+      .first<{ cron_expression: string; timezone: string }>();
+
+    if (!existing) {
       return c.json({ error: "Schedule not found" }, 404);
     }
+
+    const patch = parsed.data;
+    const now = new Date().toISOString();
+
+    const sets: string[] = [];
+    const binds: unknown[] = [];
+
+    if (patch.cron_expression !== undefined) {
+      sets.push("cron_expression = ?");
+      binds.push(patch.cron_expression);
+    }
+    if (patch.input !== undefined) {
+      sets.push("input = ?");
+      binds.push(patch.input);
+    }
+    if (patch.environment_id !== undefined) {
+      sets.push("environment_id = ?");
+      binds.push(patch.environment_id);
+    }
+    if (patch.timezone !== undefined) {
+      sets.push("timezone = ?");
+      binds.push(patch.timezone);
+    }
+    if (patch.max_sessions !== undefined) {
+      sets.push("max_sessions = ?");
+      binds.push(patch.max_sessions);
+    }
+    if (patch.enabled !== undefined) {
+      sets.push("enabled = ?");
+      binds.push(patch.enabled ? 1 : 0);
+    }
+    // `null` clears the per-schedule alert config; an object replaces it
+    // wholesale (no deep merge — alert targets are all-or-nothing).
+    if (patch.notify !== undefined) {
+      sets.push("notify = ?");
+      binds.push(patch.notify === null ? null : JSON.stringify(patch.notify));
+    }
+
+    // Recompute next_run_at whenever cron or timezone changes, using the
+    // patched value if present else the existing row's — same "unparseable
+    // cron → null → never fires" contract as create.
+    if (patch.cron_expression !== undefined || patch.timezone !== undefined) {
+      const nextMs = await computeNextRunAsync(
+        patch.cron_expression ?? existing.cron_expression,
+        patch.timezone ?? existing.timezone,
+        Date.now(),
+      );
+      const nextRunAt = nextMs != null ? new Date(nextMs).toISOString() : null;
+      sets.push("next_run_at = ?");
+      binds.push(nextRunAt);
+    }
+
+    sets.push("updated_at = ?");
+    binds.push(now);
+
+    binds.push(scheduleId, tenantId);
+
+    await db
+      .prepare(`UPDATE agent_schedules SET ${sets.join(", ")} WHERE id = ? AND tenant_id = ?`)
+      .bind(...binds)
+      .run();
 
     const row = await db
       .prepare("SELECT * FROM agent_schedules WHERE id = ? AND tenant_id = ?")
       .bind(scheduleId, tenantId)
       .first();
 
-    log.info({ schedule_id: scheduleId, enabled: parsed.data.enabled }, "schedule updated");
-    return c.json(row, 200);
+    log.info({ schedule_id: scheduleId, patch }, "schedule updated");
+    return c.json(hydrateRow(row), 200);
   });
 
   app.delete("/:agentId/schedules/:scheduleId", async (c) => {

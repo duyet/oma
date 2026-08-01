@@ -284,6 +284,12 @@ export interface HarnessContext {
      *  claude-agent-sdk-loop.ts. */
     CLAUDE_CODE_OAUTH_TOKEN?: string;
     OMA_MAX_OUTPUT_TOKENS?: string;
+    /** Credentials for the "poolside" harness (poolside.ai's
+     *  OpenAI-compatible inference API). POOLSIDE_BASE_URL defaults to
+     *  https://inference.poolside.ai/v1; override it to point at a
+     *  self-hosted poolside deployment's /openai/v1. See poolside-loop.ts. */
+    POOLSIDE_API_KEY?: string;
+    POOLSIDE_BASE_URL?: string;
     TAVILY_API_KEY?: string;
     delegateToAgent?: (agentId: string, message: string) => Promise<string>;
     /** Same delegation path as `delegateToAgent`, but also resolves the
