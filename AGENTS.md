@@ -1284,6 +1284,7 @@ GET    /v1/agents/:agentId/schedules                    # List
 PATCH  /v1/agents/:agentId/schedules/:scheduleId        # Partial update
 DELETE /v1/agents/:agentId/schedules/:scheduleId        # Delete
 POST   /v1/agents/:agentId/schedules/:scheduleId/run    # Run now → {status:"queued", next_run_at}
+GET    /v1/agents/:agentId/schedules/:scheduleId/runs   # Durable run history — cursor-paginated
 ```
 
 `next_run_at` is seeded at create from the cron + timezone and advanced to the
@@ -1292,6 +1293,25 @@ ticks or replicas never double-fire. Each firing records
 `last_run_at` / `last_run_status` / `last_run_error` / `last_session_id`; a
 failing run is fail-open (logged, next occurrence still scheduled). An
 unparseable cron leaves `next_run_at` null and the schedule never fires.
+
+### Run history
+
+`agent_schedules`' `last_run_*` columns only ever hold the *latest* firing —
+they don't answer "what happened over the last week." Every firing (a normal
+success, a launch error, or a `skipped_concurrency` skip) also appends an
+immutable row to `agent_schedule_runs` (`srun_*` ids, issue #312 WP3):
+`schedule_id`, `tenant_id`, `agent_id`, `session_id`, `status`, `error`,
+`summary`, `started_at`, `created_at`. History writes are best-effort — a
+failed INSERT is logged and swallowed so it can never break `last_run_*`
+recording or the tick's concurrency gate.
+
+`GET /v1/agents/:agentId/schedules/:scheduleId/runs` reads it back, following
+the repo's standard cursor contract: `WHERE schedule_id = ? AND tenant_id = ?`,
+ordered `(created_at, id) DESC`, opaque `next_cursor`, `{ data, next_cursor }`
+response shape (`buildScheduleRoutes` in
+`packages/http-routes/src/schedules/index.ts`). `summary` is currently always
+`null` — a nullable slot reserved for a follow-up that fills in a short
+human-readable description of what the run did.
 
 `PATCH` takes any subset of `cron_expression` / `input` / `environment_id` /
 `timezone` / `max_sessions` / `enabled` (at least one required; empty body →

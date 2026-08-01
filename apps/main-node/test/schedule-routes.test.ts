@@ -306,7 +306,7 @@ describe("GET /agents/:agentId/schedules/:scheduleId/runs", () => {
     expect(body.next_cursor).toBeUndefined();
     expect(calls[0].sql).toContain("FROM agent_schedule_runs");
     expect(calls[0].sql).toContain("ORDER BY created_at DESC, id DESC");
-    expect(calls[0].binds).toEqual(["sch_1", "tnt_1", 26]);
+    expect(calls[0].binds).toEqual(["sch_1", "tnt_1", 51]);
   });
 
   it("paginates with a cursor when more rows exist than the page limit", async () => {
