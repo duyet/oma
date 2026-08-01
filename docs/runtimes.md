@@ -29,7 +29,8 @@ Registered in `apps/agent/src/index.ts` (Cloudflare) and additionally in
 | Default | `"default"` (or omitted) | CF + self-host | In-process `generateText`/`streamText` loop over `ai-sdk`. |
 | ACP proxy | `"acp-proxy"` | CF + self-host | Bridges an Agent Client Protocol server. |
 | Long-running | `"long-running"` | CF + self-host | Default loop + periodic `agent.status` heartbeats. |
-| Claude Agent SDK | `"claude-agent-sdk"` | **self-host only** | Spawns Claude Code's CLI as a native subprocess via `@anthropic-ai/claude-agent-sdk`. Requires `child_process` + a real filesystem — unavailable inside a Cloudflare Workers isolate, so it's wired into `apps/main-node`'s harness router only, never the CF worker registry. |
+| Poolside | `"poolside"` | CF + self-host | Default loop against a [poolside.ai](https://poolside.ai) model (`laguna`/`malibu`) over plain OpenAI-compatible `/chat/completions` — pure `fetch`, no Node builtins. Requires `POOLSIDE_API_KEY`; defaults `agent.model` to `poolside/laguna-s-2.1`. See [`AGENTS.md` § Poolside models](../AGENTS.md#poolside-models-harness-poolside). |
+| Claude Agent SDK | `"claude-agent-sdk"` | **self-host only** | Spawns Claude Code's CLI as a native subprocess via `@anthropic-ai/claude-agent-sdk`. Requires `child_process` + a real filesystem — unavailable inside a Cloudflare Workers isolate, so it's wired into `apps/main-node`'s harness router only, never the CF worker registry. A copy-paste Docker template for running it lives in `examples/claude-agent-sdk-server/`. |
 
 ### Recommended default: `claude-agent-sdk` on self-host
 
