@@ -1594,6 +1594,9 @@ importers:
 
   packages/scheduler:
     dependencies:
+      '@duyet/oma-api-types':
+        specifier: workspace:*
+        version: link:../api-types
       '@duyet/oma-memory-store':
         specifier: workspace:*
         version: link:../memory-store

@@ -8,6 +8,7 @@
     "@cloudflare/containers": "^0.0.25",
     "@cloudflare/sandbox": "^0.9.1",
     "@duyet/oma-acp-runtime": "workspace:*",
+    "@duyet/oma-agent": "workspace:*",
     "@duyet/oma-agents-store": "workspace:*",
     "@duyet/oma-blob-store": "workspace:*",
     "@duyet/oma-cap": "workspace:*",

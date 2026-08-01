@@ -37,6 +37,8 @@ import {
   resolveKnownAgent,
 } from "@duyet/oma-acp-runtime/known-agents";
 import type { AgentRecord as Agent } from "../../types/agent";
+import { HarnessPicker } from "./HarnessPicker";
+import { harnessOption } from "./harness-options";
 
 // ─── Template card presentation ───────────────────────────────────────────
 // Maps a template's `icon` key (data/templates.ts) to its lucide glyph. The
@@ -1181,6 +1183,12 @@ export function BasicTab({
       setForm({ ...form, runtimeId: rt.id, acpAgentId: rt.agents?.[0]?.id ?? form.acpAgentId });
     }
   };
+
+  // Per-harness model guidance: a suggested default that stays editable, and
+  // the inline "this harness doesn't use the model field" note.
+  const selectedHarness = harnessOption(form.harness);
+  const harnessDefaultModel = selectedHarness?.defaultModel;
+  const harnessIgnoresModel = selectedHarness?.ignoresAgentModel === true;
 
   const segCls = (active: boolean) =>
     `flex-1 inline-flex flex-col items-start gap-0.5 px-3 py-2 min-h-11 text-sm rounded-md border transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)] ${
