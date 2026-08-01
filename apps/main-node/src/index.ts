@@ -1899,7 +1899,14 @@ v1.get("/files", async (c) => {
     sessionId: scopeId,
     limit: requested,
   });
-  return c.json({ data: rows.map(toFileRecord), has_more: false });
+  return c.json({
+    data: rows.map(toFileRecord),
+    has_more: false,
+    // Anthropic SDK Family B list schema: `next_page` is `string | null`.
+    // Node's read-only files route isn't cursor-paginated (always one page),
+    // so emit null to satisfy strict AMA spec validators.
+    next_page: null,
+  });
 });
 v1.get("/files/:id/content", async (c) => {
   const id = c.req.param("id");
