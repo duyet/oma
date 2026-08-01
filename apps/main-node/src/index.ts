@@ -62,6 +62,7 @@ import {
 } from "@duyet/oma-shared";
 import { DefaultHarness } from "@duyet/oma-agent/harness/default-loop";
 import { ClaudeAgentSdkHarness } from "@duyet/oma-agent/harness/claude-agent-sdk-loop";
+import { PoolsideHarness } from "@duyet/oma-agent/harness/poolside-loop";
 import { buildTools } from "@duyet/oma-agent/harness/tools";
 import { resolveModel } from "@duyet/oma-agent/harness/provider";
 import { composeSystemPrompt } from "@duyet/oma-agent/harness/platform-guidance";
@@ -841,9 +842,20 @@ function resolveProviderCreds(
     return { apiKey: "", baseUrl: process.env.ANTHROPIC_BASE_URL };
   }
 
+  // Same escape for the "poolside" harness: it resolves its own
+  // OpenAI-compatible model from POOLSIDE_API_KEY/POOLSIDE_BASE_URL inside
+  // run() and never reads ctx.model, so an Anthropic key is not required.
+  if (
+    selectHarnessName(agent?.metadata?.harness, process.env.DEFAULT_HARNESS) === "poolside" &&
+    process.env.POOLSIDE_API_KEY
+  ) {
+    return { apiKey: "", baseUrl: undefined };
+  }
+
   throw new Error(
     "ANTHROPIC_API_KEY env var required for harness turns (or connect AnyRouter via the Console, " +
-      "or set CLAUDE_CODE_OAUTH_TOKEN for a claude-agent-sdk agent)",
+      "or set CLAUDE_CODE_OAUTH_TOKEN for a claude-agent-sdk agent, " +
+      "or POOLSIDE_API_KEY for a poolside agent)",
   );
 }
 
@@ -942,12 +954,19 @@ const sessionRegistry = new SessionRegistry({
     // rationale.
     const def = new DefaultHarness();
     const claudeAgentSdk = new ClaudeAgentSdkHarness();
+    // PoolsideHarness is plain-fetch (OpenAI-compatible) with no node
+    // builtins, so unlike claude-agent-sdk it is ALSO registered on the CF
+    // worker registry (apps/agent/src/index.ts). It is wired here too
+    // because main-node routes harnesses through this switch rather than
+    // through that registry.
+    const poolside = new PoolsideHarness();
     return {
       run: (ctx: unknown) => {
         const c = ctx as HarnessContext;
         const meta = (c.agent as { metadata?: Record<string, unknown> })?.metadata;
         const harnessName = selectHarnessName(meta?.harness, process.env.DEFAULT_HARNESS);
         if (harnessName === "claude-agent-sdk") return claudeAgentSdk.run(c);
+        if (harnessName === "poolside") return poolside.run(c);
         return def.run(c);
       },
     };

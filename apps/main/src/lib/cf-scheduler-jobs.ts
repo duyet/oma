@@ -30,6 +30,9 @@ import {
 } from "@duyet/oma-scheduler/jobs/scheduled-deployment-runs";
 import { SqlClientScheduledDeploymentRunsStore } from "@duyet/oma-scheduler/jobs/scheduled-deployment-runs-store";
 import { withHealthchecks } from "@duyet/oma-shared";
+import { dispatchSessionNotifications } from "@duyet/oma-agent/runtime/notify-dispatch";
+import { WorkerHttpClient } from "@duyet/oma-integrations-adapters-cf";
+import type { SessionNotifyEvent } from "@duyet/oma-integrations-core";
 import { tickEvalRuns } from "../eval-runner";
 import { createInternalSession } from "../routes/internal";
 import { launchDeploymentSession } from "./deployment-runs";
@@ -151,6 +154,7 @@ export function buildCfScheduler(env: Env): CfScheduler {
           resolveStore: async () =>
             new SqlClientScheduledRunsStore(new CfD1SqlClient(env.MAIN_DB)),
           resolveLauncher: async () => launcher,
+          onRunRecorded: (schedule, run) => notifyScheduleRun(env, schedule, run),
         }),
       ),
     });

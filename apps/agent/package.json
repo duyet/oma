@@ -9,6 +9,7 @@
     "./harness/default-loop": "./src/harness/default-loop.ts",
     "./harness/claude-agent-sdk-loop": "./src/harness/claude-agent-sdk-loop.ts",
     "./harness/interface": "./src/harness/interface.ts",
+    "./harness/poolside-loop": "./src/harness/poolside-loop.ts",
     "./harness/tools": "./src/harness/tools.ts",
     "./harness/registry": "./src/harness/registry.ts",
     "./harness/provider": "./src/harness/provider.ts",
