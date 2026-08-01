@@ -370,15 +370,15 @@ input:focus-visible,
   color: var(--color-fg);
 }
 .arch-layer + .arch-layer {
-  margin-top: 0.75rem;
+  margin-top: 1.25rem;
 }
 .arch-layer::before {
   content: "";
   position: absolute;
   left: 1.5rem;
-  top: -0.75rem;
+  top: -1.25rem;
   width: 2px;
-  height: 0.75rem;
+  height: 1.25rem;
   background: var(--color-border-strong);
 }
 .arch-layer:first-child::before {
@@ -435,6 +435,24 @@ input:focus-visible,
   flex: none;
   align-self: center;
   color: var(--color-border-strong);
+}
+/* Lifecycle step cards (how-it-works page) — was rendering as plain
+   stacked blocks with no gap between them; grid + gap gives the cards
+   breathing room, matching the spacing used elsewhere on the page. */
+.lifecycle-track {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+@media (min-width: 640px) {
+  .lifecycle-track {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 1024px) {
+  .lifecycle-track {
+    grid-template-columns: repeat(5, 1fr);
+  }
 }
 /* Step number lights up in brand on hover (pairs with the data-lift). */
 .lifecycle-num {
