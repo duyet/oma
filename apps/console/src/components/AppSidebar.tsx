@@ -9,6 +9,7 @@ import {
   CircleCheckBigIcon,
   ChartColumnIcon,
   UsersIcon,
+  BlocksIcon,
 } from "lucide-react";
 
 import {
@@ -156,6 +157,7 @@ const navGroups: NavGroup[] = [
   {
     label: "Integrations",
     items: [
+      { to: "/integrations", label: "All Integrations", icon: BlocksIcon, end: true },
       { to: "/integrations/linear", label: "Linear", icon: LinearIcon, integrationStatus: "linear" },
       { to: "/integrations/github", label: "GitHub", icon: GitHubIcon, integrationStatus: "github" },
       { to: "/integrations/slack", label: "Slack", icon: SlackIcon, integrationStatus: "slack" },

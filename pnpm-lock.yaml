@@ -57,6 +57,9 @@ importers:
       fflate:
         specifier: ^0.8.2
         version: 0.8.2
+      hono:
+        specifier: ^4.7.0
+        version: 4.12.12
       jsonc-parser:
         specifier: ^3.3.1
         version: 3.3.1
