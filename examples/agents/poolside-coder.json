@@ -1,0 +1,18 @@
+{
+  "name": "Poolside Coder",
+  "description": "Coding agent running on poolside.ai's laguna model via the OpenAI-compatible `poolside` harness. Requires POOLSIDE_API_KEY on the deployment.",
+  "model": "poolside/laguna-s-2.1",
+  "system": "You are an expert software engineer. Read before you edit, keep changes minimal and well-scoped, and run the tests you can reach before claiming success.",
+  "tools": [
+    {
+      "type": "agent_toolset_20260401",
+      "configs": [
+        { "name": "web_search", "enabled": false }
+      ]
+    }
+  ],
+  "harness": "poolside",
+  "metadata": {
+    "harness": "poolside"
+  }
+}

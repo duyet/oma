@@ -968,6 +968,32 @@ Use it:
 
 The platform handles everything else — tool construction, skill mounting, sandbox lifecycle, event persistence, crash recovery, and WebSocket broadcasting.
 
+### Poolside models (`harness: "poolside"`)
+
+Drives a turn against a [poolside.ai](https://poolside.ai) model (the
+`laguna` / `malibu` agentic-coding family). Poolside exposes plain
+**OpenAI-compatible** `/chat/completions` inference, so `PoolsideHarness`
+extends `DefaultHarness` and swaps only the resolved model — the tool loop,
+compaction, and event emission are entirely the default harness's. It is
+pure `fetch` (no Node builtins), so it is registered on **both** runtimes.
+
+```json
+{
+  "name": "Poolside coder",
+  "model": "poolside/laguna-s-2.1",
+  "system": "You are a careful coding assistant.",
+  "tools": [{ "type": "agent_toolset_20260401" }],
+  "harness": "poolside"
+}
+```
+
+`POOLSIDE_API_KEY` is required (mint one at platform.poolside.ai);
+`POOLSIDE_BASE_URL` defaults to `https://inference.poolside.ai/v1` and should
+be set to `https://<api-domain>/openai/v1` when pointing at a self-hosted
+poolside deployment. `agent.model` is passed through verbatim, including the
+`provider/model` prefix. Poolside's separate `pool` ACP coding agent is not
+this harness — drive that through `acp-proxy` + a local runtime binding.
+
 ### Local ACP Runtime (`harness: "acp-proxy"`)
 
 Instead of running in OMA's cloud sandbox, an agent can delegate its whole
