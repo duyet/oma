@@ -47,9 +47,19 @@ const createSchema = z.object({
   enabled: z.boolean().optional().default(true),
 });
 
-const updateSchema = z.object({
-  enabled: z.boolean(),
-});
+const updateSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    cron_expression: z
+      .string()
+      .regex(/^(\S+\s+){4}\S+$/, "Must be a valid 5-field cron expression")
+      .optional(),
+    input: z.string().min(1).max(10000).optional(),
+    environment_id: z.string().min(1).optional(),
+    timezone: z.string().min(1).max(64).optional(),
+    max_sessions: z.number().int().positive().max(100).optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, "At least one field must be provided");
 
 /**
  * Tenant-wide schedule list — `GET /v1/schedules`, mounted separately from the
@@ -203,10 +213,10 @@ export function buildScheduleRoutes(deps: ScheduleRoutesDeps) {
     return c.json({ data: rows.results });
   });
 
-  // Partial update. Deliberately narrow: only `enabled` is settable, which is
-  // the one transition a UI needs (the Kanban board's Scheduled ↔ Paused drag,
-  // issue #22 follow-up). Changing cron/input/environment stays a
-  // delete-and-recreate so `next_run_at` can never drift from the cron.
+  // Partial update. Any of cron_expression/input/environment_id/timezone/
+  // max_sessions/enabled may be patched. When cron_expression or timezone
+  // changes, next_run_at is recomputed atomically in the same request so it
+  // can never drift from the cron (mirrors create's seeding logic).
   app.patch("/:agentId/schedules/:scheduleId", async (c) => {
     const scheduleId = c.req.param("scheduleId");
     const tenantId = c.var.tenant_id;
@@ -217,22 +227,77 @@ export function buildScheduleRoutes(deps: ScheduleRoutesDeps) {
     }
 
     const db = resolveDb(deps.db, c);
-    const now = new Date().toISOString();
-    const res = await db
-      .prepare("UPDATE agent_schedules SET enabled = ?, updated_at = ? WHERE id = ? AND tenant_id = ?")
-      .bind(parsed.data.enabled ? 1 : 0, now, scheduleId, tenantId)
-      .run();
 
-    if ((res.meta?.changes ?? 0) === 0) {
+    const existing = await db
+      .prepare("SELECT * FROM agent_schedules WHERE id = ? AND tenant_id = ?")
+      .bind(scheduleId, tenantId)
+      .first<{ cron_expression: string; timezone: string }>();
+
+    if (!existing) {
       return c.json({ error: "Schedule not found" }, 404);
     }
+
+    const patch = parsed.data;
+    const now = new Date().toISOString();
+
+    const sets: string[] = [];
+    const binds: unknown[] = [];
+
+    if (patch.cron_expression !== undefined) {
+      sets.push("cron_expression = ?");
+      binds.push(patch.cron_expression);
+    }
+    if (patch.input !== undefined) {
+      sets.push("input = ?");
+      binds.push(patch.input);
+    }
+    if (patch.environment_id !== undefined) {
+      sets.push("environment_id = ?");
+      binds.push(patch.environment_id);
+    }
+    if (patch.timezone !== undefined) {
+      sets.push("timezone = ?");
+      binds.push(patch.timezone);
+    }
+    if (patch.max_sessions !== undefined) {
+      sets.push("max_sessions = ?");
+      binds.push(patch.max_sessions);
+    }
+    if (patch.enabled !== undefined) {
+      sets.push("enabled = ?");
+      binds.push(patch.enabled ? 1 : 0);
+    }
+
+    // Recompute next_run_at whenever cron or timezone changes, using the
+    // patched value if present else the existing row's — same "unparseable
+    // cron → null → never fires" contract as create.
+    if (patch.cron_expression !== undefined || patch.timezone !== undefined) {
+      const nextMs = await computeNextRunAsync(
+        patch.cron_expression ?? existing.cron_expression,
+        patch.timezone ?? existing.timezone,
+        Date.now(),
+      );
+      const nextRunAt = nextMs != null ? new Date(nextMs).toISOString() : null;
+      sets.push("next_run_at = ?");
+      binds.push(nextRunAt);
+    }
+
+    sets.push("updated_at = ?");
+    binds.push(now);
+
+    binds.push(scheduleId, tenantId);
+
+    await db
+      .prepare(`UPDATE agent_schedules SET ${sets.join(", ")} WHERE id = ? AND tenant_id = ?`)
+      .bind(...binds)
+      .run();
 
     const row = await db
       .prepare("SELECT * FROM agent_schedules WHERE id = ? AND tenant_id = ?")
       .bind(scheduleId, tenantId)
       .first();
 
-    log.info({ schedule_id: scheduleId, enabled: parsed.data.enabled }, "schedule updated");
+    log.info({ schedule_id: scheduleId, patch }, "schedule updated");
     return c.json(row, 200);
   });
 

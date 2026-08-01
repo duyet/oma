@@ -1281,6 +1281,7 @@ Routes (all tenant-scoped):
 ```http
 POST   /v1/agents/:agentId/schedules                    # Create (201)
 GET    /v1/agents/:agentId/schedules                    # List
+PATCH  /v1/agents/:agentId/schedules/:scheduleId        # Partial update
 DELETE /v1/agents/:agentId/schedules/:scheduleId        # Delete
 POST   /v1/agents/:agentId/schedules/:scheduleId/run    # Run now → {status:"queued", next_run_at}
 ```
@@ -1291,6 +1292,13 @@ ticks or replicas never double-fire. Each firing records
 `last_run_at` / `last_run_status` / `last_run_error` / `last_session_id`; a
 failing run is fail-open (logged, next occurrence still scheduled). An
 unparseable cron leaves `next_run_at` null and the schedule never fires.
+
+`PATCH` takes any subset of `cron_expression` / `input` / `environment_id` /
+`timezone` / `max_sessions` / `enabled` (at least one required; empty body →
+400). When `cron_expression` or `timezone` is in the patch, `next_run_at` is
+recomputed atomically in the same request from the new value (or the
+existing row's, for the field not patched) — same seeding logic as create,
+including the "unparseable cron → null → never fires" fallback.
 
 Fires on **both runtimes** (issue #262). Cloudflare evaluates the tick via
 the per-minute cron in `apps/main/src/lib/cf-scheduler-jobs.ts`; the self-host

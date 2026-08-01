@@ -1,5 +1,6 @@
 // Covers the two schedule routes added for the Console Kanban board:
-//   - PATCH /v1/agents/:agentId/schedules/:scheduleId  ({enabled} toggle)
+//   - PATCH /v1/agents/:agentId/schedules/:scheduleId  (partial update —
+//     enabled/cron_expression/input/environment_id/timezone/max_sessions)
 //   - GET   /v1/schedules                              (tenant-wide list)
 // Both talk to the control-plane DB through the SqlClient port, so a
 // recording fake is enough — no D1/sqlite needed.
@@ -77,7 +78,9 @@ const scheduleRow = (over: Record<string, unknown> = {}) => ({
 
 describe("PATCH /agents/:agentId/schedules/:scheduleId", () => {
   it("disables a schedule and returns the updated row", async () => {
+    // call order: SELECT existing → UPDATE → SELECT final
     const { client, calls } = fakeDb([
+      { rows: [scheduleRow()] },
       { changes: 1 },
       { rows: [scheduleRow({ enabled: 0 })] },
     ]);
@@ -92,14 +95,18 @@ describe("PATCH /agents/:agentId/schedules/:scheduleId", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ id: "sch_1", enabled: 0 });
     // enabled is persisted as 0/1 and scoped by tenant, never by id alone.
-    expect(calls[0].sql).toContain("UPDATE agent_schedules SET enabled");
-    expect(calls[0].sql).toContain("tenant_id = ?");
-    expect(calls[0].binds[0]).toBe(0);
-    expect(calls[0].binds).toContain("tnt_1");
+    expect(calls[1].sql).toContain("UPDATE agent_schedules SET enabled");
+    expect(calls[1].sql).toContain("tenant_id = ?");
+    expect(calls[1].binds[0]).toBe(0);
+    expect(calls[1].binds).toContain("tnt_1");
   });
 
   it("re-enables a schedule (enabled: true → 1)", async () => {
-    const { client, calls } = fakeDb([{ changes: 1 }, { rows: [scheduleRow()] }]);
+    const { client, calls } = fakeDb([
+      { rows: [scheduleRow()] },
+      { changes: 1 },
+      { rows: [scheduleRow()] },
+    ]);
     const app = appWith(buildScheduleRoutes({ db: client }) as never, "/v1/agents");
 
     const res = await app.request("/v1/agents/agent_1/schedules/sch_1", {
@@ -109,11 +116,11 @@ describe("PATCH /agents/:agentId/schedules/:scheduleId", () => {
     });
 
     expect(res.status).toBe(200);
-    expect(calls[0].binds[0]).toBe(1);
+    expect(calls[1].binds[0]).toBe(1);
   });
 
-  it("404s when the schedule belongs to another tenant (no rows changed)", async () => {
-    const { client } = fakeDb([{ changes: 0 }]);
+  it("404s when the schedule belongs to another tenant (no row found)", async () => {
+    const { client } = fakeDb([{ rows: [] }]);
     const app = appWith(buildScheduleRoutes({ db: client }) as never, "/v1/agents");
 
     const res = await app.request("/v1/agents/agent_1/schedules/sch_other", {
@@ -125,18 +132,101 @@ describe("PATCH /agents/:agentId/schedules/:scheduleId", () => {
     expect(res.status).toBe(404);
   });
 
-  it("400s on a non-boolean enabled — the route settles no other field", async () => {
+  it("400s on an empty body — at least one field is required", async () => {
     const { client, calls } = fakeDb([]);
     const app = appWith(buildScheduleRoutes({ db: client }) as never, "/v1/agents");
 
     const res = await app.request("/v1/agents/agent_1/schedules/sch_1", {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ cron_expression: "* * * * *" }),
+      body: JSON.stringify({}),
     });
 
     expect(res.status).toBe(400);
     expect(calls).toHaveLength(0);
+  });
+
+  it("recomputes next_run_at when cron_expression is patched", async () => {
+    const { client, calls } = fakeDb([
+      { rows: [scheduleRow({ cron_expression: "0 9 * * 1", timezone: "UTC" })] },
+      { changes: 1 },
+      { rows: [scheduleRow({ cron_expression: "0 10 * * 2" })] },
+    ]);
+    const app = appWith(buildScheduleRoutes({ db: client }) as never, "/v1/agents");
+
+    const res = await app.request("/v1/agents/agent_1/schedules/sch_1", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ cron_expression: "0 10 * * 2" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(calls[1].sql).toContain("cron_expression = ?");
+    expect(calls[1].sql).toContain("next_run_at = ?");
+    const nextRunAtBind = calls[1].binds[calls[1].binds.indexOf("0 10 * * 2") + 1];
+    expect(typeof nextRunAtBind).toBe("string");
+  });
+
+  it("patching input only leaves next_run_at untouched", async () => {
+    const { client, calls } = fakeDb([
+      { rows: [scheduleRow()] },
+      { changes: 1 },
+      { rows: [scheduleRow({ input: "new prompt" })] },
+    ]);
+    const app = appWith(buildScheduleRoutes({ db: client }) as never, "/v1/agents");
+
+    const res = await app.request("/v1/agents/agent_1/schedules/sch_1", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ input: "new prompt" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(calls[1].sql).toContain("input = ?");
+    expect(calls[1].sql).not.toContain("next_run_at");
+    expect(calls[1].sql).not.toContain("cron_expression");
+  });
+
+  it("recomputes next_run_at when only timezone is patched", async () => {
+    const { client, calls } = fakeDb([
+      { rows: [scheduleRow({ cron_expression: "0 9 * * 1", timezone: "UTC" })] },
+      { changes: 1 },
+      { rows: [scheduleRow({ timezone: "America/New_York" })] },
+    ]);
+    const app = appWith(buildScheduleRoutes({ db: client }) as never, "/v1/agents");
+
+    const res = await app.request("/v1/agents/agent_1/schedules/sch_1", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ timezone: "America/New_York" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(calls[1].sql).toContain("timezone = ?");
+    expect(calls[1].sql).toContain("next_run_at = ?");
+  });
+
+  it("a syntactically-valid but unparseable cron patch resolves next_run_at to null", async () => {
+    // 5 fields (passes the schema regex) but an out-of-range weekday, so
+    // croner throws internally and computeNextRunWith falls back to null —
+    // same "never fires" contract as create.
+    const { client, calls } = fakeDb([
+      { rows: [scheduleRow()] },
+      { changes: 1 },
+      { rows: [scheduleRow({ cron_expression: "* * * * 8", next_run_at: null })] },
+    ]);
+    const app = appWith(buildScheduleRoutes({ db: client }) as never, "/v1/agents");
+
+    const res = await app.request("/v1/agents/agent_1/schedules/sch_1", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ cron_expression: "* * * * 8" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(calls[1].sql).toContain("next_run_at = ?");
+    const idx = calls[1].binds.indexOf("* * * * 8");
+    expect(calls[1].binds[idx + 1]).toBeNull();
   });
 });
 
