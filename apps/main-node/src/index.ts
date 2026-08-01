@@ -2548,6 +2548,10 @@ const scheduleRunNotifier = async (
     resolveCredentialToken,
     resolveSecret: (ref) => resolveCredentialToken(ref),
     resolveTelegramBotToken: () => process.env.TELEGRAM_BOT_TOKEN ?? null,
+    // `email` targets (issue #317) — the same SMTP/nodemailer seam the
+    // magic-link + invite emails use. No SMTP_HOST ⇒ null sender ⇒ the
+    // target is skipped with a logged warning (fail-open).
+    resolveEmailSender: () => sender,
     tenantId: schedule.tenantId,
     httpClient: new WorkerHttpClient(),
     onError: (target, err) =>

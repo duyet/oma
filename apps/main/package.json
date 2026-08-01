@@ -19,6 +19,7 @@
     "@duyet/oma-environments-store": "workspace:*",
     "@duyet/oma-evals-runner": "workspace:*",
     "@duyet/oma-evals-store": "workspace:*",
+    "@duyet/oma-email": "workspace:*",
     "@duyet/oma-files-store": "workspace:*",
     "@duyet/oma-http-routes": "workspace:*",
     "@duyet/oma-integrations-adapters-cf": "workspace:*",

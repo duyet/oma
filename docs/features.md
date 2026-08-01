@@ -134,6 +134,11 @@ Agents can post status transitions (e.g. session done, error, blocked) to extern
       "credential_id": "cred_matrix",
       "homeserver_url": "https://matrix.org",
       "room_id": "!abc:matrix.org"
+    },
+    {
+      "type": "email",
+      "to": "ops@example.com",
+      "subject_prefix": "[oma]"
     }
   ]
 }
@@ -143,3 +148,4 @@ Agents can post status transitions (e.g. session done, error, blocked) to extern
 * **GitHub**: Posted as markdown comments with a status indicator dot (🔴 Error, ⚪ Blocked, 🟢 Success).
 * **Slack**: Formatted using Slack mrkdwn and emoji blocks.
 * **Matrix**: Sent via Matrix Client-Server API room messages.
+* **Email**: Subject = optional `subject_prefix` + agent/session/status; body = the same status summary line, the final agent message, and the session link. Delivered through the deployment's email sender (Cloudflare `SEND_EMAIL` binding, or `SMTP_HOST` + friends on self-host Node) — with no sender configured the target is skipped with a logged warning.
