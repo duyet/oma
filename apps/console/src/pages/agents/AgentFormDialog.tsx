@@ -1269,9 +1269,14 @@ export function BasicTab({
           </button>
         </div>
 
-        {/* Cloud: model card + optional advanced harness. */}
+        {/* Cloud: harness template first, then the model it should use. */}
         {!isLocal && (
           <div className="mt-3 space-y-3">
+            <HarnessPicker
+              value={form.harness}
+              onChange={(id) => setForm({ ...form, harness: id })}
+              onSelectLocal={selectLocal}
+            />
             {modelCards.length === 0 ? (
               <p className="text-xs text-fg-subtle bg-bg-surface px-3 py-2 rounded-lg">
                 No model cards configured. Cloud agents need at least one card to provide LLM
@@ -1316,31 +1321,36 @@ export function BasicTab({
                       : "Select a model card..."
                   }
                 />
+                {harnessDefaultModel && (
+                  <p className="text-xs text-fg-subtle mt-1">
+                    Default: <code>{harnessDefaultModel}</code>
+                    {form.model !== harnessDefaultModel && (
+                      <>
+                        {" — "}
+                        <button
+                          type="button"
+                          className="underline hover:text-fg-muted"
+                          onClick={() =>
+                            setForm({ ...form, model: harnessDefaultModel, modelCardId: "" })
+                          }
+                        >
+                          use default
+                        </button>
+                      </>
+                    )}
+                  </p>
+                )}
               </div>
             )}
-            {/* Advanced: swap the cloud loop implementation. */}
-            <div>
-              <label className="text-sm text-fg-muted block mb-1">Harness</label>
-              <Select
-                value={form.harness}
-                onValueChange={(v) => setForm({ ...form, harness: v as typeof form.harness })}
-              >
-                <SelectOption value="default">Standard (recommended)</SelectOption>
-                <SelectOption value="claude-agent-sdk">
-                  Claude Agent SDK — full Claude Code experience (self-host)
-                </SelectOption>
-                <SelectOption value="long-running">
-                  Long-running — progress heartbeats
-                </SelectOption>
-              </Select>
-              <p className="text-xs text-fg-subtle mt-1">
-                {form.harness === "claude-agent-sdk"
-                  ? "Runs the agent through the Claude Agent SDK CLI — the same loop Claude Code uses. Self-hosted deployments only."
-                  : form.harness === "long-running"
-                    ? "Emits periodic progress updates on a fixed cadence — good for tasks that run for a long time unattended."
-                    : "The default loop. Works everywhere and is the right choice for most agents."}
+            {harnessIgnoresModel && (
+              <p className="text-xs text-fg-subtle bg-bg-surface px-3 py-2 rounded-lg">
+                This harness ignores the per-agent model. The Claude Code CLI picks its own
+                model from the deployment's environment (<code>ANTHROPIC_API_KEY</code> or{" "}
+                <code>CLAUDE_CODE_OAUTH_TOKEN</code>), and an{" "}
+                <code>ANTHROPIC_BASE_URL</code> there can point it at a gateway such as
+                AnyRouter.
               </p>
-            </div>
+            )}
           </div>
         )}
 
