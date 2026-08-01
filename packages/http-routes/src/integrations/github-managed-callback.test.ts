@@ -137,6 +137,8 @@ describe("GET /github/managed/callback", () => {
     expect(res.status).toBe(302);
     const location = new URL(res.headers.get("location")!);
     expect(location.searchParams.get("managed_install")).toBe("ok");
+    // Public success contract the Console reads: /integrations/github?connected=1
+    expect(location.searchParams.get("connected")).toBe("1");
     expect(location.searchParams.get("login")).toBe("acme");
     expect(calls[0].extra).toMatchObject({ workspaceManaged: true });
   });
@@ -159,7 +161,7 @@ describe("GET /github/managed/callback", () => {
     expect(res.headers.get("location")).toBe(`${RETURN_URL}?managed_install=error`);
   });
 
-  it("sends a stateless install (GitHub App page / setup_on_update) back to the Console origin", async () => {
+  it("sends a stateless install (GitHub App page / setup_on_update) back to the Console origin as unlinked", async () => {
     const { bridge, calls } = stubBridge(async () => ({
       publicationId: "",
       returnUrl: null,
@@ -172,8 +174,10 @@ describe("GET /github/managed/callback", () => {
     expect(res.status).toBe(302);
     // Must be absolute and on the Console — a bare "/integrations/github"
     // resolves against the gateway origin, which serves no Console (404).
+    // The App IS installed on GitHub — we just can't attribute it to a user
+    // without state, so it's `unlinked`, not a generic failure.
     expect(res.headers.get("location")).toBe(
-      `${CONSOLE_ORIGIN}/integrations/github?managed_install=error`,
+      `${CONSOLE_ORIGIN}/integrations/github?managed_install=unlinked`,
     );
     expect(calls).toHaveLength(0);
   });
@@ -186,7 +190,7 @@ describe("GET /github/managed/callback", () => {
     );
 
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("/integrations/github?managed_install=error");
+    expect(res.headers.get("location")).toBe("/integrations/github?managed_install=unlinked");
   });
 
   it("never routes an unverifiable state into the publication branch", async () => {
