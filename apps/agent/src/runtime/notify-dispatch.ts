@@ -127,6 +127,10 @@ async function dispatchOne(
   }
 }
 
+function isScheduleStatus(status: SessionNotifyEvent["status"]): boolean {
+  return status === "schedule_ok" || status === "schedule_error" || status === "schedule_skipped";
+}
+
 /**
  * Build the JSON envelope POSTed to a `webhook` target. Field order is fixed
  * so the receiver can reproduce the exact signed payload (HMAC is computed
@@ -142,6 +146,10 @@ export function buildWebhookEnvelope(event: SessionNotifyEvent, target: Extract<
     ...(event.detail ? { stop_reason: event.detail } : {}),
     ...(event.finalMessage ? { message: event.finalMessage } : {}),
     ...(event.sessionUrl ? { session_url: event.sessionUrl } : {}),
+    // Appended last (issue #313) so the historical field order — and every
+    // existing receiver's reproduced signing bytes — is untouched for
+    // non-schedule deliveries.
+    ...(event.scheduleId ? { schedule_id: event.scheduleId } : {}),
   };
   return envelope;
 }
@@ -166,7 +174,10 @@ async function dispatchWebhook(
   deps: NotifyDispatchDeps,
 ): Promise<void> {
   // Honor the events filter: when set, only deliver for listed statuses.
-  if (target.events && !target.events.includes(event.status)) {
+  // Schedule alerts (`schedule_*`, issue #313) bypass it — their own
+  // outcome filter is the schedule's `notify.on`, applied before dispatch,
+  // and the `events` enum deliberately stays session-only.
+  if (!isScheduleStatus(event.status) && target.events && !target.events.includes(event.status as "idle" | "error" | "terminated")) {
     return;
   }
 

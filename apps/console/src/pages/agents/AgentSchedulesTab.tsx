@@ -260,7 +260,6 @@ function ScheduleRunsDialog({
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [loadedFor, setLoadedFor] = useState<string | null>(null);
 
   const load = async (scheduleId: string, after?: string) => {
     setLoading(true);
@@ -280,16 +279,15 @@ function ScheduleRunsDialog({
   };
 
   // Fetch the first page whenever the dialog opens for a (new) schedule.
-  if (open && schedule && loadedFor !== schedule.id) {
-    setLoadedFor(schedule.id);
+  const scheduleId = schedule?.id;
+  useEffect(() => {
+    if (!open || !scheduleId) return;
     setRuns([]);
     setCursor(undefined);
     setHasMore(false);
-    void load(schedule.id);
-  }
-  if (!open && loadedFor !== null) {
-    setLoadedFor(null);
-  }
+    void load(scheduleId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, scheduleId]);
 
   return (
     <Modal

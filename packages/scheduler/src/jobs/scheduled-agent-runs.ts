@@ -21,6 +21,8 @@
 // in MAIN_DB) and a launcher over the internal session-create path.
 
 import { getLogger } from "@duyet/oma-observability";
+import type { ScheduleNotifyInput } from "@duyet/oma-api-types";
+import { DEFAULT_SCHEDULE_NOTIFY_ON } from "@duyet/oma-api-types";
 
 const log = getLogger("scheduler.scheduled-agent-runs");
 
@@ -38,6 +40,9 @@ export interface ClaimedSchedule {
    *  Enforced by the tick against {@link ScheduledRunLauncher.countActive}
    *  before calling {@link ScheduledRunLauncher.launch} (issue #165). */
   maxSessions: number;
+  /** Per-schedule alert config, parsed from the `notify` JSON column
+   *  (issue #313). Null/absent = this schedule raises no alerts. */
+  notify?: ScheduleNotifyInput | null;
 }
 
 export interface RecordRunInput {
@@ -96,6 +101,18 @@ export interface ScheduledAgentRunsTickDeps {
   resolveStore: () => Promise<ScheduledRunsStore | null>;
   /** Per-tick launcher resolver. Same swallow semantics as `resolveStore`. */
   resolveLauncher: () => Promise<ScheduledRunLauncher | null>;
+  /**
+   * Called after every `recordRun` — ok, error, and skipped_concurrency
+   * alike — so a host can raise per-schedule alerts (issue #313). Only
+   * invoked for schedules that carry a `notify` config whose `on` filter
+   * (default `["error", "skipped_concurrency"]`) includes the outcome, so
+   * the common no-alert schedule costs nothing.
+   *
+   * Purely observational: the call is try/caught and a rejection is logged
+   * and swallowed — a notification failure must never fail a firing or
+   * abort the batch.
+   */
+  onRunRecorded?: (schedule: ClaimedSchedule, run: RecordRunInput) => void | Promise<void>;
   /** Cap schedules fired per tick. Default 50. */
   limit?: number;
   /** Injectable clock for tests. Defaults to Date.now. */

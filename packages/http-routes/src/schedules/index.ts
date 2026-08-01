@@ -17,6 +17,7 @@ import type { SqlClient } from "@duyet/oma-sql-client";
 import { clampLimit, encodeCursor, decodeCursor } from "@duyet/oma-shared";
 import { getLogger } from "@duyet/oma-observability";
 import { computeNextRunAsync } from "@duyet/oma-scheduler/jobs/scheduled-agent-runs";
+import { scheduleNotifySchema } from "@duyet/oma-api-types";
 
 const log = getLogger("schedules");
 
@@ -36,6 +37,26 @@ function resolveDb(arg: ScheduleDbArg, c: Context): SqlClient {
   return typeof arg === "function" ? arg(c) : arg;
 }
 
+/**
+ * Hydrate the `notify` column (JSON text) into a parsed object on the way
+ * out (issue #313). Unparseable/legacy garbage degrades to `null` rather
+ * than failing the read — the column is purely an alerting convenience.
+ */
+function hydrateRow<T>(row: T): T {
+  if (!row || typeof row !== "object") return row;
+  const raw = (row as { notify?: unknown }).notify;
+  if (typeof raw !== "string") return row;
+  try {
+    return { ...row, notify: JSON.parse(raw) };
+  } catch {
+    return { ...row, notify: null };
+  }
+}
+
+function hydrateRows<T>(rows: readonly T[]): T[] {
+  return rows.map((r) => hydrateRow(r));
+}
+
 const createSchema = z.object({
   cron_expression: z.string().regex(/^(\S+\s+){4}\S+$/, "Must be a valid 5-field cron expression"),
   input: z.string().min(1).max(10000),
@@ -45,6 +66,9 @@ const createSchema = z.object({
   timezone: z.string().min(1).max(64).optional().default("UTC"),
   max_sessions: z.number().int().positive().max(100).optional().default(1),
   enabled: z.boolean().optional().default(true),
+  // Per-schedule alert targets (issue #313). Stored as JSON text in the
+  // `notify` column; absent = no alerts for this schedule.
+  notify: scheduleNotifySchema.optional(),
 });
 
 const updateSchema = z
@@ -58,6 +82,8 @@ const updateSchema = z
     environment_id: z.string().min(1).optional(),
     timezone: z.string().min(1).max(64).optional(),
     max_sessions: z.number().int().positive().max(100).optional(),
+    // `null` clears the per-schedule alert config (issue #313).
+    notify: scheduleNotifySchema.nullable().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, "At least one field must be provided");
 
@@ -109,7 +135,7 @@ export function buildTenantScheduleRoutes(deps: ScheduleRoutesDeps) {
         ? encodeCursor({ createdAt: new Date(last.created_at).getTime(), id: last.id })
         : undefined;
 
-    return c.json({ data: items, next_cursor: nextCursor });
+    return c.json({ data: hydrateRows(items), next_cursor: nextCursor });
   });
 
   return app;
@@ -141,8 +167,8 @@ export function buildScheduleRoutes(deps: ScheduleRoutesDeps) {
     await db
       .prepare(
         `INSERT INTO agent_schedules
-           (id, agent_id, tenant_id, cron_expression, input, environment_id, user_id, timezone, next_run_at, max_sessions, enabled, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, agent_id, tenant_id, cron_expression, input, environment_id, user_id, timezone, next_run_at, max_sessions, enabled, notify, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         id,
@@ -156,6 +182,7 @@ export function buildScheduleRoutes(deps: ScheduleRoutesDeps) {
         nextRunAt,
         parsed.data.max_sessions,
         parsed.data.enabled ? 1 : 0,
+        parsed.data.notify ? JSON.stringify(parsed.data.notify) : null,
         now,
         now,
       )
@@ -173,6 +200,7 @@ export function buildScheduleRoutes(deps: ScheduleRoutesDeps) {
       next_run_at: nextRunAt,
       max_sessions: parsed.data.max_sessions,
       enabled: parsed.data.enabled,
+      notify: parsed.data.notify ?? null,
       created_at: now,
       updated_at: now,
     }, 201);
@@ -210,7 +238,7 @@ export function buildScheduleRoutes(deps: ScheduleRoutesDeps) {
       .bind(agentId, tenantId)
       .all();
 
-    return c.json({ data: rows.results });
+    return c.json({ data: hydrateRows(rows.results ?? []) });
   });
 
   // Durable run history — GET /:agentId/schedules/:scheduleId/runs
@@ -308,6 +336,12 @@ export function buildScheduleRoutes(deps: ScheduleRoutesDeps) {
       sets.push("enabled = ?");
       binds.push(patch.enabled ? 1 : 0);
     }
+    // `null` clears the per-schedule alert config; an object replaces it
+    // wholesale (no deep merge — alert targets are all-or-nothing).
+    if (patch.notify !== undefined) {
+      sets.push("notify = ?");
+      binds.push(patch.notify === null ? null : JSON.stringify(patch.notify));
+    }
 
     // Recompute next_run_at whenever cron or timezone changes, using the
     // patched value if present else the existing row's — same "unparseable
@@ -339,7 +373,7 @@ export function buildScheduleRoutes(deps: ScheduleRoutesDeps) {
       .first();
 
     log.info({ schedule_id: scheduleId, patch }, "schedule updated");
-    return c.json(row, 200);
+    return c.json(hydrateRow(row), 200);
   });
 
   app.delete("/:agentId/schedules/:scheduleId", async (c) => {

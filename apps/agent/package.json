@@ -13,7 +13,8 @@
     "./harness/registry": "./src/harness/registry.ts",
     "./harness/provider": "./src/harness/provider.ts",
     "./harness/platform-guidance": "./src/harness/platform-guidance.ts",
-    "./runtime/history": "./src/runtime/history.ts"
+    "./runtime/history": "./src/runtime/history.ts",
+    "./runtime/notify-dispatch": "./src/runtime/notify-dispatch.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.69",
