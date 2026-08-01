@@ -162,9 +162,38 @@ export function computeNextRunWith(
   }
 }
 
+/**
+ * Should this firing outcome raise a per-schedule alert? True only when the
+ * schedule carries at least one notify target AND the outcome is listed in
+ * `notify.on` (defaulting to {@link DEFAULT_SCHEDULE_NOTIFY_ON} when absent).
+ */
+export function shouldNotifyRun(schedule: ClaimedSchedule, status: RecordRunInput["status"]): boolean {
+  const notify = schedule.notify;
+  if (!notify || !notify.targets || notify.targets.length === 0) return false;
+  const on = notify.on && notify.on.length > 0 ? notify.on : DEFAULT_SCHEDULE_NOTIFY_ON;
+  return (on as readonly string[]).includes(status);
+}
+
 export function scheduledAgentRunsTick(deps: ScheduledAgentRunsTickDeps): () => Promise<void> {
   const limit = deps.limit ?? 50;
   const now = deps.now ?? (() => Date.now());
+
+  // Fire the host's alert hook for one recorded run. Never throws: alerts
+  // are observational, so a bad target or a dead upstream can't affect the
+  // firing that produced them.
+  const notifyRun = async (schedule: ClaimedSchedule, run: RecordRunInput): Promise<void> => {
+    if (!deps.onRunRecorded) return;
+    if (!shouldNotifyRun(schedule, run.status)) return;
+    try {
+      await deps.onRunRecorded(schedule, run);
+    } catch (err) {
+      log.warn(
+        { err, schedule_id: schedule.id, status: run.status, op: "scheduled-runs.notify_failed" },
+        "per-schedule notification failed",
+      );
+    }
+  };
+
   return async () => {
     const startedAt = now();
     let store: ScheduledRunsStore | null;
@@ -217,12 +246,16 @@ export function scheduledAgentRunsTick(deps: ScheduledAgentRunsTickDeps): () => 
             },
             "schedule fire skipped: concurrency cap reached",
           );
-          await store.recordRun(schedule, { status: "skipped_concurrency", ranAtMs });
+          const skippedRun: RecordRunInput = { status: "skipped_concurrency", ranAtMs };
+          await store.recordRun(schedule, skippedRun);
+          await notifyRun(schedule, skippedRun);
           continue;
         }
 
         const { sessionId } = await launcher.launch(schedule);
-        await store.recordRun(schedule, { status: "ok", sessionId, ranAtMs });
+        const okRun: RecordRunInput = { status: "ok", sessionId, ranAtMs };
+        await store.recordRun(schedule, okRun);
+        await notifyRun(schedule, okRun);
         ok += 1;
       } catch (err) {
         failed += 1;
