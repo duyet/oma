@@ -1190,7 +1190,7 @@ export function BasicTab({
   // the inline "this harness doesn't use the model field" note.
   const selectedHarness = harnessOption(form.harness);
   const harnessDefaultModel = selectedHarness?.defaultModel;
-  const harnessIgnoresModel = selectedHarness?.ignoresAgentModel === true;
+  const harnessModelCaveat = selectedHarness?.modelCaveat === true;
   const harnessNote = selectedHarness?.note;
 
   const segCls = (active: boolean) =>
@@ -1358,13 +1358,16 @@ export function BasicTab({
                 {harnessNote}
               </p>
             )}
-            {harnessIgnoresModel && (
+            {harnessModelCaveat && (
               <p className="text-xs text-fg-subtle bg-bg-surface px-3 py-2 rounded-lg">
-                This harness ignores the per-agent model. The Claude Code CLI picks its own
-                model from the deployment's environment (<code>ANTHROPIC_API_KEY</code> or{" "}
-                <code>CLAUDE_CODE_OAUTH_TOKEN</code>), and an{" "}
-                <code>ANTHROPIC_BASE_URL</code> there can point it at a gateway such as
-                AnyRouter.
+                This harness applies the per-agent model when it resolves to a model card
+                on an Anthropic-format endpoint (provider <code>ant</code> or{" "}
+                <code>ant-compatible</code>) — the card's model, key and base URL are passed
+                to the Claude Code CLI for the turn. An OpenAI-format card fails the turn:
+                the CLI has no OpenAI transport. With no matching card, the CLI falls back
+                to the deployment's environment (<code>ANTHROPIC_API_KEY</code> or{" "}
+                <code>CLAUDE_CODE_OAUTH_TOKEN</code>, plus{" "}
+                <code>ANTHROPIC_BASE_URL</code>).
               </p>
             )}
           </div>

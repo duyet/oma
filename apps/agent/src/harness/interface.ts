@@ -1,6 +1,7 @@
 import type { ModelMessage, LanguageModel } from "ai";
 import type { AgentConfig, EnvironmentConfig, SessionEvent, UserMessageEvent } from "@duyet/oma-shared";
 import type { FileResolver } from "../runtime/history";
+import type { ClaudeSdkModelBinding } from "./claude-agent-sdk/model";
 
 // SandboxExecutor + ProcessHandle live in @duyet/oma-sandbox so
 // non-CF runtimes (apps/main-node, future deployments) can implement the
@@ -283,6 +284,13 @@ export interface HarnessContext {
      *  consulted when ANTHROPIC_API_KEY is unset — see
      *  claude-agent-sdk-loop.ts. */
     CLAUDE_CODE_OAUTH_TOKEN?: string;
+    /** Per-agent model + provider resolved from the agent's model card by
+     *  the self-host Node shell (apps/main-node, issue #316). Only
+     *  ClaudeAgentSdkHarness consumes it today — it maps the binding onto
+     *  the CLI subprocess's ANTHROPIC_* environment. Absent (CF worker,
+     *  or no card matched) → the global env vars above are used
+     *  unchanged. */
+    modelProvider?: ClaudeSdkModelBinding;
     OMA_MAX_OUTPUT_TOKENS?: string;
     /** Credentials for the "poolside" harness (poolside.ai's
      *  OpenAI-compatible inference API). POOLSIDE_BASE_URL defaults to

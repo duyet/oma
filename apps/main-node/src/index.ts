@@ -196,6 +196,7 @@ import {
 import { PgEventStreamHub } from "./lib/pg-event-stream-hub";
 import { NodeHarnessRuntime } from "./lib/node-harness-runtime";
 import { selectHarnessName } from "./lib/harness-select";
+import { resolveAgentModelBinding } from "./lib/claude-sdk-model";
 import { SessionRegistry } from "./registry.js";
 import {
   TelegramClient,
@@ -980,6 +981,25 @@ const sessionRegistry = new SessionRegistry({
   },
   buildHarnessContext: async (input) => {
     const { apiKey, baseUrl } = resolveProviderCreds(input.agent);
+    // Per-agent model + provider for the claude-agent-sdk harness (issue
+    // #316): resolve the agent's model card into a binding the harness maps
+    // onto its CLI subprocess env. Only that harness consumes it; every
+    // other harness still routes through buildModel's process-global
+    // provider, so this is a no-op for them. A null binding (no card, or a
+    // lookup failure) leaves the pre-#316 global-env behavior untouched.
+    const harnessName = selectHarnessName(
+      (input.agent as { metadata?: Record<string, unknown> })?.metadata?.harness,
+      process.env.DEFAULT_HARNESS,
+    );
+    const modelProvider =
+      harnessName === "claude-agent-sdk"
+        ? ((await resolveAgentModelBinding({
+            modelCards: modelCardsService,
+            tenantId: input.tenantId,
+            agent: input.agent as { model?: string | { id?: string }; metadata?: Record<string, unknown> },
+            logger: { warn: (ctx, msg) => logger.warn(ctx, msg) },
+          })) ?? undefined)
+        : undefined;
     const runtime = new NodeHarnessRuntime({
       sessionId: input.sessionId,
       log: input.eventLog,
@@ -1000,6 +1020,7 @@ const sessionRegistry = new SessionRegistry({
         ANTHROPIC_API_KEY: apiKey,
         ANTHROPIC_BASE_URL: baseUrl,
         CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
+        ...(modelProvider ? { modelProvider } : {}),
       },
       runtime,
     } satisfies HarnessContext;
