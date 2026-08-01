@@ -335,7 +335,9 @@ export function configToForm(parsed: Record<string, unknown>): FormState {
     runtimeId: rb?.runtime_id ?? "",
     acpAgentId: rb?.acp_agent_id ?? "claude-agent-acp",
     harness:
-      oma?.harness === "claude-agent-sdk" || oma?.harness === "long-running"
+      oma?.harness === "claude-agent-sdk" ||
+      oma?.harness === "long-running" ||
+      oma?.harness === "poolside"
         ? oma.harness
         : "default",
     localSkillBlocklist: Array.isArray(rb?.local_skill_blocklist)
@@ -371,7 +373,7 @@ export const INITIAL_FORM = {
   acpAgentId: "claude-agent-acp",
   // Cloud harness — ignored (implicitly "acp-proxy") whenever runtimeId is
   // set. "default" emits no _oma.harness at all (server default).
-  harness: "default" as "default" | "claude-agent-sdk" | "long-running",
+  harness: "default" as "default" | "claude-agent-sdk" | "long-running" | "poolside",
   /** Local skill ids to HIDE from this agent's ACP child. Empty = all
    *  detected local skills are visible (the daemon's default). */
   localSkillBlocklist: [] as string[],
@@ -1189,6 +1191,7 @@ export function BasicTab({
   const selectedHarness = harnessOption(form.harness);
   const harnessDefaultModel = selectedHarness?.defaultModel;
   const harnessIgnoresModel = selectedHarness?.ignoresAgentModel === true;
+  const harnessNote = selectedHarness?.note;
 
   const segCls = (active: boolean) =>
     `flex-1 inline-flex flex-col items-start gap-0.5 px-3 py-2 min-h-11 text-sm rounded-md border transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)] ${
@@ -1349,6 +1352,11 @@ export function BasicTab({
                   </p>
                 )}
               </div>
+            )}
+            {harnessNote && (
+              <p className="text-xs text-fg-subtle bg-bg-surface px-3 py-2 rounded-lg">
+                {harnessNote}
+              </p>
             )}
             {harnessIgnoresModel && (
               <p className="text-xs text-fg-subtle bg-bg-surface px-3 py-2 rounded-lg">

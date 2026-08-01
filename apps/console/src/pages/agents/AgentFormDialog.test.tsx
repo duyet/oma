@@ -54,6 +54,19 @@ describe("<BasicTab /> harness picker", () => {
     expect(screen.getByText(/ignores the per-agent model/i)).toBeTruthy();
   });
 
+  it("selects the poolside harness and surfaces its API-key requirement", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    expect(screen.queryByText(/POOLSIDE_API_KEY/)).toBeNull();
+    await user.click(screen.getByRole("radio", { name: "Poolside" }));
+    expect(screen.getByTestId("harness").textContent).toBe("poolside");
+    expect(JSON.parse(screen.getByTestId("config").textContent!)._oma).toEqual({
+      harness: "poolside",
+    });
+    expect(screen.getByText(/POOLSIDE_API_KEY/)).toBeTruthy();
+  });
+
   it("the local runtime card switches the form to the Local machine flow", async () => {
     const user = userEvent.setup();
     render(<Harness />);

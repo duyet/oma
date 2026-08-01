@@ -1301,6 +1301,7 @@ curl -s $BASE/v1/agents/$AGENT_ID/schedules \
 | `timezone` | No | IANA zone, default `UTC` — DST-correct next-run math (via `croner`) |
 | `max_sessions` | No | Concurrency cap 1–100, default 1 |
 | `enabled` | No | Default true |
+| `notify` | No | Per-schedule alert config — `{ on?, targets }`. See [Per-schedule alerts](#per-schedule-alerts) |
 
 Routes (all tenant-scoped):
 
@@ -1319,6 +1320,41 @@ ticks or replicas never double-fire. Each firing records
 `last_run_at` / `last_run_status` / `last_run_error` / `last_session_id`; a
 failing run is fail-open (logged, next occurrence still scheduled). An
 unparseable cron leaves `next_run_at` null and the schedule never fires.
+
+### Per-schedule alerts
+
+A schedule can raise its own alerts, independent of the agent's `notify`
+(which fires for *every* session that agent runs). Set `notify` on the
+schedule with the same [`NotificationTarget`](#notify-targets) shapes:
+
+```json
+{
+  "notify": {
+    "on": ["error", "skipped_concurrency"],
+    "targets": [
+      { "type": "slack_message", "credential_id": "cred_xxx", "channel": "C123" }
+    ]
+  }
+}
+```
+
+- **`on`** filters which firing outcomes alert — any of `ok` | `error` |
+  `skipped_concurrency`. **When omitted it defaults to
+  `["error", "skipped_concurrency"]`**: the two outcomes an operator usually
+  wants paged about. Success alerts are opt-in via an explicit `on`.
+- The filter is applied **before** dispatch, in the tick
+  (`shouldNotifyRun`), so it is independent of a `webhook` target's own
+  `events` filter — that enum stays session-only and schedule deliveries
+  bypass it.
+- Deliveries reuse the agent runtime's notify dispatcher, so a schedule
+  firing surfaces as a `schedule_ok` / `schedule_error` /
+  `schedule_skipped` status ("Scheduled run succeeded", …) and a `webhook`
+  envelope gains a trailing `schedule_id` field (appended last, so existing
+  receivers' signature reproduction is unchanged).
+- Credentials resolve across the **tenant's vaults** (a schedule has no
+  `vault_ids` of its own). Alerting is purely observational and fail-open —
+  an unresolvable credential or a dead endpoint is logged and never affects
+  the firing. `PATCH` with `"notify": null` clears the config.
 
 ### Run history
 
