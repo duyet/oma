@@ -6,6 +6,14 @@ import { Button } from "@/components/ui/button";
 import { PopoverContent } from "@/components/ui/popover";
 import { useConfirm } from "@/hooks/useConfirm";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -19,6 +27,7 @@ import { TextInput, SecretInput } from "../components/Input";
 import { toast } from "sonner";
 import type { ModelCard } from "@duyet/oma-api-types";
 import { INITIAL_FORM as AGENT_INITIAL_FORM, formToConfig } from "./agents/AgentFormDialog";
+import { AnyRouterIcon } from "@/components/icons";
 
 // ─── AnyRouter — "Connect to AnyRouter" OAuth (PKCE) button ────────────
 //
@@ -100,6 +109,7 @@ function AnyRouterConnectCard({
   const [presets, setPresets] = useState<AnyRouterPreset[]>([]);
   const [credits, setCredits] = useState<AnyRouterCredits | null>(null);
   const [modelBusy, setModelBusy] = useState(false);
+  const [showConnectDialog, setShowConnectDialog] = useState(false);
   const [adding, setAdding] = useState(false);
   const [newCardId, setNewCardId] = useState("");
   const [newCardModel, setNewCardModel] = useState("");
@@ -176,6 +186,11 @@ function AnyRouterConnectCard({
     } finally {
       setBusy(false);
     }
+  };
+
+  const startConnect = () => {
+    setShowConnectDialog(false);
+    window.location.assign("/v1/providers/anyrouter/connect");
   };
 
   // Retarget any AnyRouter-backed card — the base card or a sibling. Goes
@@ -319,12 +334,15 @@ function AnyRouterConnectCard({
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border bg-bg-surface px-4 py-3">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="text-sm font-medium text-fg">AnyRouter</div>
-          <div className="text-xs text-fg-subtle">
-            {status.connected
-              ? "Connected — agents with model \"anyrouter\" route through AnyRouter's gateway (150+ models, unified billing)."
-              : "Connect once via OAuth to route agents through AnyRouter, without pasting an sk-ar-… key by hand."}
+        <div className="flex items-center gap-2.5">
+          <AnyRouterIcon className="w-5 h-5 text-fg" />
+          <div>
+            <div className="text-sm font-medium text-fg">AnyRouter</div>
+            <div className="text-xs text-fg-subtle">
+              {status.connected
+                ? "Connected — agents with model \"anyrouter\" route through AnyRouter's gateway (177+ models, unified billing)."
+                : "Connect once via OAuth to route agents through AnyRouter, without pasting an sk-ar-… key by hand."}
+            </div>
           </div>
         </div>
         {status.connected ? (
@@ -332,11 +350,74 @@ function AnyRouterConnectCard({
             Disconnect
           </Button>
         ) : (
-          <Button onClick={() => window.location.assign("/v1/providers/anyrouter/connect")}>
+          <Button
+            onClick={() => setShowConnectDialog(true)}
+            className="gap-1.5"
+          >
+            <AnyRouterIcon className="w-4 h-4" />
             Connect to AnyRouter
           </Button>
         )}
       </div>
+      {/* AnyRouter connect guideline dialog — explains what AnyRouter is, that
+          the key is stored securely in a vault and reused across all model
+          cards, and that the OAuth flow mints an sk-ar-… key without the
+          user ever copy-pasting one. One click from here into the backend
+          PKCE flow; the dialog is dismissed so a page refresh doesn't re-show
+          it (the redirect back carries ?anyrouter_connected=1). */}
+      <Dialog open={showConnectDialog} onOpenChange={setShowConnectDialog}>
+        <DialogContent className="p-0 max-w-md">
+          <DialogHeader className="px-6 py-5 pb-3">
+            <DialogTitle className="flex items-center gap-2.5 text-lg">
+              <AnyRouterIcon className="w-6 h-6 text-fg" />
+              Connect to AnyRouter
+            </DialogTitle>
+            <DialogDescription className="text-sm text-fg-subtle pt-1">
+              AnyRouter is an OpenAI-compatible LLM gateway that routes requests behind
+              one API key across 17 providers and 177+ models — including free-tier
+              models, key balancing, automatic failover, and presets (model bundles).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-6 py-4 space-y-3 text-sm">
+            <ul className="space-y-2 text-sm text-fg-subtle">
+              <li className="flex gap-2">
+                <span className="text-fg font-medium">• &nbsp; One-click OAuth</span>
+                <span>Mints an <span className="font-mono">sk-ar-…</span> inference key via OAuth (PKCE) — no manual key paste.</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-fg font-medium">• &nbsp; Key stored securely</span>
+                <span>The key is saved in a <strong>vault</strong> and never enters the sandbox. It's reused across every model card that points at it, so you can swap models freely without re-pasting credentials.</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-fg font-medium">• &nbsp; Pick any model</span>
+                <span>Change the target model or preset from the picker below after connecting — agents using <span className="font-mono">model: "anyrouter"</span> instantly follow.</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-fg font-medium">• &nbsp; Unified billing</span>
+                <span>$2 credit every month, $0 markup on your own keys, and a shared free-tier pool.</span>
+              </li>
+            </ul>
+            <div className="pt-2 border-t border-border">
+              <a
+                href="https://anyrouter.dev"
+                target="_blank"
+                rel="noreferrer"
+                className="text-brand hover:underline text-xs"
+              >
+                Learn more about AnyRouter ↗
+              </a>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowConnectDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={startConnect}>
+              Connect now
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {status.connected && credits && (
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-border pt-3 text-xs">
           <span className="text-fg-subtle">
@@ -1102,9 +1183,12 @@ export function ModelCardsList() {
           `anyrouterCardId`, which filters the managed card out of the table
           above. */}
       <section className="border border-border rounded-lg bg-bg-surface/30 p-4 sm:p-5">
-        <h2 className="font-display text-lg font-semibold text-fg mb-1">Provider connections</h2>
+        <h2 className="font-display text-lg font-semibold text-fg mb-1 flex items-center gap-2">
+          <AnyRouterIcon className="w-5 h-5 text-fg" />
+          Provider connections
+        </h2>
         <p className="text-[13px] text-fg-muted mb-3">
-          Managed connections — one click, keys minted for you.
+          Managed connections — one click, keys minted for you and stored securely in a vault.
         </p>
         <AnyRouterConnectCard onStatus={handleAnyRouterStatus} onCardsChanged={load} />
       </section>
