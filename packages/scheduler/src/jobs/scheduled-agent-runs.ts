@@ -265,14 +265,18 @@ export function scheduledAgentRunsTick(deps: ScheduledAgentRunsTickDeps): () => 
           "schedule fire failed",
         );
         // Best-effort — recording the failure must not itself abort the batch.
+        const errorRun: RecordRunInput = { status: "error", error: message, ranAtMs };
         try {
-          await store.recordRun(schedule, { status: "error", error: message, ranAtMs });
+          await store.recordRun(schedule, errorRun);
         } catch (recordErr) {
           log.warn(
             { err: recordErr, schedule_id: schedule.id, op: "scheduled-runs.record_failed" },
             "recordRun failed",
           );
         }
+        // Alert even when the history write failed — the operator cares
+        // about the failed firing, not about our bookkeeping.
+        await notifyRun(schedule, errorRun);
       }
     }
 

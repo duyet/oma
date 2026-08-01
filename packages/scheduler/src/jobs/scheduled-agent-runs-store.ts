@@ -11,6 +11,7 @@
 import { nanoid } from "nanoid";
 import type { SqlClient } from "@duyet/oma-sql-client";
 import { getLogger } from "@duyet/oma-observability";
+import type { ScheduleNotifyInput } from "@duyet/oma-api-types";
 import type {
   ClaimedSchedule,
   RecordRunInput,
@@ -30,6 +31,20 @@ interface DueRow {
   input: string;
   next_run_at: string;
   max_sessions: number;
+  notify: string | null;
+}
+
+/** Parse the `notify` JSON column into a ClaimedSchedule.notify (issue #313).
+ *  Unparseable text degrades to null — a malformed alert config must never
+ *  stop the schedule itself from firing. */
+function parseNotify(raw: string | null | undefined): ScheduleNotifyInput | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as ScheduleNotifyInput;
+  } catch (err) {
+    log.warn({ err, op: "scheduled-agent-runs.bad_notify_json" }, "unparseable schedule notify JSON");
+    return null;
+  }
 }
 
 export class SqlClientScheduledRunsStore implements ScheduledRunsStore {
@@ -44,7 +59,7 @@ export class SqlClientScheduledRunsStore implements ScheduledRunsStore {
 
     const candidates = await this.db
       .prepare(
-        `SELECT id, tenant_id, agent_id, environment_id, user_id, cron_expression, timezone, input, next_run_at, max_sessions
+        `SELECT id, tenant_id, agent_id, environment_id, user_id, cron_expression, timezone, input, next_run_at, max_sessions, notify
          FROM agent_schedules
          WHERE enabled = 1 AND next_run_at IS NOT NULL AND next_run_at <= ?
          ORDER BY next_run_at ASC
@@ -86,6 +101,7 @@ export class SqlClientScheduledRunsStore implements ScheduledRunsStore {
           timezone,
           prompt: row.input,
           maxSessions: row.max_sessions,
+          notify: parseNotify(row.notify),
         });
       }
     }
