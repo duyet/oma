@@ -13,6 +13,7 @@ import type {
   GitHubA1FormStep,
   GitHubA1InstallLink,
   GitHubInstallation,
+  GitHubInstallationDetail,
   GitHubIssue,
   GitHubIssueFilters,
   GitHubPublication,
@@ -299,6 +300,15 @@ class GitHubClient {
       `/v1/integrations/github/installations/${encodeURIComponent(installationId)}/publications`,
     );
     return r.data;
+  }
+
+  /** Live GitHub-side detail (permissions, repo selection, install date,
+   *  repo names) for one connected account. */
+  async installationDetail(installationId: string): Promise<GitHubInstallationDetail> {
+    return request<GitHubInstallationDetail>(
+      this.basePath,
+      `/v1/integrations/github/installations/${encodeURIComponent(installationId)}/detail`,
+    );
   }
 
   /** Detach a connected account from this workspace. The App stays installed

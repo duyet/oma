@@ -139,4 +139,11 @@ export interface Env {
   GITHUB_MANAGED_BOT_LOGIN?: string;
   GITHUB_MANAGED_PRIVATE_KEY?: string;
   GITHUB_MANAGED_WEBHOOK_SECRET?: string;
+  /** Managed App's OAuth client credentials. Only the "link existing
+   *  installation" reconcile flow needs them — it identifies the human via
+   *  GitHub's user-authorization flow so we can read back `GET
+   *  /user/installations`. Unset ⇒ that flow reports itself unavailable;
+   *  every other managed path keeps working. */
+  GITHUB_MANAGED_CLIENT_ID?: string;
+  GITHUB_MANAGED_CLIENT_SECRET?: string;
 }

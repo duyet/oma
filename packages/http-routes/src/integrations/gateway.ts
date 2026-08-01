@@ -286,6 +286,63 @@ export function buildIntegrationsGatewayRoutes(deps: IntegrationsGatewayDeps) {
     }
   });
 
+  // GET /github/managed/link/callback?code=&state=
+  // Reconcile callback — the managed App's OAuth "Callback URL" on
+  // github.com. Unlike the Setup URL above there is no `installation_id`
+  // here: the `code` identifies the *user*, and the bridge exchanges it for
+  // a user token to enumerate the installations that user administers,
+  // writing a `github_installations` row for each of ours that has none.
+  // Redirects back with `?managed_install=linked&linked=<n>` (or `ok` when
+  // everything was already recorded).
+  app.get("/github/managed/link/callback", async (c) => {
+    const url = new URL(c.req.url);
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
+    const error = url.searchParams.get("error");
+    const consoleOrigin = deps.consoleOrigin;
+
+    let returnUrl: string | null = null;
+    if (state) {
+      try {
+        const decoded = await deps.jwt.verify<{ returnUrl?: string }>(state);
+        returnUrl = decoded.returnUrl ?? null;
+      } catch {
+        returnUrl = null;
+      }
+    }
+    if (error || !code || !state) {
+      return redirectManagedInstall(c, returnUrl, "error", null, consoleOrigin);
+    }
+
+    try {
+      const result = await deps.installBridge.continueInstall({
+        provider: "github",
+        code,
+        state,
+        extra: { linkExisting: true },
+      });
+      const linked = result.linked ?? 0;
+      return redirectToConsole(
+        c,
+        result.returnUrl && result.returnUrl.trim() ? result.returnUrl : returnUrl ?? CONSOLE_GITHUB_PATH,
+        consoleOrigin,
+        {
+          managed_install: linked > 0 ? "linked" : "ok",
+          connected: "1",
+          linked: String(linked),
+          ...(result.login ? { login: result.login } : {}),
+        },
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn(
+        { op: "github.managed.link.failed", err: msg },
+        "github managed install link failed",
+      );
+      return redirectManagedInstall(c, returnUrl, "error", null, consoleOrigin);
+    }
+  });
+
   // GET /github/install/app/:appOmaId/callback?installation_id=&setup_action=&state=
   // Legacy install callback — kept for installations created before
   // migration 0002. Same semantics, just keyed on app_oma_id rather than

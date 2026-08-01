@@ -57,8 +57,11 @@ import { GitHubApiClient } from "./api/client";
 import {
   buildInstallUrl,
   buildInstallationTokenRequest,
+  buildUserAuthorizeUrl,
+  buildUserTokenRequest,
   mintAppJwt,
   parseInstallationTokenResponse,
+  parseUserTokenResponse,
 } from "./oauth/protocol";
 import {
   buildManifest,
@@ -367,9 +370,34 @@ export class GitHubProvider implements IntegrationProvider {
       return { returnUrl: state.returnUrl, login: existing.workspaceName };
     }
 
-    // Mint a 1-hour installation access token and look up the install's org.
     const appJwt = await mintAppJwt(managedApp.privateKey, { appId: managedApp.appId });
-    const tokReq = buildInstallationTokenRequest(appJwt, input.installationId);
+    const login = await this.recordManagedInstallation({
+      tenantId: state.tenantId,
+      userId: state.userId,
+      installationId: input.installationId,
+      appJwt,
+    });
+    return { returnUrl: state.returnUrl, login };
+  }
+
+  /**
+   * Mint an installation token, INSERT the `github_installations` row and its
+   * credential vault. Shared by the setup-URL callback
+   * (`completeManagedWorkspaceInstall`) and the reconcile flow
+   * (`completeManagedInstallLink`), which record the exact same rows — the
+   * only difference is how they learned the installation id.
+   *
+   * Caller is responsible for the idempotency check (`findByWorkspace`).
+   * Returns the account login.
+   */
+  private async recordManagedInstallation(input: {
+    tenantId: string;
+    userId: string;
+    installationId: string;
+    appJwt: string;
+  }): Promise<string> {
+    const managedApp = this.config.managedApp!;
+    const tokReq = buildInstallationTokenRequest(input.appJwt, input.installationId);
     const tokRes = await this.container.http.fetch({
       method: "POST",
       url: tokReq.url,
@@ -382,11 +410,11 @@ export class GitHubProvider implements IntegrationProvider {
       );
     }
     const token = parseInstallationTokenResponse(tokRes.body);
-    const installDetail = await this.api.getInstallation(appJwt, input.installationId);
+    const installDetail = await this.api.getInstallation(input.appJwt, input.installationId);
 
     const installation = await this.container.installations.insert({
-      tenantId: state.tenantId,
-      userId: state.userId,
+      tenantId: input.tenantId,
+      userId: input.userId,
       providerId: PROVIDER_ID,
       // The numeric GitHub installation id is the stable workspace handle.
       workspaceId: input.installationId,
@@ -405,7 +433,7 @@ export class GitHubProvider implements IntegrationProvider {
     // publication flow, just named "· managed" and with no persona.
     const vaultName = `GitHub · ${installDetail.account.login} · managed`;
     const { vaultId } = await this.container.vaults.createCredentialForUser({
-      userId: state.userId,
+      userId: input.userId,
       vaultName,
       displayName: "GitHub MCP token (managed)",
       mcpServerUrl: this.config.mcpServerUrl,
@@ -413,7 +441,7 @@ export class GitHubProvider implements IntegrationProvider {
       provider: "github",
     });
     await this.container.vaults.addCapCliCredential({
-      userId: state.userId,
+      userId: input.userId,
       vaultId,
       vaultName,
       displayName: "GitHub CLI token (managed)",
@@ -423,7 +451,196 @@ export class GitHubProvider implements IntegrationProvider {
     });
     await this.container.installations.setVaultId(installation.id, vaultId);
 
-    return { returnUrl: state.returnUrl, login: installDetail.account.login };
+    return installDetail.account.login;
+  }
+
+  /**
+   * Reconcile half 1 — start the "link existing installation" flow.
+   *
+   * Fixes the install that predates (or bypassed) the Setup URL round-trip:
+   * the App is installed on github.com but no `github_installations` row was
+   * ever written, so the Console shows nothing connected. Instead of asking
+   * the user to uninstall + reinstall, we identify them via GitHub's
+   * user-authorization flow and read back *their* installations.
+   *
+   * Requires the managed App's OAuth client id/secret
+   * (`GITHUB_MANAGED_CLIENT_ID` / `GITHUB_MANAGED_CLIENT_SECRET`) — the
+   * install-token flow alone can't identify a human.
+   */
+  async beginManagedInstallLink(input: {
+    userId: string;
+    returnUrl: string;
+  }): Promise<{ url: string }> {
+    const managedApp = this.config.managedApp;
+    if (!managedApp) {
+      throw new Error(
+        "GitHub install link: no managed App configured on this deployment " +
+          "(GITHUB_MANAGED_APP_ID/APP_SLUG/BOT_LOGIN/PRIVATE_KEY/WEBHOOK_SECRET unset)",
+      );
+    }
+    if (!managedApp.clientId || !managedApp.clientSecret) {
+      throw new Error(
+        "GitHub install link: managed App has no OAuth credentials " +
+          "(set GITHUB_MANAGED_CLIENT_ID / GITHUB_MANAGED_CLIENT_SECRET)",
+      );
+    }
+    const tenantId = await this.container.tenants.resolveByUserId(input.userId);
+    const state = await this.container.jwt.sign(
+      {
+        kind: "github.link.workspace",
+        userId: input.userId,
+        tenantId,
+        returnUrl: input.returnUrl,
+        nonce: this.container.ids.generate(),
+      },
+      OAUTH_STATE_TTL_SECONDS,
+    );
+    return {
+      url: buildUserAuthorizeUrl({
+        clientId: managedApp.clientId,
+        redirectUri: this.managedLinkRedirectUri(),
+        state,
+      }),
+    };
+  }
+
+  /**
+   * Reconcile half 2 — exchange the user-auth `code`, enumerate the
+   * installations THAT USER can see, and INSERT a row for each one of OUR
+   * managed App's installs that isn't recorded yet.
+   *
+   * Attribution: we only ever link installs returned by
+   * `GET /user/installations` under the connecting user's own token, so a
+   * tenant can never claim an org they don't administer. Installs of other
+   * GitHub Apps the user can see are filtered out by `app_id`.
+   */
+  async completeManagedInstallLink(input: {
+    code: string;
+    state: string;
+  }): Promise<{ returnUrl: string; linked: number; existing: number; logins: string[] }> {
+    const managedApp = this.config.managedApp;
+    if (!managedApp?.clientId || !managedApp.clientSecret) {
+      throw new Error("GitHub install link callback: managed App OAuth not configured");
+    }
+    if (!input.code) throw new Error("GitHub install link callback: missing code");
+    if (!input.state) throw new Error("GitHub install link callback: missing state");
+
+    const state = await this.container.jwt.verify<{
+      kind: string;
+      userId: string;
+      tenantId: string;
+      returnUrl: string;
+    }>(input.state);
+    if (state.kind !== "github.link.workspace") {
+      throw new Error("GitHub install link callback: invalid state kind");
+    }
+
+    const tokReq = buildUserTokenRequest({
+      clientId: managedApp.clientId,
+      clientSecret: managedApp.clientSecret,
+      code: input.code,
+      redirectUri: this.managedLinkRedirectUri(),
+    });
+    const tokRes = await this.container.http.fetch({
+      method: "POST",
+      url: tokReq.url,
+      headers: tokReq.headers,
+      body: tokReq.body,
+    });
+    if (tokRes.status < 200 || tokRes.status >= 300) {
+      throw new Error(`GitHub user token: HTTP ${tokRes.status} ${tokRes.body.slice(0, 200)}`);
+    }
+    const userToken = parseUserTokenResponse(tokRes.body).token;
+
+    const visible = await this.api.listUserInstallations(userToken);
+    const ours = visible.filter((i) => String(i.appId) === String(managedApp.appId));
+
+    const appJwt = await mintAppJwt(managedApp.privateKey, { appId: managedApp.appId });
+    const logins: string[] = [];
+    let linked = 0;
+    let existing = 0;
+    for (const install of ours) {
+      const installationId = String(install.id);
+      const already = await this.container.installations.findByWorkspace(
+        PROVIDER_ID,
+        installationId,
+        "dedicated",
+        null,
+      );
+      if (already) {
+        existing += 1;
+        continue;
+      }
+      const login = await this.recordManagedInstallation({
+        tenantId: state.tenantId,
+        userId: state.userId,
+        installationId,
+        appJwt,
+      });
+      logins.push(login);
+      linked += 1;
+    }
+    return { returnUrl: state.returnUrl, linked, existing, logins };
+  }
+
+  /**
+   * Live detail for one managed installation: what GitHub currently reports
+   * for permissions / repository selection / install date, plus the first
+   * page of accessible repos. Read-only and un-cached — the Console renders
+   * it per connected-account card.
+   */
+  async getManagedInstallationDetail(input: { installationId: string }): Promise<{
+    permissions: Record<string, string>;
+    repositorySelection: "all" | "selected";
+    installedAt: string | null;
+    repoCount: number;
+    repos: string[];
+    htmlUrl: string;
+  }> {
+    const managedApp = this.config.managedApp;
+    if (!managedApp) {
+      throw new Error("GitHub installation detail: no managed App configured on this deployment");
+    }
+    const appJwt = await mintAppJwt(managedApp.privateKey, { appId: managedApp.appId });
+    const detail = await this.api.getInstallation(appJwt, input.installationId);
+
+    // Repo names need an installation token (the App JWT can't read
+    // `/installation/repositories`). Best-effort: a failure here still
+    // returns the permissions/selection half rather than erroring the card.
+    let repos: string[] = [];
+    let repoCount = 0;
+    try {
+      const tokReq = buildInstallationTokenRequest(appJwt, input.installationId);
+      const tokRes = await this.container.http.fetch({
+        method: "POST",
+        url: tokReq.url,
+        headers: tokReq.headers,
+        body: tokReq.body,
+      });
+      if (tokRes.status >= 200 && tokRes.status < 300) {
+        const token = parseInstallationTokenResponse(tokRes.body);
+        const page = await this.api.listInstallationRepos(token.token, 1, 100);
+        repos = page.repos.map((r) => `${r.owner}/${r.name}`);
+        repoCount = repos.length;
+      }
+    } catch {
+      // Leave repos empty — the caller renders the rest of the card.
+    }
+
+    return {
+      permissions: detail.permissions,
+      repositorySelection: detail.repositorySelection,
+      installedAt: detail.createdAt,
+      repoCount,
+      repos,
+      htmlUrl: detail.htmlUrl,
+    };
+  }
+
+  /** Fixed redirect URI for the user-auth link flow. Must match the managed
+   *  App's "Callback URL" on github.com. */
+  private managedLinkRedirectUri(): string {
+    return `${this.config.gatewayOrigin}/github/managed/link/callback`;
   }
 
   async continueInstall(

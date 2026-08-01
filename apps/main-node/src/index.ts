@@ -2646,6 +2646,32 @@ function bridgeAsInstallProxy(bridge: NodeInstallBridge): InstallProxyForwarder 
         });
       }
 
+      // GitHub reconcile: link pre-existing installations + live detail.
+      const managedLink = /^github\/managed\/link$/.exec(subpath);
+      if (managedLink && (method ?? "POST") === "POST") {
+        const result = await bridge.startInstallation!({
+          provider: "github",
+          mode: "link-managed-installations",
+          body: (body ?? {}) as Record<string, unknown>,
+        });
+        return new Response(JSON.stringify(result.body), {
+          status: result.status,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      const installDetail = /^github\/managed\/installation-detail$/.exec(subpath);
+      if (installDetail && (method ?? "POST") === "POST") {
+        const result = await bridge.startInstallation!({
+          provider: "github",
+          mode: "managed-installation-detail",
+          body: (body ?? {}) as Record<string, unknown>,
+        });
+        return new Response(JSON.stringify(result.body), {
+          status: result.status,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
       // Linear publication-first endpoints first — they share a subpath
       // prefix with the legacy ones so order matters.
       const newPub = /^linear\/publications$/.exec(subpath);

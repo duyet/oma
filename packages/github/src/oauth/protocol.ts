@@ -32,6 +32,83 @@ export function buildInstallUrl(input: BuildInstallUrlInput): string {
   return `https://github.com/apps/${encodeURIComponent(input.appSlug)}/installations/new?${params.toString()}`;
 }
 
+export interface BuildUserAuthorizeUrlInput {
+  /** OAuth client id of the (managed) GitHub App. */
+  clientId: string;
+  /** Where GitHub sends the user back with `?code=&state=`. */
+  redirectUri: string;
+  /** Opaque state we'll receive back at the redirect URI. */
+  state: string;
+}
+
+/**
+ * URL for GitHub's **user**-authorization flow (user-to-server token). Unlike
+ * `buildInstallUrl` this installs nothing — it identifies the human, so we can
+ * ask GitHub which installations of our App *that user* can see
+ * (`GET /user/installations`). That's the only attribution-safe way to link an
+ * App install that happened outside our install flow: the App JWT's
+ * `GET /app/installations` lists every tenant's installs with no way to tell
+ * whose they are.
+ *
+ * No `scope` is requested — a GitHub App's user token is scoped by the App's
+ * own permissions, and `/user/installations` needs nothing extra.
+ */
+export function buildUserAuthorizeUrl(input: BuildUserAuthorizeUrlInput): string {
+  const params = new URLSearchParams();
+  params.set("client_id", input.clientId);
+  params.set("redirect_uri", input.redirectUri);
+  params.set("state", input.state);
+  return `https://github.com/login/oauth/authorize?${params.toString()}`;
+}
+
+export interface UserTokenExchangeRequest {
+  url: string;
+  headers: Record<string, string>;
+  body: string;
+}
+
+/** Build the `code` → user-to-server token exchange request. */
+export function buildUserTokenRequest(input: {
+  clientId: string;
+  clientSecret: string;
+  code: string;
+  redirectUri: string;
+}): UserTokenExchangeRequest {
+  return {
+    url: "https://github.com/login/oauth/access_token",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "user-agent": "open-managed-agents",
+    },
+    body: JSON.stringify({
+      client_id: input.clientId,
+      client_secret: input.clientSecret,
+      code: input.code,
+      redirect_uri: input.redirectUri,
+    }),
+  };
+}
+
+/** Parse the user-token exchange response. GitHub 200s on failure with an
+ *  `{error, error_description}` body, so the error branch matters. */
+export function parseUserTokenResponse(body: string): { token: string } {
+  const parsed = JSON.parse(body) as Partial<{
+    access_token: string;
+    error: string;
+    error_description: string;
+  }>;
+  if (parsed.error) {
+    throw new Error(
+      `GitHub user token: ${parsed.error}${parsed.error_description ? ` — ${parsed.error_description}` : ""}`,
+    );
+  }
+  if (!parsed.access_token || typeof parsed.access_token !== "string") {
+    throw new Error(`GitHub user token: missing access_token in response: ${body.slice(0, 200)}`);
+  }
+  return { token: parsed.access_token };
+}
+
 export interface AppJwtClaims {
   /** App's numeric ID (`iss` claim per GitHub spec). */
   appId: string;

@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { IntegrationsApi } from "../api/client";
-import type { GitHubInstallation, GitHubPublication } from "../api/types";
+import type {
+  GitHubInstallation,
+  GitHubInstallationDetail,
+  GitHubPublication,
+} from "../api/types";
 import { StatusPill } from "../components/StatusPill";
 import { ConnectModeChooser } from "../components/ConnectModeChooser";
 import { Avatar } from "../../components/Avatar";
@@ -23,6 +27,17 @@ function startManagedConnect() {
   const returnUrl = `${window.location.origin}/integrations/github`;
   window.location.assign(
     `/v1/integrations/github/managed/connect?returnUrl=${encodeURIComponent(returnUrl)}`,
+  );
+}
+
+/** Reconcile flow: identify the user on GitHub (user-authorization) so the
+ *  backend can read `GET /user/installations` and write rows for App installs
+ *  that never round-tripped through our Setup URL. Same top-level-navigation
+ *  reason as startManagedConnect — the session cookie must ride along. */
+function startInstallationSync() {
+  const returnUrl = `${window.location.origin}/integrations/github`;
+  window.location.assign(
+    `/v1/integrations/github/managed/link?returnUrl=${encodeURIComponent(returnUrl)}`,
   );
 }
 
@@ -120,7 +135,11 @@ export function IntegrationsGitHubList() {
         )}
 
         {managedResult && (
-          <ManagedInstallBanner result={managedResult} login={managedResultLogin} />
+          <ManagedInstallBanner
+            result={managedResult}
+            login={managedResultLogin}
+            linked={searchParams.get("linked")}
+          />
         )}
 
         <ConnectModeChooser
@@ -147,12 +166,24 @@ export function IntegrationsGitHubList() {
           <EmptyState
             title="No GitHub orgs connected yet."
             action={
-              <Link
-                to="/integrations/github/bind"
-                className="text-brand hover:underline text-[13px]"
-              >
-                Bind your first agent →
-              </Link>
+              <div className="flex flex-col items-center gap-2">
+                <Link
+                  to="/integrations/github/bind"
+                  className="text-brand hover:underline text-[13px]"
+                >
+                  Bind your first agent →
+                </Link>
+                {/* Already installed the App straight from github.com? That
+                    install never hit our Setup URL, so no row exists — this
+                    finds it and links it instead of reinstalling. */}
+                <button
+                  type="button"
+                  onClick={startInstallationSync}
+                  className="text-[12px] text-fg-muted hover:text-fg underline"
+                >
+                  Already installed on GitHub? Sync installations
+                </button>
+              </div>
             }
           />
         )}
@@ -163,13 +194,23 @@ export function IntegrationsGitHubList() {
               <h2 className="text-[12px] font-medium text-fg-muted uppercase tracking-wider">
                 Connected accounts
               </h2>
-              <button
-                type="button"
-                onClick={startManagedConnect}
-                className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 text-[12px] font-medium rounded-md border border-border text-fg hover:border-border-strong transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
-              >
-                Add another account →
-              </button>
+              <div className="shrink-0 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={startInstallationSync}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[12px] font-medium rounded-md border border-border text-fg-muted hover:text-fg hover:border-border-strong transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
+                  title="Find App installations that already exist on GitHub and link them here"
+                >
+                  Sync installations
+                </button>
+                <button
+                  type="button"
+                  onClick={startManagedConnect}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[12px] font-medium rounded-md border border-border text-fg hover:border-border-strong transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
+                >
+                  Add another account →
+                </button>
+              </div>
             </div>
             <div className="space-y-3">
               {items.map(({ installation, publications }) => (
@@ -194,10 +235,23 @@ export function IntegrationsGitHubList() {
 function ManagedInstallBanner({
   result,
   login,
+  linked,
 }: {
   result: string;
   login: string | null;
+  linked: string | null;
 }) {
+  if (result === "linked") {
+    const many = linked !== null && linked !== "1";
+    return (
+      <div className="mb-6 rounded-md border border-success/30 bg-success-subtle px-4 py-3 text-[13px] text-fg">
+        <span className="font-medium text-success">Linked</span> — we found{" "}
+        {many ? `${linked} existing installations` : "an existing installation"} of
+        OMA's GitHub App on your account and connected {many ? "them" : "it"} to this
+        workspace.
+      </div>
+    );
+  }
   if (result === "ok") {
     return (
       <div className="mb-6 flex items-center gap-3 rounded-md border border-success/30 bg-success-subtle px-4 py-3">
@@ -296,6 +350,26 @@ function WorkspaceCard({
   publications: GitHubPublication[];
   onDisconnect: () => void;
 }) {
+  // Live GitHub-side grant. Fetched per card because it's not persisted —
+  // permissions and repo selection change on github.com without telling us.
+  const [detail, setDetail] = useState<GitHubInstallationDetail | null>(null);
+  const [detailError, setDetailError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.github
+      .installationDetail(installation.id)
+      .then((d) => {
+        if (!cancelled) setDetail(d);
+      })
+      .catch(() => {
+        if (!cancelled) setDetailError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [installation.id]);
+
   return (
     <div className="border border-border rounded-lg overflow-hidden bg-bg hover:border-border-strong transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]">
       <div className="flex items-center justify-between gap-4 px-5 py-4">
@@ -342,6 +416,14 @@ function WorkspaceCard({
         </div>
       </div>
 
+      {detail && <InstallationDetailRow detail={detail} />}
+      {detailError && (
+        <p className="border-t border-border px-5 py-2 text-[12px] text-fg-muted">
+          Couldn't read this installation from GitHub — it may have been removed
+          there.
+        </p>
+      )}
+
       {publications.length > 0 ? (
         <ul className="border-t border-border divide-y divide-border bg-bg-surface/20">
           {publications.map((p) => (
@@ -360,6 +442,61 @@ function WorkspaceCard({
           >
             Bind an agent →
           </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** What GitHub currently grants this installation: permission levels, whether
+ *  it covers all repos or a picked set, and when it was installed. */
+function InstallationDetailRow({ detail }: { detail: GitHubInstallationDetail }) {
+  const permissions = Object.entries(detail.permissions).sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+  const installedAt = detail.installedAt ? new Date(detail.installedAt) : null;
+  return (
+    <div className="border-t border-border px-5 py-3 space-y-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-fg-muted">
+        <span>
+          Repos:{" "}
+          <span className="text-fg">
+            {detail.repositorySelection === "all"
+              ? "all repositories"
+              : `${detail.repoCount} selected`}
+          </span>
+        </span>
+        {installedAt && !Number.isNaN(installedAt.getTime()) && (
+          <span>
+            Installed <span className="text-fg">{installedAt.toLocaleDateString()}</span>
+          </span>
+        )}
+        {detail.htmlUrl && (
+          <a
+            href={detail.htmlUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-fg-muted hover:text-brand underline"
+          >
+            Manage on GitHub ↗
+          </a>
+        )}
+      </div>
+      {detail.repos.length > 0 && detail.repositorySelection === "selected" && (
+        <p className="text-[12px] text-fg-muted truncate" title={detail.repos.join(", ")}>
+          {detail.repos.join(", ")}
+        </p>
+      )}
+      {permissions.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {permissions.map(([name, level]) => (
+            <span
+              key={name}
+              className="inline-flex items-center rounded border border-border px-1.5 py-0.5 text-[11px] font-mono text-fg-muted"
+            >
+              {name}: {level}
+            </span>
+          ))}
         </div>
       )}
     </div>
