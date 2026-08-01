@@ -83,16 +83,7 @@ export function resolveClaudeSdkProvider(input: {
 
   if (binding) {
     if (OAI_COMPAT.has(binding.apiCompat)) {
-      const where = binding.source ? ` (model card ${binding.source})` : "";
-      return {
-        ok: false,
-        error:
-          `ClaudeAgentSdkHarness cannot use the OpenAI-compatible provider ` +
-          `"${binding.apiCompat}"${where}: the Claude Code CLI speaks the Anthropic ` +
-          `/v1/messages wire format only. Point this agent at a model card whose ` +
-          `provider is anthropic ("ant") or Anthropic-compatible ("ant-compatible"), ` +
-          `or switch the agent to the "default" harness.`,
-      };
+      return { ok: false, error: oaiCompatError(binding) };
     }
     // Any other tag (including an unknown one) is treated as Anthropic-wire,
     // mirroring resolveModelCardCredentials' `apiCompat = "ant"` default.
@@ -150,6 +141,19 @@ export function resolveClaudeSdkProvider(input: {
  *  resolveModelCardCredentials in session-do.ts: the four wire tags pass
  *  through, `anthropic`/`openai` map onto their wire format, and anything
  *  else (e.g. "custom") defaults to Anthropic-wire. */
+// One place owns the OpenAI-wire rejection message — it's long, and tests
+// assert on its pieces.
+export function oaiCompatError(binding: { apiCompat: string; source?: string }): string {
+  const where = binding.source ? ` (model card ${binding.source})` : "";
+  return (
+    `ClaudeAgentSdkHarness cannot use the OpenAI-compatible provider ` +
+    `"${binding.apiCompat}"${where}: the Claude Code CLI speaks the Anthropic ` +
+    `/v1/messages wire format only. Point this agent at a model card whose ` +
+    `provider is anthropic ("ant") or Anthropic-compatible ("ant-compatible"), ` +
+    `or switch the agent to the "default" harness.`
+  );
+}
+
 export function providerToApiCompat(provider: string | null | undefined): string {
   const p = (provider ?? "").toLowerCase();
   if (ANT_COMPAT.has(p) || OAI_COMPAT.has(p)) return p;

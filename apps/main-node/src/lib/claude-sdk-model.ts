@@ -48,9 +48,22 @@ export async function resolveAgentModelBinding(input: {
     const card = cardId
       ? await modelCards.get({ tenantId, cardId })
       : await modelCards.findByModelId({ tenantId, modelId: handle });
-    if (!card || card.archived_at) return null;
+    if (!card) return null;
+    if (card.archived_at) {
+      input.logger?.warn(
+        { op: "claude_agent_sdk.model_card_archived", cardId: card.id },
+        "model card is archived — falling back to global env provider",
+      );
+      return null;
+    }
     const apiKey = await modelCards.getApiKey({ tenantId, cardId: card.id });
-    if (!apiKey) return null;
+    if (!apiKey) {
+      input.logger?.warn(
+        { op: "claude_agent_sdk.model_card_key_unavailable", cardId: card.id },
+        "model card key missing or undecryptable — falling back to global env provider",
+      );
+      return null;
+    }
     return {
       model: card.model || handle,
       apiKey,
