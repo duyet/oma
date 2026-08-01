@@ -59,6 +59,9 @@ interface Row {
   enabled: boolean;
   nextRunAt: number | null;
   maxSessions: number;
+  /** Per-schedule alert config (issue #313) — mirrors the parsed `notify`
+   *  JSON column the SqlClient store hydrates onto ClaimedSchedule. */
+  notify?: ClaimedSchedule["notify"];
   lastRun?: RecordRunInput;
 }
 
@@ -108,6 +111,7 @@ class FakeStore implements ScheduledRunsStore {
         timezone: row.timezone,
         prompt: row.prompt,
         maxSessions: row.maxSessions,
+        notify: row.notify ?? null,
       });
     }
     return claimed;

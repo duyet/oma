@@ -490,6 +490,9 @@ importers:
       '@duyet/oma-acp-runtime':
         specifier: workspace:*
         version: link:../../packages/acp-runtime
+      '@duyet/oma-agent':
+        specifier: workspace:*
+        version: link:../agent
       '@duyet/oma-agents-store':
         specifier: workspace:*
         version: link:../../packages/agents-store
