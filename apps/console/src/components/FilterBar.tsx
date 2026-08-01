@@ -24,7 +24,7 @@ import { FilterChip, CreatedFilterChip } from "./FilterChip";
  * children (they lead the row) alongside the common props.
  */
 
-interface FacetProp {
+export interface FacetProp {
   value: string;
   onChange: (value: string) => void;
   options: FacetedFilterOption[];
@@ -53,14 +53,14 @@ export interface FilterBarProps {
  * single-select FacetedFilter. Extracted from the copy-pasted blocks the
  * list pages carried inline.
  */
-function FacetChip({
+export function FacetChip({
   facet,
   defaultLabel,
-  popoverWidth,
+  popoverWidth = "w-56",
 }: {
   facet: FacetProp;
   defaultLabel: string;
-  popoverWidth: string;
+  popoverWidth?: string;
 }) {
   const label = facet.label ?? defaultLabel;
   const inactive = facet.defaultValue ?? "any";
