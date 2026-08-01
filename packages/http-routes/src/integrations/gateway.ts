@@ -219,6 +219,15 @@ export function buildIntegrationsGatewayRoutes(deps: IntegrationsGatewayDeps) {
       // Org admin requested the install but it's pending approval.
       return c.html(githubRequestPendingPage(setupAction), 200);
     }
+    if (installationId && !state) {
+      // The App really is installed on GitHub, we just can't attribute it to
+      // an OMA user: no state means the install was started from the App's
+      // own github.com page (or is a `setup_on_update` permission-change
+      // redirect). Land the user on the Console with a distinct status so
+      // the page can tell them to re-run Connect rather than showing a
+      // generic failure.
+      return redirectManagedInstall(c, returnUrl, "unlinked", null, consoleOrigin);
+    }
     if (!installationId || !state) {
       return redirectManagedInstall(c, returnUrl, "error", null, consoleOrigin);
     }
@@ -1158,16 +1167,19 @@ function redirectToConsole(
 /**
  * Build the 302 back to the console after a managed workspace install.
  * Appends `?managed_install=<status>` (+ `&login=<login>` on success).
+ * Success also carries `connected=1`, the documented public contract for
+ * "the App round-tripped back to the Console" (`/integrations/github?connected=1`).
  */
 function redirectManagedInstall(
   c: import("hono").Context,
   returnUrl: string | null | undefined,
-  status: "ok" | "error",
+  status: "ok" | "error" | "unlinked",
   login?: string | null,
   consoleOrigin?: string | null,
 ): Response {
   const base = returnUrl && returnUrl.trim() ? returnUrl : CONSOLE_GITHUB_PATH;
   const params: Record<string, string> = { managed_install: status };
+  if (status === "ok") params.connected = "1";
   if (login) params.login = login;
   return redirectToConsole(c, base, consoleOrigin, params);
 }

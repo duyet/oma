@@ -301,6 +301,16 @@ class GitHubClient {
     return r.data;
   }
 
+  /** Detach a connected account from this workspace. The App stays installed
+   *  on github.com — the user removes it there if they want it fully gone. */
+  async disconnectInstallation(installationId: string): Promise<void> {
+    await request(
+      this.basePath,
+      `/v1/integrations/github/installations/${encodeURIComponent(installationId)}`,
+      { method: "DELETE" },
+    );
+  }
+
   /**
    * Publications still in-progress (pending_setup / credentials_filled /
    * awaiting_install). Used by the list page's "In-progress installs"

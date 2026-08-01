@@ -41,8 +41,11 @@ export function IntegrationsGitHubList() {
   const [managedAvailable, setManagedAvailable] = useState<boolean | null>(null);
 
   // Result of a managed-app install round-trip (set on the ?managed_install=
-  // redirect the backend callback bounces us back with).
-  const managedResult = searchParams.get("managed_install");
+  // redirect the backend callback bounces us back with). `?connected=1` is
+  // the same success signal under its public name.
+  const managedResult =
+    searchParams.get("managed_install") ??
+    (searchParams.get("connected") === "1" ? "ok" : null);
   const managedResultLogin = searchParams.get("login");
 
   useEffect(() => {
@@ -75,6 +78,15 @@ export function IntegrationsGitHubList() {
   useEffect(() => {
     void load();
   }, []);
+
+  async function disconnect(installationId: string) {
+    try {
+      await api.github.disconnectInstallation(installationId);
+      setItems((list) => list.filter((x) => x.installation.id !== installationId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
 
   async function discardPending(pubId: string) {
     try {
@@ -145,15 +157,32 @@ export function IntegrationsGitHubList() {
           />
         )}
 
-        <div className="space-y-3">
-          {items.map(({ installation, publications }) => (
-            <WorkspaceCard
-              key={installation.id}
-              installation={installation}
-              publications={publications}
-            />
-          ))}
-        </div>
+        {items.length > 0 && (
+          <section>
+            <div className="flex items-center justify-between gap-4 mb-2">
+              <h2 className="text-[12px] font-medium text-fg-muted uppercase tracking-wider">
+                Connected accounts
+              </h2>
+              <button
+                type="button"
+                onClick={startManagedConnect}
+                className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 text-[12px] font-medium rounded-md border border-border text-fg hover:border-border-strong transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
+              >
+                Add another account →
+              </button>
+            </div>
+            <div className="space-y-3">
+              {items.map(({ installation, publications }) => (
+                <WorkspaceCard
+                  key={installation.id}
+                  installation={installation}
+                  publications={publications}
+                  onDisconnect={() => disconnect(installation.id)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );
@@ -193,7 +222,9 @@ function ManagedInstallBanner({
   const message =
     result === "unavailable"
       ? "The managed GitHub App isn't configured on this deployment — ask your admin to set the managed app secrets, or bring your own app."
-      : "The GitHub App install didn't complete. Try again, or bring your own app.";
+      : result === "unlinked"
+        ? "OMA's GitHub App is installed, but the install wasn't started from here so we couldn't attach it to your workspace. Click Connect below to link it."
+        : "The GitHub App install didn't complete. Try again, or bring your own app.";
   return (
     <div className="mb-6 rounded-md border border-warning/30 bg-warning-subtle px-4 py-3 text-[13px] text-fg">
       {message}
@@ -259,9 +290,11 @@ function PendingRow({
 function WorkspaceCard({
   installation,
   publications,
+  onDisconnect,
 }: {
   installation: GitHubInstallation;
   publications: GitHubPublication[];
+  onDisconnect: () => void;
 }) {
   return (
     <div className="border border-border rounded-lg overflow-hidden bg-bg hover:border-border-strong transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]">
@@ -285,16 +318,28 @@ function WorkspaceCard({
               GitHub App · full identity ·{" "}
               <span className="text-fg">
                 {publications.length} agent{publications.length === 1 ? "" : "s"}
-              </span>
+              </span>{" "}
+              · installation{" "}
+              <span className="font-mono text-fg">{installation.workspace_id}</span>
             </p>
           </div>
         </div>
-        <Link
-          to={`/integrations/github/installations/${installation.id}`}
-          className="shrink-0 text-[13px] text-fg-muted hover:text-brand transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
-        >
-          Manage →
-        </Link>
+        <div className="shrink-0 flex items-center gap-3">
+          <Link
+            to={`/integrations/github/installations/${installation.id}`}
+            className="text-[13px] text-fg-muted hover:text-brand transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
+          >
+            Manage →
+          </Link>
+          <button
+            type="button"
+            onClick={onDisconnect}
+            className="text-[13px] text-fg-muted hover:text-danger transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
+            title="Detach this account from your workspace"
+          >
+            Disconnect
+          </button>
+        </div>
       </div>
 
       {publications.length > 0 ? (

@@ -75,6 +75,44 @@ describe("<IntegrationsGitHubList />", () => {
     expect(screen.getAllByText(/@acme/).length).toBeGreaterThan(0);
   });
 
+  it("treats ?connected=1 as the success signal", async () => {
+    mockEndpoints();
+    renderPage("/integrations/github?connected=1&login=acme");
+    await waitFor(() => expect(screen.getByText(/Connected/i)).toBeInTheDocument());
+  });
+
+  it("lists every connected account with its installation id and a disconnect action", async () => {
+    mockEndpoints({
+      installations: [
+        installation(),
+        installation({ id: "ghinst_2", workspace_id: "77", workspace_name: "widgets-inc" }),
+      ],
+    });
+    const deleted: string[] = [];
+    server.use(
+      http.delete("/v1/integrations/github/installations/:id", ({ params }) => {
+        deleted.push(String(params.id));
+        return HttpResponse.json({ id: params.id, status: "disconnected" });
+      }),
+    );
+    renderPage();
+
+    expect(await screen.findByText("acme")).toBeInTheDocument();
+    expect(screen.getByText("widgets-inc")).toBeInTheDocument();
+    // The numeric GitHub installation id is shown per account.
+    expect(screen.getByText("42")).toBeInTheDocument();
+    expect(screen.getByText("77")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Add another account/i }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByRole("button", { name: "Disconnect" })[0]);
+    await waitFor(() => expect(deleted).toEqual(["ghinst_1"]));
+    // Only the disconnected account disappears.
+    await waitFor(() => expect(screen.queryByText("acme")).not.toBeInTheDocument());
+    expect(screen.getByText("widgets-inc")).toBeInTheDocument();
+  });
+
   it("starts the real managed-app install via a top-level navigation", async () => {
     mockEndpoints();
     const assign = vi.fn();
