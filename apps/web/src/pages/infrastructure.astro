@@ -91,6 +91,81 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
     </div>
   </section>
 
+  <!-- Deployment topology: two parallel paths, not a pipeline -->
+  <section class="border-b border-[var(--color-border)] bg-[var(--color-bg-surface)]" data-reveal id="topology">
+    <div class="max-w-5xl mx-auto px-4 py-14 md:py-16">
+      <p class="flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
+        <Icon name="layers" size={14} class="text-[var(--color-brand)]" /> Deployment
+      </p>
+      <h2 class="font-display text-2xl md:text-3xl font-bold mb-2 text-center tracking-tight">
+        Two deployment paths, one codebase
+      </h2>
+      <p class="text-center text-[var(--color-fg-muted)] max-w-2xl mx-auto mb-8 leading-relaxed">
+        Cloudflare and self-hosted Node aren't stages of a pipeline — they're
+        parallel options. Same business logic, same API surface, pick one per
+        deployment.
+      </p>
+      <div class="topology-grid">
+        <div class="topology-track">
+          <div class="topology-track-head">
+            <Icon name="globe" size={18} class="text-[var(--color-brand)]" /> Cloudflare
+          </div>
+          <ul class="topology-nodes">
+            <li class="topology-node">
+              <span class="topology-node-glyph"><Icon name="server" size={16} /></span>
+              <span>
+                <span class="topology-node-name block">Workers</span>
+                <span class="topology-node-sub">HTTP API, MCP proxy</span>
+              </span>
+            </li>
+            <li class="topology-node">
+              <span class="topology-node-glyph"><Icon name="database" size={16} /></span>
+              <span>
+                <span class="topology-node-name block">Durable Objects</span>
+                <span class="topology-node-sub">SessionDO, SQLite event log</span>
+              </span>
+            </li>
+            <li class="topology-node">
+              <span class="topology-node-glyph"><Icon name="box" size={16} /></span>
+              <span>
+                <span class="topology-node-name block">Containers</span>
+                <span class="topology-node-sub">Cloudflare Sandbox, or boxrun / k8s-remote / OpenShell over HTTP</span>
+              </span>
+            </li>
+          </ul>
+        </div>
+        <div class="topology-track">
+          <div class="topology-track-head">
+            <Icon name="terminal" size={18} class="text-[var(--color-brand)]" /> Self-hosted Node
+          </div>
+          <ul class="topology-nodes">
+            <li class="topology-node">
+              <span class="topology-node-glyph"><Icon name="server" size={16} /></span>
+              <span>
+                <span class="topology-node-name block">apps/main-node</span>
+                <span class="topology-node-sub">Same route implementation as Workers</span>
+              </span>
+            </li>
+            <li class="topology-node">
+              <span class="topology-node-glyph"><Icon name="database" size={16} /></span>
+              <span>
+                <span class="topology-node-name block">SQLite / Postgres</span>
+                <span class="topology-node-sub">Control-plane DB, agent DO logic in-process</span>
+              </span>
+            </li>
+            <li class="topology-node">
+              <span class="topology-node-glyph"><Icon name="box" size={16} /></span>
+              <span>
+                <span class="topology-node-name block">docker compose</span>
+                <span class="topology-node-sub">Full SandboxProviderRegistry — every adapter available</span>
+              </span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Fleet operations -->
   <section class="border-b border-[var(--color-border)]" data-reveal id="fleets">
     <div class="max-w-5xl mx-auto px-4 py-16 md:py-20 text-center">
