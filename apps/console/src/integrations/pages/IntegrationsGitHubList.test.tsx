@@ -26,6 +26,7 @@ function mockEndpoints(
     installations?: Record<string, unknown>[];
     publications?: Record<string, unknown>[];
     available?: boolean;
+    detail?: Record<string, unknown>;
   } = {},
 ) {
   const installs = opts.installations ?? [installation()];
@@ -41,6 +42,18 @@ function mockEndpoints(
     ),
     http.get("/v1/integrations/github/installations/:id/publications", () =>
       HttpResponse.json({ data: opts.publications ?? [] }),
+    ),
+    http.get("/v1/integrations/github/installations/:id/detail", () =>
+      HttpResponse.json(
+        opts.detail ?? {
+          permissions: { contents: "write", issues: "read" },
+          repositorySelection: "selected",
+          installedAt: "2026-01-05T00:00:00Z",
+          repoCount: 2,
+          repos: ["acme/widgets", "acme/docs"],
+          htmlUrl: "https://github.com/organizations/acme/settings/installations/42",
+        },
+      ),
     ),
   );
 }
@@ -111,6 +124,46 @@ describe("<IntegrationsGitHubList />", () => {
     // Only the disconnected account disappears.
     await waitFor(() => expect(screen.queryByText("acme")).not.toBeInTheDocument());
     expect(screen.getByText("widgets-inc")).toBeInTheDocument();
+  });
+
+  it("shows the live GitHub grant on each connected account", async () => {
+    mockEndpoints();
+    renderPage();
+
+    // Repository selection + install date + permission levels come from the
+    // live detail read, not the stored row.
+    expect(await screen.findByText(/2 selected/)).toBeInTheDocument();
+    expect(screen.getByText("acme/widgets, acme/docs")).toBeInTheDocument();
+    expect(screen.getByText("contents: write")).toBeInTheDocument();
+    expect(screen.getByText("issues: read")).toBeInTheDocument();
+    expect(screen.getByText(/Installed/)).toBeInTheDocument();
+  });
+
+  it("offers a sync path for an App installed straight from github.com", async () => {
+    mockEndpoints({ installations: [] });
+    const assign = vi.fn();
+    const original = window.location;
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { ...original, origin: original.origin, assign },
+    });
+    try {
+      renderPage();
+      const sync = await screen.findByRole("button", { name: /Sync installations/i });
+      await userEvent.click(sync);
+    } finally {
+      Object.defineProperty(window, "location", { configurable: true, value: original });
+    }
+    expect(assign).toHaveBeenCalledTimes(1);
+    expect(assign.mock.calls[0][0]).toContain("/v1/integrations/github/managed/link?returnUrl=");
+  });
+
+  it("reports how many installations the sync linked", async () => {
+    mockEndpoints();
+    renderPage("/integrations/github?managed_install=linked&linked=2");
+    await waitFor(() =>
+      expect(screen.getByText(/2 existing installations/)).toBeInTheDocument(),
+    );
   });
 
   it("starts the real managed-app install via a top-level navigation", async () => {
