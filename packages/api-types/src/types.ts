@@ -1345,13 +1345,43 @@ export interface MemoryVersion {
 
 // --- File ---
 
+export interface BetaFileScope {
+  /**
+   * The ID of the scoping resource (e.g., the session ID).
+   */
+  id: string;
+  /**
+   * The type of scope (e.g., `"session"`).
+   */
+  type: "session";
+}
+
 export interface FileRecord {
   id: string;
   type?: "file";
   filename: string;
+  /**
+   * MIME type of the file. OMA-native field name.
+   *
+   * `mime_type` is emitted as a wire-compatible alias for
+   * `@anthropic-ai/sdk`'s `client.beta.files.*` (AMA Files API,
+   * `files-api-2025-04-14`), whose `FileMetadata` schema names this field
+   * `mime_type` rather than `media_type`. Both fields always carry the same
+   * value; existing OMA callers keep reading `media_type`.
+   */
   media_type: string;
+  /** Anthropic SDK alias of `media_type` (see above). */
+  mime_type?: string;
   size_bytes: number;
+  /** OMA-native: the scoping session id, if any. */
   scope_id?: string;
+  /**
+   * Anthropic SDK alias of `scope_id`. OMA-native stores the scalar session
+   * id, but `client.beta.files` expects an object `{ id, type: "session" }`
+   * (`null` when the file is tenant-scoped). Both forms are emitted when a
+   * scope is present so SDK callers AND legacy OMA callers work unchanged.
+   */
+  scope?: BetaFileScope | null;
   downloadable?: boolean;
   created_at: string;
 }
