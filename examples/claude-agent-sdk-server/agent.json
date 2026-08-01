@@ -1,0 +1,11 @@
+{
+  "name": "Claude Agent SDK Server Example",
+  "description": "Coding agent whose turns are driven by Claude Code's CLI (via @anthropic-ai/claude-agent-sdk) on a self-hosted Node instance.",
+  "model": "claude-sonnet-4-6",
+  "system": "You are a careful coding assistant. Inspect files before changing them, keep edits minimal, and explain what you changed.",
+  "tools": [{ "type": "agent_toolset_20260401" }],
+  "harness": "claude-agent-sdk",
+  "metadata": {
+    "harness": "claude-agent-sdk"
+  }
+}

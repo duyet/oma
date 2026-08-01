@@ -61,6 +61,9 @@ export default defineConfig({
       { find: "@duyet/oma-evals-store", replacement: "./packages/evals-store/src/index.ts" },
       { find: "@duyet/oma-model-cards-store/test-fakes", replacement: "./packages/model-cards-store/src/test-fakes.ts" },
       { find: "@duyet/oma-model-cards-store", replacement: "./packages/model-cards-store/src/index.ts" },
+      // apps/agent subpath — apps/main re-uses the agent DO's notify
+      // dispatcher for per-schedule alerts (issue #313).
+      { find: "@duyet/oma-agent/runtime/notify-dispatch", replacement: "./apps/agent/src/runtime/notify-dispatch.ts" },
       { find: "@duyet/oma-agents-store/test-fakes", replacement: "./packages/agents-store/src/test-fakes.ts" },
       { find: "@duyet/oma-agents-store", replacement: "./packages/agents-store/src/index.ts" },
       { find: "@duyet/oma-publications-store/test-fakes", replacement: "./packages/publications-store/src/test-fakes.ts" },
