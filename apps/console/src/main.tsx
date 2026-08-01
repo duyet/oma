@@ -136,6 +136,7 @@ const PUBLISHING_HUB: HubConfig = {
   description: "Publish agents as bots and connect them to your tools.",
   tabs: [
     { label: "My Bots", path: "/my-bots" },
+    { label: "Integrations", path: "/integrations" },
     { label: "Linear", path: "/integrations/linear" },
     { label: "GitHub", path: "/integrations/github" },
     { label: "Slack", path: "/integrations/slack" },
