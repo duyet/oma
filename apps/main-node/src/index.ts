@@ -81,6 +81,7 @@ import {
 import {
   buildAgentRoutes,
   buildScheduleRoutes,
+  buildTenantScheduleRoutes,
   buildVaultRoutes,
   buildMcpServerRoutes,
   buildFederationRoutes,
@@ -1285,6 +1286,8 @@ v1.route("/agents", buildAgentRoutes({ services }));
 // the same /agents prefix (CF mounts it the same way). Node's control-plane
 // DB is the single `sql` client — agent_schedules lives there.
 v1.route("/agents", buildScheduleRoutes({ db: sql }));
+// Tenant-wide schedule list — cross-agent read for the Kanban board.
+v1.route("/schedules", buildTenantScheduleRoutes({ db: sql }));
 // Published-agent management API (issue #72) — tenant-authed CRUD backing
 // the public /p/:slug chat surface. Runtime-neutral (only needs `services`),
 // mirroring apps/main's mounts at the same paths (issue #226).

@@ -21,6 +21,7 @@ import {
   buildAnalyticsRoutes,
   buildTelemetryRoutes,
   buildScheduleRoutes,
+  buildTenantScheduleRoutes,
   buildModelCardRoutes,
   buildStatsRoutes,
   buildUsageRoutes,
@@ -930,6 +931,11 @@ app.route("/v1/usage", usageRoutes);
 app.route(
   "/v1/agents",
   buildScheduleRoutes({ db: (c) => new CfD1SqlClient((c.env as Env).MAIN_DB) }),
+);
+// Tenant-wide schedule list — cross-agent read for the Kanban board.
+app.route(
+  "/v1/schedules",
+  buildTenantScheduleRoutes({ db: (c) => new CfD1SqlClient((c.env as Env).MAIN_DB) }),
 );
 app.route("/v1/deployments", deploymentsRoutes);
 // Webhook trigger for deployments — bypasses x-api-key auth (see auth.ts);
