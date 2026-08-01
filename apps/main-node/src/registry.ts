@@ -96,6 +96,7 @@ export interface SessionRegistryDeps {
     tools: unknown;
     model: LanguageModel;
     sessionId: string;
+    tenantId: string;
     eventLog: SqlEventLog;
   }): Promise<unknown>;
 
@@ -323,6 +324,7 @@ export class SessionRegistry {
         this.deps.buildHarnessContext({
           ...input,
           sessionId,
+          tenantId,
           eventLog,
         }),
       publish: (event: SessionEvent) => this.deps.hub.publish(sessionId, event),

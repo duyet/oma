@@ -1120,10 +1120,22 @@ An explicit Model Card always wins over both. See
 `resolveModelCardCredentials` in `apps/agent/src/runtime/session-do.ts`.
 
 The `claude-agent-sdk` harness (self-host Node only — see
-[Custom Harness](#custom-harness)) authenticates its CLI subprocess
-independently: `ANTHROPIC_API_KEY`, or `CLAUDE_CODE_OAUTH_TOKEN` (minted via
+[Custom Harness](#custom-harness)) resolves its CLI subprocess's model +
+credentials per-agent (issue #316): when `agent.model` matches a **model
+card** handle (or `metadata.model_card_id` pins one), that card's `model`,
+API key and `base_url` are exported into the spawned CLI for the turn
+(`ANTHROPIC_API_KEY` / `ANTHROPIC_BASE_URL` / `ANTHROPIC_MODEL`, plus the
+SDK's own `model` option). The card's provider must be Anthropic-wire
+(`ant` / `ant-compatible` — `anthropic` normalizes to `ant`); an
+`oai` / `oai-compatible` card **fails the turn** with an explicit
+`session.error` rather than silently falling back, because the Claude Code
+CLI speaks only the Anthropic `/v1/messages` format. When no card resolves,
+it falls back to the deployment's global env exactly as before:
+`ANTHROPIC_API_KEY`, or `CLAUDE_CODE_OAUTH_TOKEN` (minted via
 `claude setup-token`) when that's unset — the CI/CD alternative for
-non-interactive deploys.
+non-interactive deploys — plus `ANTHROPIC_BASE_URL`. Resolution lives in
+`apps/main-node/src/lib/claude-sdk-model.ts` (card lookup) and
+`apps/agent/src/harness/claude-agent-sdk/model.ts` (pure env mapping).
 
 ### Connecting AnyRouter (one-click, no pasted key)
 

@@ -45,13 +45,13 @@ describe("<BasicTab /> harness picker", () => {
     });
   });
 
-  it("notes that the Claude Agent SDK harness ignores the per-agent model", async () => {
+  it("explains how the Claude Agent SDK harness applies the per-agent model", async () => {
     const user = userEvent.setup();
     render(<Harness />);
 
-    expect(screen.queryByText(/ignores the per-agent model/i)).toBeNull();
+    expect(screen.queryByText(/applies the per-agent model/i)).toBeNull();
     await user.click(screen.getByRole("radio", { name: "Claude Agent SDK" }));
-    expect(screen.getByText(/ignores the per-agent model/i)).toBeTruthy();
+    expect(screen.getByText(/applies the per-agent model/i)).toBeTruthy();
   });
 
   it("selects the poolside harness and surfaces its API-key requirement", async () => {

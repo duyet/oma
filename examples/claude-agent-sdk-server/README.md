@@ -63,6 +63,25 @@ a Workers isolate.
 
 ## Model auth
 
+### Per-agent (model cards) — preferred
+
+Since issue #316 this harness honors the agent's own model: if `agent.model`
+matches a **model card** handle (or `metadata.model_card_id` pins one), the
+card's `model`, API key and `base_url` are exported into the Claude Code CLI
+subprocess for that turn (`ANTHROPIC_API_KEY` / `ANTHROPIC_BASE_URL` /
+`ANTHROPIC_MODEL` + the SDK's `model` option). Different agents on one server
+can therefore run on different models and gateways.
+
+The card's provider must be Anthropic-wire (`anthropic` / `ant` /
+`ant-compatible`). An `openai` / `oai-compatible` card **fails the turn** with
+an explicit `session.error` — the Claude Code CLI has no OpenAI transport, so
+falling back to some other key would silently run a different model than the
+agent is configured for.
+
+When no card matches, the global env vars below are used exactly as before.
+
+### Global fallback
+
 Supply exactly one of these to the container:
 
 | Env var | When to use it |

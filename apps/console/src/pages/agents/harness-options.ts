@@ -29,10 +29,11 @@ export interface HarnessOption {
   /** Model id suggested when this harness is selected. */
   defaultModel?: string;
   /**
-   * True when the per-agent `model` field is not what this harness actually
-   * uses — the dialog says so inline instead of pretending it applies.
+   * True when the per-agent `model` field only partly drives this harness —
+   * the dialog explains inline how it is (and isn't) applied instead of
+   * pretending it behaves like the standard harness.
    */
-  ignoresAgentModel?: boolean;
+  modelCaveat?: boolean;
   /** Extra deployment requirement surfaced inline under the model field. */
   note?: string;
 }
@@ -72,7 +73,7 @@ export const CLOUD_HARNESS_OPTIONS: HarnessOption[] = [
     summary: "Delegates the loop to the real Claude Code CLI, in a self-host Node deployment.",
     badge: "Self-host only",
     bestFor: "Best for the exact Claude Code experience, skills and all.",
-    ignoresAgentModel: true,
+    modelCaveat: true,
   },
 ];
 
