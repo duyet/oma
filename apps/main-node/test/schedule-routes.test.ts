@@ -331,3 +331,150 @@ describe("GET /agents/:agentId/schedules/:scheduleId/runs", () => {
     expect(calls[0].binds).toContain("tnt_other");
   });
 });
+
+// ─── per-schedule notify (issue #313, WP2) ──────────────────────────────────
+
+const slackTarget = { type: "slack_message", credential_id: "cred_1", channel: "C1" };
+
+describe("schedule notify config", () => {
+  it("stores notify as JSON text on create and echoes the parsed object", async () => {
+    const { client, calls } = fakeDb([{ changes: 1 }]);
+    const app = appWith(buildScheduleRoutes({ db: client }) as never, "/v1/agents");
+
+    const notify = { on: ["error"], targets: [slackTarget] };
+    const res = await app.request("/v1/agents/agent_1/schedules", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        cron_expression: "0 9 * * 1",
+        input: "digest",
+        environment_id: "env_1",
+        notify,
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    expect(await res.json()).toMatchObject({ notify });
+    expect(calls[0].sql).toContain("notify");
+    expect(calls[0].binds).toContain(JSON.stringify(notify));
+  });
+
+  it("stores NULL when notify is omitted on create", async () => {
+    const { client, calls } = fakeDb([{ changes: 1 }]);
+    const app = appWith(buildScheduleRoutes({ db: client }) as never, "/v1/agents");
+
+    const res = await app.request("/v1/agents/agent_1/schedules", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        cron_expression: "0 9 * * 1",
+        input: "digest",
+        environment_id: "env_1",
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    expect(await res.json()).toMatchObject({ notify: null });
+    // enabled(1), notify(null), created_at, updated_at — notify binds null.
+    expect(calls[0].binds).toContain(null);
+  });
+
+  it("rejects an unknown notify.on value (422-class 400 from the zod guard)", async () => {
+    const { client, calls } = fakeDb([]);
+    const app = appWith(buildScheduleRoutes({ db: client }) as never, "/v1/agents");
+
+    const res = await app.request("/v1/agents/agent_1/schedules", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        cron_expression: "0 9 * * 1",
+        input: "digest",
+        environment_id: "env_1",
+        notify: { on: ["exploded"], targets: [slackTarget] },
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("rejects a malformed notify target", async () => {
+    const { client } = fakeDb([]);
+    const app = appWith(buildScheduleRoutes({ db: client }) as never, "/v1/agents");
+
+    const res = await app.request("/v1/agents/agent_1/schedules", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        cron_expression: "0 9 * * 1",
+        input: "digest",
+        environment_id: "env_1",
+        notify: { targets: [{ type: "webhook", url: "not-a-url" }] },
+      }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("PATCH replaces notify wholesale", async () => {
+    const notify = { on: ["ok", "error"], targets: [slackTarget] };
+    const { client, calls } = fakeDb([
+      { rows: [scheduleRow()] },
+      { changes: 1 },
+      { rows: [scheduleRow({ notify: JSON.stringify(notify) })] },
+    ]);
+    const app = appWith(buildScheduleRoutes({ db: client }) as never, "/v1/agents");
+
+    const res = await app.request("/v1/agents/agent_1/schedules/sch_1", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ notify }),
+    });
+
+    expect(res.status).toBe(200);
+    // The JSON column is hydrated back into an object on the way out.
+    expect(await res.json()).toMatchObject({ notify });
+    expect(calls[1].sql).toContain("notify = ?");
+    expect(calls[1].binds[0]).toBe(JSON.stringify(notify));
+  });
+
+  it("PATCH notify: null clears the config", async () => {
+    const { client, calls } = fakeDb([
+      { rows: [scheduleRow({ notify: JSON.stringify({ targets: [slackTarget] }) })] },
+      { changes: 1 },
+      { rows: [scheduleRow({ notify: null })] },
+    ]);
+    const app = appWith(buildScheduleRoutes({ db: client }) as never, "/v1/agents");
+
+    const res = await app.request("/v1/agents/agent_1/schedules/sch_1", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ notify: null }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ notify: null });
+    expect(calls[1].binds[0]).toBeNull();
+  });
+
+  it("GET hydrates the notify JSON column, and degrades garbage to null", async () => {
+    const notify = { on: ["error"], targets: [slackTarget] };
+    const { client } = fakeDb([
+      {
+        rows: [
+          scheduleRow({ id: "sch_ok", notify: JSON.stringify(notify) }),
+          scheduleRow({ id: "sch_bad", notify: "{not json" }),
+          scheduleRow({ id: "sch_none", notify: null }),
+        ],
+      },
+    ]);
+    const app = appWith(buildScheduleRoutes({ db: client }) as never, "/v1/agents");
+
+    const res = await app.request("/v1/agents/agent_1/schedules");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: Array<{ id: string; notify: unknown }> };
+    expect(body.data[0]).toMatchObject({ id: "sch_ok", notify });
+    expect(body.data[1].notify).toBeNull();
+    expect(body.data[2].notify).toBeNull();
+  });
+});

@@ -362,3 +362,110 @@ describe("scheduledAgentRunsTick — max_sessions concurrency cap", () => {
     });
   });
 });
+
+// ─── per-schedule alerts: onRunRecorded + the `on` filter (issue #313) ───────
+
+const target = { type: "slack_message", credential_id: "cred_1", channel: "C1" } as const;
+const DUE = Date.UTC(2026, 0, 1, 0, 0, 0);
+
+/** Collect every (scheduleId, status) the tick hands to onRunRecorded. */
+function recorder() {
+  const seen: Array<{ id: string; status: RecordRunInput["status"] }> = [];
+  return {
+    seen,
+    onRunRecorded: (schedule: ClaimedSchedule, run: RecordRunInput) => {
+      seen.push({ id: schedule.id, status: run.status });
+    },
+  };
+}
+
+describe("onRunRecorded — per-schedule alerts", () => {
+  it("is not called at all for a schedule with no notify config", async () => {
+    const store = new FakeStore([row({ id: "a", nextRunAt: DUE })]);
+    const rec = recorder();
+    await scheduledAgentRunsTick({
+      resolveStore: async () => store,
+      resolveLauncher: async () => new FakeLauncher(),
+      onRunRecorded: rec.onRunRecorded,
+      now: () => NOW,
+    })();
+    expect(rec.seen).toEqual([]);
+  });
+
+  it("defaults to alerting on error + skipped_concurrency only (no `on`)", async () => {
+    const notify = { targets: [target] };
+    const store = new FakeStore([
+      row({ id: "ok", nextRunAt: DUE, notify }),
+      row({ id: "err", nextRunAt: DUE, notify }),
+      row({ id: "skip", nextRunAt: DUE, notify, maxSessions: 1 }),
+    ]);
+    const launcher = new FakeLauncher(new Set(["err"]), new Map([["skip", 1]]));
+    const rec = recorder();
+    await scheduledAgentRunsTick({
+      resolveStore: async () => store,
+      resolveLauncher: async () => launcher,
+      onRunRecorded: rec.onRunRecorded,
+      now: () => NOW,
+    })();
+    // "ok" fired successfully but is not in the default `on` set.
+    expect(rec.seen).toEqual([
+      { id: "err", status: "error" },
+      { id: "skip", status: "skipped_concurrency" },
+    ]);
+  });
+
+  it("honors an explicit `on` filter (ok-only opts into success alerts)", async () => {
+    const notify = { on: ["ok" as const], targets: [target] };
+    const store = new FakeStore([
+      row({ id: "ok", nextRunAt: DUE, notify }),
+      row({ id: "err", nextRunAt: DUE, notify }),
+    ]);
+    const rec = recorder();
+    await scheduledAgentRunsTick({
+      resolveStore: async () => store,
+      resolveLauncher: async () => new FakeLauncher(new Set(["err"])),
+      onRunRecorded: rec.onRunRecorded,
+      now: () => NOW,
+    })();
+    expect(rec.seen).toEqual([{ id: "ok", status: "ok" }]);
+  });
+
+  it("skips a notify config with an empty targets array", async () => {
+    const store = new FakeStore([
+      row({ id: "err", nextRunAt: DUE, notify: { on: ["error"], targets: [] } }),
+    ]);
+    const rec = recorder();
+    await scheduledAgentRunsTick({
+      resolveStore: async () => store,
+      resolveLauncher: async () => new FakeLauncher(new Set(["err"])),
+      onRunRecorded: rec.onRunRecorded,
+      now: () => NOW,
+    })();
+    expect(rec.seen).toEqual([]);
+  });
+
+  it("never lets a throwing notifier fail the tick or the other schedules", async () => {
+    const notify = { on: ["ok" as const], targets: [target] };
+    const store = new FakeStore([
+      row({ id: "a", nextRunAt: DUE, notify }),
+      row({ id: "b", nextRunAt: DUE, notify }),
+    ]);
+    const launcher = new FakeLauncher();
+    const seen: string[] = [];
+    await expect(
+      scheduledAgentRunsTick({
+        resolveStore: async () => store,
+        resolveLauncher: async () => launcher,
+        onRunRecorded: async (schedule) => {
+          seen.push(schedule.id);
+          throw new Error("notify upstream down");
+        },
+        now: () => NOW,
+      })(),
+    ).resolves.toBeUndefined();
+    // Both schedules fired and both notifications were attempted.
+    expect(launcher.launched).toEqual(["a", "b"]);
+    expect(seen).toEqual(["a", "b"]);
+    expect(store.rows.every((r) => r.lastRun?.status === "ok")).toBe(true);
+  });
+});

@@ -14,7 +14,7 @@
  */
 
 /** Harness ids the cloud (non-local) picker can write to `form.harness`. */
-export type CloudHarnessId = "default" | "long-running" | "claude-agent-sdk";
+export type CloudHarnessId = "default" | "long-running" | "claude-agent-sdk" | "poolside";
 
 export interface HarnessOption {
   id: CloudHarnessId | "acp-proxy";
@@ -33,6 +33,8 @@ export interface HarnessOption {
    * uses — the dialog says so inline instead of pretending it applies.
    */
   ignoresAgentModel?: boolean;
+  /** Extra deployment requirement surfaced inline under the model field. */
+  note?: string;
 }
 
 /** Harnesses that run inside OMA (selected by writing `_oma.harness`). */
@@ -53,6 +55,16 @@ export const CLOUD_HARNESS_OPTIONS: HarnessOption[] = [
     badge: "Cloud + self-host",
     bestFor: "Best for hours-long unattended jobs you want to watch.",
     defaultModel: "claude-sonnet-4-6",
+  },
+  {
+    id: "poolside",
+    name: "Poolside",
+    summary:
+      "The standard tool loop on poolside's agentic coding models (laguna/malibu), via their OpenAI-compatible API.",
+    badge: "Cloud + self-host",
+    bestFor: "Best for cost-efficient coding agents.",
+    defaultModel: "poolside/laguna-s-2.1",
+    note: "Requires POOLSIDE_API_KEY configured on the deployment.",
   },
   {
     id: "claude-agent-sdk",
