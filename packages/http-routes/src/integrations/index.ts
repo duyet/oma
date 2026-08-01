@@ -148,6 +148,23 @@ export function buildIntegrationsRoutes(deps: IntegrationsRoutesDeps) {
       });
     });
 
+    // Disconnect an account: revokes the installation row so it drops out of
+    // GET /installations (which filters revoked rows). The App itself stays
+    // installed on the GitHub/Slack/Linear side — uninstalling there is the
+    // user's call; this only detaches it from the OMA workspace.
+    sub.delete("/installations/:id", async (c) => {
+      const userId = c.get("user_id")!;
+      const installationId = c.req.param("id");
+      const { bag, err } = bagOr503(c, provider);
+      if (err) return err;
+      const installation = await bag.installations.get(installationId);
+      if (!installation || installation.userId !== userId) {
+        return c.json({ error: "not found" }, 404);
+      }
+      await bag.installations.markRevoked(installationId, Date.now());
+      return c.json({ id: installationId, status: "disconnected" });
+    });
+
     sub.get("/installations/:id/publications", async (c) => {
       const userId = c.get("user_id")!;
       const installationId = c.req.param("id");
