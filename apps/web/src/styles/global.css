@@ -318,6 +318,23 @@ input:focus-visible,
 .prose h1 { font-family: var(--font-display); font-size: 2rem; font-weight: 700; margin-top: 2.5rem; margin-bottom: 1rem; }
 .prose h2 { font-family: var(--font-display); font-size: 1.5rem; font-weight: 600; margin-top: 2rem; margin-bottom: 0.75rem; }
 .prose h3 { font-family: var(--font-display); font-size: 1.2rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 0.5rem; }
+/* Belt-and-suspenders for markdown-rendered links: the `:where(p, li, dd,
+   td, blockquote) a` rule below already covers most of these, but rendered
+   markdown can place an <a> outside those wrappers (e.g. a linked image).
+   No default underline; brand-colored underline appears on hover only. */
+.prose a {
+  color: var(--color-brand);
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 120ms ease-out, text-decoration-color 120ms ease-out;
+}
+.prose a:hover {
+  color: var(--color-brand-hover);
+  text-decoration: underline;
+  text-decoration-color: var(--color-brand-hover);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
 
 /* Architecture / lifecycle visualization helpers (landing page). */
 .arch-stack {
