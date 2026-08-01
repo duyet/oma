@@ -19,9 +19,9 @@ const schemas = [softwareApplicationSchema()];
 // (0.625rem → rounded-md); previously each anchor carried a 400-char inline
 // copy of these, which drifted between call sites.
 const btnPrimary =
-  "inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground no-underline transition-colors hover:bg-primary/90 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 [&_svg]:shrink-0";
+  "inline-flex h-11 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground no-underline transition-colors hover:bg-primary/90 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 [&_svg]:shrink-0 sm:h-9 sm:w-auto";
 const btnOutline =
-  "inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground no-underline transition-colors hover:bg-muted hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 [&_svg]:shrink-0";
+  "inline-flex h-11 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground no-underline transition-colors hover:bg-muted hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 [&_svg]:shrink-0 sm:h-9 sm:w-auto";
 
 // Section frame — the page is white throughout and sections are separated by a
 // hairline top border. Padding is deliberately tighter than the previous
@@ -83,7 +83,7 @@ const explore = [
 
     <div class="max-w-3xl">
       <h1
-        class="text-balance text-[2.125rem] font-semibold leading-[1.08] tracking-tighter text-[var(--color-fg)] sm:text-[2.75rem] lg:text-[3.25rem]"
+        class="text-balance text-[clamp(1.75rem,7vw,2.125rem)] font-semibold leading-[1.08] tracking-tighter text-[var(--color-fg)] sm:text-[2.75rem] lg:text-[3.25rem]"
       >
         The self-hosted agent platform for any LLM provider and any sandbox
       </h1>
@@ -94,7 +94,7 @@ const explore = [
         Workers, or run it yourself with Docker.
       </p>
 
-      <div class="mt-8 flex flex-wrap items-center gap-3">
+      <div class="mt-8 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <a
           href="https://github.com/duyet/oma"
           target="_blank"
