@@ -277,3 +277,57 @@ describe("GET /schedules (tenant-wide)", () => {
     expect(calls[0].sql).not.toContain("created_at < ?");
   });
 });
+
+const runRow = (over: Record<string, unknown> = {}) => ({
+  id: "srun_1",
+  schedule_id: "sch_1",
+  tenant_id: "tnt_1",
+  agent_id: "agent_1",
+  session_id: "sess_1",
+  status: "ok",
+  error: null,
+  summary: null,
+  started_at: "2026-08-01T00:00:00.000Z",
+  created_at: "2026-08-01T00:00:00.000Z",
+  ...over,
+});
+
+describe("GET /agents/:agentId/schedules/:scheduleId/runs", () => {
+  it("returns run history newest-first, scoped by tenant and schedule", async () => {
+    const { client, calls } = fakeDb([
+      { rows: [runRow({ id: "srun_2" }), runRow({ id: "srun_1" })] },
+    ]);
+    const app = appWith(buildScheduleRoutes({ db: client }) as never, "/v1/agents");
+
+    const res = await app.request("/v1/agents/agent_1/schedules/sch_1/runs");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: unknown[]; next_cursor?: string };
+    expect(body.data).toHaveLength(2);
+    expect(body.next_cursor).toBeUndefined();
+    expect(calls[0].sql).toContain("FROM agent_schedule_runs");
+    expect(calls[0].sql).toContain("ORDER BY created_at DESC, id DESC");
+    expect(calls[0].binds).toEqual(["sch_1", "tnt_1", 26]);
+  });
+
+  it("paginates with a cursor when more rows exist than the page limit", async () => {
+    const { client, calls } = fakeDb([{ rows: [runRow({ id: "srun_2" }), runRow({ id: "srun_1" })] }]);
+    const app = appWith(buildScheduleRoutes({ db: client }) as never, "/v1/agents");
+
+    const res = await app.request("/v1/agents/agent_1/schedules/sch_1/runs?limit=1");
+    const body = (await res.json()) as { data: unknown[]; next_cursor?: string };
+    expect(body.data).toHaveLength(1);
+    expect(body.next_cursor).toBeTruthy();
+    expect(calls[0].binds[calls[0].binds.length - 1]).toBe(2);
+  });
+
+  it("returns an empty page for another tenant's schedule (never leaks rows)", async () => {
+    const { client, calls } = fakeDb([{ rows: [] }]);
+    const app = appWith(buildScheduleRoutes({ db: client }) as never, "/v1/agents", "tnt_other");
+
+    const res = await app.request("/v1/agents/agent_1/schedules/sch_1/runs");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: unknown[] };
+    expect(body.data).toHaveLength(0);
+    expect(calls[0].binds).toContain("tnt_other");
+  });
+});

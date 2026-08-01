@@ -213,6 +213,47 @@ export function buildScheduleRoutes(deps: ScheduleRoutesDeps) {
     return c.json({ data: rows.results });
   });
 
+  // Durable run history — GET /:agentId/schedules/:scheduleId/runs
+  // (issue #312, WP3). Reads agent_schedule_runs, one row per firing (ok /
+  // error / skipped_concurrency), independent of the single-row
+  // last_run_* summary on agent_schedules. Same cursor contract as every
+  // other paginated table in this repo: ordered (created_at, id) DESC,
+  // opaque cursor, stale cursor silently restarts from page 1.
+  app.get("/:agentId/schedules/:scheduleId/runs", async (c) => {
+    const scheduleId = c.req.param("scheduleId");
+    const tenantId = c.var.tenant_id;
+    const db = resolveDb(deps.db, c);
+    const limit = clampLimit(c.req.query("limit") ? Number(c.req.query("limit")) : undefined);
+    const after = decodeCursor(c.req.query("cursor"));
+
+    let where = "schedule_id = ? AND tenant_id = ?";
+    const binds: unknown[] = [scheduleId, tenantId];
+    if (after) {
+      where += " AND (created_at < ? OR (created_at = ? AND id < ?))";
+      const afterIso = new Date(after.createdAt).toISOString();
+      binds.push(afterIso, afterIso, after.id);
+    }
+    binds.push(limit + 1);
+
+    const res = await db
+      .prepare(
+        `SELECT * FROM agent_schedule_runs WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT ?`,
+      )
+      .bind(...binds)
+      .all<{ id: string; created_at: string }>();
+
+    const rows = res.results ?? [];
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, limit) : rows;
+    const last = items[items.length - 1];
+    const nextCursor =
+      hasMore && last
+        ? encodeCursor({ createdAt: new Date(last.created_at).getTime(), id: last.id })
+        : undefined;
+
+    return c.json({ data: items, next_cursor: nextCursor });
+  });
+
   // Partial update. Any of cron_expression/input/environment_id/timezone/
   // max_sessions/enabled may be patched. When cron_expression or timezone
   // changes, next_run_at is recomputed atomically in the same request so it

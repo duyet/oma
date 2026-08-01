@@ -8,12 +8,16 @@
 // ISO-8601 sorts lexicographically, so `next_run_at <= ?` string comparison
 // is a correct time comparison.
 
+import { nanoid } from "nanoid";
 import type { SqlClient } from "@duyet/oma-sql-client";
+import { getLogger } from "@duyet/oma-observability";
 import type {
   ClaimedSchedule,
   RecordRunInput,
   ScheduledRunsStore,
 } from "./scheduled-agent-runs";
+
+const log = getLogger("scheduler.scheduled-agent-runs-store");
 
 interface DueRow {
   id: string;
@@ -89,7 +93,7 @@ export class SqlClientScheduledRunsStore implements ScheduledRunsStore {
     return claimed;
   }
 
-  async recordRun(id: string, input: RecordRunInput): Promise<void> {
+  async recordRun(schedule: ClaimedSchedule, input: RecordRunInput): Promise<void> {
     const ranAtIso = new Date(input.ranAtMs).toISOString();
     await this.db
       .prepare(
@@ -97,7 +101,39 @@ export class SqlClientScheduledRunsStore implements ScheduledRunsStore {
          SET last_run_at = ?, last_run_status = ?, last_run_error = ?, last_session_id = ?, updated_at = ?
          WHERE id = ?`,
       )
-      .bind(ranAtIso, input.status, input.error ?? null, input.sessionId ?? null, ranAtIso, id)
+      .bind(ranAtIso, input.status, input.error ?? null, input.sessionId ?? null, ranAtIso, schedule.id)
       .run();
+
+    // Durable per-firing history row (issue #312, WP3). Best-effort — a
+    // failure here must never take down last_run_* recording above, which
+    // is what the tick's concurrency gate and Console "last run" surface
+    // depend on.
+    try {
+      const runId = `srun_${nanoid(24)}`;
+      await this.db
+        .prepare(
+          `INSERT INTO agent_schedule_runs
+             (id, schedule_id, tenant_id, agent_id, session_id, status, error, summary, started_at, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(
+          runId,
+          schedule.id,
+          schedule.tenantId,
+          schedule.agentId,
+          input.sessionId ?? null,
+          input.status,
+          input.error ?? null,
+          null,
+          ranAtIso,
+          ranAtIso,
+        )
+        .run();
+    } catch (err) {
+      log.warn(
+        { err, schedule_id: schedule.id, op: "scheduled-agent-runs.history_insert_failed" },
+        "failed to write agent_schedule_runs history row",
+      );
+    }
   }
 }

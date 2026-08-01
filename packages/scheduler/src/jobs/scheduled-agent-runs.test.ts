@@ -62,10 +62,20 @@ interface Row {
   lastRun?: RecordRunInput;
 }
 
+/** Mirrors a durable agent_schedule_runs history row (issue #312, WP3). */
+interface HistoryRow {
+  scheduleId: string;
+  status: RecordRunInput["status"];
+  sessionId?: string | null;
+  error?: string | null;
+}
+
 /** Models agent_schedules + the compare-and-set claim in-memory. `yield_`
  *  forces a microtask between select and CAS so two concurrent claimDue
  *  calls actually race (mirrors two overlapping cron ticks). */
 class FakeStore implements ScheduledRunsStore {
+  history: HistoryRow[] = [];
+
   constructor(
     public rows: Row[],
     private readonly yield_ = false,
@@ -103,9 +113,15 @@ class FakeStore implements ScheduledRunsStore {
     return claimed;
   }
 
-  async recordRun(id: string, input: RecordRunInput): Promise<void> {
-    const row = this.rows.find((r) => r.id === id);
+  async recordRun(schedule: ClaimedSchedule, input: RecordRunInput): Promise<void> {
+    const row = this.rows.find((r) => r.id === schedule.id);
     if (row) row.lastRun = input;
+    this.history.push({
+      scheduleId: schedule.id,
+      status: input.status,
+      sessionId: input.sessionId,
+      error: input.error,
+    });
   }
 }
 
@@ -219,6 +235,22 @@ describe("scheduledAgentRunsTick", () => {
     expect(store.rows.find((r) => r.id === "b")!.lastRun).toMatchObject({ status: "ok" });
   });
 
+  it("appends a durable history row for a successful fire and a failed fire (issue #312)", async () => {
+    const launcher = new FakeLauncher(new Set(["a"]));
+    const tick = scheduledAgentRunsTick({
+      resolveStore: async () => store,
+      resolveLauncher: async () => launcher,
+      now: () => NOW,
+    });
+    await tick();
+    expect(store.history).toContainEqual(
+      expect.objectContaining({ scheduleId: "a", status: "error" }),
+    );
+    expect(store.history).toContainEqual(
+      expect.objectContaining({ scheduleId: "b", status: "ok", sessionId: "sess_b" }),
+    );
+  });
+
   it("no-ops cleanly when store/launcher resolve to null", async () => {
     const tick = scheduledAgentRunsTick({
       resolveStore: async () => null,
@@ -274,6 +306,12 @@ describe("scheduledAgentRunsTick — max_sessions concurrency cap", () => {
     // would just re-select and re-skip every tick forever).
     expect(updated.nextRunAt).not.toBeNull();
     expect(updated.nextRunAt).toBeGreaterThan(dueAt);
+
+    // A skipped_concurrency firing still gets a durable history row
+    // (issue #312).
+    expect(store.history).toContainEqual(
+      expect.objectContaining({ scheduleId: "a", status: "skipped_concurrency" }),
+    );
   });
 
   it("skips firing when the in-flight count exceeds max_sessions", async () => {

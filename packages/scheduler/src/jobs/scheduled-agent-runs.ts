@@ -67,8 +67,9 @@ export interface ScheduledRunsStore {
     computeNextRun: (cron: string, timezone: string, fromMs: number) => number | null,
   ): Promise<ClaimedSchedule[]>;
 
-  /** Persist the outcome of a fired schedule (last_run_* columns). */
-  recordRun(id: string, input: RecordRunInput): Promise<void>;
+  /** Persist the outcome of a fired schedule (last_run_* columns) and, best
+   *  effort, append a durable history row (issue #312, WP3). */
+  recordRun(schedule: ClaimedSchedule, input: RecordRunInput): Promise<void>;
 }
 
 export interface ScheduledRunLauncher {
@@ -199,12 +200,12 @@ export function scheduledAgentRunsTick(deps: ScheduledAgentRunsTickDeps): () => 
             },
             "schedule fire skipped: concurrency cap reached",
           );
-          await store.recordRun(schedule.id, { status: "skipped_concurrency", ranAtMs });
+          await store.recordRun(schedule, { status: "skipped_concurrency", ranAtMs });
           continue;
         }
 
         const { sessionId } = await launcher.launch(schedule);
-        await store.recordRun(schedule.id, { status: "ok", sessionId, ranAtMs });
+        await store.recordRun(schedule, { status: "ok", sessionId, ranAtMs });
         ok += 1;
       } catch (err) {
         failed += 1;
@@ -215,7 +216,7 @@ export function scheduledAgentRunsTick(deps: ScheduledAgentRunsTickDeps): () => 
         );
         // Best-effort — recording the failure must not itself abort the batch.
         try {
-          await store.recordRun(schedule.id, { status: "error", error: message, ranAtMs });
+          await store.recordRun(schedule, { status: "error", error: message, ranAtMs });
         } catch (recordErr) {
           log.warn(
             { err: recordErr, schedule_id: schedule.id, op: "scheduled-runs.record_failed" },
