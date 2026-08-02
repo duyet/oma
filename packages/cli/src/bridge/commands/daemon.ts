@@ -76,6 +76,8 @@ export async function runDaemon(): Promise<void> {
   const profile = currentProfile();
   const profileTag = profile ? `  [profile=${profile}]` : "";
   printBanner(`daemon — runtime ${creds.runtimeId.slice(0, 8)}… → ${creds.serverUrl}${profileTag}`, PKG_VERSION);
+  log.warn("local sandbox ops use THIS machine's own `gh`/git credentials");
+  log.hint("not OMA-managed or scoped to a session's vaults — only pair machines you trust the agent to authenticate as.");
 
   // Warm the merged ACP registry cache (official @cdn.agentclientprotocol.com
   // + OMA overlay) once at startup. All downstream sync resolveKnownAgent /

@@ -288,6 +288,17 @@ async function offerOpenShellBackend(): Promise<void> {
   log.hint("ACP agents still spawn on this host; this only affects relayed sandbox ops.");
 }
 
+/** Local sandbox ops (subprocess relay) run against THIS machine's own
+ *  filesystem and credentials — there is no outbound vault-credential MITM
+ *  proxy on the daemon host, so `gh`/git calls silently fall back to
+ *  whatever `gh auth login` / git credentials already exist here, not an
+ *  OMA-managed, session-scoped one. See AGENTS.md's sandbox provider table
+ *  (`"subprocess"` row) and docs/runtimes.md for the full limitation. */
+function warnLocalCredentialFallback(): void {
+  log.warn("local sandbox ops use THIS machine's own `gh`/git credentials");
+  log.hint("not OMA-managed or scoped to a session's vaults — only pair machines you trust the agent to authenticate as.");
+}
+
 /** Slow-path tail: install the system service if supported, otherwise
  *  exec into the daemon foreground. Either way the user has a running
  *  daemon by the time this returns (or the process is gone, replaced
@@ -303,6 +314,7 @@ async function installServiceOrFallback(opts: SetupOpts): Promise<void> {
       log.step("--no-service: starting daemon in foreground");
     }
     log.hint("Ctrl-C to stop. To run as a system service, re-run setup without --no-service.");
+    warnLocalCredentialFallback();
     process.stderr.write("\n");
     execIntoDaemon();
     return;
@@ -325,6 +337,7 @@ async function refreshServiceOrFallback(opts: SetupOpts): Promise<void> {
     process.stderr.write("\n");
     log.step(opts.noService ? "--no-service: starting daemon in foreground" : `service install not supported on ${process.platform}; running daemon in foreground`);
     log.hint("Ctrl-C to stop. To run as a system service, re-run setup without --no-service.");
+    warnLocalCredentialFallback();
     process.stderr.write("\n");
     execIntoDaemon();
     return;
@@ -387,6 +400,8 @@ async function installAndReport(opts: SetupOpts): Promise<void> {
   process.stderr.write(
     `${c.dim("  After joining new workspaces, run `oma bridge refresh` to authorize them on this daemon.")}\n\n`,
   );
+  warnLocalCredentialFallback();
+  process.stderr.write("\n");
 }
 
 /** Replace this process with `oma bridge daemon` (foreground). Uses
