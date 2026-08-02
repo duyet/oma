@@ -488,6 +488,36 @@ See `classifyCfSandboxProvider` (`packages/sandbox/src/provider-config.ts`)
 for the classification and `resolveCfSandbox`
 (`apps/agent/src/runtime/sandbox.ts`) for the resolution + error path.
 
+#### `k8s-remote` vs `openshell` — which Kubernetes path
+
+Both let a Worker drive in-cluster sandboxes, but on different substrates:
+
+| | `k8s-remote` | `openshell` |
+|---|---|---|
+| Sandboxes are | raw **k8s pods** you own (`Sandbox` CRD, one per session) | **OpenShell** managed sandboxes (isolated container/microVM) |
+| In-cluster component | **k8s-sandbox-gateway** wrapping `KubernetesSandboxExecutor` | **k8s-bridge** with `BRIDGE_BACKEND=openshell` wrapping `OpenShellManager` |
+| Gateway ⇄ sandbox | k8s `pods/exec` WebSocket | **gRPC** `openshell.v1.OpenShell` |
+| Egress control | k8s `NetworkPolicy` + OMA outbound proxy | OpenShell **SandboxPolicy** (mapped from the OMA env config) |
+| Cluster RBAC | **yes** (pod create/exec/delete) | **no** — the bridge owns no cluster, only calls the gateway |
+
+Pick `k8s-remote` for ordinary pods on a cluster you fully control; pick
+`openshell` for OpenShell's policy-enforced isolation without OMA holding
+cluster RBAC. Both drop memory-store / session-outputs mounts. Full
+comparison + deploy steps (Helm chart + `deploy/cli-bridge-daemon/`
+manifests): [`docs/deploy/k8s-sandbox-backends.md`](docs/deploy/k8s-sandbox-backends.md).
+
+The **CLI bridge daemon** (`oma bridge daemon`, the `subprocess` provider's
+relay) also supports the OpenShell backend: answer the `oma bridge setup`
+prompt, or set `BRIDGE_SANDBOX_BACKEND=openshell` plus
+`OPENSHELL_GATEWAY_ENDPOINT=<host:port>`, and each sandbox op is relayed to an
+OpenShell gateway over gRPC instead of the local subprocess. Selection is
+explicit opt-in only — an endpoint on its own never flips the backend, since
+silently swapping a laptop's host relay for an empty sandbox would hide the
+user's real repos and toolchains. Logic: `resolveSandboxBackend`
+(`packages/cli/src/bridge/lib/sandbox-backend.ts`). The daemon can run
+in-cluster as a Deployment with no RBAC (outbound-only) — see
+`deploy/cli-bridge-daemon/`.
+
 ### Environment Status
 
 Environments go through a build process:
