@@ -223,32 +223,38 @@ app.get("/", async (c) => {
   const beforeId = c.req.query("before_id"); // returns files with id < before_id
   const afterId = c.req.query("after_id");   // returns files with id > after_id
   const order = c.req.query("order") === "asc" ? "asc" : "desc";
+  // Continuation token echoed back from a previous response's `next_page`.
+  // Anthropic's SDK spells the param `page_token` on its token pager and
+  // `page` on its cursor pager; the beta files pager is id-based and sends
+  // neither, so we accept both spellings rather than guess one.
+  const pageToken = c.req.query("page_token") ?? c.req.query("page") ?? undefined;
 
   let requested = limitParam ? parseInt(limitParam, 10) : 100;
   if (isNaN(requested) || requested < 1) requested = 100;
   if (requested > 1000) requested = 1000;
 
-  // Ask for one extra row so we can derive `has_more` without a count query.
-  const rows = await c.var.services.files.list({
+  const page = await c.var.services.files.listPage({
     tenantId: t,
     sessionId: scopeId,
+    cursor: pageToken,
     beforeId,
     afterId,
     order,
-    limit: requested + 1,
+    limit: requested,
   });
 
-  const slice = rows.slice(0, requested);
-  const data: ApiFileRecord[] = slice.map(toFileRecord) as ApiFileRecord[];
-  let hasMore = rows.length > requested;
+  const data: ApiFileRecord[] = page.items.map(toFileRecord) as ApiFileRecord[];
+  let hasMore = page.nextCursor !== undefined;
+  let nextPage: string | null = page.nextCursor ?? null;
 
   // When the caller scopes to a session, also list the R2 session-outputs
-  // prefix and fold those in as synthesized rows. Pagination here is
-  // best-effort: we don't honor before_id/after_id across the synthesized
-  // set (they'd need a unified cursor scheme over D1 + R2). For typical
-  // usage — list session artifacts after the agent finishes — this returns
-  // everything in one page.
-  if (scopeId && c.env.FILES_BUCKET) {
+  // prefix and fold those in as synthesized rows. They live outside the D1
+  // cursor (unifying the two would need a cursor spanning D1 + R2), so they
+  // ride along on the FIRST page only — otherwise every subsequent page would
+  // repeat them. For typical usage — list session artifacts after the agent
+  // finishes — that is still everything in one page.
+  const firstPage = !pageToken && !afterId && !beforeId;
+  if (scopeId && firstPage && c.env.FILES_BUCKET) {
     const synthesized = await listSessionOutputAsFiles(
       c.env.FILES_BUCKET,
       t,
@@ -258,15 +264,21 @@ app.get("/", async (c) => {
     if (synthesized.length >= 1000) hasMore = true;
   }
 
+  // first_id/last_id drive the AMA SDK's id pager (`Page` in
+  // core/pagination.js walks `last_id` → `after_id`), so they must name D1
+  // rows — a synthesized `out:` id is not a valid anchor.
+  const anchors = page.items.length > 0 ? page.items : [];
   return c.json({
     data,
     has_more: hasMore,
-    first_id: data[0]?.id,
-    last_id: data[data.length - 1]?.id,
-    // Anthropic SDK Family B list schema: `next_page` is `string | null`.
-    // The AMA files pager actually paginates via `after_id`/`last_id` (see
-    // core/pagination.js), so null here just satisfies strict validators.
-    next_page: null,
+    first_id: anchors[0]?.id ?? data[0]?.id,
+    last_id: anchors[anchors.length - 1]?.id ?? data[data.length - 1]?.id,
+    // Anthropic SDK Family B list schema: `next_page` is `string | null` — an
+    // opaque continuation token. Ours is the shared (created_at, id) cursor;
+    // pass it back as `?page_token=` (or `?page=`) for the next page. Null on
+    // the last page. The beta files pager itself walks `after_id`, which this
+    // route honors too — both cursors resolve to the same seek position.
+    next_page: nextPage,
   });
 });
 

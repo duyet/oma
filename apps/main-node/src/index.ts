@@ -666,6 +666,13 @@ export function getSandboxQuota(): InMemoryQuotaStore {
 // then `config.type` (legacy hosting type), then falls back to the
 // global SANDBOX_PROVIDER default. Unknown types degrade gracefully
 // to the default — a misconfigured env must not hard-fail a session.
+// Thrown when a session's environment explicitly selects a sandbox provider
+// that cannot run on the self-host Node runtime (a CF-only primitive such as
+// "dynamic-workers"). Propagated out of resolveEnvProvider (past its
+// fallback catch) so session start fails clearly instead of silently
+// substituting a different sandbox.
+class NodeIncompatibleProviderError extends Error {}
+
 async function resolveEnvProvider(sessionId: string): Promise<string | null> {
   try {
     const row = await sql
@@ -682,6 +689,19 @@ async function resolveEnvProvider(sessionId: string): Promise<string | null> {
     // Direct provider id reference (new API)
     if (env.config.sandbox_provider) {
       const pid = env.config.sandbox_provider;
+      // A CF-only primitive (e.g. "dynamic-workers", which needs the Worker
+      // Loader binding) has no Node equivalent. Fail clearly rather than
+      // silently degrading to SANDBOX_PROVIDER — the inverse of how a
+      // Node-only provider fails on the Cloudflare deployment. This throws
+      // past resolveEnvProvider's fallback catch (see the rethrow there) so
+      // it surfaces as a session error.
+      const desc = SYSTEM_PROVIDERS.find((d) => d.type === pid.toLowerCase());
+      if (desc && desc.nodeCompatible === false) {
+        throw new NodeIncompatibleProviderError(
+          `sandbox_provider="${pid}" is a Cloudflare-only primitive and is not available on the ` +
+            `self-host Node runtime — use a Node-capable provider (subprocess / boxrun / k8s / e2b / daytona).`,
+        );
+      }
       if (sandboxRegistry.get(pid)) return pid;
       logger.warn(
         { op: "main-node.sandbox.unknown_provider_id", session_id: sessionId, provider_id: pid },
@@ -699,6 +719,8 @@ async function resolveEnvProvider(sessionId: string): Promise<string | null> {
     );
     return null;
   } catch (err) {
+    // A Cloudflare-only provider selection must fail loud, not degrade.
+    if (err instanceof NodeIncompatibleProviderError) throw err;
     logger.warn(
       { err, op: "main-node.sandbox.env_provider_resolve_failed", session_id: sessionId },
       "failed to resolve per-environment sandbox provider; falling back to SANDBOX_PROVIDER",
@@ -1944,18 +1966,30 @@ v1.get("/files", async (c) => {
   let requested = limitParam ? parseInt(limitParam, 10) : 100;
   if (isNaN(requested) || requested < 1) requested = 100;
   if (requested > 1000) requested = 1000;
-  const rows = await filesService.list({
+  const beforeId = c.req.query("before_id");
+  const afterId = c.req.query("after_id");
+  const order = c.req.query("order") === "asc" ? "asc" : "desc";
+  const pageToken = c.req.query("page_token") ?? c.req.query("page") ?? undefined;
+  const page = await filesService.listPage({
     tenantId: t,
     sessionId: scopeId,
+    cursor: pageToken,
+    beforeId,
+    afterId,
+    order,
     limit: requested,
   });
+  const data = page.items.map(toFileRecord);
   return c.json({
-    data: rows.map(toFileRecord),
-    has_more: false,
-    // Anthropic SDK Family B list schema: `next_page` is `string | null`.
-    // Node's read-only files route isn't cursor-paginated (always one page),
-    // so emit null to satisfy strict AMA spec validators.
-    next_page: null,
+    data,
+    has_more: page.nextCursor !== undefined,
+    first_id: data[0]?.id,
+    last_id: data[data.length - 1]?.id,
+    // Anthropic SDK Family B list schema: `next_page` is `string | null` — the
+    // shared (created_at, id) cursor, replayed as `?page_token=` / `?page=`.
+    // Same contract as the Cloudflare route (apps/main/src/routes/files.ts);
+    // Node has no session-outputs R2 prefix to fold in.
+    next_page: page.nextCursor ?? null,
   });
 });
 v1.get("/files/:id/content", async (c) => {

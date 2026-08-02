@@ -259,7 +259,8 @@ each with its own bindings, deployed via `wrangler deploy`.
 #   1. Preflight: wrangler login, jq + node, prompt for Anthropic key
 #   2. Create resources (idempotent — re-running is safe): 2 D1 DBs,
 #      1 KV namespace, 4 R2 buckets
-#   3. Patch top-level wrangler.jsonc files with the captured IDs
+#   3. Generate gitignored apps/<app>/wrangler.local.jsonc copies with the
+#      captured IDs (tracked wrangler.jsonc files keep their placeholders)
 #   4. Set required secrets (auto-generated where possible)
 #   5. Apply migrations (one consolidated file per D1)
 #   6. Wire R2 → memory-events queue notification

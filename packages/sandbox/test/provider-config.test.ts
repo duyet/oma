@@ -80,6 +80,7 @@ describe("classifyCfSandboxProvider", () => {
       "github-actions": true,
       "remote-agent": true,
       openshell: true,
+      "dynamic-workers": true,
       "browser-vm": true,
     });
   });
@@ -88,6 +89,16 @@ describe("classifyCfSandboxProvider", () => {
     expect(classifyCfSandboxProvider("openshell")).toEqual({ kind: "remote", type: "openshell" });
     // case-insensitive
     expect(classifyCfSandboxProvider("OpenShell")).toEqual({ kind: "remote", type: "openshell" });
+  });
+
+  it("classifies dynamic-workers as remote (CF-native, LOADER-binding-gated in resolveCfSandbox)", () => {
+    expect(classifyCfSandboxProvider("dynamic-workers")).toEqual({ kind: "remote", type: "dynamic-workers" });
+    expect(classifyCfSandboxProvider("Dynamic-Workers")).toEqual({ kind: "remote", type: "dynamic-workers" });
+  });
+
+  it("marks dynamic-workers as the only node-incompatible provider (CF-only primitive)", () => {
+    const nodeIncompatible = SYSTEM_PROVIDERS.filter((p) => p.nodeCompatible === false).map((p) => p.type);
+    expect(nodeIncompatible).toEqual(["dynamic-workers"]);
   });
 });
 

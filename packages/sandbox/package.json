@@ -10,6 +10,7 @@
     "./adapters/daytona": "./src/adapters/daytona.ts",
     "./adapters/litebox": "./src/adapters/litebox.ts",
     "./adapters/boxrun": "./src/adapters/boxrun.ts",
+    "./adapters/dynamic-workers": "./src/adapters/dynamic-workers.ts",
     "./adapters/k8s-bridge": "./src/adapters/k8s-bridge.ts",
     "./adapters/kubernetes": "./src/adapters/kubernetes.ts",
     "./adapters/kubernetes-remote": "./src/adapters/kubernetes-remote.ts",

@@ -8,6 +8,8 @@
 // project convention; cascade-by-session lives in this port so adapters and
 // the in-memory fake share one canonical implementation.
 
+import type { PageCursor } from "@duyet/oma-shared";
+
 import type { FileRow, FileScope } from "./types";
 
 export interface NewFileInput {
@@ -31,10 +33,15 @@ export interface FileListOptions {
    * When undefined, returns ALL files for the tenant (both scopes).
    */
   sessionId?: string;
-  /** Cursor: return files with id < beforeId (lexicographic). */
-  beforeId?: string;
-  /** Cursor: return files with id > afterId (lexicographic). */
-  afterId?: string;
+  /**
+   * Seek cursor over the `(created_at, id)` natural ordering: return the page
+   * that comes AFTER this position in the requested `order`. The service
+   * resolves both an opaque page token and an `after_id` anchor row into one
+   * of these, so adapters only ever implement the single cursor scheme.
+   */
+  after?: PageCursor;
+  /** Same seek cursor, walking BACKWARDS from the position (`before_id`). */
+  before?: PageCursor;
   /** Sort by created_at — desc matches the GET list default (files.ts:99). */
   order: "asc" | "desc";
   /** Page size. Adapter clamps via DEFAULT_LIST_LIMIT / MAX_LIST_LIMIT. */
