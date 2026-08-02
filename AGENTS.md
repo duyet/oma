@@ -805,6 +805,35 @@ child doesn't lose the others' results:
 - A call targeting an `agent_id` not in the agent's `callable_agents` roster
   fails just that entry (`success: false`) without aborting the batch.
 
+**Remote (federated) fan-out** (issue #132): a call may also target a
+`remote_agent` roster entry by passing its federation `instance_id` alongside
+the remote `agent_id`. Remote and local calls mix freely in one batch, run
+under the **same** `max_parallel_subagents` cap, and each runs
+`delegateToRemoteAgent` with the same per-call success/error isolation. Remote
+results echo back `instance_id` (and carry no `thread_id`, since the turn runs
+on the remote instance's own event log):
+
+```json
+{
+  "calls": [
+    { "agent_id": "agent_local_researcher", "message": "Summarize the local docs" },
+    { "agent_id": "agent_remote_specialist", "instance_id": "fed_xxx", "message": "Cross-check against the EU dataset" }
+  ]
+}
+```
+
+```json
+{
+  "results": [
+    { "agent_id": "agent_local_researcher", "success": true, "response": "...", "thread_id": "sthr_..." },
+    { "agent_id": "agent_remote_specialist", "instance_id": "fed_xxx", "success": true, "response": "..." }
+  ]
+}
+```
+
+An `(instance_id, agent_id)` pair not in the agent's `callable_agents` roster
+fails just that entry (`success: false`), like an unknown local `agent_id`.
+
 ---
 
 ## Cross-Instance Federation
@@ -905,9 +934,12 @@ The delivered slice is a one-shot request/response delegate. Not yet built:
 event-log **streaming/mirroring** of the remote turn into the caller's log
 (only the final text returns today), remote **identity mapping** beyond the
 shared tenant key, a Console UI for the registry + `remote_agent` roster
-entries (API-only for now), federated **parallel fan-out** (remote entries are
-excluded from `call_agents_parallel`), and inbound-federation trust controls
-distinct from the tenant API key.
+entries (API-only for now), and inbound-federation trust controls distinct
+from the tenant API key.
+
+Federated **parallel fan-out** is now supported: `call_agents_parallel`
+accepts remote (`remote_agent`) targets alongside local ones — see
+[Parallel Delegation](#parallel-delegation).
 
 ---
 
