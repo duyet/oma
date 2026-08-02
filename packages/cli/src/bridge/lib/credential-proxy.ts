@@ -29,6 +29,14 @@
  *   - The subprocess is only ever handed a `127.0.0.1:<port>` URL, which is
  *     not a secret.
  *   - Hosts with no matching credential are proxied through untouched.
+ *   - The listener is loopback-only on an ephemeral port, so nothing off-box
+ *     can reach it. It does NOT authenticate its callers, though: any process
+ *     running as this user that finds the port can have a request injected.
+ *     That is not a new exposure on the personal machine this path targets —
+ *     such a process can already use the machine's own `gh`/git credentials,
+ *     which is the very gap this proxy exists to close — but it does mean the
+ *     proxy grants no isolation between local processes. Do not treat it as a
+ *     boundary against other software on the same machine.
  *
  * BOUNDARY — what is NOT injected (deliberate; see docs/runtimes.md):
  *   - Direct `https://` connections. Injecting those needs TLS interception

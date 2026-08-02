@@ -270,6 +270,13 @@ injection`). Failing closed would turn a transient platform blip into a broken
 agent turn while adding no protection, since the un-injected path is not a new
 exposure.
 
+The proxy listens on loopback only, so nothing off-box can reach it. It does
+not authenticate its callers, so any process running as the same user that
+finds the port can have a request injected. That isn't a new exposure on the
+personal machine this path targets — such a process can already use the
+machine's own `gh`/git credentials — but the proxy is not a boundary between
+local processes, and shouldn't be relied on as one.
+
 **Other limitations of the relay path** (vs. self-host
 `LocalSubprocessSandbox`): memory-store / session-outputs mounts aren't wired.
 Standard file tools, `bash`, git, etc. all work against the per-session
