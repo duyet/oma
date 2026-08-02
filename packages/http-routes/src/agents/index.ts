@@ -17,7 +17,7 @@ import { Hono } from "hono";
 import type {
   AgentConfig,
 } from "@duyet/oma-shared";
-import { notificationTargetsSchema, mcpServersSchema } from "@duyet/oma-api-types";
+import { notificationTargetsSchema, mcpServersSchema, agentHooksSchema } from "@duyet/oma-api-types";
 import {
   AgentNotFoundError,
   AgentVersionMismatchError,
@@ -53,6 +53,9 @@ function formatAgent(agent: AgentConfig) {
   if (agent.notify && agent.notify.length > 0) {
     oma.notify = agent.notify;
   }
+  if (agent.hooks && agent.hooks.length > 0) {
+    oma.hooks = agent.hooks;
+  }
 
   const callable = agent.callable_agents ?? [];
   // The `multiagent` coordinator shape only represents LOCAL sub-agents;
@@ -77,6 +80,7 @@ function formatAgent(agent: AgentConfig) {
     aux_model: _aux,
     appendable_prompts: _ap,
     notify: _notify,
+    hooks: _hooks,
     callable_agents: _ca,
     ...rest
   } = agent;
@@ -215,6 +219,7 @@ export function buildAgentRoutes(deps: AgentRoutesDeps) {
         aux_model?: string | { id: string; speed?: "standard" | "fast" };
         appendable_prompts?: string[];
         notify?: AgentConfig["notify"];
+        hooks?: AgentConfig["hooks"];
       };
     }>();
 
@@ -240,12 +245,20 @@ export function buildAgentRoutes(deps: AgentRoutesDeps) {
       aux_model: raw._oma?.aux_model,
       appendable_prompts: raw._oma?.appendable_prompts,
       notify: raw._oma?.notify,
+      hooks: raw._oma?.hooks,
     };
 
     if (raw._oma?.notify !== undefined) {
       const parsed = notificationTargetsSchema.safeParse(raw._oma.notify);
       if (!parsed.success) {
         return c.json({ error: "invalid notify config", details: parsed.error.issues }, 422);
+      }
+    }
+
+    if (raw._oma?.hooks !== undefined) {
+      const parsed = agentHooksSchema.safeParse(raw._oma.hooks);
+      if (!parsed.success) {
+        return c.json({ error: "invalid hooks config", details: parsed.error.issues }, 422);
       }
     }
 
@@ -287,6 +300,7 @@ export function buildAgentRoutes(deps: AgentRoutesDeps) {
         enable_general_subagent: (body as { enable_general_subagent?: boolean })
           .enable_general_subagent,
         notify: body.notify,
+        hooks: body.hooks,
         max_parallel_subagents: (body as { max_parallel_subagents?: number })
           .max_parallel_subagents,
       },
@@ -431,6 +445,7 @@ export function buildAgentRoutes(deps: AgentRoutesDeps) {
         aux_model?: string | { id: string; speed?: "standard" | "fast" } | null;
         appendable_prompts?: string[] | null;
         notify?: AgentConfig["notify"] | null;
+        hooks?: AgentConfig["hooks"] | null;
       };
     };
 
@@ -464,7 +479,15 @@ export function buildAgentRoutes(deps: AgentRoutesDeps) {
       aux_model: raw._oma?.aux_model,
       appendable_prompts: raw._oma?.appendable_prompts,
       notify: raw._oma?.notify,
+      hooks: raw._oma?.hooks,
     };
+
+    if (raw._oma?.hooks !== undefined && raw._oma.hooks !== null) {
+      const parsed = agentHooksSchema.safeParse(raw._oma.hooks);
+      if (!parsed.success) {
+        return c.json({ error: "invalid hooks config", details: parsed.error.issues }, 422);
+      }
+    }
 
     if (deps.validateAgentLimits) {
       const limitCheck = deps.validateAgentLimits(body);
@@ -505,6 +528,7 @@ export function buildAgentRoutes(deps: AgentRoutesDeps) {
           enable_general_subagent: (body as { enable_general_subagent?: boolean })
             .enable_general_subagent,
           notify: body.notify,
+          hooks: body.hooks,
           max_parallel_subagents: (body as { max_parallel_subagents?: number | null })
             .max_parallel_subagents,
         },

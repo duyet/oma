@@ -140,6 +140,7 @@ A **vault** is a secure credential store. Credentials in vaults are **never expo
 | `appendable_prompts` | string[] | No | Opt-in registry of prompt IDs to inject as additional system prompt segments at session/turn start. Empty/missing = no extra segments |
 | `enable_general_subagent` | boolean | No | Opt-in built-in delegation tool. When true, the harness exposes a `general_subagent(task)` tool that spawns a generic sub-agent thread inheriting this agent's model + sandbox — bypasses the `callable_agents` roster |
 | `notify` | array | No | Notification targets to post session-status updates to (issue/PR comments, chat messages) — see [Notify Targets](#notify-targets) |
+| `hooks` | array | No | Declarative pre/post-tool + lifecycle hooks that gate/redact tool calls via a signed outbound webhook — see [Agent Hooks](#agent-hooks) |
 
 See [`examples/`](examples/) for copy-paste-ready agent and environment
 configs (coding assistant, data analyst, research agent, plus full harness
@@ -1711,6 +1712,84 @@ The `notify` array is zod-validated at agent create/update in
 `packages/http-routes/src/agents/index.ts` via `notificationTargetsSchema`
 (`packages/api-types/src/notify-schema.ts`). An invalid target (e.g. a
 non-URL `webhook.url`, or an unknown `events` value) is rejected with HTTP 422.
+
+---
+
+## Agent Hooks
+
+`agent.hooks` is Claude-Code-style hook system (issue #76 Part B): declarative
+callbacks fired around the harness tool loop that let a creator **gate** a tool
+call, **redact** its output, or trigger a **side effect** — without running any
+custom code inside the Worker/DO. Each hook dispatches to a **signed outbound
+webhook** (same transport + HMAC-SHA256 signing as the `webhook` notify
+target), and the platform reads a small JSON decision back.
+
+Hooks are attached at the agent level and inherited by every session via its
+`agent_snapshot` — same scope model as `mcp_servers` / `notify`.
+
+```json
+{
+  "hooks": [
+    {
+      "event": "pre_tool",
+      "matcher": "bash",
+      "target": { "type": "webhook", "url": "https://hooks.example.com/gate", "secret_ref": "cred_hook_secret" },
+      "timeout_ms": 3000,
+      "on_error": "closed"
+    },
+    {
+      "event": "post_tool",
+      "matcher": "*",
+      "target": { "type": "webhook", "url": "https://hooks.example.com/redact", "secret_ref": "cred_hook_secret" }
+    }
+  ]
+}
+```
+
+| Field | Required | Notes |
+|---|---|---|
+| `event` | Yes | `pre_tool` \| `post_tool` \| `session_start` \| `session_idle`. Only `pre_tool`/`post_tool` wrap the tool loop today. |
+| `matcher` | No | Tool-name filter for pre/post-tool (`"*"` or unset = every tool). |
+| `target` | Yes | `{ "type": "webhook", "url", "secret_ref?" }`. `secret_ref` is a vault credential id — the HMAC secret is resolved at dispatch time, **never inlined**. (An `mcp_tool` target variant is reserved but not yet dispatched.) |
+| `timeout_ms` | No | Outbound call timeout (default 5000). |
+| `on_error` | No | Fail policy on timeout/error/malformed response: `"open"` (default) proceeds, `"closed"` denies the tool call. |
+
+### Semantics
+
+- **`pre_tool`** fires before a tool runs. The platform POSTs
+  `{ event: "pre_tool", tool_name, tool_input, session_id }` and reads back
+  `{ decision: "allow" | "deny" | "modify", tool_input?, reason? }`:
+  - `deny` — the tool never executes; the model sees `Tool call blocked by
+    hook: <reason>`.
+  - `modify` — `tool_input` replaces the arguments passed to the tool.
+  - `allow` (or any other response) — the call proceeds unchanged.
+- **`post_tool`** fires after a tool returns. The platform POSTs
+  `{ event: "post_tool", tool_name, tool_input, tool_result, session_id }` and
+  reads back `{ decision: "allow" | "modify", tool_result?, reason? }`; a
+  `modify` replaces the observed result (e.g. redacting secrets before the
+  model sees them).
+- **Signing** — the request body is HMAC-SHA256-signed with the vault-resolved
+  secret in `X-OMA-Signature: sha256=<hex>` (Web Crypto, identical on
+  Cloudflare and Node). `X-OMA-Hook` carries the event name. When no
+  `secret_ref` is set the delivery is unsigned.
+- **Timeout + fail policy** — every hook is time-bounded (`timeout_ms`). On
+  timeout, transport error, or a malformed response the `on_error` policy
+  applies: **fail-open** (default) so a dead hook endpoint never bricks a
+  session, or **fail-closed** to deny the tool call when the hook can't be
+  reached.
+- **Rate limiting** — outbound hook volume is capped **per tenant**
+  (`hook:<tenantId>` bucket, `packages/rate-limit`). On exhaustion the hook is
+  skipped and the fail policy applies (fail-open by default).
+- **Prompt-cache safety** — hooks only wrap a tool's `execute`; tool names,
+  descriptions, and input schemas are untouched, so Anthropic's cached prefix
+  is byte-identical whether or not hooks are configured.
+
+The dispatch wrapper is `wrapToolsWithHooks` / `runPreToolHooks` /
+`runPostToolHooks` (`apps/agent/src/harness/hooks.ts`), wired into `buildTools`
+(`apps/agent/src/harness/tools.ts`) via `env.hookDeps` from `SessionDO`. The
+`hooks` array is zod-validated at agent create/update via `agentHooksSchema`
+(`packages/api-types/src/hooks-schema.ts`); an invalid hook (non-URL webhook,
+unknown event/policy) is rejected with HTTP 422.
 
 ---
 

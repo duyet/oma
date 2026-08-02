@@ -110,6 +110,54 @@ export type NotificationTarget =
       events?: Array<"idle" | "error" | "terminated">;
     };
 
+// --- Agent hooks (issue #76 Part B) ---
+
+/**
+ * Lifecycle points at which an agent hook can fire. `pre_tool` / `post_tool`
+ * wrap the harness tool-execution loop (Claude-Code-style gate/redact/side
+ * effect); `session_start` / `session_idle` are lifecycle observers.
+ */
+export type HookEvent = "pre_tool" | "post_tool" | "session_start" | "session_idle";
+
+/**
+ * Where a hook dispatches to. Declarative only — a hook NEVER runs arbitrary
+ * code in the Worker/DO. Today only `webhook` is dispatched: it POSTs a signed
+ * envelope to a customer URL (same transport + HMAC-SHA256 signing as the
+ * `webhook` notify target). `secret_ref` references a vault credential id whose
+ * `static_bearer` token is the HMAC secret — never inlined on the config. An
+ * `mcp_tool` variant is reserved for dispatching to a configured MCP tool.
+ */
+export type HookTarget =
+  | { type: "webhook"; url: string; secret_ref?: string }
+  | { type: "mcp_tool"; server: string; tool: string };
+
+/**
+ * A single agent hook. Attached at the agent level (`agent.hooks`), inherited
+ * by every session via its `agent_snapshot` — same scope model as
+ * `mcp_servers` / `notify`.
+ *
+ * For `pre_tool` / `post_tool`, `matcher` filters by tool name ("*" or unset =
+ * every tool). A `pre_tool` hook may return `{ decision: "allow" | "deny" |
+ * "modify", tool_input?, reason? }`; a `post_tool` hook may return
+ * `{ decision: "allow" | "modify", tool_result?, reason? }`.
+ *
+ * `timeout_ms` bounds the outbound call (default 5000). `on_error` is the fail
+ * policy when the hook times out, errors, or returns a malformed response:
+ * `"open"` (default) allows the tool call / keeps the result unchanged;
+ * `"closed"` denies the tool call. So a dead hook endpoint never bricks a
+ * session unless the creator explicitly opts into fail-closed.
+ */
+export interface AgentHook {
+  event: HookEvent;
+  /** Tool-name filter for pre_tool/post_tool ("*" or unset = all tools). */
+  matcher?: string;
+  target: HookTarget;
+  /** Outbound call timeout in ms (default 5000). */
+  timeout_ms?: number;
+  /** Fail policy on timeout/error/malformed response (default "open"). */
+  on_error?: "open" | "closed";
+}
+
 export interface AgentConfig {
   id: string;
   name: string;
@@ -226,6 +274,12 @@ export interface AgentConfig {
    * no outbound notifications.
    */
   notify?: NotificationTarget[];
+  /**
+   * Declarative hooks fired around the harness tool loop / session lifecycle
+   * (issue #76 Part B). Each hook POSTs a signed envelope to a webhook and may
+   * gate/redact a tool call. Empty/missing = no hooks. See `AgentHook`.
+   */
+  hooks?: AgentHook[];
   version: number;
   created_at: string;
   updated_at?: string;

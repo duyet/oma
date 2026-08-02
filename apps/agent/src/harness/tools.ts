@@ -12,6 +12,7 @@ import { assertPublicUrl, SsrfBlockedError } from "./ssrf";
 // Concrete adapters (CF / Node / CDP / Disabled) live in the package and
 // dynamic-import their workerd / Node peers only at first launch().
 import type { BrowserHarness, BrowserBillingHook } from "@duyet/oma-browser-harness";
+import { wrapToolsWithHooks, type HookDispatchDeps } from "./hooks";
 
 // Source of truth for which tool names are part of the agent_toolset_20260401
 // built-in suite. Used by buildTools() below to decide which tool entries to
@@ -543,6 +544,11 @@ export async function buildTools(
       prompt: string;
       kind: "one_shot" | "cron";
     }>;
+    /** Agent-hook dispatch deps (issue #76 Part B). When present AND the agent
+     *  declares `pre_tool` / `post_tool` hooks, every tool's `execute` is
+     *  wrapped so a pre hook can gate/modify the call and a post hook can
+     *  redact the result. Absent ⇒ hooks are a no-op (tools unwrapped). */
+    hookDeps?: HookDispatchDeps;
   }
 ): Promise<Record<string, any>> {
   const enabled = getEnabledTools(agentConfig.tools);
@@ -1679,6 +1685,15 @@ export async function buildTools(
         }
       }),
     });
+  }
+
+  // Agent hooks (issue #76 Part B): wrap each tool's execute with pre/post-tool
+  // hook dispatch. Wrapping only replaces `execute` — names/descriptions/schemas
+  // are untouched, so the prompt-cache prefix is identical with or without
+  // hooks. Runs BEFORE the always_ask strip below so confirmed re-runs (which
+  // rebuild + call execute directly) still fire hooks. No-op when unconfigured.
+  if (env?.hookDeps && agentConfig.hooks && agentConfig.hooks.length > 0) {
+    Object.assign(tools, wrapToolsWithHooks(tools, agentConfig.hooks, env.hookDeps));
   }
 
   // Strip execute from always_ask tools so AI SDK returns them as pending calls
