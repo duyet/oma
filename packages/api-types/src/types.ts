@@ -447,6 +447,36 @@ export interface EnvironmentConfig {
        */
       worktree?: { branch: string };
     };
+    /**
+     * Remote-OMA binding — required when `sandbox_provider === "oma-remote"`,
+     * unused otherwise (cross-instance federation, issue #132 M1). Sessions
+     * using such an environment don't run locally at all: the whole turn is
+     * proxied to a session on the named registered instance, which owns the
+     * sandbox, the tools and its own vault. The origin never holds anything
+     * but the remote's API key (encrypted at rest, resolved per-turn), and
+     * mirrors the remote's `agent.*` events into its own event log.
+     */
+    remote?: {
+      /** Registered federation instance id (`fed_*`) on this tenant. */
+      instance_id: string;
+      /**
+       * Agent id **on the remote instance** to open the proxied session
+       * against.
+       *
+       * Position on issue #132's "agent identity across instances" open
+       * question: the remote must ALREADY have the agent; the origin does
+       * NOT push an agent snapshot at session-create. Pushing a snapshot
+       * would mean the origin's agent config silently dictates what runs
+       * inside the remote's trust boundary — the remote could not review,
+       * pin, or archive it, and its tool/skill/vault policy would be set by
+       * a config it never authored. Federation deliberately crosses exactly
+       * one secret (the remote's API key); it must not also cross
+       * executable configuration.
+       */
+      agent_id: string;
+      /** Optional environment id on the remote to run the session in. */
+      environment_id?: string;
+    };
     packages?: {
       pip?: string[];
       npm?: string[];

@@ -916,6 +916,35 @@ function createRemoteSandbox(
 }
 
 /**
+ * Placeholder executor for `sandbox_provider: "oma-remote"` environments
+ * (cross-instance federation, issue #132 M1). Those sessions have no local
+ * sandbox at all — the remote instance owns it — so every operation fails
+ * loudly with SandboxProviderUnavailableError, which surfaces through the
+ * normal turn-processing error path as a `session.error`. `destroy` is the
+ * one no-op: teardown of a sandbox that was never created must not error.
+ */
+export class FederatedNoSandbox implements SandboxExecutor {
+  #fail(op: string): never {
+    throw new SandboxProviderUnavailableError(
+      `sandbox.${op} is not available for an "oma-remote" (federated) environment — ` +
+        `this session executes on a remote OMA instance, which owns its sandbox.`,
+    );
+  }
+  async exec(): Promise<string> {
+    this.#fail("exec");
+  }
+  async readFile(): Promise<string> {
+    this.#fail("readFile");
+  }
+  async writeFile(): Promise<string> {
+    this.#fail("writeFile");
+  }
+  async destroy(): Promise<void> {
+    /* nothing was ever provisioned */
+  }
+}
+
+/**
  * Resolve a SandboxExecutor for a CF session from its environment's
  * `config.sandbox_provider` (falls back to legacy `config.type`).
  *
@@ -948,6 +977,15 @@ export function resolveCfSandbox(
       ? new BrowserVmRelaySandbox(env, sessionId, tenantId)
       : new BridgeRelaySandbox(env, sessionId, tenantId);
   }
+
+  // Federated ("oma-remote") environments intentionally have no local
+  // sandbox: OmaRemoteHarness proxies the whole turn to the remote instance,
+  // which owns the sandbox. SessionDO still *constructs* an executor eagerly
+  // for every session, so we hand back one that throws on any real
+  // operation rather than throwing here — construction must not break a
+  // perfectly valid federated session, but nothing may silently execute on
+  // this instance either.
+  if (resolution.kind === "federated") return new FederatedNoSandbox();
 
   throw new SandboxProviderUnavailableError(
     `provider "${resolution.type}" is not available on the Cloudflare deployment; ` +

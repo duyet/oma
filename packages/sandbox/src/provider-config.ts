@@ -235,6 +235,31 @@ export const SYSTEM_PROVIDERS: SystemProviderDescriptor[] = [
     capabilities: ["exec", "files"],
   },
   {
+    type: "oma-remote",
+    label: "Remote OMA instance (federation)",
+    description:
+      "The session does not run locally at all — it is proxied to a session on another registered OMA " +
+      "instance (issue #132 M1). The remote owns the sandbox, the tools, and the vault; this instance only " +
+      "forwards the user turn and mirrors the remote's events into its own event log. Requires the " +
+      "environment's config.remote.instance_id to name a registered `fed_*` instance.",
+    // Reachability is a per-tenant registry question (is `fed_*` registered
+    // and does its key decrypt?), not an env-var one — so no envKeys, and
+    // seedSystemProviders never emits it as a system provider.
+    envKeys: [],
+    factoryPath: "", // no SandboxExecutor exists — resolution is harness-level
+    cfCompatible: true,
+    // Not wired on the self-host Node runtime yet: main-node selects its
+    // harness from the agent's metadata rather than from the environment, and
+    // has no per-session slot to persist the bound remote session id. Marked
+    // node-incompatible so Node fails clearly (NodeIncompatibleProviderError)
+    // instead of silently degrading to SANDBOX_PROVIDER and running the agent
+    // locally — which is exactly the "wrong instance" outcome federation must
+    // never produce.
+    nodeCompatible: false,
+    // Zero local sandbox capabilities on purpose: nothing executes here.
+    capabilities: [],
+  },
+  {
     type: "browser-vm",
     label: "Browser VM (WASM)",
     description: "Agent sandbox running as a WASM VM (WebContainers / CheerpX) inside a user's browser tab. Relayed over the RuntimeRoom WebSocket — zero server-side sandbox compute.",
@@ -261,6 +286,7 @@ export type CfSandboxResolution =
   | { kind: "cloudflare" }
   | { kind: "remote"; type: string }
   | { kind: "bridge"; type: string }
+  | { kind: "federated"; type: string }
   | { kind: "unavailable"; type: string };
 
 /**
@@ -288,6 +314,13 @@ export function classifyCfSandboxProvider(
 ): CfSandboxResolution {
   const id = (providerId ?? "").trim().toLowerCase();
   if (!id || id === "cloud") return { kind: "cloudflare" };
+  // Federated environments have NO local sandbox — the whole session is
+  // proxied to another OMA instance by the "oma-remote" harness, which never
+  // touches SandboxExecutor. Anything that does ask for one here is a bug,
+  // and resolveCfSandbox turns this classification into a loud error rather
+  // than silently handing back a local CloudflareSandbox the agent would
+  // then run in on the WRONG instance.
+  if (id === "oma-remote") return { kind: "federated", type: "oma-remote" };
   // Local subprocess environments relay to a paired bridge runtime.
   if (id === "subprocess" || id === "local") return { kind: "bridge", type: "subprocess" };
   // Browser VM environments relay to a user's browser tab over the

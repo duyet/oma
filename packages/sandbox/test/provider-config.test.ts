@@ -82,6 +82,9 @@ describe("classifyCfSandboxProvider", () => {
       openshell: true,
       "dynamic-workers": true,
       "browser-vm": true,
+      // No local sandbox at all — the session is proxied to another OMA
+      // instance by OmaRemoteHarness (issue #132 M1).
+      "oma-remote": true,
     });
   });
 
@@ -96,9 +99,21 @@ describe("classifyCfSandboxProvider", () => {
     expect(classifyCfSandboxProvider("Dynamic-Workers")).toEqual({ kind: "remote", type: "dynamic-workers" });
   });
 
-  it("marks dynamic-workers as the only node-incompatible provider (CF-only primitive)", () => {
+  it("marks the CF-only providers as node-incompatible", () => {
     const nodeIncompatible = SYSTEM_PROVIDERS.filter((p) => p.nodeCompatible === false).map((p) => p.type);
-    expect(nodeIncompatible).toEqual(["dynamic-workers"]);
+    // dynamic-workers needs the Worker Loader binding; oma-remote's proxy
+    // harness is CF-wired only so far (issue #132 M1).
+    expect(nodeIncompatible).toEqual(["dynamic-workers", "oma-remote"]);
+  });
+
+  it("classifies oma-remote as federated (no local sandbox at all)", () => {
+    expect(classifyCfSandboxProvider("oma-remote")).toEqual({ kind: "federated", type: "oma-remote" });
+    expect(classifyCfSandboxProvider("OMA-Remote")).toEqual({ kind: "federated", type: "oma-remote" });
+  });
+
+  it("never seeds oma-remote as a system provider (registry-resolved, not env-var-resolved)", () => {
+    const seeded = seedSystemProviders({ BOXRUN_URL: "https://boxrun.example" }).map((p) => p.id);
+    expect(seeded).not.toContain("oma-remote");
   });
 });
 

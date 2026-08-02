@@ -15,12 +15,17 @@ import { DefaultHarness } from "./harness/default-loop";
 import { AcpProxyHarness } from "./harness/acp-proxy-loop";
 import { LongRunningHarness } from "./harness/long-running-loop";
 import { PoolsideHarness } from "./harness/poolside-loop";
+import { OmaRemoteHarness } from "./harness/oma-remote-loop";
 registerHarness("default", () => new DefaultHarness());
 registerHarness("acp-proxy", () => new AcpProxyHarness());
 registerHarness("long-running", () => new LongRunningHarness());
 // Plain-fetch OpenAI-compatible provider (poolside.ai) — no node builtins,
 // so unlike claude-agent-sdk it registers on the CF worker too.
 registerHarness("poolside", () => new PoolsideHarness());
+// Cross-instance federation (issue #132 M1): the whole session is proxied to
+// a session on another OMA instance. Selected by an environment with
+// `sandbox_provider: "oma-remote"`, never by name.
+registerHarness("oma-remote", () => new OmaRemoteHarness());
 
 // --- Export DO classes (required by wrangler) ---
 export { SessionDO } from "./runtime/session-do";
