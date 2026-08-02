@@ -25,7 +25,23 @@ export type SessionNotifyStatus =
   | "error"
   | "schedule_ok"
   | "schedule_error"
-  | "schedule_skipped";
+  | "schedule_skipped"
+  | "sandbox_provision_failed"
+  | "sandbox_unhealthy";
+
+/**
+ * Sandbox lifecycle outcomes an operator can subscribe to (issue #80). The
+ * set is deliberately tiny: only the two states that need a human. Routine
+ * churn — per-turn warmups, operator-initiated pause/resume, snapshot
+ * retries — is excluded, because an integration that fires on those gets
+ * muted and then the real failures are missed too.
+ */
+export type SandboxNotifyKind = "provision_failed" | "unhealthy";
+
+export const SANDBOX_NOTIFY_STATUS: Record<SandboxNotifyKind, SessionNotifyStatus> = {
+  provision_failed: "sandbox_provision_failed",
+  unhealthy: "sandbox_unhealthy",
+};
 
 export interface SessionNotifyEvent {
   sessionId: SessionId;
@@ -45,6 +61,15 @@ export interface SessionNotifyEvent {
   /** Agent schedule id (`sch_*`) this notification is about, for the
    *  `schedule_*` statuses. Absent for ordinary session notifications. */
   scheduleId?: string;
+  /** Tenant that owns the session — an operator watching a shared cluster
+   *  needs it to know whose sandbox broke. Set for the `sandbox_*` statuses. */
+  tenantId?: string;
+  /** Sandbox provider id the session resolved to (`cloud`, `k8s-remote`,
+   *  `boxrun`, …). Set for the `sandbox_*` statuses. */
+  sandboxProvider?: string;
+  /** Where in the sandbox lifecycle the failure surfaced (e.g. `warmup`,
+   *  `provider_unavailable`). Set for the `sandbox_*` statuses. */
+  sandboxPhase?: string;
 }
 
 /**
@@ -64,6 +89,12 @@ export interface WebhookEnvelope {
    *  so the pre-existing field order — and therefore every existing
    *  receiver's signature check — is unchanged. */
   schedule_id?: string;
+  /** Present only for the `sandbox_*` statuses (issue #80). Appended last,
+   *  same reason as `schedule_id` — existing receivers' signing bytes are
+   *  untouched for every pre-existing status. */
+  tenant_id?: string;
+  sandbox_provider?: string;
+  sandbox_phase?: string;
 }
 
 const STATUS_LABEL: Record<SessionNotifyStatus, string> = {
@@ -73,6 +104,8 @@ const STATUS_LABEL: Record<SessionNotifyStatus, string> = {
   schedule_ok: "scheduled run succeeded",
   schedule_error: "scheduled run failed",
   schedule_skipped: "scheduled run was skipped (concurrency cap reached)",
+  sandbox_provision_failed: "could not provision its sandbox",
+  sandbox_unhealthy: "sandbox became unhealthy and was recreated",
 };
 
 /**
@@ -83,6 +116,7 @@ const STATUS_LABEL: Record<SessionNotifyStatus, string> = {
 export function summarizeSessionNotifyEvent(event: SessionNotifyEvent): string {
   const who = event.agentName ? `Agent "${event.agentName}"` : "The agent";
   let line = `${who} session ${event.sessionId} ${STATUS_LABEL[event.status]}.`;
+  if (event.sandboxProvider) line += ` [provider=${event.sandboxProvider}${event.sandboxPhase ? ` phase=${event.sandboxPhase}` : ""}]`;
   if (event.detail) line += ` ${event.detail}`;
   if (event.sessionUrl) line += ` (${event.sessionUrl})`;
   return line;

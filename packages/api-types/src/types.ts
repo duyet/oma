@@ -52,7 +52,24 @@ export type ToolConfig = ToolsetConfig | CustomToolConfig;
  * id to a live token is the caller's responsibility — these target shapes
  * only describe *where* to post, not how the token is fetched.
  */
-export type NotificationTarget =
+/**
+ * Sandbox lifecycle events a target opts into (issue #80). Absent or empty
+ * means the target receives NO sandbox notifications — sandbox alerting is
+ * strictly opt-in so enabling it never makes an existing session-status
+ * target chattier. Applied before dispatch, like a schedule's `notify.on`.
+ */
+export type SandboxNotifyEventFilter = "provision_failed" | "unhealthy";
+
+/** Distributes the shared opt-in field across every variant so `type`
+ *  narrowing and `Extract<NotificationTarget, { type: "webhook" }>` keep
+ *  working unchanged. */
+type WithSandboxEvents<T> = T extends unknown
+  ? T & { sandbox_events?: SandboxNotifyEventFilter[] }
+  : never;
+
+export type NotificationTarget = WithSandboxEvents<NotificationTargetBase>;
+
+type NotificationTargetBase =
   | {
       type: "github_comment";
       credential_id: string;
