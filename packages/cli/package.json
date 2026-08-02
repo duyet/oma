@@ -1,6 +1,6 @@
 {
   "name": "@getoma/cli",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "CLI for the oma managed agents platform",
   "type": "module",
   "bin": {
