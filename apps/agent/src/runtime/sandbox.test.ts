@@ -11,6 +11,8 @@ import type { Env } from "@duyet/oma-shared";
 import { BoxRunSandbox } from "@duyet/oma-sandbox/adapters/boxrun";
 import { KubernetesRemoteSandbox } from "@duyet/oma-sandbox/adapters/kubernetes-remote";
 import { K8sBridgeSandbox } from "@duyet/oma-sandbox/adapters/k8s-bridge";
+import { DynamicWorkerSandbox } from "@duyet/oma-sandbox/adapters/dynamic-workers";
+import type { WorkerLoader } from "@duyet/oma-shared";
 import {
   CloudflareSandbox,
   createSandbox,
@@ -125,6 +127,19 @@ describe("resolveCfSandbox", () => {
       expect((err as Error).message).toContain("litebox");
       expect((err as Error).message).toContain("Cloudflare deployment");
     }
+  });
+
+  it("resolves dynamic-workers to a DynamicWorkerSandbox when the LOADER binding is present", () => {
+    const loader = { get: () => ({ getEntrypoint: () => ({ fetch: async () => new Response() }) }) } as unknown as WorkerLoader;
+    const env = { ...baseEnv, LOADER: loader } as unknown as Env;
+    const sandbox = resolveCfSandbox(env, "sess_1", { sandbox_provider: "dynamic-workers" });
+    expect(sandbox).toBeInstanceOf(DynamicWorkerSandbox);
+  });
+
+  it("throws SandboxProviderUnavailableError for dynamic-workers without the LOADER binding", () => {
+    expect(() =>
+      resolveCfSandbox(baseEnv, "sess_1", { sandbox_provider: "dynamic-workers" }),
+    ).toThrow(SandboxProviderUnavailableError);
   });
 
   it.each(["subprocess", "local"])(

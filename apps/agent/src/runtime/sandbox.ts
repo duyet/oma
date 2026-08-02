@@ -21,6 +21,11 @@ import { BoxRunSandbox } from "@duyet/oma-sandbox/adapters/boxrun";
 // lazy `import(factoryPath)` can't bundle here (see the comment above).
 import { KubernetesRemoteSandbox } from "@duyet/oma-sandbox/adapters/kubernetes-remote";
 import { K8sBridgeSandbox } from "@duyet/oma-sandbox/adapters/k8s-bridge";
+// JS-eval-only executor backed by Cloudflare Dynamic Workers (Worker Loader
+// binding). Pure — takes the WorkerLoader interface from @duyet/oma-shared,
+// no Node builtins — so esbuild bundles it into the single-file Worker like
+// BoxRunSandbox. Availability is the env.LOADER *binding*, gated below.
+import { DynamicWorkerSandbox } from "@duyet/oma-sandbox/adapters/dynamic-workers";
 // Relay-backed executor for local (subprocess) environments on the CF
 // deployment — forwards sandbox ops to a user-paired `oma bridge daemon`
 // over the RuntimeRoom DO. Imported lazily-at-construction (not at module
@@ -848,6 +853,22 @@ function createRemoteSandbox(
         image: e.SANDBOX_IMAGE,
         policy,
       });
+    }
+    case "dynamic-workers": {
+      // Cloudflare Dynamic Workers — a JS-eval isolate, gated by the LOADER
+      // *binding* (declared via `worker_loaders` in wrangler.jsonc), not an
+      // env var/secret. Absent binding ⇒ fail clearly, same discipline as
+      // boxrun's missing-BOXRUN_URL path (a Node self-host deployment never
+      // reaches here — it fails in resolveEnvProvider's nodeCompatible guard).
+      const loader = (env as unknown as { LOADER?: import("@duyet/oma-shared").WorkerLoader }).LOADER;
+      if (!loader) {
+        throw new SandboxProviderUnavailableError(
+          `provider "dynamic-workers" requires the Worker Loader binding (LOADER) to be declared ` +
+            `in the agent worker's wrangler.jsonc ("worker_loaders": [{ "binding": "LOADER" }]) — ` +
+            `it is absent on this Cloudflare deployment. Dynamic Workers is Cloudflare-only.`,
+        );
+      }
+      return new DynamicWorkerSandbox({ loader, sessionId });
     }
     default:
       // daytona / e2b — cfCompatible in provider-config.ts's classification

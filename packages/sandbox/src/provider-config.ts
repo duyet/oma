@@ -85,6 +85,17 @@ export interface SystemProviderDescriptor {
    * bundle for a single-file Worker script, so it's Node-only in practice).
    */
   cfCompatible: boolean;
+  /**
+   * Whether this adapter can run on the self-host **Node** runtime. Defaults
+   * to `true` (every historical provider) — the field only needs to be set
+   * to `false` for the rare CF-only primitive that depends on a Worker
+   * binding with no Node equivalent (e.g. `dynamic-workers`, which needs the
+   * Worker Loader binding). A `false` value means `apps/main-node`'s
+   * `resolveEnvProvider` fails clearly when the provider is explicitly
+   * selected, rather than silently degrading to SANDBOX_PROVIDER — the exact
+   * inverse of how `cfCompatible: false` fails on the Cloudflare deployment.
+   */
+  nodeCompatible?: boolean;
 }
 
 export const SYSTEM_PROVIDERS: SystemProviderDescriptor[] = [
@@ -168,6 +179,22 @@ export const SYSTEM_PROVIDERS: SystemProviderDescriptor[] = [
     factoryPath: "", // CF path is direct, not via adapters
     cfCompatible: true,
     capabilities: ["exec", "files", "pause_resume", "cf_compatible"],
+  },
+  {
+    type: "dynamic-workers",
+    label: "Cloudflare Dynamic Workers",
+    description:
+      "Ephemeral V8 isolate per exec via the Worker Loader binding. JS/Wasm eval only — " +
+      "no shell, no persistent filesystem, no package installs. Millisecond cold start. " +
+      "Cloudflare-only (needs the LOADER binding); not available on the self-host Node runtime.",
+    // Needs the LOADER *binding*, not an env var — availability is gated in
+    // resolveCfSandbox (env.LOADER present?), not by seedSystemProviders.
+    envKeys: [],
+    factoryPath: "", // CF-native (resolved directly in resolveCfSandbox), like "cloud"
+    cfCompatible: true,
+    nodeCompatible: false,
+    // Deliberately NOT "files"/"pause_resume" — a JS-eval isolate has neither.
+    capabilities: ["exec", "cf_compatible"],
   },
   {
     type: "docker-compose",
