@@ -137,9 +137,6 @@ const PUBLISHING_HUB: HubConfig = {
   tabs: [
     { label: "My Bots", path: "/my-bots" },
     { label: "Integrations", path: "/integrations" },
-    { label: "Linear", path: "/integrations/linear" },
-    { label: "GitHub", path: "/integrations/github" },
-    { label: "Slack", path: "/integrations/slack" },
   ],
 };
 
