@@ -76,8 +76,8 @@ export async function runDaemon(): Promise<void> {
   const profile = currentProfile();
   const profileTag = profile ? `  [profile=${profile}]` : "";
   printBanner(`daemon — runtime ${creds.runtimeId.slice(0, 8)}… → ${creds.serverUrl}${profileTag}`, PKG_VERSION);
-  log.warn("local sandbox ops use THIS machine's own `gh`/git credentials");
-  log.hint("not OMA-managed or scoped to a session's vaults — only pair machines you trust the agent to authenticate as.");
+  log.warn("local sandbox ops run as YOU on this machine, with your filesystem and tools");
+  log.hint("git over HTTPS is routed through the daemon's local credential proxy, so a session's vault credentials are injected; everything else (gh, curl https://…, any tool opening its own TLS) still falls back to this machine's own credentials. Only pair machines you trust the agent to act as.");
 
   // Warm the merged ACP registry cache (official @cdn.agentclientprotocol.com
   // + OMA overlay) once at startup. All downstream sync resolveKnownAgent /
@@ -387,6 +387,9 @@ export async function runDaemon(): Promise<void> {
             return;
           case "sandbox.op":
             void sandboxes.handle(msg as never);
+            return;
+          case "sandbox.outbound.credential.result":
+            sandboxes.handleCredentialResult(msg as never);
             return;
           default:
             process.stderr.write(`! unhandled server message: ${msg.type ?? "?"}\n`);

@@ -220,17 +220,69 @@ setup`…"* — it never silently substitutes a different sandbox.
 `GET /v1/hosting_types` reports `subprocess` as `healthy` once any runtime is
 online, `not_configured` otherwise.
 
-**Limitations of the relay path (vs. self-host `LocalSubprocessSandbox`):**
-there is no outbound vault-credential MITM proxy on your machine, so the
-agent's outbound HTTP from the local box is **not** vault-injected; and
-memory-store / session-outputs mounts aren't wired. Standard file tools,
-`bash`, git, etc. all work against the per-session workdir. Because the box
-runs on your own hardware with zero isolation, only pair machines you trust
-the agent to run on. **In particular:** `gh`/git calls silently use
-**your machine's own** `gh auth login` / git credentials instead of an
-OMA-managed, session-scoped vault credential — there is no per-session
-credential swap on this path, so every session on a paired machine
-authenticates as you.
+### Outbound vault credentials on the relay path
+
+The daemon starts a **local credential proxy** (`127.0.0.1`, ephemeral port,
+one per relayed session — `packages/cli/src/bridge/lib/credential-proxy.ts`).
+On each request it asks the platform which vault credential matches the target
+host, over the *same* relay socket the sandbox ops use:
+
+```
+daemon → relay   { type: "sandbox.outbound.credential", request_id, session_id, host }
+relay  → daemon  { type: "sandbox.outbound.credential.result", request_id, ok, token? }
+```
+
+The relay answers from `MAIN_MCP.lookupOutboundCredential` — the identical
+resolver behind the cloud sandbox's outbound proxy — so the URL→credential
+match rule lives in exactly one place. The token is held in the daemon's
+memory only (60s TTL cache): it is never written to disk, never placed in the
+relayed subprocess's environment, never written into a git config, and never
+logged. The subprocess is only ever handed a loopback URL.
+
+**What IS injected**
+
+| Traffic | How |
+|---|---|
+| plain `http://` from any tool | `HTTP_PROXY` / `http_proxy` point at the local proxy |
+| `git` over **HTTPS** | a per-session `GIT_CONFIG_GLOBAL` adds `url."http://127.0.0.1:<port>/__oma_outbound/https/<host>/".insteadOf = https://<host>/`, so git speaks plaintext to loopback and the proxy re-originates the TLS leg upstream |
+
+The generated git config contains no secret, and `include`s your real
+`~/.gitconfig` so your identity, aliases, and helpers still apply. It is only
+written for hosts that actually have a matching vault credential — if none
+does, git is left completely untouched and your own credential helper keeps
+working exactly as before.
+
+**What is NOT injected**
+
+Anything that opens its own TLS session: `gh`, `curl https://…`, language HTTP
+clients, and anything honoring `HTTPS_PROXY` (the proxy answers `CONNECT` with
+405 rather than pretending). Intercepting those requires terminating TLS with a
+locally generated CA that the user must trust machine-wide; OMA deliberately
+does **not** generate or install one. Those calls reach upstream un-injected
+and therefore still use **your machine's own** credentials (e.g. `gh auth
+login`) — so only pair machines whose ambient credentials you're fine with the
+agent using.
+
+**Failure policy: fail open.** If the platform can't answer a lookup (relay
+down, deployment without the `MAIN_MCP` binding), the request is forwarded
+**without** injection — the pre-#318 behavior — and a clear warning is written
+to the daemon log (`[oma credential-proxy] WARNING: … forwarding WITHOUT
+injection`). Failing closed would turn a transient platform blip into a broken
+agent turn while adding no protection, since the un-injected path is not a new
+exposure.
+
+The proxy listens on loopback only, so nothing off-box can reach it. It does
+not authenticate its callers, so any process running as the same user that
+finds the port can have a request injected. That isn't a new exposure on the
+personal machine this path targets — such a process can already use the
+machine's own `gh`/git credentials — but the proxy is not a boundary between
+local processes, and shouldn't be relied on as one.
+
+**Other limitations of the relay path** (vs. self-host
+`LocalSubprocessSandbox`): memory-store / session-outputs mounts aren't wired.
+Standard file tools, `bash`, git, etc. all work against the per-session
+workdir. Because the box runs on your own hardware with zero isolation, only
+pair machines you trust the agent to run on.
 
 ## Cross-sandbox sub-agents
 

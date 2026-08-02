@@ -301,8 +301,8 @@ async function warnLocalCredentialFallback(): Promise<void> {
   // so warning there would be actively misleading.
   const sel = resolveSandboxBackend(process.env, await readSettings());
   if (sel.kind !== "subprocess") return;
-  log.warn("local sandbox ops use THIS machine's own `gh`/git credentials");
-  log.hint("not OMA-managed or scoped to a session's vaults — only pair machines you trust the agent to authenticate as.");
+  log.warn("`gh` and other HTTPS tools use THIS machine's own credentials");
+  log.hint("git over HTTPS and plain-http calls go through the daemon's local credential proxy, so a session's vault credentials ARE injected. Tools that open their own TLS session (gh, curl https://…) can't be intercepted without a machine-wide CA, which OMA does not install — those still authenticate as you. Only pair machines you trust the agent to act as.");
 }
 
 /** Slow-path tail: install the system service if supported, otherwise
