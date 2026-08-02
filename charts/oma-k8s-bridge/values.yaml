@@ -28,6 +28,53 @@ config:
   sandboxImage: ghcr.io/duyet/oma-runtime-base:latest
   runtimeClass: ""
   serviceAccount: ""
+  # Which BridgeBackend apps/k8s-bridge runs (see
+  # apps/k8s-bridge/src/backend.ts:resolveBridgeBackendKind):
+  #   k8s       — Kubernetes Sandbox CRD backend (default; existing behavior).
+  #   openshell — fronts an NVIDIA OpenShell gateway over gRPC (see the
+  #               `openshell:` block below). Owns no pods, so RBAC is
+  #               skipped entirely for this backend.
+  #   auto      — let the process itself auto-detect from whether
+  #               OPENSHELL_GATEWAY_ENDPOINT is set (matches the bridge's
+  #               own BRIDGE_BACKEND=auto behavior). Prefer an explicit
+  #               value in a chart install.
+  backend: k8s
+
+# Only consulted when config.backend is "openshell" (or "auto" with an
+# endpoint set). Maps directly onto the OPENSHELL_* env vars
+# `OpenShellSandbox` / `resolveOpenShellTlsFromEnv` read
+# (packages/sandbox/src/adapters/openshell.ts).
+openshell:
+  # host:port (or DNS name) of the OpenShell gateway, e.g.
+  # openshell.openshell.svc.cluster.local:50051. Required when
+  # config.backend is openshell — the chart refuses to render an empty
+  # OPENSHELL_GATEWAY_ENDPOINT, which would otherwise trip the bridge's
+  # own auto-detect.
+  endpoint: ""
+  # Sandbox container image OpenShell should launch. Empty = gateway default.
+  image: ""
+  tls:
+    enabled: false
+    # Name of a Secret carrying the CA used to verify the gateway. Required
+    # when tls.enabled.
+    caSecret: ""
+    # Secret carrying the client cert/key — setting this is what turns on
+    # mTLS. Leave empty for plain server-auth TLS (CA only); the chart then
+    # emits no client cert/key paths, since a CA-only Secret has nothing to
+    # mount there. May name the same Secret as caSecret if it carries all
+    # three keys (ca.crt + tls.crt + tls.key).
+    certSecret: ""
+    # Keys inside the secret(s) above.
+    caKey: ca.crt
+    certKey: tls.crt
+    keyKey: tls.key
+  token:
+    # Name of a pre-existing Secret carrying the OPENSHELL_TOKEN bearer
+    # credential for the gateway. Never set a real token in values.yaml —
+    # same out-of-band pattern as secret.existingSecret above. Empty =
+    # no OPENSHELL_TOKEN is set (gateway allows unauthenticated access).
+    existingSecret: ""
+    tokenKey: OPENSHELL_TOKEN
 
 service:
   type: ClusterIP

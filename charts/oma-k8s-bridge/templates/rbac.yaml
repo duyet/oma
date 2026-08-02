@@ -1,5 +1,13 @@
-{{- if .Values.rbac.create }}
+{{- if and .Values.rbac.create (ne .Values.config.backend "openshell") }}
 {{- /*
+The OpenShell backend (config.backend: openshell) never touches a
+Kubernetes Sandbox CR, a pod, or a node — it fronts an external gRPC
+gateway instead (see apps/k8s-bridge/src/openshell-manager.ts). None of
+the grants below apply to it, so RBAC is skipped entirely for that
+backend rather than shipping unused pod create/delete permissions that
+would contradict this file's own "every verb traces to a real call site"
+rule.
+
 RBAC is split by scope, not bundled into one ClusterRole:
 
   1. A namespace-scoped Role, bound in the sandbox namespace
