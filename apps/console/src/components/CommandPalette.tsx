@@ -20,15 +20,13 @@ import {
   DashboardIcon,
   EnvIcon,
   FilesIcon,
-  GitHubIcon,
-  LinearIcon,
   MemoryIcon,
   ModelCardsIcon,
   SessionsIcon,
   SkillsIcon,
-  SlackIcon,
   VaultIcon,
 } from "./icons";
+import { BlocksIcon } from "lucide-react";
 
 interface NavCommand {
   label: string;
@@ -57,9 +55,7 @@ const COMMANDS: NavCommand[] = [
   { label: "Model Cards",        to: "/model-cards",               group: "Configuration",  icon: ModelCardsIcon },
   { label: "API Keys",           to: "/api-keys",                  group: "Configuration",  icon: ApiKeysIcon, aliases: "tokens" },
   { label: "Sandbox Runtime",     to: "/runtimes",                  group: "Configuration",  icon: RuntimesIcon },
-  { label: "Linear",             to: "/integrations/linear",       group: "Integrations",   icon: LinearIcon },
-  { label: "GitHub",             to: "/integrations/github",       group: "Integrations",   icon: GitHubIcon },
-  { label: "Slack",              to: "/integrations/slack",        group: "Integrations",   icon: SlackIcon },
+  { label: "Integrations",       to: "/integrations",                group: "Integrations",   icon: BlocksIcon },
 ];
 
 /**

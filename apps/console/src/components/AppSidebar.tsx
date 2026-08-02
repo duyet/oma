@@ -40,14 +40,11 @@ import {
   DashboardIcon,
   EnvIcon,
   FilesIcon,
-  GitHubIcon,
-  LinearIcon,
   MemoryIcon,
   ModelCardsIcon,
   RuntimesIcon,
   SessionsIcon,
   SkillsIcon,
-  SlackIcon,
   VaultIcon,
 } from "./icons";
 import { consolePlugins } from "../plugins/registry";
@@ -100,8 +97,10 @@ interface NavItem {
   end?: boolean;
   badge?: BadgeKey;
   /** When set, renders a connection-status badge for the given integration
-   *  provider (dot + count when at least one installation exists). */
-  integrationStatus?: "linear" | "github" | "slack";
+   *  provider (dot + count when at least one installation exists). "total"
+   *  renders the aggregate count across every provider as a single badge
+   *  on a hub-level item. */
+  integrationStatus?: "linear" | "github" | "slack" | "total";
   /** Sub-destinations nested under this item, revealed via a chevron toggle
    *  next to the (still directly clickable) parent link. */
   children?: NavItem[];
@@ -116,6 +115,9 @@ interface IntegrationStatusMap {
   linear?: number;
   github?: number;
   slack?: number;
+  /** Sum of all provider installation counts — shown on the collapsed
+   *  "Integrations" hub item instead of per-provider rows. */
+  total?: number;
 }
 
 /* ── Navigation — single source of truth for sidebar items ──
@@ -125,8 +127,11 @@ interface IntegrationStatusMap {
  * `main.tsx` (SESSIONS_HUB / RESOURCES_HUB / PUBLISHING_HUB /
  * SETTINGS_HUB) — an item deep-links straight to a tab, and the hub page
  * still renders its own tab strip, so the two navigations agree instead
- * of describing different structures. Agents keeps a chevron sub-item
- * (New Agent) for its fast-path create flow. */
+ * of describing different structures. The Integrations hub (which also
+ * serves the PUBLISHING_HUB tab strip in main.tsx) is filed under
+ * Resources here with an aggregate count badge rather than a per-provider
+ * sub-menu, collapsing three provider rows into one. Agents keeps a
+ * chevron sub-item (New Agent) for its fast-path create flow. */
 const navGroups: NavGroup[] = [
   {
     label: "Workspace",
@@ -152,15 +157,13 @@ const navGroups: NavGroup[] = [
       { to: "/skills", label: "Skills", icon: SkillsIcon, badge: "skills" },
       { to: "/files", label: "Files", icon: FilesIcon },
       { to: "/model-cards", label: "Model Cards", icon: ModelCardsIcon, badge: "model_cards" },
-    ],
-  },
-  {
-    label: "Integrations",
-    items: [
-      { to: "/integrations", label: "All Integrations", icon: BlocksIcon, end: true },
-      { to: "/integrations/linear", label: "Linear", icon: LinearIcon, integrationStatus: "linear" },
-      { to: "/integrations/github", label: "GitHub", icon: GitHubIcon, integrationStatus: "github" },
-      { to: "/integrations/slack", label: "Slack", icon: SlackIcon, integrationStatus: "slack" },
+      {
+        to: "/integrations",
+        label: "Integrations",
+        icon: BlocksIcon,
+        end: true,
+        integrationStatus: "total",
+      },
     ],
   },
   {
@@ -210,17 +213,18 @@ export function AppSidebar() {
     { staleTime: 60_000 },
   );
   const integrationStatus: IntegrationStatusMap = useMemo(
-    () => ({
-      ...(Array.isArray(linearInstalls) && linearInstalls.length
-        ? { linear: linearInstalls.length }
-        : {}),
-      ...(Array.isArray(githubInstalls) && githubInstalls.length
-        ? { github: githubInstalls.length }
-        : {}),
-      ...(Array.isArray(slackInstalls) && slackInstalls.length
-        ? { slack: slackInstalls.length }
-        : {}),
-    }),
+    () => {
+      const linear = Array.isArray(linearInstalls) && linearInstalls.length ? linearInstalls.length : 0;
+      const github = Array.isArray(githubInstalls) && githubInstalls.length ? githubInstalls.length : 0;
+      const slack = Array.isArray(slackInstalls) && slackInstalls.length ? slackInstalls.length : 0;
+      const total = linear + github + slack;
+      return {
+        ...(linear ? { linear } : {}),
+        ...(github ? { github } : {}),
+        ...(slack ? { slack } : {}),
+        ...(total ? { total } : {}),
+      };
+    },
     [linearInstalls, githubInstalls, slackInstalls],
   );
 
@@ -231,7 +235,7 @@ export function AppSidebar() {
   // (or is zero — a "0" badge is visual noise, the empty page says it
   // better). Runtimes is the one status badge: a dot that goes green only
   // when at least one machine is actually attached.
-  const renderBadge = (key: BadgeKey | undefined, integrationStatus?: "linear" | "github" | "slack") => {
+  const renderBadge = (key: BadgeKey | undefined, providerKey?: "linear" | "github" | "slack" | "total") => {
     if (key === "runtimes") {
       if (runtimes === undefined || runtimes.length === 0) return null;
       return (
@@ -251,8 +255,8 @@ export function AppSidebar() {
       if (!count) return null;
       return <SidebarMenuBadge className="text-fg-subtle">{count}</SidebarMenuBadge>;
     }
-    if (integrationStatus) {
-      const count = integrationStatus[integrationStatus];
+    if (providerKey) {
+      const count = integrationStatus[providerKey];
       if (count == null) return null;
       return (
         <SidebarMenuBadge className="gap-1 text-success">
