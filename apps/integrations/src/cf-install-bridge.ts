@@ -77,6 +77,22 @@ export class CfInstallBridge implements InstallBridge {
       return { publicationId: result.publicationId, returnUrl: result.returnUrl };
     }
 
+    if (args.provider === "github" && args.extra?.linkExisting) {
+      // Reconcile callback — the `code` is a USER-auth code, not an install
+      // callback. Links every managed-App installation the connecting user
+      // administers that has no row yet.
+      const r = await providers.github.completeManagedInstallLink({
+        code: args.code ?? "",
+        state: args.state ?? "",
+      });
+      return {
+        publicationId: "",
+        returnUrl: r.returnUrl,
+        login: r.logins[0] ?? null,
+        linked: r.linked,
+      };
+    }
+
     if (args.provider === "github" && args.extra?.workspaceManaged) {
       // Managed workspace install callback — no publication; records only a
       // github_installations row + credential vault. Provider is already

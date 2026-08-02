@@ -8,12 +8,15 @@
     ".": "./src/index.ts",
     "./harness/default-loop": "./src/harness/default-loop.ts",
     "./harness/claude-agent-sdk-loop": "./src/harness/claude-agent-sdk-loop.ts",
+    "./harness/claude-agent-sdk/model": "./src/harness/claude-agent-sdk/model.ts",
     "./harness/interface": "./src/harness/interface.ts",
+    "./harness/poolside-loop": "./src/harness/poolside-loop.ts",
     "./harness/tools": "./src/harness/tools.ts",
     "./harness/registry": "./src/harness/registry.ts",
     "./harness/provider": "./src/harness/provider.ts",
     "./harness/platform-guidance": "./src/harness/platform-guidance.ts",
-    "./runtime/history": "./src/runtime/history.ts"
+    "./runtime/history": "./src/runtime/history.ts",
+    "./runtime/notify-dispatch": "./src/runtime/notify-dispatch.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.69",
@@ -32,6 +35,7 @@
     "@duyet/oma-credentials-store": "workspace:*",
     "@duyet/oma-environments-store": "workspace:*",
     "@duyet/oma-event-log": "workspace:*",
+    "@duyet/oma-email": "workspace:*",
     "@duyet/oma-files-store": "workspace:*",
     "@duyet/oma-github": "workspace:*",
     "@duyet/oma-integrations-adapters-cf": "workspace:*",

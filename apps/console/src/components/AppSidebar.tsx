@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import { useMemo } from "react";
 import { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import {
@@ -8,6 +9,7 @@ import {
   CircleCheckBigIcon,
   ChartColumnIcon,
   UsersIcon,
+  BlocksIcon,
 } from "lucide-react";
 
 import {
@@ -19,6 +21,7 @@ import {
   SidebarHeader,
   SidebarMenu,
   SidebarMenuAction,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
@@ -48,12 +51,57 @@ import {
   VaultIcon,
 } from "./icons";
 import { consolePlugins } from "../plugins/registry";
+import { useApiQuery } from "../lib/useApiQuery";
+import { cn } from "@/lib/utils";
+import { IntegrationsApi } from "../integrations/api/client";
+import type {
+  LinearInstallation,
+  GitHubInstallation,
+  SlackInstallation,
+} from "../integrations/api/types";
+
+/* ── Sidebar counters ──
+ * Two cheap reads back every badge: `/v1/stats` (one covering-index
+ * COUNT(*) per resource — never a "fetch every row and take .length")
+ * and `/v1/runtimes`, which is the only thing carrying liveness rather
+ * than a count. Both are ordinary `useApiQuery` calls, so the pages that
+ * already read them (Dashboard, RuntimesList) share the same cache entry
+ * instead of issuing a second fetch. */
+interface SidebarStats {
+  agents: number;
+  sessions: number;
+  environments: number;
+  vaults: number;
+  skills: number;
+  model_cards: number;
+  api_keys: number;
+}
+
+interface SidebarRuntime {
+  status: "online" | "offline";
+}
+
+/** Which counter feeds an item's badge. Keys are stable ids rather than
+ *  the route path so a route rename doesn't silently drop a badge. */
+type BadgeKey =
+  | "agents"
+  | "sessions"
+  | "environments"
+  | "vaults"
+  | "skills"
+  | "model_cards"
+  | "api_keys"
+  | "runtimes";
 
 interface NavItem {
   to: string;
   label: string;
   icon: ComponentType<{ className?: string }>;
   end?: boolean;
+  badge?: BadgeKey;
+  /** When set, renders a connection-status badge for the given integration
+   *  provider (dot + count when at least one installation exists). */
+  integrationStatus?: "linear" | "github" | "slack";
   /** Sub-destinations nested under this item, revealed via a chevron toggle
    *  next to the (still directly clickable) parent link. */
   children?: NavItem[];
@@ -62,6 +110,12 @@ interface NavItem {
 interface NavGroup {
   label: string;
   items: NavItem[];
+}
+
+interface IntegrationStatusMap {
+  linear?: number;
+  github?: number;
+  slack?: number;
 }
 
 /* ── Navigation — single source of truth for sidebar items ──
@@ -77,13 +131,14 @@ const navGroups: NavGroup[] = [
   {
     label: "Workspace",
     items: [
-      { to: "/", label: "Dashboard", icon: DashboardIcon, end: true },
+      { to: "/", label: "Overview", icon: DashboardIcon, end: true },
       {
         to: "/agents",
         label: "Agents",
         icon: AgentIcon,
+        badge: "agents",
       },
-      { to: "/sessions", label: "Sessions", icon: SessionsIcon },
+      { to: "/sessions", label: "Sessions", icon: SessionsIcon, badge: "sessions" },
       { to: "/kanban", label: "Kanban Board", icon: SquareKanbanIcon },
       { to: "/usage", label: "Usage", icon: ChartColumnIcon },
     ],
@@ -91,20 +146,21 @@ const navGroups: NavGroup[] = [
   {
     label: "Resources",
     items: [
-      { to: "/environments", label: "Environments", icon: EnvIcon },
-      { to: "/vaults", label: "Credential Vaults", icon: VaultIcon },
+      { to: "/environments", label: "Environments", icon: EnvIcon, badge: "environments" },
+      { to: "/vaults", label: "Credential Vaults", icon: VaultIcon, badge: "vaults" },
       { to: "/memory", label: "Memory Stores", icon: MemoryIcon },
-      { to: "/skills", label: "Skills", icon: SkillsIcon },
+      { to: "/skills", label: "Skills", icon: SkillsIcon, badge: "skills" },
       { to: "/files", label: "Files", icon: FilesIcon },
-      { to: "/model-cards", label: "Model Cards", icon: ModelCardsIcon },
+      { to: "/model-cards", label: "Model Cards", icon: ModelCardsIcon, badge: "model_cards" },
     ],
   },
   {
     label: "Integrations",
     items: [
-      { to: "/integrations/linear", label: "Linear", icon: LinearIcon },
-      { to: "/integrations/github", label: "GitHub", icon: GitHubIcon },
-      { to: "/integrations/slack", label: "Slack", icon: SlackIcon },
+      { to: "/integrations", label: "All Integrations", icon: BlocksIcon, end: true },
+      { to: "/integrations/linear", label: "Linear", icon: LinearIcon, integrationStatus: "linear" },
+      { to: "/integrations/github", label: "GitHub", icon: GitHubIcon, integrationStatus: "github" },
+      { to: "/integrations/slack", label: "Slack", icon: SlackIcon, integrationStatus: "slack" },
     ],
   },
   {
@@ -112,8 +168,8 @@ const navGroups: NavGroup[] = [
     items: [
       { to: "/members", label: "Members", icon: UsersIcon },
       { to: "/evals", label: "Eval Runs", icon: CircleCheckBigIcon },
-      { to: "/api-keys", label: "API Keys", icon: ApiKeysIcon },
-      { to: "/runtimes", label: "Sandbox Runtime", icon: RuntimesIcon },
+      { to: "/api-keys", label: "API Keys", icon: ApiKeysIcon, badge: "api_keys" },
+      { to: "/runtimes", label: "Sandbox Runtime", icon: RuntimesIcon, badge: "runtimes" },
     ],
   },
 ];
@@ -121,6 +177,92 @@ const navGroups: NavGroup[] = [
 export function AppSidebar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
+
+  // Counts are decoration, never a gate: a failed/absent fetch just leaves
+  // the badges off rather than erroring or toasting in the chrome. Runtimes
+  // poll a little faster because their badge carries liveness, not a count
+  // that only moves when the user creates something.
+  const { data: stats } = useApiQuery<SidebarStats>("/v1/stats", undefined, {
+    staleTime: 60_000,
+  });
+  const { data: runtimesRes } = useApiQuery<{ runtimes: SidebarRuntime[] }>(
+    "/v1/runtimes",
+    undefined,
+    { staleTime: 30_000, refetchInterval: 60_000 },
+  );
+
+  // Integration installation counts for sidebar badges. Failed/absent fetches
+  // leave the badges off; never errors the sidebar.
+  const integrationsApi = useMemo(() => new IntegrationsApi(), []);
+  const { data: linearInstalls } = useApiQuery<LinearInstallation[]>(
+    "/v1/integrations/linear/installations",
+    undefined,
+    { staleTime: 60_000 },
+  );
+  const { data: githubInstalls } = useApiQuery<GitHubInstallation[]>(
+    "/v1/integrations/github/installations",
+    undefined,
+    { staleTime: 60_000 },
+  );
+  const { data: slackInstalls } = useApiQuery<SlackInstallation[]>(
+    "/v1/integrations/slack/installations",
+    undefined,
+    { staleTime: 60_000 },
+  );
+  const integrationStatus: IntegrationStatusMap = useMemo(
+    () => ({
+      ...(Array.isArray(linearInstalls) && linearInstalls.length
+        ? { linear: linearInstalls.length }
+        : {}),
+      ...(Array.isArray(githubInstalls) && githubInstalls.length
+        ? { github: githubInstalls.length }
+        : {}),
+      ...(Array.isArray(slackInstalls) && slackInstalls.length
+        ? { slack: slackInstalls.length }
+        : {}),
+    }),
+    [linearInstalls, githubInstalls, slackInstalls],
+  );
+
+  const runtimes = runtimesRes?.runtimes;
+  const runtimesOnline = runtimes?.filter((r) => r.status === "online").length;
+
+  // Renders the badge for an item, or null when the counter hasn't loaded
+  // (or is zero — a "0" badge is visual noise, the empty page says it
+  // better). Runtimes is the one status badge: a dot that goes green only
+  // when at least one machine is actually attached.
+  const renderBadge = (key: BadgeKey | undefined, integrationStatus?: "linear" | "github" | "slack") => {
+    if (key === "runtimes") {
+      if (runtimes === undefined || runtimes.length === 0) return null;
+      return (
+        <SidebarMenuBadge className="gap-1 text-fg-subtle">
+          <span
+            className={cn(
+              "size-1.5 rounded-full",
+              runtimesOnline ? "bg-success" : "bg-fg-subtle",
+            )}
+          />
+          {runtimesOnline}/{runtimes.length}
+        </SidebarMenuBadge>
+      );
+    }
+    if (key && stats) {
+      const count = stats?.[key];
+      if (!count) return null;
+      return <SidebarMenuBadge className="text-fg-subtle">{count}</SidebarMenuBadge>;
+    }
+    if (integrationStatus) {
+      const count = integrationStatus[integrationStatus];
+      if (count == null) return null;
+      return (
+        <SidebarMenuBadge className="gap-1 text-success">
+          <span className="size-1.5 rounded-full bg-success" />
+          {count}
+        </SidebarMenuBadge>
+      );
+    }
+    return null;
+  };
 
   const matchesPrefix = (base: string) =>
     pathname === base || pathname.startsWith(`${base}/`);
@@ -185,7 +327,15 @@ export function AppSidebar() {
     );
 
     if (!hasChildren) {
-      return <SidebarMenuItem key={item.to}>{button}</SidebarMenuItem>;
+      // The badge is absolutely positioned in the item's right slot — the
+      // same slot the chevron would take — so items with children skip it
+      // rather than stacking two things on top of each other.
+      return (
+        <SidebarMenuItem key={item.to}>
+          {button}
+          {(item.badge || item.integrationStatus) ? renderBadge(item.badge, item.integrationStatus) : null}
+        </SidebarMenuItem>
+      );
     }
 
     const isOpen = openItems[item.to] ?? false;

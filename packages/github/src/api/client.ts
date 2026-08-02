@@ -44,6 +44,8 @@ export interface InstallationDetail {
   permissions: Record<string, string>;
   events: ReadonlyArray<string>;
   htmlUrl: string;
+  /** ISO-8601 timestamp GitHub recorded the install at, when returned. */
+  createdAt: string | null;
 }
 
 export class GitHubApiClient {
@@ -122,7 +124,58 @@ export class GitHubApiClient {
       permissions: (parsed.permissions as Record<string, string>) ?? {},
       events: (parsed.events as string[]) ?? [],
       htmlUrl: (parsed.html_url as string) ?? "",
+      createdAt: (parsed.created_at as string) ?? null,
     };
+  }
+
+  /**
+   * `GET /user/installations` — installations of THIS App that the
+   * authenticated user can see (i.e. owns, or admins the org for). Auth: a
+   * user-to-server token, NOT the App JWT.
+   *
+   * This is the attribution-safe half of the reconcile flow: the App JWT's
+   * `GET /app/installations` returns every tenant's installs with no way to
+   * tell whose they are, so linking off that would let one tenant claim
+   * another's org.
+   */
+  async listUserInstallations(userToken: string): Promise<InstallationDetail[]> {
+    const res = await this.http.fetch({
+      method: "GET",
+      url: `${GITHUB_API}/user/installations?per_page=100`,
+      headers: this.installationHeaders(userToken),
+    });
+    if (res.status < 200 || res.status >= 300) {
+      throw new GitHubApiError(
+        `GET /user/installations: HTTP ${res.status} ${res.body.slice(0, 200)}`,
+        res.status,
+      );
+    }
+    const parsed = JSON.parse(res.body) as {
+      installations?: Array<Record<string, unknown>>;
+    };
+    return (parsed.installations ?? []).map((row) => {
+      const account = (row.account ?? {}) as {
+        id?: number;
+        login?: string;
+        type?: string;
+        avatar_url?: string;
+      };
+      return {
+        id: row.id as number,
+        account: {
+          id: account.id ?? 0,
+          login: account.login ?? "",
+          type: account.type === "Organization" ? "Organization" : "User",
+          avatarUrl: account.avatar_url ?? null,
+        },
+        repositorySelection: (row.repository_selection as "all" | "selected") ?? "selected",
+        appId: (row.app_id as number) ?? 0,
+        permissions: (row.permissions as Record<string, string>) ?? {},
+        events: (row.events as string[]) ?? [],
+        htmlUrl: (row.html_url as string) ?? "",
+        createdAt: (row.created_at as string) ?? null,
+      } satisfies InstallationDetail;
+    });
   }
 
   /**

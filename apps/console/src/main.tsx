@@ -136,6 +136,7 @@ const PUBLISHING_HUB: HubConfig = {
   description: "Publish agents as bots and connect them to your tools.",
   tabs: [
     { label: "My Bots", path: "/my-bots" },
+    { label: "Integrations", path: "/integrations" },
     { label: "Linear", path: "/integrations/linear" },
     { label: "GitHub", path: "/integrations/github" },
     { label: "Slack", path: "/integrations/slack" },
@@ -154,7 +155,7 @@ const SETTINGS_HUB: HubConfig = {
 };
 
 const protectedRoutes: RouteObject[] = [
-  { index: true, element: <Dashboard />, handle: { crumb: "Dashboard" } },
+  { index: true, element: <Dashboard />, handle: { crumb: "Overview" } },
   // Nested route groups so detail pages publish a proper hierarchy
   // through `useMatches()` — `/agents/:id` resolves to
   // [agents-parent, agents/:id], so AppBreadcrumb renders

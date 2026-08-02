@@ -25,8 +25,10 @@
  * exactly as documented there.
  *
  * ── Per-turn flow ──────────────────────────────────────────────────────
- *   1. Resolve the model id + Anthropic credentials from `ctx.env`
- *      (mirrors `resolveModelId` in flue-loop.ts).
+ *   1. Resolve the model id + Anthropic credentials — per-agent from
+ *      `ctx.env.modelProvider` (a model card resolved by the self-host
+ *      Node shell, issue #316) when present, else from the global
+ *      `ctx.env` vars. See ./claude-agent-sdk/model.ts.
  *   2. Build an in-process MCP server that bridges `ctx.runtime.sandbox`
  *      into bash/read/write/edit/glob/grep tool calls the Claude Agent SDK
  *      can invoke (see `./claude-agent-sdk/sandbox-tools.ts` — mirrors
@@ -54,7 +56,7 @@ import type { SessionEvent, UserMessageEvent } from "@duyet/oma-shared";
 import { generateEventId, log, logError } from "@duyet/oma-shared";
 import { buildOmaSandboxMcpServer } from "./claude-agent-sdk/sandbox-tools";
 import { ClaudeAgentSdkEventTranslator } from "./claude-agent-sdk/translate";
-import { resolveClaudeSdkAuth } from "./claude-agent-sdk/auth";
+import { resolveClaudeSdkProvider } from "./claude-agent-sdk/model";
 
 /** Base scratch directory the CLI subprocess is spawned from. Only its own
  *  process bookkeeping (and the disabled built-in tools, which never run —
@@ -92,19 +94,20 @@ export class ClaudeAgentSdkHarness implements HarnessInterface {
       return;
     }
 
-    const auth = resolveClaudeSdkAuth(ctx.env);
-    if (!auth) {
-      this.#emitError(
-        runtime,
-        "ClaudeAgentSdkHarness needs env.ANTHROPIC_API_KEY or env.CLAUDE_CODE_OAUTH_TOKEN",
-      );
+    // Per-agent model + provider (issue #316). `ctx.env.modelProvider` is
+    // populated by the self-host Node shell from the agent's model card;
+    // when absent this collapses to the original global-env behavior.
+    const provider = resolveClaudeSdkProvider({
+      binding: ctx.env.modelProvider,
+      env: ctx.env,
+      agentModel: ctx.agent.model,
+    });
+    if (!provider.ok) {
+      this.#emitError(runtime, provider.error);
       return;
     }
-    const model = resolveModelId(ctx);
-    if (!model) {
-      this.#emitError(runtime, "ClaudeAgentSdkHarness could not resolve a model id from the agent config");
-      return;
-    }
+    const model = provider.model;
+    const providerEnv = provider.env;
 
     const sessionSeed = ctx.session_id || ctx.userMessage.id || generateEventId();
     const sessionUuid = deriveSessionUuid(sessionSeed);
@@ -164,8 +167,7 @@ export class ClaudeAgentSdkHarness implements HarnessInterface {
           ...(hasPriorTurn ? { resume: sessionUuid } : { sessionId: sessionUuid }),
           env: {
             ...process.env,
-            ...auth,
-            ...(ctx.env.ANTHROPIC_BASE_URL ? { ANTHROPIC_BASE_URL: ctx.env.ANTHROPIC_BASE_URL } : {}),
+            ...providerEnv,
             CLAUDE_AGENT_SDK_CLIENT_APP: "open-managed-agents/1.0",
           },
           stderr: (data: string) => {
@@ -228,14 +230,6 @@ function extractUserText(msg: UserMessageEvent): string {
     .map((c) => c.text as string)
     .join("\n")
     .trim();
-}
-
-/** Resolve the upstream model id from the agent config / env. */
-function resolveModelId(ctx: HarnessContext): string {
-  const envModel = ctx.env.ANTHROPIC_MODEL;
-  if (envModel) return envModel;
-  const m = ctx.agent.model;
-  return typeof m === "string" ? m : (m?.id ?? "");
 }
 
 /**

@@ -95,6 +95,7 @@ import {
 import type { SessionNotifyEvent, SessionNotifyStatus } from "@duyet/oma-integrations-core";
 import { WorkerHttpClient } from "@duyet/oma-integrations-adapters-cf";
 import { dispatchSessionNotifications } from "./notify-dispatch";
+import { senderFromCfBinding, type CfSendEmailBinding } from "@duyet/oma-email/adapters/cf";
 import { meterTurnDebit } from "./turn-metering";
 import { resolveSessionMetadata, walletFromMetadata } from "./resolve-session-metadata";
 import { generateSessionTitle, shouldGenerateSessionTitle } from "./session-title";
@@ -1827,6 +1828,59 @@ export class SessionDO extends DurableObject<Env> {
       return new Response("ok");
     }
 
+    // POST /runtime-settings — change the session-level model /
+    // reasoning-effort override mid-session. Writes the same two state
+    // slots the create-time `model` + `reasoning_effort` init params seed,
+    // so `resolveModelForTurn` picks the new value up on the next turn
+    // with no other plumbing. Deliberately NOT an event: the override is
+    // resolution input, never conversation history (appending it would
+    // change the cached prompt prefix for no reason).
+    //
+    // Refused (409) while a turn is in flight — swapping providers under a
+    // running harness would split a single turn across two models and
+    // invalidate the prompt cache mid-stream.
+    if (request.method === "POST" && url.pathname === "/runtime-settings") {
+      if (this.deriveStatus() === "running") {
+        return new Response(
+          JSON.stringify({
+            type: "error",
+            error: {
+              type: "invalid_request_error",
+              message: "Cannot change model while a turn is in flight",
+            },
+          }),
+          { status: 409, headers: { "content-type": "application/json" } },
+        );
+      }
+      let body: { model?: string | null; reasoning_effort?: string | null } = {};
+      try {
+        body = (await request.json()) as typeof body;
+      } catch {
+        return new Response(
+          JSON.stringify({
+            type: "error",
+            error: { type: "invalid_request_error", message: "Invalid JSON body" },
+          }),
+          { status: 400, headers: { "content-type": "application/json" } },
+        );
+      }
+      const next = { ...this.state };
+      // `null` clears the override (falls back to the agent's own model);
+      // omitting the key leaves the current value untouched.
+      if (body.model !== undefined) {
+        next.model_override = body.model === null ? undefined : body.model;
+      }
+      if (body.reasoning_effort !== undefined) {
+        next.reasoning_effort_override =
+          body.reasoning_effort === null ? undefined : body.reasoning_effort;
+      }
+      this.setState(next);
+      return Response.json({
+        model: next.model_override ?? null,
+        reasoning_effort: next.reasoning_effort_override ?? null,
+      });
+    }
+
     // POST /pause — snapshot + destroy the sandbox container to save cost
     // while keeping the session resumable. Refuses while a turn is
     // in-flight (mid-turn pause would race the harness's own sandbox
@@ -3174,6 +3228,14 @@ export class SessionDO extends DurableObject<Env> {
           break;
         } catch (err: any) {
           lastError = err?.message || String(err);
+          // Relay providers (browser-vm tab, subprocess bridge daemon) throw
+          // this on the first op when no runtime is online. Retrying can't
+          // conjure one up, and falling through would spend ~33s of backoff
+          // only to bury the actionable "open your sandbox tab" / "run bridge
+          // setup" text under a generic "container failed to start". Fail
+          // fast with the original typed error — callers (runSubAgent) also
+          // branch on `instanceof SandboxProviderUnavailableError`.
+          if (err instanceof SandboxProviderUnavailableError) throw err;
           if (attempt === NUKE_AFTER_ATTEMPT && !destroyed) {
             console.warn(
               `[warmup] container unhealthy after ${attempt + 1} probes ` +
@@ -3717,6 +3779,10 @@ export class SessionDO extends DurableObject<Env> {
         resolveCredentialToken: (id) => this.resolveCredentialToken(id),
         resolveSecret: (ref) => this.resolveWebhookSecret(ref),
         resolveTelegramBotToken: () => (this.env as { TELEGRAM_BOT_TOKEN?: string }).TELEGRAM_BOT_TOKEN ?? null,
+        // `email` targets (issue #317) ride the CF Email Workers binding.
+        // Unbound (deploys without email configured) ⇒ null sender ⇒ the
+        // target is skipped with a warning, never a throw.
+        resolveEmailSender: () => senderFromCfBinding(this.env.SEND_EMAIL as CfSendEmailBinding | undefined),
         tenantId: this.state.tenant_id,
         webhookRateLimitGate: this.webhookRateLimitGate(),
         httpClient: new WorkerHttpClient(),
@@ -4871,7 +4937,16 @@ export class SessionDO extends DurableObject<Env> {
           // dedicated container's identity is stable for the lifetime of
           // this single delegate call (no retries reuse it — a fresh
           // runSubAgent call always mints a fresh threadId).
-          subSandbox = createSandbox(this.env, `${this.state.session_id}:sub-${threadId}`, childEnv.config);
+          // tenant_id is load-bearing for relay providers (browser-vm /
+          // subprocess): it's how the relay finds the tenant's online
+          // runtime. Omitting it made every dedicated sub-agent sandbox on
+          // those providers fail with a misleading "no runtime connected".
+          subSandbox = createSandbox(
+            this.env,
+            `${this.state.session_id}:sub-${threadId}`,
+            childEnv.config,
+            this.state.tenant_id,
+          );
           dedicatedChildSandbox = true;
           subAgentEnv = childEnv;
           // Bare createSandbox() skips everything getOrCreateSandbox's lazy-

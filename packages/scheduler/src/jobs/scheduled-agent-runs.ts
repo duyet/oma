@@ -21,6 +21,8 @@
 // in MAIN_DB) and a launcher over the internal session-create path.
 
 import { getLogger } from "@duyet/oma-observability";
+import type { ScheduleNotifyInput } from "@duyet/oma-api-types";
+import { DEFAULT_SCHEDULE_NOTIFY_ON } from "@duyet/oma-api-types";
 
 const log = getLogger("scheduler.scheduled-agent-runs");
 
@@ -38,6 +40,9 @@ export interface ClaimedSchedule {
    *  Enforced by the tick against {@link ScheduledRunLauncher.countActive}
    *  before calling {@link ScheduledRunLauncher.launch} (issue #165). */
   maxSessions: number;
+  /** Per-schedule alert config, parsed from the `notify` JSON column
+   *  (issue #313). Null/absent = this schedule raises no alerts. */
+  notify?: ScheduleNotifyInput | null;
 }
 
 export interface RecordRunInput {
@@ -67,8 +72,9 @@ export interface ScheduledRunsStore {
     computeNextRun: (cron: string, timezone: string, fromMs: number) => number | null,
   ): Promise<ClaimedSchedule[]>;
 
-  /** Persist the outcome of a fired schedule (last_run_* columns). */
-  recordRun(id: string, input: RecordRunInput): Promise<void>;
+  /** Persist the outcome of a fired schedule (last_run_* columns) and, best
+   *  effort, append a durable history row (issue #312, WP3). */
+  recordRun(schedule: ClaimedSchedule, input: RecordRunInput): Promise<void>;
 }
 
 export interface ScheduledRunLauncher {
@@ -95,6 +101,18 @@ export interface ScheduledAgentRunsTickDeps {
   resolveStore: () => Promise<ScheduledRunsStore | null>;
   /** Per-tick launcher resolver. Same swallow semantics as `resolveStore`. */
   resolveLauncher: () => Promise<ScheduledRunLauncher | null>;
+  /**
+   * Called after every `recordRun` — ok, error, and skipped_concurrency
+   * alike — so a host can raise per-schedule alerts (issue #313). Only
+   * invoked for schedules that carry a `notify` config whose `on` filter
+   * (default `["error", "skipped_concurrency"]`) includes the outcome, so
+   * the common no-alert schedule costs nothing.
+   *
+   * Purely observational: the call is try/caught and a rejection is logged
+   * and swallowed — a notification failure must never fail a firing or
+   * abort the batch.
+   */
+  onRunRecorded?: (schedule: ClaimedSchedule, run: RecordRunInput) => void | Promise<void>;
   /** Cap schedules fired per tick. Default 50. */
   limit?: number;
   /** Injectable clock for tests. Defaults to Date.now. */
@@ -144,9 +162,38 @@ export function computeNextRunWith(
   }
 }
 
+/**
+ * Should this firing outcome raise a per-schedule alert? True only when the
+ * schedule carries at least one notify target AND the outcome is listed in
+ * `notify.on` (defaulting to {@link DEFAULT_SCHEDULE_NOTIFY_ON} when absent).
+ */
+export function shouldNotifyRun(schedule: ClaimedSchedule, status: RecordRunInput["status"]): boolean {
+  const notify = schedule.notify;
+  if (!notify || !notify.targets || notify.targets.length === 0) return false;
+  const on = notify.on && notify.on.length > 0 ? notify.on : DEFAULT_SCHEDULE_NOTIFY_ON;
+  return (on as readonly string[]).includes(status);
+}
+
 export function scheduledAgentRunsTick(deps: ScheduledAgentRunsTickDeps): () => Promise<void> {
   const limit = deps.limit ?? 50;
   const now = deps.now ?? (() => Date.now());
+
+  // Fire the host's alert hook for one recorded run. Never throws: alerts
+  // are observational, so a bad target or a dead upstream can't affect the
+  // firing that produced them.
+  const notifyRun = async (schedule: ClaimedSchedule, run: RecordRunInput): Promise<void> => {
+    if (!deps.onRunRecorded) return;
+    if (!shouldNotifyRun(schedule, run.status)) return;
+    try {
+      await deps.onRunRecorded(schedule, run);
+    } catch (err) {
+      log.warn(
+        { err, schedule_id: schedule.id, status: run.status, op: "scheduled-runs.notify_failed" },
+        "per-schedule notification failed",
+      );
+    }
+  };
+
   return async () => {
     const startedAt = now();
     let store: ScheduledRunsStore | null;
@@ -199,12 +246,16 @@ export function scheduledAgentRunsTick(deps: ScheduledAgentRunsTickDeps): () => 
             },
             "schedule fire skipped: concurrency cap reached",
           );
-          await store.recordRun(schedule.id, { status: "skipped_concurrency", ranAtMs });
+          const skippedRun: RecordRunInput = { status: "skipped_concurrency", ranAtMs };
+          await store.recordRun(schedule, skippedRun);
+          await notifyRun(schedule, skippedRun);
           continue;
         }
 
         const { sessionId } = await launcher.launch(schedule);
-        await store.recordRun(schedule.id, { status: "ok", sessionId, ranAtMs });
+        const okRun: RecordRunInput = { status: "ok", sessionId, ranAtMs };
+        await store.recordRun(schedule, okRun);
+        await notifyRun(schedule, okRun);
         ok += 1;
       } catch (err) {
         failed += 1;
@@ -214,14 +265,18 @@ export function scheduledAgentRunsTick(deps: ScheduledAgentRunsTickDeps): () => 
           "schedule fire failed",
         );
         // Best-effort — recording the failure must not itself abort the batch.
+        const errorRun: RecordRunInput = { status: "error", error: message, ranAtMs };
         try {
-          await store.recordRun(schedule.id, { status: "error", error: message, ranAtMs });
+          await store.recordRun(schedule, errorRun);
         } catch (recordErr) {
           log.warn(
             { err: recordErr, schedule_id: schedule.id, op: "scheduled-runs.record_failed" },
             "recordRun failed",
           );
         }
+        // Alert even when the history write failed — the operator cares
+        // about the failed firing, not about our bookkeeping.
+        await notifyRun(schedule, errorRun);
       }
     }
 

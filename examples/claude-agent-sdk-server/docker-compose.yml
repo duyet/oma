@@ -1,0 +1,72 @@
+# Self-host OMA preconfigured for the `claude-agent-sdk` harness.
+#
+# A trimmed sibling of the repo-root docker-compose.yml: same server image,
+# same ./data persistence, but with DEFAULT_HARNESS + the Claude Code CLI
+# auth env wired up. Run it from the REPO ROOT so the build context resolves:
+#
+#   docker compose -f examples/claude-agent-sdk-server/docker-compose.yml up --build
+#   curl localhost:8787/health
+#
+# For the outbound vault credential-injection sidecar (oma-vault), use the
+# repo-root compose file instead and just add the two env vars marked
+# "harness selection" below to its oma-server service.
+
+services:
+  oma-server:
+    build:
+      # Repo root — the base image needs the whole pnpm workspace.
+      context: ../..
+      dockerfile: apps/main-node/Dockerfile
+    image: oma/main-node:dev
+    container_name: oma-claude-agent-sdk-server
+    ports:
+      - "${OMA_PORT:-8787}:8787"
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      # --- harness selection -------------------------------------------
+      # Every agent without an explicit `metadata.harness` runs through
+      # ClaudeAgentSdkHarness (Claude Code's CLI as a subprocess).
+      DEFAULT_HARNESS: claude-agent-sdk
+
+      # --- model auth ---------------------------------------------------
+      # Supply ONE of these. ANTHROPIC_API_KEY is the normal path; the OAuth
+      # token (minted with `claude setup-token`) is the CI/CD alternative for
+      # non-interactive deploys and is only consulted when the key is unset.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+      # Anthropic-compatible gateway (e.g. AnyRouter) — see README.
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
+
+      # --- sandbox provider ---------------------------------------------
+      # `subprocess` (alias `local`) runs tool calls as child processes of the
+      # server, rooted at SANDBOX_WORKDIR. It is the default on self-host Node
+      # and the only provider that needs no extra infrastructure. Swap for
+      # docker-compose / k8s / boxrun via an environment record's
+      # config.sandbox_provider — see AGENTS.md.
+      SANDBOX_PROVIDER: ${SANDBOX_PROVIDER:-subprocess}
+      SANDBOX_WORKDIR: /app/data/sandboxes
+
+      # --- storage ------------------------------------------------------
+      DATABASE_PATH: /app/data/oma.db
+      AUTH_DATABASE_PATH: /app/data/auth.db
+      MEMORY_BLOB_DIR: /app/data/memory-blobs
+      SESSION_OUTPUTS_DIR: /app/data/session-outputs
+
+      # --- auth ---------------------------------------------------------
+      # AUTH_DISABLED=1 makes every request tenant "default" — fine for a
+      # local single-user trial, never for a shared deploy.
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+      PLATFORM_ROOT_SECRET: ${PLATFORM_ROOT_SECRET:-}
+      AUTH_DISABLED: ${AUTH_DISABLED:-1}
+      API_KEY: ${API_KEY:-}
+    volumes:
+      - ../../data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

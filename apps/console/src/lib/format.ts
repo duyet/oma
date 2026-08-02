@@ -29,6 +29,37 @@ export function formatSandboxTime(seconds: number | undefined): string {
 }
 
 /**
+ * Format a session's wall-clock span (seconds) at session scale:
+ * `8s`, `2m 14s`, `1h 12m`, `3d 4h`. Distinct from `formatDuration`, which
+ * targets sub-second tool spans and degrades to `125m30s` for anything
+ * over an hour — unusable for a sessions table where multi-hour and
+ * multi-day rows are normal.
+ *
+ * `null`/`undefined`/negative render as an em-dash: a session that has
+ * never reported a duration is unknown, not zero.  A real sub-second
+ * span floors to `0s` rather than "—" so "ran, and was fast" stays
+ * distinguishable from "no data".
+ */
+export function formatSessionDuration(seconds: number | null | undefined): string {
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return "—";
+  const s = Math.floor(seconds);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) {
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return rem > 0 ? `${m}m ${rem}s` : `${m}m`;
+  }
+  if (s < 86_400) {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  }
+  const d = Math.floor(s / 86_400);
+  const h = Math.floor((s % 86_400) / 3600);
+  return h > 0 ? `${d}d ${h}h` : `${d}d`;
+}
+
+/**
  * Humanize a count into a compact label: `999`, `7.5K`, `105K`, `1.2M`.
  * Values under 1000 render verbatim; the `.0` fraction is dropped so
  * `105000` reads `105K` rather than `105.0K`. `null`/`undefined` render

@@ -10,7 +10,9 @@
  * `schtasks /query /tn dev.oma.bridge` (Windows), or look at the logs.
  */
 
-import { readCreds } from "../lib/config.js";
+import { readCreds, readSettings } from "../lib/config.js";
+import { resolveSandboxBackend } from "../lib/sandbox-backend.js";
+import { probeOpenShellGateway, resolveOpenShellTlsFromEnv } from "../lib/openshell-client.js";
 import { paths, currentProfile } from "../lib/platform.js";
 import { detectServiceKind } from "../lib/service-manager.js";
 import { printBanner, log, c, sym } from "../lib/style.js";
@@ -72,6 +74,21 @@ export async function runStatus(): Promise<void> {
       : "no heartbeat yet";
     const up = `up ${formatAge(Date.now() - dstate.startedAt).replace(/ ago$/, "")}`;
     row("daemon", `${conn}  ${c.dim(`pid ${dstate.pid} · ${hb} · ${up}`)}`);
+  }
+
+  // Which substrate executes relayed sandbox ops. This is the main way a user
+  // confirms isolation is really on, so for openshell we also probe the
+  // gateway — "configured" and "reachable" are different claims.
+  const backend = resolveSandboxBackend(process.env, await readSettings());
+  if (backend.kind === "openshell") {
+    const up = await probeOpenShellGateway(backend.endpoint!, resolveOpenShellTlsFromEnv(process.env));
+    row(
+      "sandbox",
+      `${c.green("openshell")} ${c.dim(backend.endpoint!)}  ` +
+        `${up ? c.green("reachable") : c.yellow("unreachable")}  ${c.dim(backend.reason)}`,
+    );
+  } else {
+    row("sandbox", `subprocess ${c.dim("(host filesystem, no isolation) · " + backend.reason)}`);
   }
 
   // Local activity counters (best-effort, observability-only). "today"
