@@ -143,6 +143,29 @@ describe("GET /github/managed/callback", () => {
     expect(calls[0].extra).toMatchObject({ workspaceManaged: true });
   });
 
+  it("redirects a failed workspace connect back to the console origin when no returnUrl was supplied", async () => {
+    const { bridge, calls } = stubBridge(async () => {
+      throw new Error("installation token: HTTP 404");
+    });
+    const state = stateFor({
+      kind: "github.install.workspace",
+      userId: "user-a",
+      tenantId: "tenant-a",
+      returnUrl: null,
+    });
+
+    const res = await buildGateway(bridge).request(
+      `/github/managed/callback?installation_id=99&setup_action=install&state=${encodeURIComponent(state)}`,
+    );
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(
+      `${CONSOLE_ORIGIN}/integrations/github?managed_install=error`,
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0].extra).toMatchObject({ workspaceManaged: true });
+  });
+
   it("redirects a failed agent-bind install back to the console, not a raw error", async () => {
     const { bridge } = stubBridge(async () => {
       throw new Error("installation token: HTTP 404");
