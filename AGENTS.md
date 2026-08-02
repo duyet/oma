@@ -482,6 +482,7 @@ because a Worker is a single-file V8 isolate with no filesystem, no
 | `"subprocess"` (alias `"local"`) | Works **via the bridge relay** when the tenant has a paired machine online. A Worker can't spawn `child_process`, so each sandbox op (exec, read/write files, setEnvVars, destroy) is relayed to the tenant's most-recently-heartbeated `oma bridge daemon` over the RuntimeRoom DO WebSocket, executed on that machine, and streamed back — the sandbox sibling of the ACP agent relay. Enable it by running `npx @getoma/cli bridge setup` on the machine; no `wrangler secret`. When no runtime is online, the first sandbox op fails clearly with a `session.error` ("no bridge runtime connected — run `bridge setup`…"). **Limitations:** no outbound vault-credential MITM proxy on the user's machine (outbound HTTP is un-injected), and memory-store / session-outputs mounts aren't wired. **Security consequence:** any `gh`/git call the agent makes on this box silently falls back to using **the machine's own** `gh auth login` / git credentials — not a vault credential scoped to the session, and not OMA-managed at all. Only pair a machine whose ambient credentials you're fine with the agent using. See `BridgeRelaySandbox` (`apps/agent/src/runtime/bridge-relay.ts`) and `BridgeSandboxManager` (`packages/cli/src/bridge/lib/bridge-sandbox.ts`). |
 | `"dynamic-workers"` | Works — a **JS/Wasm eval isolate** per exec via the **Worker Loader** binding (`env.LOADER`), not a Linux box: `exec` runs the command as a JS module in a fresh ephemeral V8 isolate (millisecond cold start, egress blocked by default via `globalOutbound: null`); `readFile`/`writeFile`/`startProcess`/`gitCheckout` fail clearly with a "not supported by dynamic-workers" error (no shell, no filesystem, no package installs, nothing persists between calls). Availability is a **binding**, not a secret: `worker_loaders` must be declared in the agent worker's `wrangler.jsonc` (`"worker_loaders": [{ "binding": "LOADER" }]`); absent binding fails clearly with a `session.error`. **Cloudflare-only** — the self-host Node runtime rejects it up front (`nodeCompatible: false`). Best for pure code-eval / Code-Mode agents, untrusted-snippet execution, and per-call compute-only sub-agents. See `DynamicWorkerSandbox` (`packages/sandbox/src/adapters/dynamic-workers.ts`). |
 | `"browser-vm"` | Works **via the RuntimeRoom relay** to a browser tab hosting a WASM VM — the tab twin of the `subprocess` bridge daemon. The user opens `GET /sandbox-tab` (Console → Runtimes → "Open sandbox tab"), which pairs as a runtime with `kind: "browser-vm"` and services sandbox ops against an in-tab engine (v86 by default; WebContainers/CheerpX are BYO-license). No online tab ⇒ the first op fails clearly with a `session.error`. **Limitations:** no vault outbound MITM from the tab, no memory-store / session-outputs mounts, networking is engine-proxied (no raw TCP). See `docs/browser-vm-sandbox.md` and `BrowserVmRelaySandbox` (`apps/agent/src/runtime/browser-vm-relay.ts`). |
+| `"oma-remote"` | Works — but it is not a sandbox at all: the session has **no local sandbox** and the whole turn is proxied to a session on another registered OMA instance (see [Cross-Instance Federation](#cross-instance-federation)). Requires `config.remote.{instance_id, agent_id}`; the remote owns the sandbox, the tools and its own vault, and this instance only mirrors the remote's `agent.*` events into its own event log. Any code path that does ask for a local executor gets a `FederatedNoSandbox` that throws `SandboxProviderUnavailableError` on every operation. **Self-host Node: not wired yet** — selecting it there fails clearly (`NodeIncompatibleProviderError`) rather than degrading to a local run. |
 | `"litebox"` / `"k8s"` / `"docker-compose"` | Node-only (a native micro-VM binding, local kubeconfig/filesystem access, or a Docker socket) — cannot run in a Worker at all, and no relay path. Selecting one fails clearly with a `session.error` explaining to use the self-host runtime instead. |
 
 See `classifyCfSandboxProvider` (`packages/sandbox/src/provider-config.ts`)
@@ -952,6 +953,87 @@ The delegation client is `delegateToRemoteAgent`
 `apps/agent/src/harness/tools.ts`; the CF executor is
 `SessionDO#runRemoteAgent` (`apps/agent/src/runtime/session-do.ts`).
 
+### 3. Remote sessions — `sandbox_provider: "oma-remote"`
+
+Delegation (above) borrows a remote *agent* for one tool call. A **remote
+session** goes further: the origin's session has no local sandbox at all and
+every turn runs on the remote instance. This is what makes "Cloudflare origin
+→ homelab k8s sandboxes" work — the console, the API surface and the event log
+stay on the origin; the compute stays on the remote.
+
+Create an environment that names a registered instance:
+
+```json
+{
+  "name": "homelab",
+  "config": {
+    "type": "cloud",
+    "sandbox_provider": "oma-remote",
+    "remote": {
+      "instance_id": "fed_xxx",
+      "agent_id": "agent_on_the_remote",
+      "environment_id": "env_on_the_remote"
+    }
+  }
+}
+```
+
+Any session created with it is driven by `OmaRemoteHarness`
+(`apps/agent/src/harness/oma-remote-loop.ts`), selected from the environment
+exactly like `kind: "local"` selects `acp-proxy` — `config.harness` is ignored.
+Per turn it: opens (or reuses) a session on the remote, posts the user message,
+polls the remote event log to `session.status_idle`, and **mirrors the remote's
+`agent.*` events into the origin's own event log**, tagged with
+`metadata.remote_instance_id` + `metadata.remote_seq`. `GET
+/v1/sessions/:id/events` on the origin therefore renders the remote turn with
+no client change. The bound remote session id is persisted on the origin
+session, so turn N+1 continues the same remote conversation and `/workspace`.
+
+**Positions taken on the issue's open questions:**
+
+- **Agent identity across instances** — the remote must ALREADY have the
+  agent; the origin never pushes an agent snapshot at session-create. Pushing
+  one would let the origin's config dictate what executes inside the remote's
+  trust boundary, with the remote unable to review, pin or archive it.
+  Federation deliberately crosses exactly one secret; it must not also cross
+  executable configuration.
+- **Event-log ownership** — the origin persists a **read-through copy**, it
+  does not live-proxy reads. Crash recovery is rebuilt from a session's own
+  append-only log, and a pure live proxy would make every origin read (and any
+  mid-turn origin restart) depend on the remote being up. The trade-off is
+  duplicated storage and a copy that stops at the last poll; the remote's log
+  stays the source of truth for anything the origin missed.
+- **Loop prevention** — a federated session may not itself be an origin.
+  A → B is allowed; A → B → C is refused (`MAX_FEDERATION_DEPTH = 1`,
+  `assertFederationDepthAllowed`), for both the proxied-session path and
+  `call_remote_agent_*`. A hop budget only bounds cycle *length* — it still
+  lets a ring burn real sandboxes and tokens on every instance — and depth 1
+  is the only bound enforceable from purely local information. Every outbound
+  federated create stamps the depth in `metadata.federation.depth` and in an
+  `x-oma-federation-depth` header, so a remote can grow its own inbound guard
+  without trusting the body.
+
+**Failure modes are loud, never a local fallback.** An unresolvable instance,
+an undecryptable key, an unreachable remote, a remote `session.error`, a
+timeout, or the loop refusal each surface as a `session.error` on the origin.
+Running the agent locally instead would put it in the wrong vault and the
+wrong sandbox — worse than a visible failure.
+
+**Credential boundary.** The remote's API key never reaches the harness. The
+harness calls the `env.proxyRemoteTurn` port; `SessionDO` resolves the key
+(Cloudflare: the `MAIN_MCP.resolveFederationTarget` RPC, since the agent DO has
+no KV or secret access), uses it as an `x-api-key` header inside that call, and
+returns only the remote session id plus text. It is never in a response body,
+an event, or a log line.
+
+**Limitations:** Cloudflare-only for now (self-host Node selects its harness
+from agent metadata rather than the environment and has no slot for the bound
+remote session id — it fails clearly instead). The mirror is poll-driven, so
+the origin lags the remote by up to one poll interval; true SSE passthrough is
+M2, below. Session pause/resume, workspace backups, memory-store mounts and
+file promotion all act on the (absent) local sandbox and are therefore not
+available to a federated session.
+
 ### Security model
 
 - The remote API key never enters a sandbox and is never returned by the API.
@@ -964,15 +1046,17 @@ The delegation client is `delegateToRemoteAgent`
 
 ### Deferred (follow-ups on #132)
 
-The delivered slice is a one-shot request/response delegate. Not yet built:
-event-log **streaming/mirroring** of the remote turn into the caller's log
-(only the final text returns today), remote **identity mapping** beyond the
-shared tenant key, a Console UI for the registry + `remote_agent` roster
-entries (API-only for now), and inbound-federation trust controls distinct
-from the tenant API key.
+Not yet built: **SSE passthrough** of the remote's `/events/stream` so the
+origin renders the remote turn in real time instead of per-poll (M2);
+**unified listing** — `GET /v1/sessions` / `/v1/agents` fanning out across
+registered remotes and merging with a `remote_instance_id` badge (M3);
+self-host **Node parity** for `oma-remote`; remote **identity mapping** beyond
+the shared tenant key; a Console UI for the registry, `remote_agent` roster
+entries and `oma-remote` environments (API-only for now); and
+inbound-federation trust controls distinct from the tenant API key.
 
-Federated **parallel fan-out** is now supported: `call_agents_parallel`
-accepts remote (`remote_agent`) targets alongside local ones — see
+Federated **parallel fan-out** is supported: `call_agents_parallel` accepts
+remote (`remote_agent`) targets alongside local ones — see
 [Parallel Delegation](#parallel-delegation).
 
 ---

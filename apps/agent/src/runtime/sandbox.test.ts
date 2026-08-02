@@ -18,6 +18,7 @@ import {
   createSandbox,
   resolveCfSandbox,
   SandboxProviderUnavailableError,
+  FederatedNoSandbox,
 } from "./sandbox";
 import { BridgeRelaySandbox } from "./bridge-relay";
 import { BrowserVmRelaySandbox } from "./browser-vm-relay";
@@ -154,6 +155,24 @@ describe("resolveCfSandbox", () => {
     const sandbox = resolveCfSandbox(baseEnv, "sess_1", { sandbox_provider: "browser-vm" }, "tenant_1");
     expect(sandbox).toBeInstanceOf(BrowserVmRelaySandbox);
     expect(sandbox).not.toBeInstanceOf(BridgeRelaySandbox);
+  });
+});
+
+describe("resolveCfSandbox — oma-remote (federated, issue #132 M1)", () => {
+  it("returns a no-op executor rather than a real sandbox", () => {
+    const sandbox = resolveCfSandbox(baseEnv, "sess_1", { type: "cloud", sandbox_provider: "oma-remote" });
+    expect(sandbox).toBeInstanceOf(FederatedNoSandbox);
+    expect(sandbox).not.toBeInstanceOf(CloudflareSandbox);
+  });
+
+  it("fails loudly on any actual sandbox operation — never silently executes locally", async () => {
+    const sandbox = resolveCfSandbox(baseEnv, "sess_1", { type: "cloud", sandbox_provider: "oma-remote" });
+    await expect(sandbox.exec("ls")).rejects.toBeInstanceOf(SandboxProviderUnavailableError);
+    await expect(sandbox.readFile("/workspace/x")).rejects.toBeInstanceOf(SandboxProviderUnavailableError);
+    await expect(sandbox.writeFile("/workspace/x", "y")).rejects.toBeInstanceOf(SandboxProviderUnavailableError);
+    // destroy is the one no-op: tearing down a sandbox that never existed
+    // must not error out the session.
+    await expect(sandbox.destroy!()).resolves.toBeUndefined();
   });
 });
 

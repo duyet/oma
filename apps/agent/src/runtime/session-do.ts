@@ -24,6 +24,8 @@ import {
   TransientInfraError,
   fileR2Key,
   delegateToRemoteAgent as remoteAgentDelegate,
+  runRemoteTurn,
+  assertFederationDepthAllowed,
 } from "@duyet/oma-shared";
 import {
   CfDoStreamRepo,
@@ -99,24 +101,7 @@ import { senderFromCfBinding, type CfSendEmailBinding } from "@duyet/oma-email/a
 import { meterTurnDebit } from "./turn-metering";
 import { resolveSessionMetadata, walletFromMetadata } from "./resolve-session-metadata";
 import { generateSessionTitle, shouldGenerateSessionTitle } from "./session-title";
-
-/**
- * Harness-to-environment migration: which HarnessInterface a turn runs
- * under is now selected from the session's (or sub-agent turn's)
- * environment, not `agent.harness` (removed from AgentConfig). Formula
- * (AGENTS.md):
- *   harness = env.kind === "local" ? "acp-proxy" : (env.config.harness ?? "default")
- * `kind: "local"` is never independently overridable by `config.harness` —
- * the ACP proxy loop is implied. A missing environment snapshot (legacy
- * sessions created before this migration, or test fixtures) defaults to
- * the unchanged pre-migration behavior: "default".
- */
-function resolveHarnessNameForEnvironment(
-  env: EnvironmentConfig | null | undefined,
-): string {
-  if (env?.config?.kind === "local") return "acp-proxy";
-  return env?.config?.harness ?? "default";
-}
+import { resolveHarnessNameForEnvironment } from "./harness-selection";
 
 interface SessionInitParams {
   agent_id: string;
@@ -350,6 +335,17 @@ interface SessionState {
    * is not.
    */
   sandbox_paused_at?: number | null;
+  /**
+   * Cross-instance federation (issue #132 M1). The remote OMA session this
+   * origin session is bound to, for `sandbox_provider: "oma-remote"`
+   * environments. Persisted so turn N+1 reuses the same remote session
+   * (and therefore the same remote conversation + /workspace) instead of
+   * spawning a fresh one; `remote_last_seq` is the highest remote `seq`
+   * already mirrored into this log, so a reused session never replays
+   * earlier turns.
+   */
+  remote_session_id?: string;
+  remote_last_seq?: number;
 }
 
 const INITIAL_SESSION_STATE: SessionState = {
@@ -4759,6 +4755,27 @@ export class SessionDO extends DurableObject<Env> {
     message: string,
     remoteEnvironmentId?: string,
   ): Promise<string> {
+    // Same loop-prevention rule as the proxied-session path: a session that
+    // is itself federated may not open a further hop.
+    assertFederationDepthAllowed(this.state.metadata);
+    const target = await this.resolveRemoteTarget(instanceId);
+    const { text } = await remoteAgentDelegate(
+      { base_url: target.base_url, api_key: target.api_key },
+      { remoteAgentId, message, remoteEnvironmentId },
+    );
+    return text;
+  }
+
+  /**
+   * Resolve a registered remote instance for this tenant: base URL +
+   * decrypted API key. On Cloudflare the agent DO has no KV or secret access
+   * of its own, so it asks the main worker over the `MAIN_MCP` RPC; the key
+   * lives only inside this method's frame and is never stored on `this`,
+   * never broadcast, and never logged.
+   */
+  private async resolveRemoteTarget(
+    instanceId: string,
+  ): Promise<{ base_url: string; api_key?: string }> {
     const mcp = this.env.MAIN_MCP;
     if (!mcp?.resolveFederationTarget) {
       throw new Error("federation not available (MAIN_MCP.resolveFederationTarget unwired)");
@@ -4770,11 +4787,51 @@ export class SessionDO extends DurableObject<Env> {
     if (!target) {
       throw new Error(`federation instance ${instanceId} not found for this tenant`);
     }
-    const { text } = await remoteAgentDelegate(
+    return target;
+  }
+
+  /**
+   * Cross-instance federation, proxied session (issue #132 M1). Runs one turn
+   * of THIS session against a session on the remote instance and mirrors the
+   * remote's events back through `onRemoteEvent` (OmaRemoteHarness persists
+   * them into this session's log). The remote session id is persisted so
+   * subsequent turns continue the same remote conversation.
+   *
+   * Fails loud on every unhappy path — unresolvable instance, unreachable
+   * remote, refused loop. There is deliberately no local-sandbox fallback:
+   * running the agent here would put it in the wrong vault and the wrong
+   * sandbox, which is worse than a visible failure.
+   */
+  private async runRemoteProxyTurn(opts: {
+    instanceId: string;
+    remoteAgentId: string;
+    remoteEnvironmentId?: string;
+    message: string;
+    onRemoteEvent: (event: { seq?: number; type?: string; content?: unknown }) => void;
+  }): Promise<{ remote_session_id: string; text: string }> {
+    // Loop prevention: an instance that is itself a federation TARGET may not
+    // act as an origin (see the rationale on assertFederationDepthAllowed).
+    assertFederationDepthAllowed(this.state.metadata);
+
+    const target = await this.resolveRemoteTarget(opts.instanceId);
+    const result = await runRemoteTurn(
       { base_url: target.base_url, api_key: target.api_key },
-      { remoteAgentId, message, remoteEnvironmentId },
+      {
+        remoteAgentId: opts.remoteAgentId,
+        remoteEnvironmentId: opts.remoteEnvironmentId,
+        message: opts.message,
+        remoteSessionId: this.state.remote_session_id,
+        afterSeq: this.state.remote_last_seq,
+        onRemoteEvent: opts.onRemoteEvent,
+      },
+      "proxy_session",
     );
-    return text;
+    this.setState({
+      ...this.state,
+      remote_session_id: result.remote_session_id,
+      remote_last_seq: result.last_seq,
+    });
+    return { remote_session_id: result.remote_session_id, text: result.text };
   }
 
   /**
@@ -5419,6 +5476,13 @@ export class SessionDO extends DurableObject<Env> {
         );
         return { text, threadId: childThreadId };
       },
+      proxyRemoteTurn: (opts: {
+        instanceId: string;
+        remoteAgentId: string;
+        remoteEnvironmentId?: string;
+        message: string;
+        onRemoteEvent: (event: { seq?: number; type?: string; content?: unknown }) => void;
+      }) => this.runRemoteProxyTurn(opts),
       delegateToRemoteAgent: (
         instanceId: string,
         remoteAgentId: string,

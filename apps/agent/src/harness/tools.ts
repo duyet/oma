@@ -483,6 +483,18 @@ export async function buildTools(
       message: string,
       remoteEnvironmentId?: string,
     ) => Promise<string>;
+    /** Cross-instance federation, proxied session (issue #132 M1). Not a
+     *  tool — no `buildTools` output consumes it — but this record is the
+     *  same object SessionDO passes as `HarnessContext.env`, and
+     *  OmaRemoteHarness reads the port from there. See interface.ts for the
+     *  credential-boundary contract. */
+    proxyRemoteTurn?: (opts: {
+      instanceId: string;
+      remoteAgentId: string;
+      remoteEnvironmentId?: string;
+      message: string;
+      onRemoteEvent: (event: { seq?: number; type?: string; content?: unknown }) => void;
+    }) => Promise<{ remote_session_id: string; text: string }>;
     environmentConfig?: { networking?: { type: string; allowed_hosts?: string[] } };
     /** MCP routing context — wired from SessionDO. AI SDK's MCP HTTP
      *  transport gets a custom `fetch` that calls

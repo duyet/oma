@@ -166,33 +166,100 @@ function extractText(content: unknown): string {
   return "";
 }
 
-/**
- * Delegate a single task to an agent on a remote OMA instance and return its
- * text response. Creates a fresh remote session, posts the message, and polls
- * the remote event log until it reaches `session.status_idle` (or the timeout
- * elapses). Throws on any transport / remote error so the caller can surface
- * it as a tool error / `success: false`.
- */
-export async function delegateToRemoteAgent(
-  target: RemoteInstanceTarget,
-  opts: RemoteDelegateOptions,
-): Promise<{ text: string; remote_session_id: string }> {
-  const fetchImpl = opts.fetchImpl ?? (fetch as unknown as FetchLike);
-  const sleep = opts.sleep ?? defaultSleep;
-  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const pollIntervalMs = opts.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
-  const base = apiBase(target.base_url);
-  const headers = authHeaders(target.api_key);
-  const deadline = Date.now() + timeoutMs;
+// ── Loop prevention (issue #132 open question) ────────────────────────────
+//
+// Position taken for v1: **a federated session may not itself be an origin.**
+// A → B is allowed; A → B → C is refused at B. Rationale: a hop-count budget
+// only bounds cycle *length*, it doesn't stop a cycle from burning a full
+// budget of real sandboxes and model tokens on every instance in the ring,
+// and there is no shared identity across instances to detect "I've already
+// seen this task". Depth 1 is the only bound that is enforceable with purely
+// local information, which is all a federated instance has.
+//
+// Enforcement is origin-side and defence-in-depth:
+//   1. The origin refuses to open a *further* remote hop when the session it
+//      is running was itself created by federation (its metadata carries
+//      `federation.depth >= 1`). See `assertFederationDepthAllowed`.
+//   2. Every outbound federated create carries the depth both in the session
+//      metadata (`metadata.federation.depth`) and in an
+//      `x-oma-federation-depth` request header, so a remote that later grows
+//      its own inbound guard can reject the hop without trusting the body.
+export const FEDERATION_DEPTH_HEADER = "x-oma-federation-depth";
+export const MAX_FEDERATION_DEPTH = 1;
 
-  // 1. Create the remote session.
+/** Read the federation depth off a session's metadata (0 when absent). */
+export function federationDepthOf(metadata: unknown): number {
+  const fed = (metadata as { federation?: { depth?: unknown } } | null | undefined)?.federation;
+  const depth = fed?.depth;
+  return typeof depth === "number" && Number.isFinite(depth) && depth > 0 ? depth : 0;
+}
+
+/**
+ * Throw when the session described by `metadata` is already a federated
+ * session and therefore may not open another hop. Callers surface the throw
+ * as a loud session/tool error — never a silent local fallback.
+ */
+export function assertFederationDepthAllowed(metadata: unknown): void {
+  const depth = federationDepthOf(metadata);
+  if (depth >= MAX_FEDERATION_DEPTH) {
+    throw new Error(
+      `federation loop refused: this session is already a federated session (depth ${depth}); ` +
+        `an OMA instance may not be both a federation target and a federation origin (max depth ${MAX_FEDERATION_DEPTH})`,
+    );
+  }
+}
+
+/** One event mirrored back from a remote session's event log. */
+export interface RemoteMirroredEvent {
+  seq?: number;
+  type?: string;
+  content?: unknown;
+  [k: string]: unknown;
+}
+
+export interface RemoteTurnOptions extends RemoteDelegateOptions {
+  /**
+   * Reuse an existing remote session instead of creating a new one — this is
+   * what makes a *proxied session* (M1) more than a one-shot delegate: the
+   * origin's session id maps 1:1 onto one long-lived remote session, so turn
+   * N+1 sees turn N's conversation and `/workspace`.
+   */
+  remoteSessionId?: string;
+  /**
+   * Highest remote `seq` this origin session has already mirrored. Only
+   * meaningful together with `remoteSessionId`; prevents replaying earlier
+   * turns of a reused remote session into the origin log.
+   */
+  afterSeq?: number;
+  /** Depth to stamp on the outbound create (see the loop-prevention note). */
+  depth?: number;
+  /**
+   * Called once per remote event observed while polling, in log order. The
+   * proxy harness uses this to mirror the remote's `agent.*` events into the
+   * origin's own event log so the origin console renders the turn.
+   */
+  onRemoteEvent?: (event: RemoteMirroredEvent) => void;
+}
+
+/**
+ * Create a remote session. Split out of `delegateToRemoteAgent` so the
+ * proxy-session path (M1) can create once and reuse across turns.
+ */
+async function createRemoteSession(
+  base: string,
+  headers: Record<string, string>,
+  fetchImpl: FetchLike,
+  opts: RemoteTurnOptions,
+  origin: string,
+): Promise<string> {
+  const depth = (opts.depth ?? 0) + 1;
   const createRes = await fetchImpl(`${base}/sessions`, {
     method: "POST",
-    headers,
+    headers: { ...headers, [FEDERATION_DEPTH_HEADER]: String(depth) },
     body: JSON.stringify({
       agent: opts.remoteAgentId,
       ...(opts.remoteEnvironmentId ? { environment_id: opts.remoteEnvironmentId } : {}),
-      metadata: { federation: { origin: "callable_agent" } },
+      metadata: { federation: { origin, depth } },
     }),
   });
   if (!createRes.ok) {
@@ -201,10 +268,38 @@ export async function delegateToRemoteAgent(
     );
   }
   const created = (await createRes.json()) as { id?: string };
-  const remoteSessionId = created?.id;
-  if (!remoteSessionId) {
+  if (!created?.id) {
     throw new Error("remote session create returned no id");
   }
+  return created.id;
+}
+
+/**
+ * Run one turn against a remote OMA session: (optionally create the session),
+ * post the user message, and poll the remote event log to idle, mirroring
+ * every observed event through `onRemoteEvent`.
+ *
+ * Shared by the one-shot `call_remote_agent_*` delegate (M4) and the
+ * `oma-remote` proxied-session harness (M1) so there is exactly one
+ * implementation of the create → post → poll protocol.
+ */
+export async function runRemoteTurn(
+  target: RemoteInstanceTarget,
+  opts: RemoteTurnOptions,
+  origin: string,
+): Promise<{ text: string; remote_session_id: string; last_seq: number }> {
+  const fetchImpl = opts.fetchImpl ?? (fetch as unknown as FetchLike);
+  const sleep = opts.sleep ?? defaultSleep;
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const pollIntervalMs = opts.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+  const base = apiBase(target.base_url);
+  const headers = authHeaders(target.api_key);
+  const deadline = Date.now() + timeoutMs;
+
+  // 1. Create the remote session (or reuse the one this origin session is
+  //    already bound to).
+  const remoteSessionId =
+    opts.remoteSessionId ?? (await createRemoteSession(base, headers, fetchImpl, opts, origin));
 
   // 2. Post the user message.
   const postRes = await fetchImpl(`${base}/sessions/${remoteSessionId}/events`, {
@@ -222,8 +317,9 @@ export async function delegateToRemoteAgent(
 
   // 3. Poll the event log until idle, collecting agent.message text emitted
   //    after our message. We track by seq so a slow first poll still captures
-  //    everything from the start.
-  let afterSeq = 0;
+  //    everything from the start. On a reused session we start from the seq
+  //    the caller last saw so earlier turns aren't replayed.
+  let afterSeq = opts.remoteSessionId ? (opts.afterSeq ?? 0) : 0;
   const texts: string[] = [];
   for (;;) {
     if (Date.now() > deadline) {
@@ -237,13 +333,12 @@ export async function delegateToRemoteAgent(
     if (!evRes.ok) {
       throw new Error(`remote events poll failed (${evRes.status})`);
     }
-    const page = (await evRes.json()) as {
-      data?: Array<{ seq?: number; type?: string; content?: unknown }>;
-    };
+    const page = (await evRes.json()) as { data?: RemoteMirroredEvent[] };
     const events = Array.isArray(page.data) ? page.data : [];
     let reachedIdle = false;
     for (const ev of events) {
       if (typeof ev.seq === "number" && ev.seq > afterSeq) afterSeq = ev.seq;
+      opts.onRemoteEvent?.(ev);
       if (ev.type === "agent.message") {
         const t = extractText(ev.content);
         if (t) texts.push(t);
@@ -257,5 +352,19 @@ export async function delegateToRemoteAgent(
     if (reachedIdle) break;
   }
 
-  return { text: texts.join("\n\n"), remote_session_id: remoteSessionId };
+  return { text: texts.join("\n\n"), remote_session_id: remoteSessionId, last_seq: afterSeq };
+}
+
+/**
+ * Delegate a single task to an agent on a remote OMA instance and return its
+ * text response. Creates a fresh remote session, posts the message, and polls
+ * the remote event log until it reaches `session.status_idle` (or the timeout
+ * elapses). Throws on any transport / remote error so the caller can surface
+ * it as a tool error / `success: false`.
+ */
+export async function delegateToRemoteAgent(
+  target: RemoteInstanceTarget,
+  opts: RemoteDelegateOptions,
+): Promise<{ text: string; remote_session_id: string }> {
+  return runRemoteTurn(target, opts, "callable_agent");
 }

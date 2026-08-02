@@ -305,6 +305,25 @@ export interface HarnessContext {
      *  tool (buildTools) to surface per-child thread ids in its
      *  aggregated result. See tools.ts for the fallback when unset. */
     delegateToAgentDetailed?: (agentId: string, message: string) => Promise<{ text: string; threadId?: string }>;
+    /**
+     * Cross-instance federation, proxied-session flavour (issue #132 M1).
+     * Runs ONE turn of this session against a session on a remote OMA
+     * instance and streams the remote's events back through `onRemoteEvent`.
+     *
+     * The remote's API key never crosses this port in either direction:
+     * SessionDO resolves it (CF: `MAIN_MCP.resolveFederationTarget` RPC;
+     * Node: KV + crypto), uses it inside the call, and returns only the
+     * remote session id + text. OmaRemoteHarness therefore cannot leak a
+     * credential it never receives. Absent binding ⇒ the harness fails
+     * loudly instead of falling back to a local sandbox run.
+     */
+    proxyRemoteTurn?: (opts: {
+      instanceId: string;
+      remoteAgentId: string;
+      remoteEnvironmentId?: string;
+      message: string;
+      onRemoteEvent: (event: { seq?: number; type?: string; content?: unknown }) => void;
+    }) => Promise<{ remote_session_id: string; text: string }>;
     CONFIG_KV?: KVNamespace;
     memoryStoreIds?: string[];
     environmentConfig?: { networking?: { type: string; allowed_hosts?: string[] } };
