@@ -179,6 +179,7 @@ its sandboxes (`packages/sandbox/src/provider-config.ts`):
 | `cloud` | Cloudflare Containers | fixed — `ghcr.io/duyet/sandbox-base:latest` |
 | `openshell` | NVIDIA OpenShell gateway (gRPC) | provider config `image`, default `ghcr.io/nvidia/openshell-community/sandboxes/base:latest` |
 | `browser-vm` | Browser tab (WASM VM) — **Cloudflare only** | N/A — no image; the browser host page boots the engine itself (v86 by default). Self-host Node lists the provider but reports `not_configured`. See [Browser-VM Sandbox](browser-vm-sandbox.md). |
+| `dynamic-workers` | Cloudflare Worker Loader (V8 isolate) — **Cloudflare only** | N/A — no image; each `exec` runs as a JS module in a fresh ephemeral isolate. No filesystem, no shell, nothing persists between calls. Requires the `worker_loaders` binding (`env.LOADER`); self-host Node rejects it (`nodeCompatible: false`). |
 
 Point `daytona`/`e2b`/`k8s`/`boxrun` at `oma-runtime-base:latest` (or a
 registry-pushed tag of it) instead of the bare `node:22-slim` default to

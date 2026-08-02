@@ -447,6 +447,7 @@ provider available:
 | `OpenShellSandbox` | NVIDIA OpenShell gateway (gRPC) | `OPENSHELL_GATEWAY_ENDPOINT=host:port`, optional `OPENSHELL_TOKEN` (bearer). Policy-enforced, isolated agent sandboxes. `OPENSHELL_GATEWAY_TLS=1` + `OPENSHELL_GATEWAY_CA_PATH` (and `..._CERT_PATH`/`..._KEY_PATH` for mTLS) enable TLS. Self-host Node speaks gRPC directly; the Cloudflare deployment reaches it over `fetch` via the k8s-bridge OpenShell backend (`OPENSHELL_BRIDGE_URL`). |
 | `CloudflareSandbox` | If you happen to deploy on CF Workers + Containers | Use the regular `apps/agent` worker, not main-node. |
 | `browser-vm` (listed, not usable here) | N/A on self-host | Seeded from the same shared provider list as Cloudflare, but `GET /v1/hosting_types` always reports it `not_configured` on main-node — the RuntimeRoom WebSocket relay it needs is a Cloudflare-only surface. Use one of the providers above instead. |
+| `dynamic-workers` (listed, not usable here) | N/A on self-host | A Cloudflare Worker Loader (`env.LOADER`) binding, not a sandbox adapter — no Node equivalent (`nodeCompatible: false`). Pure code-eval / "Code Mode" agents on Cloudflare only; see [Runtimes](runtimes.md). |
 
 **The old `SANDBOX_PROVIDER` env var still works** as the fallback default
 when an environment has no explicit provider selection. New deployments should
@@ -623,6 +624,7 @@ that only set `config.type` continue to work unchanged.
 | `E2B` | ✓ | ✓ | ✓ | ✓ (s3fs, requires `MEMORY_S3_*` + template with s3fs) | ✓ (same bucket, session-outputs prefix) | ⚠ (template must allow sudo writes to /etc/ssl/) | ✓ (tar via exec + readFileBytes) |
 | `BoxRun` | ✓ | ✓ | ✓ | ✗ (HTTP API has no mount primitive — use a custom image with s3fs preinstalled) | ✗ (same — no host-bind primitive) | ✓ (CA upload via tar PUT) | ⚠ (best-effort tar via exec) |
 | `CloudflareSandbox` | ✓ | ✓ | ✓ | ✓ (R2 + FUSE) | ✓ | ✓ (interceptHttps + outboundHandlers) | ✓ (squashfs to R2 backup bucket) |
+| `dynamic-workers` | ✗ (JS/Wasm eval only, no shell) | ✗ (no filesystem — `readFile`/`writeFile` fail clearly) | ✗ by default (`allowNetwork: false` ⇒ `globalOutbound: null` blocks all egress; set it true to inherit the worker's) | ✗ | ✗ | n/a | ✗ (nothing persists between calls) |
 
 Read-only memory mounts: enforced via `chmod -R a-w` on the mount target where supported (LocalSubprocess, Daytona, E2B). LiteBox honors the `readOnly` flag on its volume mount. CloudflareSandbox does not enforce ro at the FS layer — the harness's write tool checks `assertWritable` and refuses writes regardless of provider.
 

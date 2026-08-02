@@ -52,6 +52,7 @@ const MARK: Record<string, { mode: "fill" | "stroke"; path: string; color?: stri
   },
   cli: { mode: "stroke", path: "m4 17 6-6-6-6M12 19h8" },
   e2b: { mode: "stroke", color: "#F97316", path: "M9 4H5v16h4M15 4h4v16h-4" },
+  "dynamic-workers": { mode: "stroke", path: "M13 2 3 14h9l-1 8 10-12h-9l1-8Z" },
 };
 
 // LLM providers fan in on the left (right edge of a node = x=165).
@@ -71,17 +72,18 @@ const RIGHT = [
   { y: 102, name: "Kubernetes", sub: "pod-per-session", mark: "kubernetes" },
   { y: 154, name: "OpenShell", sub: "gRPC bridge", mark: "openshell" },
   { y: 206, name: "E2B · Daytona", sub: "micro-VMs", mark: "e2b" },
+  { y: 258, name: "Dynamic Workers", sub: "V8 isolate, code mode", mark: "dynamic-workers" },
   // extra gap here separates the two family frames
-  { y: 288, name: "Browser VM", sub: "WASM tab", mark: "browser-vm" },
-  { y: 340, name: "CLI · subprocess", sub: "your machine", mark: "cli" },
+  { y: 340, name: "Browser VM", sub: "WASM tab", mark: "browser-vm" },
+  { y: 392, name: "CLI · subprocess", sub: "your machine", mark: "cli" },
 ];
 
 // Two families of sandbox host, framed as labeled groups on the right. `from`
 // /`to` are node indices into RIGHT (inclusive); the box spans their rows.
 const NODE_H = 44;
 const RIGHT_GROUPS = [
-  { label: "Cloud · provisioned", from: 0, to: 3 },
-  { label: "Your hardware · relay", from: 4, to: 5 },
+  { label: "Cloud · provisioned", from: 0, to: 4 },
+  { label: "Your hardware · relay", from: 5, to: 6 },
 ];
 
 // What the control plane owns regardless of model or sandbox — rendered as
@@ -139,7 +141,7 @@ const PILL_GAP = 6;
 ---
 
 <figure class="pf">
-  <svg viewBox="0 0 772 384" class="pf-diagram" role="img" aria-label="Any LLM provider routes through the OMA control plane — which owns context, state, and memory — out to any sandbox provider">
+  <svg viewBox="0 0 772 436" class="pf-diagram" role="img" aria-label="Any LLM provider routes through the OMA control plane — which owns context, state, and memory — out to any sandbox provider">
     <!-- Edges: one quiet track + one staggered traveler per edge. The triple
          (rail + animated dash overlay + packet) became a clean single line so
          the fan reads as a flow, not a tangle. Delays stagger the dots so the
