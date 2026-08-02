@@ -19,6 +19,12 @@
  * whole point of a "local" environment: the user opted their own machine in
  * via `oma bridge setup`. Per-session workdirs live under <baseDir>/<sessionId>/.
  *
+ * Outbound vault credentials (issue #318): each subprocess session gets its own
+ * LocalCredentialProxy on loopback (see credential-proxy.ts). Credentials are
+ * resolved by the PLATFORM at request time over this same relay socket
+ * (`sandbox.outbound.credential`), held in the daemon's memory only, and never
+ * placed in the child's environment — the child only ever sees a 127.0.0.1 URL.
+ *
  * The optional `openshell` backend (explicit opt-in — see sandbox-backend.ts)
  * runs the same ops inside an OpenShell sandbox on this machine instead:
  * isolated and egress-policed, but EMPTY — none of the user's repos, tools,
@@ -35,6 +41,7 @@ import { spawn } from "node:child_process";
 import { promises as fs, mkdirSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+import { LocalCredentialProxy, prepareGitConfig } from "./credential-proxy.js";
 import { OpenShellClient, type OpenShellClientOptions } from "./openshell-client.js";
 
 export type SandboxSend = (msg: Record<string, unknown>) => void;
@@ -75,7 +82,16 @@ export interface RelaySandboxBackend {
   create(sessionId: string): RelaySandboxExecutor;
 }
 
+/**
+ * Asks the platform for the vault credential matching `host` for one session.
+ * Resolves to null when no credential matches; rejects when the platform
+ * couldn't be reached (the proxy tells those two apart when logging).
+ */
+export type SessionCredentialResolver = (sessionId: string, host: string) => Promise<string | null>;
+
 const DEFAULT_TIMEOUT_MS = 120_000;
+/** Reply timeout for a `sandbox.outbound.credential` round-trip. */
+const CREDENTIAL_OP_TIMEOUT_MS = 15_000;
 /** Bound on how long daemon shutdown waits for remote box teardown. */
 const DESTROY_ALL_TIMEOUT_MS = 10_000;
 
@@ -89,9 +105,28 @@ export class BridgeSandboxManager {
   #backend: RelaySandboxBackend;
   #boxes = new Map<string, RelaySandboxExecutor>();
 
-  constructor(send: SandboxSend, opts?: { baseDir?: string; backend?: RelaySandboxBackend }) {
+  #outboundPending = new Map<string, { resolve: (t: string | null) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+  #outboundSeq = 0;
+
+  constructor(
+    send: SandboxSend,
+    opts?: {
+      baseDir?: string;
+      backend?: RelaySandboxBackend;
+      /** Outbound vault-credential injection (issue #318). On by default;
+       *  tests that drive ops without a live relay turn it off. */
+      credentialProxy?: boolean;
+    },
+  ) {
     this.#send = send;
-    this.#backend = opts?.backend ?? createSubprocessBackend(opts?.baseDir);
+    this.#backend =
+      opts?.backend ??
+      createSubprocessBackend(
+        opts?.baseDir,
+        opts?.credentialProxy === false
+          ? undefined
+          : (sessionId, host) => this.resolveCredential(sessionId, host),
+      );
   }
 
   /** Which backend is executing ops — surfaced by `oma bridge status`. */
@@ -117,6 +152,60 @@ export class BridgeSandboxManager {
     } catch (err) {
       this.#reply(req, { ok: false, error: err instanceof Error ? err.message : String(err) });
     }
+  }
+
+  /**
+   * Ask the platform for the vault credential matching `host` for a session.
+   *
+   * Sent over the SAME relay socket the sandbox ops use, so it inherits the
+   * relay's tenant pin and needs no extra auth surface. The platform side
+   * (BridgeRelaySandbox) answers from `MAIN_MCP.lookupOutboundCredential` —
+   * the exact resolver the cloud sandbox's outbound proxy uses.
+   *
+   * The returned token is handed straight to the session's credential proxy,
+   * which keeps it in memory only. Nothing here logs, persists, or echoes it.
+   */
+  resolveCredential(sessionId: string, host: string): Promise<string | null> {
+    const requestId = `sbxc_${++this.#outboundSeq}_${Date.now()}`;
+    return new Promise<string | null>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.#outboundPending.delete(requestId);
+        reject(new Error(`credential lookup for ${host} timed out`));
+      }, CREDENTIAL_OP_TIMEOUT_MS);
+      this.#outboundPending.set(requestId, { resolve, reject, timer });
+      try {
+        this.#send({
+          type: "sandbox.outbound.credential",
+          request_id: requestId,
+          session_id: sessionId,
+          host,
+        });
+      } catch (err) {
+        clearTimeout(timer);
+        this.#outboundPending.delete(requestId);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
+    });
+  }
+
+  /**
+   * Settle a `sandbox.outbound.credential.result` frame from the platform.
+   * Routed here by the daemon's WS switch.
+   */
+  handleCredentialResult(msg: {
+    request_id?: string;
+    ok?: boolean;
+    token?: string | null;
+    error?: string;
+  }): void {
+    const requestId = msg.request_id;
+    if (!requestId) return;
+    const pending = this.#outboundPending.get(requestId);
+    if (!pending) return;
+    this.#outboundPending.delete(requestId);
+    clearTimeout(pending.timer);
+    if (msg.ok) pending.resolve(typeof msg.token === "string" ? msg.token : null);
+    else pending.reject(new Error(msg.error ?? "credential lookup failed"));
   }
 
   /**
@@ -206,26 +295,76 @@ export class BridgeSandboxManager {
 
 // ── subprocess backend (default) ───────────────────────────────────────────
 
-export function createSubprocessBackend(baseDirOpt?: string): RelaySandboxBackend {
+export function createSubprocessBackend(
+  baseDirOpt?: string,
+  resolveCredential?: SessionCredentialResolver,
+): RelaySandboxBackend {
   const baseDir = baseDirOpt ? resolve(baseDirOpt) : defaultSandboxBaseDir();
   return {
     kind: "subprocess",
-    create: (sessionId) => new SubprocessSandbox(join(baseDir, sanitizeSessionId(sessionId))),
+    create: (sessionId) =>
+      new SubprocessSandbox(
+        join(baseDir, sanitizeSessionId(sessionId)),
+        resolveCredential ? (host) => resolveCredential(sessionId, host) : undefined,
+      ),
   };
 }
 
-class SubprocessSandbox implements RelaySandboxExecutor {
+export class SubprocessSandbox implements RelaySandboxExecutor {
   #workdir: string;
   #envVars: Record<string, string> = {};
+  #resolveCredential?: (host: string) => Promise<string | null>;
+  #proxy: LocalCredentialProxy | null = null;
+  /** Loopback URLs + GIT_CONFIG_GLOBAL. Never contains credential material. */
+  #proxyEnv: Record<string, string> = {};
+  #proxyReady: Promise<void> | null = null;
 
-  constructor(workdir: string) {
+  constructor(workdir: string, resolveCredential?: (host: string) => Promise<string | null>) {
     this.#workdir = workdir;
+    this.#resolveCredential = resolveCredential;
     mkdirSync(workdir, { recursive: true });
   }
 
-  exec(command: string, timeoutMs: number): Promise<string> {
+  /**
+   * Bring up this session's credential proxy once, on first exec. Lazy because
+   * a session that only reads/writes files should not bind a port, and because
+   * probing the platform for git-host credentials costs a relay round-trip.
+   *
+   * Failure is non-fatal: without the proxy the child simply runs with no
+   * injection, which is the pre-#318 behavior.
+   */
+  #ensureProxy(): Promise<void> {
+    if (!this.#resolveCredential) return Promise.resolve();
+    if (this.#proxyReady) return this.#proxyReady;
+    const resolveCredential = this.#resolveCredential;
+    this.#proxyReady = (async () => {
+      const proxy = new LocalCredentialProxy({
+        resolve: resolveCredential,
+        log: (m) => process.stderr.write(`[oma credential-proxy] ${m}\n`),
+      });
+      await proxy.start();
+      this.#proxy = proxy;
+      this.#proxyEnv = {
+        ...proxy.envVars(),
+        ...(await prepareGitConfig(proxy, this.#workdir)),
+      };
+    })().catch((err) => {
+      process.stderr.write(
+        `[oma credential-proxy] failed to start; outbound calls will NOT be ` +
+          `vault-injected: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
+      this.#proxyEnv = {};
+    });
+    return this.#proxyReady;
+  }
+
+  async exec(command: string, timeoutMs: number): Promise<string> {
+    await this.#ensureProxy();
     const workdir = this.#workdir;
-    const envVars = this.#envVars;
+    // Proxy env first so a harness-supplied override still wins, and so a
+    // caller reading #envVars can never observe credential material — the
+    // proxy env is loopback URLs only.
+    const envVars = this.childEnvOverrides();
     return new Promise<string>((resolveExec) => {
       const child = spawn("/bin/sh", ["-c", command], {
         cwd: workdir,
@@ -283,11 +422,24 @@ class SubprocessSandbox implements RelaySandboxExecutor {
     this.#envVars = { ...this.#envVars, ...envVars };
   }
 
+  /**
+   * Exactly what gets layered onto `process.env` for a spawned child. Exposed
+   * so tests can assert the security invariant directly: this map carries
+   * loopback URLs and a git-config path, never a credential.
+   */
+  childEnvOverrides(): Record<string, string> {
+    return { ...this.#proxyEnv, ...this.#envVars };
+  }
+
   async ping(): Promise<void> {
     /* the host is always reachable */
   }
 
   async destroy(): Promise<void> {
+    try {
+      await this.#proxy?.stop();
+    } catch { /* best-effort */ }
+    this.#proxy = null;
     try {
       rmSync(this.#workdir, { recursive: true, force: true });
     } catch { /* best-effort */ }

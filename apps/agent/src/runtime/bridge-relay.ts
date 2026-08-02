@@ -26,10 +26,20 @@
  * SandboxProviderUnavailableError with a clear "run bridge setup" message —
  * fail loud, never silently substitute a different sandbox.
  *
- * NOTE ON CREDENTIALS: unlike CloudflareSandbox, there is no outbound MITM
- * proxy on the user's machine, so `setOutboundContext` is a no-op here — the
- * agent's outbound HTTP from the local box is not vault-injected. Documented
- * in docs/runtimes.md.
+ * NOTE ON CREDENTIALS: there is no TLS-MITM proxy on the user's machine (that
+ * would require installing a locally generated CA), so `setOutboundContext` is
+ * still a no-op. Instead the daemon runs a loopback credential proxy and asks
+ * US, per request, which credential matches a host (issue #318):
+ *
+ *   daemon → relay   { type: "sandbox.outbound.credential", request_id, session_id, host }
+ *   relay → daemon   { type: "sandbox.outbound.credential.result", request_id, ok, token? }
+ *
+ * We answer from `env.MAIN_MCP.lookupOutboundCredential` — the same resolver
+ * the cloud sandbox's transparent outbound proxy uses, so the match rule is
+ * defined in exactly one place. The token crosses to the daemon's memory only
+ * (never to disk, the child's env, or a log) and only for hosts the daemon's
+ * proxy is actually handling. Which traffic that covers — and what it does not
+ * — is documented in docs/runtimes.md.
  */
 
 import type { SandboxExecutor, ProcessHandle } from "../harness/interface";
@@ -285,6 +295,10 @@ export class BridgeRelaySandbox implements SandboxExecutor {
     } catch {
       return;
     }
+    if (parsed.type === "sandbox.outbound.credential") {
+      void this.#answerCredentialLookup(parsed as { request_id?: string; host?: string });
+      return;
+    }
     if (parsed.type !== "sandbox.result") return;
     const requestId = parsed.request_id;
     if (!requestId) return;
@@ -296,6 +310,50 @@ export class BridgeRelaySandbox implements SandboxExecutor {
       pending.resolve(parsed.result ?? {});
     } else {
       pending.reject(new Error(parsed.error ?? "bridge sandbox op failed"));
+    }
+  }
+
+  /**
+   * Answer a daemon-initiated credential lookup. Reply is always sent — a
+   * failure comes back as `ok: false` so the daemon's proxy can log it and
+   * forward the request un-injected rather than hanging until its timeout.
+   */
+  async #answerCredentialLookup(req: { request_id?: string; host?: string }): Promise<void> {
+    const requestId = req.request_id;
+    if (!requestId) return;
+    const reply = (payload: Record<string, unknown>): void => {
+      try {
+        this.#ws?.send(
+          JSON.stringify({
+            type: "sandbox.outbound.credential.result",
+            request_id: requestId,
+            session_id: this.#sessionId,
+            ...(this.#tenantId ? { tenant_id: this.#tenantId } : {}),
+            ...payload,
+          }),
+        );
+      } catch {
+        /* socket died; the daemon's lookup times out and falls back */
+      }
+    };
+
+    const host = typeof req.host === "string" ? req.host : "";
+    const main = (this.#env as unknown as Env).MAIN_MCP;
+    if (!host || !main?.lookupOutboundCredential || !this.#tenantId) {
+      reply({ ok: false, error: "credential resolution unavailable on this deployment" });
+      return;
+    }
+    try {
+      const cred = await main.lookupOutboundCredential({
+        tenantId: this.#tenantId,
+        sessionId: this.#sessionId,
+        hostname: host,
+      });
+      // `token: null` is a definite "no credential matches" — distinct from
+      // ok:false, which means we could not answer at all.
+      reply({ ok: true, token: cred?.token ?? null });
+    } catch (err) {
+      reply({ ok: false, error: err instanceof Error ? err.message : String(err) });
     }
   }
 

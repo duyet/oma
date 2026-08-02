@@ -290,10 +290,14 @@ export class RuntimeRoom extends DurableObject<Env> {
 
     // Sandbox-relay results — fan out to the sandbox-relay WS for that sid.
     //   sandbox.result { session_id, request_id, ok, result?, error?, tenant_id? }
-    if (parsed.type === "sandbox.result") {
+    // `sandbox.outbound.credential` (issue #318) travels the same way: the
+    // daemon's loopback credential proxy asks the relay which vault credential
+    // matches a host, and the relay answers from MAIN_MCP. Same tenant guard —
+    // a mis-tenanted lookup must never be answered.
+    if (parsed.type === "sandbox.result" || parsed.type === "sandbox.outbound.credential") {
       const sid = parsed.session_id as string | undefined;
       if (!sid) {
-        logWarn({ op: "runtime_room.sandbox_result_no_sid" }, "sandbox.result missing session_id");
+        logWarn({ op: "runtime_room.sandbox_result_no_sid", type: parsed.type }, `${parsed.type} missing session_id`);
         return;
       }
       // Tenant guard mirrors the session path: when the daemon echoes a

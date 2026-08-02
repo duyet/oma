@@ -15,7 +15,10 @@ let mgr: BridgeSandboxManager;
 beforeEach(() => {
   baseDir = mkdtempSync(join(tmpdir(), "oma-sbx-"));
   sent = [];
-  mgr = new BridgeSandboxManager((m) => sent.push(m), { baseDir });
+  // credentialProxy off: these tests drive ops with a no-op sender, so a
+  // credential lookup would have nothing to answer it. Injection itself is
+  // covered in credential-proxy.test.ts.
+  mgr = new BridgeSandboxManager((m) => sent.push(m), { baseDir, credentialProxy: false });
 });
 
 afterEach(() => {
@@ -94,5 +97,42 @@ describe("BridgeSandboxManager", () => {
   it("ignores frames missing request_id or session_id", async () => {
     await mgr.handle({ type: "sandbox.op", op: "exec", command: "true" } as never);
     expect(sent).toHaveLength(0);
+  });
+});
+
+describe("outbound credential lookup relay (issue #318)", () => {
+  it("asks the platform over the relay socket and settles on the reply", async () => {
+    const pending = mgr.resolveCredential("sess_1", "github.com");
+    const frame = sent.at(-1)!;
+    expect(frame).toMatchObject({
+      type: "sandbox.outbound.credential",
+      session_id: "sess_1",
+      host: "github.com",
+    });
+    // The request frame carries no credential material — it is a question.
+    expect(JSON.stringify(frame)).not.toContain("Bearer");
+
+    mgr.handleCredentialResult({
+      request_id: frame.request_id as string,
+      ok: true,
+      token: "fake-token-not-a-real-credential",
+    });
+    await expect(pending).resolves.toBe("fake-token-not-a-real-credential");
+  });
+
+  it("resolves null when no credential matches the host", async () => {
+    const pending = mgr.resolveCredential("sess_1", "example.com");
+    mgr.handleCredentialResult({ request_id: sent.at(-1)!.request_id as string, ok: true, token: null });
+    await expect(pending).resolves.toBeNull();
+  });
+
+  it("rejects (so the proxy can log + fail open) when the platform cannot answer", async () => {
+    const pending = mgr.resolveCredential("sess_1", "github.com");
+    mgr.handleCredentialResult({
+      request_id: sent.at(-1)!.request_id as string,
+      ok: false,
+      error: "credential resolution unavailable on this deployment",
+    });
+    await expect(pending).rejects.toThrow("unavailable on this deployment");
   });
 });
