@@ -2,6 +2,8 @@
 // cascade-on-delete behavior + ordering of the D1 adapter so tests catch
 // the same integrity violations.
 
+import type { PageCursor } from "@duyet/oma-shared";
+
 import type {
   Clock,
   FileListOptions,
@@ -58,11 +60,12 @@ export class InMemoryFileRepo implements FileRepo {
     if (opts.sessionId !== undefined) {
       rows = rows.filter((f) => f.session_id === opts.sessionId);
     }
-    if (opts.beforeId) rows = rows.filter((f) => f.id < opts.beforeId!);
-    if (opts.afterId) rows = rows.filter((f) => f.id > opts.afterId!);
+    const ascending = opts.order === "asc";
+    if (opts.after) rows = rows.filter((f) => seek(f, opts.after!, ascending));
+    if (opts.before) rows = rows.filter((f) => seek(f, opts.before!, !ascending));
     rows.sort((a, b) => {
-      const cmp = a.created_at - b.created_at;
-      return opts.order === "asc" ? cmp : -cmp;
+      const cmp = a.created_at - b.created_at || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+      return ascending ? cmp : -cmp;
     });
     return rows.slice(0, opts.limit).map(toRow);
   }
@@ -138,6 +141,14 @@ function toRow(f: InMemFile): FileRow {
     r2_key: f.r2_key,
     created_at: msToIso(f.created_at),
   };
+}
+
+/** `(created_at, id)` seek predicate — mirrors the SQL adapter's `seek`. */
+function seek(f: InMemFile, cursor: PageCursor, forward: boolean): boolean {
+  if (f.created_at !== cursor.createdAt) {
+    return forward ? f.created_at > cursor.createdAt : f.created_at < cursor.createdAt;
+  }
+  return forward ? f.id > cursor.id : f.id < cursor.id;
 }
 
 function msToIso(ms: number): string {

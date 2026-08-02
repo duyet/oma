@@ -1,3 +1,6 @@
+import type { PageCursor } from "@duyet/oma-shared";
+import { decodeCursor, fetchN, toCursorPage, trimPage } from "@duyet/oma-shared";
+
 import { FileNotFoundError } from "./errors";
 import type {
   Clock,
@@ -138,26 +141,74 @@ export class FileService {
    * composite index. Without it, uses (tenant_id, created_at DESC). Both
    * paths are a single indexed SELECT — the KV-era list+merge is gone.
    */
-  async list(opts: {
-    tenantId: string;
-    sessionId?: string;
-    beforeId?: string;
-    afterId?: string;
-    order?: "asc" | "desc";
-    limit?: number;
-  }): Promise<FileRow[]> {
+  async list(opts: FileListArgs): Promise<FileRow[]> {
+    return (await this.listPage(opts)).items;
+  }
+
+  /**
+   * Same query as {@link list}, plus the opaque continuation token the HTTP
+   * layer returns as `next_page`. Undefined `nextCursor` means "last page".
+   *
+   * Cursors are the shared `(created_at, id)` DESC ones from
+   * @duyet/oma-shared — no second scheme lives here. An `after_id` /
+   * `before_id` anchor (the Anthropic id-cursor form) is resolved to the same
+   * cursor by reading the anchor row, so both entry points hit one code path.
+   * A stale or unreadable cursor decodes to undefined and restarts at page 1,
+   * per the project-wide pagination contract.
+   */
+  async listPage(
+    opts: FileListArgs & { cursor?: string },
+  ): Promise<{ items: FileRow[]; nextCursor?: string }> {
     let limit = opts.limit ?? DEFAULT_LIST_LIMIT;
     if (!Number.isFinite(limit) || limit < 1) limit = DEFAULT_LIST_LIMIT;
     if (limit > MAX_LIST_LIMIT) limit = MAX_LIST_LIMIT;
+
+    const after =
+      decodeCursor(opts.cursor) ?? (await this.anchor(opts.tenantId, opts.afterId));
+    const before = await this.anchor(opts.tenantId, opts.beforeId);
+
+    // An id anchor that names no row would otherwise silently degrade to
+    // "page 1", which turns an SDK auto-pagination walk into an endless loop.
+    // Treat it as past-the-end instead. (An opaque cursor is different: the
+    // shared contract says a stale token restarts from page 1.)
+    if ((opts.afterId && !after) || (opts.beforeId && !before)) {
+      return { items: [] };
+    }
+
     const listOpts: FileListOptions = {
       sessionId: opts.sessionId,
-      beforeId: opts.beforeId,
-      afterId: opts.afterId,
+      after,
+      before,
       order: opts.order ?? "desc",
-      limit,
+      // N+1 so "is there another page" needs no COUNT query.
+      limit: fetchN(limit),
     };
-    return this.repo.list(opts.tenantId, listOpts);
+    const rows = await this.repo.list(opts.tenantId, listOpts);
+    return toCursorPage(trimPage(rows, limit), (r) => ({
+      createdAt: new Date(r.created_at).getTime(),
+      id: r.id,
+    }));
   }
+
+  /** Resolve an id anchor (`after_id` / `before_id`) to a seek cursor. */
+  private async anchor(
+    tenantId: string,
+    fileId: string | undefined,
+  ): Promise<PageCursor | undefined> {
+    if (!fileId) return undefined;
+    const row = await this.repo.get(tenantId, fileId);
+    if (!row) return undefined;
+    return { createdAt: new Date(row.created_at).getTime(), id: row.id };
+  }
+}
+
+export interface FileListArgs {
+  tenantId: string;
+  sessionId?: string;
+  beforeId?: string;
+  afterId?: string;
+  order?: "asc" | "desc";
+  limit?: number;
 }
 
 // ============================================================
