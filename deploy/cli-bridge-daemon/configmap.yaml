@@ -1,5 +1,5 @@
-# Non-secret backend config for the bridge daemon. Flip OMA_BRIDGE_BACKEND to
-# "openshell" and set OMA_OPENSHELL_URL to relay sandbox ops to an OpenShell
+# Non-secret backend config for the bridge daemon. Flip BRIDGE_SANDBOX_BACKEND to
+# "openshell" and set OPENSHELL_GATEWAY_ENDPOINT to relay sandbox ops to an OpenShell
 # gateway instead of running them locally in the pod.
 apiVersion: v1
 kind: ConfigMap
@@ -9,8 +9,8 @@ metadata:
     app: oma-bridge-daemon
 data:
   # "" (or omit) = local subprocess relay. "openshell" = gRPC relay.
-  OMA_BRIDGE_BACKEND: ""
-  # Required when OMA_BRIDGE_BACKEND=openshell. gRPC `host:port` of the gateway.
-  OMA_OPENSHELL_URL: ""
+  BRIDGE_SANDBOX_BACKEND: ""
+  # Required when BRIDGE_SANDBOX_BACKEND=openshell. gRPC `host:port` of the gateway.
+  OPENSHELL_GATEWAY_ENDPOINT: ""
   # Optional OpenShell sandbox image; empty = gateway default.
-  OMA_OPENSHELL_IMAGE: ""
+  OPENSHELL_IMAGE: ""

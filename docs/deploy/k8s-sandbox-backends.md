@@ -76,8 +76,8 @@ kubectl create secret generic oma-bridge-daemon-creds \
 
 # 2. (optional) flip to the OpenShell backend
 kubectl create configmap oma-bridge-daemon-config \
-  --from-literal=OMA_BRIDGE_BACKEND=openshell \
-  --from-literal=OMA_OPENSHELL_URL=openshell-gateway.openshell.svc:8080
+  --from-literal=BRIDGE_SANDBOX_BACKEND=openshell \
+  --from-literal=OPENSHELL_GATEWAY_ENDPOINT=openshell-gateway.openshell.svc:8080
 
 # 3. Deploy
 kubectl apply -f deploy/cli-bridge-daemon/
@@ -89,15 +89,28 @@ ServiceAccount or RBAC**.
 
 ### Backend selection
 
-`oma bridge daemon` chooses its sandbox backend like the k8s-bridge does
-(`resolveSandboxBackend`, `packages/cli/src/bridge/lib/sandbox-backend.ts`):
+`oma bridge daemon` picks its sandbox backend via `resolveSandboxBackend`
+(`packages/cli/src/bridge/lib/sandbox-backend.ts`), in this precedence order:
+
+1. persisted daemon settings, written by `oma bridge setup`,
+2. the `BRIDGE_SANDBOX_BACKEND` environment variable,
+3. `subprocess`.
 
 | Input | Effect |
 |---|---|
-| `--backend local` / `OMA_BRIDGE_BACKEND=local` | Local subprocess relay (default) |
-| `--backend openshell` / `OMA_BRIDGE_BACKEND=openshell` | Relay each op to an OpenShell gateway over gRPC |
-| `--openshell-url <host:port>` / `OMA_OPENSHELL_URL` | Gateway endpoint (auto-selects openshell when no backend is set) |
-| `OMA_OPENSHELL_TOKEN`, `OMA_OPENSHELL_IMAGE` | Gateway token / sandbox image (fall back to the adapter's `OPENSHELL_*` names) |
+| `BRIDGE_SANDBOX_BACKEND=subprocess` (or `local`) | Host subprocess relay — the default |
+| `BRIDGE_SANDBOX_BACKEND=openshell` | Relay each op to an OpenShell gateway over gRPC |
+| `OPENSHELL_GATEWAY_ENDPOINT` | Gateway `host:port` (default `127.0.0.1:8080`) |
+| `OPENSHELL_GATEWAY_TLS=1` | Enable TLS; `OPENSHELL_GATEWAY_CA_PATH` for server auth, plus `OPENSHELL_GATEWAY_CERT_PATH` / `OPENSHELL_GATEWAY_KEY_PATH` for mTLS |
+
+> **Opt-in only — no auto-detect.** Unlike the k8s-bridge's
+> `resolveBridgeBackendKind` (`apps/k8s-bridge/src/backend.ts`), which flips to
+> OpenShell as soon as an endpoint is present, the daemon requires an explicit
+> choice. That rule is safe for a dedicated in-cluster deployment and unsafe on
+> a laptop: someone who installed OpenShell for unrelated reasons would
+> silently flip their daemon, and every agent would lose sight of their real
+> repos and toolchains. Setting `OPENSHELL_GATEWAY_ENDPOINT` alone does **not**
+> select the OpenShell backend.
 
 > **Image note:** the default local relay runs with the published
 > `@getoma/cli` on any Node image. The OpenShell backend dynamically imports

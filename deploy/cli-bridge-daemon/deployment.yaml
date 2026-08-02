@@ -6,7 +6,7 @@
 #
 #   * local  (default)   — subprocess + host filesystem, inside this pod.
 #   * openshell          — relay each op to an OpenShell gateway over gRPC
-#                          (set OMA_BRIDGE_BACKEND=openshell + OMA_OPENSHELL_URL).
+#                          (set BRIDGE_SANDBOX_BACKEND=openshell + OPENSHELL_GATEWAY_ENDPOINT).
 #
 # The daemon makes only OUTBOUND connections (WS to the control plane, gRPC to
 # the OpenShell gateway) and never touches the Kubernetes API — so, unlike the
@@ -40,6 +40,32 @@ spec:
         fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        # The daemon writes inside its config dir at runtime — `sessions/`
+        # (per-session ACP cwds, see packages/cli/src/bridge/lib/session-cwd.ts)
+        # and `machine-id`. A Secret volume is always read-only, so mounting it
+        # directly at ~/.oma/bridge makes those writes fail. Copy the creds into
+        # a writable emptyDir instead and mount that as the config dir.
+        - name: seed-creds
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              cp /creds-src/credentials.json /home/oma/.oma/bridge/credentials.json
+              chmod 0600 /home/oma/.oma/bridge/credentials.json
+          volumeMounts:
+            - name: creds-src
+              mountPath: /creds-src
+              readOnly: true
+            - name: bridge-state
+              mountPath: /home/oma/.oma/bridge
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
       containers:
         - name: daemon
           # Default (local relay): the published CLI on a plain Node image.
@@ -52,36 +78,37 @@ spec:
             - name: HOME
               value: /home/oma
             # Backend selection (apps/cli sandbox-backend.ts). Empty/absent =
-            # local relay. Set to "openshell" + OMA_OPENSHELL_URL to relay to a
+            # local relay. Set to "openshell" + OPENSHELL_GATEWAY_ENDPOINT to relay to a
             # gateway instead. Sourced from the ConfigMap so it's easy to flip.
-            - name: OMA_BRIDGE_BACKEND
+            - name: BRIDGE_SANDBOX_BACKEND
               valueFrom:
                 configMapKeyRef:
                   name: oma-bridge-daemon-config
-                  key: OMA_BRIDGE_BACKEND
+                  key: BRIDGE_SANDBOX_BACKEND
                   optional: true
-            - name: OMA_OPENSHELL_URL
+            - name: OPENSHELL_GATEWAY_ENDPOINT
               valueFrom:
                 configMapKeyRef:
                   name: oma-bridge-daemon-config
-                  key: OMA_OPENSHELL_URL
+                  key: OPENSHELL_GATEWAY_ENDPOINT
                   optional: true
-            - name: OMA_OPENSHELL_IMAGE
+            - name: OPENSHELL_IMAGE
               valueFrom:
                 configMapKeyRef:
                   name: oma-bridge-daemon-config
-                  key: OMA_OPENSHELL_IMAGE
+                  key: OPENSHELL_IMAGE
                   optional: true
-            - name: OMA_OPENSHELL_TOKEN
+            - name: OPENSHELL_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: oma-bridge-daemon-creds
-                  key: OMA_OPENSHELL_TOKEN
+                  key: OPENSHELL_TOKEN
                   optional: true
           volumeMounts:
-            - name: creds
+            # Writable: holds credentials.json (seeded by the init container)
+            # plus the sessions/ and machine-id state the daemon writes.
+            - name: bridge-state
               mountPath: /home/oma/.oma/bridge
-              readOnly: true
             # npx needs a writable home for its cache; keep the rest read-only.
             - name: npm-cache
               mountPath: /home/oma/.npm
@@ -100,13 +127,18 @@ spec:
               cpu: "1"
               memory: 512Mi
       volumes:
-        - name: creds
+        # Read-only source of the paired credentials; copied into bridge-state
+        # by the init container above.
+        - name: creds-src
           secret:
             secretName: oma-bridge-daemon-creds
-            # credentials.json must be mode-0600-readable by uid 1000.
             defaultMode: 0400
             items:
               - key: credentials.json
                 path: credentials.json
+        # Writable daemon state (credentials.json, machine-id, sessions/).
+        # Ephemeral by design: re-seeded from the Secret on every restart.
+        - name: bridge-state
+          emptyDir: {}
         - name: npm-cache
           emptyDir: {}

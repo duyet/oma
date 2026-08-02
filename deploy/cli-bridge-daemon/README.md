@@ -16,7 +16,7 @@ to the gateway) — it never touches the Kubernetes API, so it needs **no RBAC**
 | File | Purpose |
 |---|---|
 | `deployment.yaml` | The daemon Deployment (1 replica = 1 machine) |
-| `configmap.yaml` | Backend selection env (`OMA_BRIDGE_BACKEND`, `OMA_OPENSHELL_URL`, …) |
+| `configmap.yaml` | Backend selection env (`BRIDGE_SANDBOX_BACKEND`, `OPENSHELL_GATEWAY_ENDPOINT`, …) |
 | `secret.example.yaml` | Shape of the `credentials.json` Secret — create it out-of-band |
 | `Dockerfile.openshell` | Monorepo image build for the OpenShell backend |
 
@@ -31,7 +31,7 @@ kubectl create secret generic oma-bridge-daemon-creds \
   --from-file=credentials.json="$HOME/.oma/bridge/credentials.json"
 
 # 3. (optional) OpenShell backend:
-kubectl apply -f configmap.yaml   # then edit: OMA_BRIDGE_BACKEND=openshell, OMA_OPENSHELL_URL=...
+kubectl apply -f configmap.yaml   # then edit: BRIDGE_SANDBOX_BACKEND=openshell, OPENSHELL_GATEWAY_ENDPOINT=...
 
 # 4. Deploy:
 kubectl apply -f deployment.yaml

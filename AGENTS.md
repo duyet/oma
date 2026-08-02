@@ -507,13 +507,16 @@ comparison + deploy steps (Helm chart + `deploy/cli-bridge-daemon/`
 manifests): [`docs/deploy/k8s-sandbox-backends.md`](docs/deploy/k8s-sandbox-backends.md).
 
 The **CLI bridge daemon** (`oma bridge daemon`, the `subprocess` provider's
-relay) also supports the OpenShell backend: `--backend openshell
---openshell-url <host:port>` (or `OMA_BRIDGE_BACKEND=openshell` +
-`OMA_OPENSHELL_URL`) relays each sandbox op to an OpenShell gateway over gRPC
-instead of the local subprocess, reusing the same `@duyet/oma-sandbox`
-adapter. Selection logic: `resolveSandboxBackend`
-(`packages/cli/src/bridge/lib/sandbox-backend.ts`). It can run in-cluster as a
-Deployment with no RBAC (outbound-only) — see `deploy/cli-bridge-daemon/`.
+relay) also supports the OpenShell backend: answer the `oma bridge setup`
+prompt, or set `BRIDGE_SANDBOX_BACKEND=openshell` plus
+`OPENSHELL_GATEWAY_ENDPOINT=<host:port>`, and each sandbox op is relayed to an
+OpenShell gateway over gRPC instead of the local subprocess. Selection is
+explicit opt-in only — an endpoint on its own never flips the backend, since
+silently swapping a laptop's host relay for an empty sandbox would hide the
+user's real repos and toolchains. Logic: `resolveSandboxBackend`
+(`packages/cli/src/bridge/lib/sandbox-backend.ts`). The daemon can run
+in-cluster as a Deployment with no RBAC (outbound-only) — see
+`deploy/cli-bridge-daemon/`.
 
 ### Environment Status
 
