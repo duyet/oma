@@ -44,6 +44,20 @@ export {
   SYSTEM_PROVIDERS,
 } from "./provider-config";
 
+export type {
+  DeploymentRuntime,
+  ProviderAvailability,
+  ProviderAvailabilityState,
+  AvailabilityInput,
+  HostingTypeEntry,
+} from "./availability";
+
+export {
+  describeProviderAvailability,
+  describeAllProviderAvailability,
+  buildUnseededHostingTypes,
+} from "./availability";
+
 export { KubernetesRemoteSandbox } from "./adapters/kubernetes-remote";
 
 export {

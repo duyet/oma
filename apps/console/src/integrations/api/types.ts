@@ -83,6 +83,13 @@ export interface A1FormStep {
    */
   manifestLaunchUrl?: string | null;
   /**
+   * Slack-only: the same manifest the launch URL encodes, pretty-printed.
+   * For admins applying it to an App that already exists (Slack's App
+   * Manifest editor takes a paste) or reviewing scopes before creating one.
+   * Contains no secrets — only the deployment's public gateway URLs.
+   */
+  manifestJson?: string | null;
+  /**
    * Slack publication-first only: the OMA publication id minted by the
    * shell-create. The wizard surfaces it for ops/debug; the API client uses
    * it implicitly via the formToken JWT (no client-side state needed).

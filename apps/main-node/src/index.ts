@@ -75,6 +75,8 @@ import {
   SandboxProviderRegistry,
   InMemoryQuotaStore,
   SYSTEM_PROVIDERS,
+  buildUnseededHostingTypes,
+  describeProviderAvailability,
   resolveDefaultLocalSandboxProvider,
   type SandboxProviderConfig,
   type SandboxUsageRecord,
@@ -1710,10 +1712,20 @@ v1.get("/hosting_types", async (c) => {
       external: !p.isSystem || !["subprocess", "cloud"].includes(p.type),
       capabilities: sysCap(p.type),
       health: health ?? null,
+      availability: describeProviderAvailability({
+        providerId: p.type,
+        runtime: "node",
+        env,
+      }),
     };
   });
 
-  return c.json({ data: types });
+  // Every provider this build ships that wasn't seeded still gets a row, so
+  // the Console can say *why* it isn't usable here instead of omitting it.
+  const seeded = new Set(providers.map((p) => p.type));
+  const unseeded = buildUnseededHostingTypes(seeded, "node", env);
+
+  return c.json({ runtime: "node", data: [...types, ...unseeded] });
 });
 
 // ─── Sandbox provider management (BYOK) ──────────────────────────────

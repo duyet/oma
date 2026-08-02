@@ -116,3 +116,135 @@ describe("<RuntimesList /> browser-vm", () => {
     expect(openSpy).not.toHaveBeenCalled();
   });
 });
+
+function provider(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "cloud",
+    label: "Cloudflare Sandbox",
+    description: "Managed sandbox — uses Cloudflare Containers.",
+    type: "system",
+    provider: "cloud",
+    external: false,
+    capabilities: ["exec", "files"],
+    health: null,
+    ...overrides,
+  };
+}
+
+describe("<RuntimesList /> provider availability", () => {
+  it("renders an unavailable provider's reason instead of omitting it", async () => {
+    server.use(
+      http.get("/v1/hosting_types", () =>
+        HttpResponse.json({
+          runtime: "cloudflare",
+          data: [
+            provider(),
+            provider({
+              id: "k8s",
+              label: "Kubernetes",
+              provider: "k8s",
+              availability: {
+                state: "unavailable",
+                reason: "Kubernetes is Node-only — use the self-host Node runtime instead.",
+              },
+            }),
+          ],
+        }),
+      ),
+      http.get("/v1/runtimes", () => HttpResponse.json({ runtimes: [] })),
+    );
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Cloudflare Sandbox")).toBeInTheDocument());
+    expect(screen.getByText("Not available on this deployment (1)")).toBeInTheDocument();
+    expect(screen.getByText("Kubernetes")).toBeInTheDocument();
+    expect(
+      screen.getByText("Kubernetes is Node-only — use the self-host Node runtime instead."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Unavailable here")).toBeInTheDocument();
+  });
+
+  it("shows the missing secret for a provider that needs configuration", async () => {
+    server.use(
+      http.get("/v1/hosting_types", () =>
+        HttpResponse.json({
+          runtime: "cloudflare",
+          data: [
+            provider({
+              id: "boxrun",
+              label: "BoxRun (remote micro-VM)",
+              provider: "boxrun",
+              availability: {
+                state: "needs_config",
+                reason: "Requires the BOXRUN_URL secret.",
+                missing_env: ["BOXRUN_URL"],
+              },
+            }),
+          ],
+        }),
+      ),
+      http.get("/v1/runtimes", () => HttpResponse.json({ runtimes: [] })),
+    );
+
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByText("BoxRun (remote micro-VM)")).toBeInTheDocument(),
+    );
+    expect(screen.getByText("Needs config")).toBeInTheDocument();
+    // The missing-secret chip lives in the same note as the reason; scope to
+    // it because the page's setup help copy also mentions env var names.
+    const note = screen.getByText("Requires the BOXRUN_URL secret.").parentElement!;
+    expect(note).toHaveTextContent("BOXRUN_URL");
+    // Still usable here — it stays in the main grid, not the unavailable list.
+    expect(screen.queryByText(/Not available on this deployment/)).not.toBeInTheDocument();
+  });
+
+  it("names the deployment the availability applies to", async () => {
+    server.use(
+      http.get("/v1/hosting_types", () =>
+        HttpResponse.json({ runtime: "node", data: [provider()] }),
+      ),
+      http.get("/v1/runtimes", () => HttpResponse.json({ runtimes: [] })),
+    );
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Cloudflare Sandbox")).toBeInTheDocument());
+    expect(screen.getByText("Self-host Node runtime")).toBeInTheDocument();
+  });
+
+  it("offers no Set up button for a provider that cannot run here", async () => {
+    server.use(
+      http.get("/v1/hosting_types", () =>
+        HttpResponse.json({
+          runtime: "cloudflare",
+          data: [
+            provider({
+              id: "docker-compose",
+              label: "Docker Compose",
+              provider: "docker-compose",
+              health: {
+                status: "not_configured",
+                latency_ms: 0,
+                last_checked: new Date().toISOString(),
+                reason: "Not configured.",
+              },
+              availability: {
+                state: "unavailable",
+                reason: "Docker Compose is Node-only — it needs a Docker socket.",
+              },
+            }),
+          ],
+        }),
+      ),
+      http.get("/v1/runtimes", () => HttpResponse.json({ runtimes: [] })),
+    );
+
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText("Docker Compose")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Set up" })).not.toBeInTheDocument();
+  });
+});

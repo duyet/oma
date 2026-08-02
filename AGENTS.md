@@ -488,6 +488,17 @@ See `classifyCfSandboxProvider` (`packages/sandbox/src/provider-config.ts`)
 for the classification and `resolveCfSandbox`
 (`apps/agent/src/runtime/sandbox.ts`) for the resolution + error path.
 
+`GET /v1/hosting_types` reports this table back to the Console. It returns
+`{ runtime: "cloudflare" | "node", data: [...] }` and lists **every** provider
+this build ships — not just the ones seeded from env — each carrying
+`availability: { state: "available" | "needs_config" | "unavailable", reason,
+missing_env? }`. `availability` answers "can this deployment run it at all"
+(runtime, bindings, secrets); the existing `health` answers "is the configured
+provider responding right now". The classification is pure and lives in
+`describeProviderAvailability` (`packages/sandbox/src/availability.ts`); the
+Console's **Settings › Sandbox Runtimes** page renders unavailable providers in
+their own collapsed section with the reason, instead of omitting them.
+
 #### `k8s-remote` vs `openshell` — which Kubernetes path
 
 Both let a Worker drive in-cluster sandboxes, but on different substrates:

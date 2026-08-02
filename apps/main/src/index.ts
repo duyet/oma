@@ -97,7 +97,13 @@ import mcpProxyRoutes, {
 import { resolveGithubCredentials } from "./lib/github-creds";
 import { buildCfScheduler } from "./lib/cf-scheduler-jobs";
 import { buildCfMemoryQueue, dispatchCfMemoryQueueBatch } from "./lib/cf-queue-handlers";
-import { SandboxProviderRegistry, seedSystemProviders, SYSTEM_PROVIDERS } from "@duyet/oma-sandbox";
+import {
+  SandboxProviderRegistry,
+  seedSystemProviders,
+  SYSTEM_PROVIDERS,
+  buildUnseededHostingTypes,
+  describeProviderAvailability,
+} from "@duyet/oma-sandbox";
 import { logError, recordEvent, errFields } from "@duyet/oma-shared";
 import { globalErrorHandler, requestMetricsMiddleware } from "./lib/observability";
 import { errorEnvelopeMiddleware } from "./lib/error-envelope";
@@ -248,6 +254,10 @@ app.get("/v1/hosting_types", async (c) => {
   const sysCap = (type: string): string[] =>
     SYSTEM_PROVIDERS.find((d) => d.type === type)?.capabilities ?? [];
 
+  // `dynamic-workers` availability hangs off a *binding*, not an env var —
+  // there is no secret that stands in for it, so probe the binding directly.
+  const hasWorkerLoader = !!(c.env as unknown as { LOADER?: unknown }).LOADER;
+
   const types = providers.map((p) => {
     const health = healthResults.get(p.id);
     return {
@@ -259,10 +269,21 @@ app.get("/v1/hosting_types", async (c) => {
       external: !p.isSystem || !["subprocess", "cloud", "browser-vm"].includes(p.type),
       capabilities: sysCap(p.type),
       health: health ?? null,
+      availability: describeProviderAvailability({
+        providerId: p.type,
+        runtime: "cloudflare",
+        env,
+        hasWorkerLoader,
+      }),
     };
   });
 
-  return c.json({ data: types });
+  // Every provider this build ships that wasn't seeded still gets a row, so
+  // the Console can say *why* it isn't usable here instead of omitting it.
+  const seeded = new Set(providers.map((p) => p.type));
+  const unseeded = buildUnseededHostingTypes(seeded, "cloudflare", env, { hasWorkerLoader });
+
+  return c.json({ runtime: "cloudflare", data: [...types, ...unseeded] });
 });
 
 // Public consumer endpoints — no authMiddleware, use their own consumer
