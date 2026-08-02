@@ -26,6 +26,8 @@ import type { SessionRow } from "@duyet/oma-sessions-store";
 import type { RouteServicesArg } from "../types";
 import { resolveServices } from "../types";
 import { parseAnalyticsRange } from "../analytics";
+import { federatedListBody } from "../federation-fanout";
+import type { FederationCryptoDep, FederatedRow } from "../federation-fanout";
 import { redactMcpServers, reconcileMcpServerTokens } from "../mcp-server-redaction";
 
 interface Vars {
@@ -196,6 +198,11 @@ export interface AgentRoutesDeps {
     tenantId: string,
     agentId: string,
   ) => Promise<boolean>;
+  /** At-rest crypto for federated-listing fan-out (issue #132 M3). Same
+   *  FEDERATION_CRYPTO_LABEL crypto the federation registry routes use.
+   *  Unset ⇒ `?include_remotes=1` degrades to local rows plus a
+   *  `remote_errors[]` marker per registered instance. */
+  federationCrypto?: FederationCryptoDep;
 }
 
 export function buildAgentRoutes(deps: AgentRoutesDeps) {
@@ -401,11 +408,18 @@ export function buildAgentRoutes(deps: AgentRoutesDeps) {
         return created !== 0 ? created : a.id.localeCompare(b.id);
       });
     }
-    return c.json({
-      data: items.map(toApiAgent),
-      ...(page.nextCursor ? { next_cursor: page.nextCursor } : {}),
-      has_more: !!page.nextCursor,
+    // Federated listing (issue #132 M3) — opt-in via `?include_remotes=1`.
+    // Without it this is exactly the local page it always was.
+    const body = await federatedListBody(c, {
+      kv: services.kv,
+      crypto: deps.federationCrypto,
+      tenantId: c.var.tenant_id,
+      resource: "agents",
+      limit,
+      localItems: items.map(toApiAgent) as unknown as FederatedRow[],
+      localNextCursor: page.nextCursor,
     });
+    return c.json({ ...body, has_more: !!body.next_cursor });
   });
 
   // GET /v1/agents/:id — get

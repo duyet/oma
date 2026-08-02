@@ -383,6 +383,7 @@ const agentsRoutes = new Hono<{
   const services = ctx.var.services;
   const app = buildAgentRoutes({
     services: () => cfRouteServicesFromCtx(ctx),
+    federationCrypto: cfFederationCrypto(ctx.env),
     validateModel: async (tenantId, model) => {
       const cards = await services.modelCards.list({ tenantId });
       const active = cards.filter((card) => card.archived_at === null);
@@ -470,14 +471,23 @@ const skillsRoutes = new Hono<{ Bindings: Env; Variables: { tenant_id: string } 
   return invokePackage(c, app);
 });
 
+// Federation at-rest crypto for a request's env — shared by the registry
+// routes and the federated-listing fan-out on /agents + /sessions
+// (issue #132 M3). Absent PLATFORM_ROOT_SECRET ⇒ undefined, and fan-out
+// degrades to a per-instance error marker instead of silently listing local
+// rows only.
+function cfFederationCrypto(env: unknown) {
+  const secret = (env as { PLATFORM_ROOT_SECRET?: string }).PLATFORM_ROOT_SECRET;
+  return secret ? buildLabeledCrypto(secret, FEDERATION_CRYPTO_LABEL) : undefined;
+}
+
 // Cross-instance federation registry (issue #132). The remote API key is
 // encrypted at rest under FEDERATION_CRYPTO_LABEL off PLATFORM_ROOT_SECRET.
 const federationRoutes = new Hono<{ Bindings: Env; Variables: { tenant_id: string } }>().all("*", (c) => {
   const ctx = c as unknown as AppCtx;
-  const secret = (c.env as unknown as { PLATFORM_ROOT_SECRET?: string }).PLATFORM_ROOT_SECRET;
   const app = buildFederationRoutes({
     services: () => cfRouteServicesFromCtx(ctx),
-    crypto: secret ? buildLabeledCrypto(secret, FEDERATION_CRYPTO_LABEL) : undefined,
+    crypto: cfFederationCrypto(c.env),
   });
   return invokePackage(c, app);
 });
@@ -762,6 +772,7 @@ function buildSessionsApp(services: Services, env: Env, tenantDb: D1Database, ct
   return buildSessionRoutes({
     services: () => cfRouteServicesFromCtxForTenant(services, tenantDb),
     router,
+    federationCrypto: cfFederationCrypto(env),
     // environment_id is always required now (harness-to-environment
     // migration) — no more synthetic LOCAL_RUNTIME_ENV_ID sentinel; a
     // missing/bogus environment_id 404s via the normal lookup below.

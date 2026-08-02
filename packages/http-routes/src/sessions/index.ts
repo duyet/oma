@@ -40,6 +40,8 @@ import type { SessionRouter, SessionInitParams } from "@duyet/oma-session-runtim
 import type { RouteServicesArg } from "../types";
 import { redactMcpServers } from "../mcp-server-redaction";
 import { resolveServices } from "../types";
+import { federatedListBody } from "../federation-fanout";
+import type { FederationCryptoDep, FederatedRow } from "../federation-fanout";
 
 interface Vars {
   Variables: { tenant_id: string; user_id?: string };
@@ -177,6 +179,11 @@ export interface SessionRoutesDeps {
    *  optional — Node leaves them undefined and the package degrades
    *  gracefully (no-op). */
   lifecycle?: SessionLifecycleHooks;
+  /** At-rest crypto for federated-listing fan-out (issue #132 M3). Same
+   *  FEDERATION_CRYPTO_LABEL crypto the federation registry routes use.
+   *  Unset ⇒ `?include_remotes=1` degrades to local rows plus a
+   *  `remote_errors[]` marker per registered instance. */
+  federationCrypto?: FederationCryptoDep;
 }
 
 function resolveRouter(
@@ -666,9 +673,21 @@ export function buildSessionRoutes(deps: SessionRoutesDeps) {
         ? { createdBefore: createdBeforeRes.value }
         : {}),
     });
+    // Federated listing (issue #132 M3) — opt-in via `?include_remotes=1`.
+    // Without it this is exactly the local page it always was.
+    const body = await federatedListBody(c, {
+      kv: services.kv,
+      crypto: deps.federationCrypto,
+      tenantId: c.var.tenant_id,
+      resource: "sessions",
+      limit,
+      localItems: page.items.map((row) => toApiSession(row as never)) as unknown as FederatedRow[],
+      localNextCursor: page.nextCursor,
+    });
     return c.json({
-      data: page.items.map((row) => toApiSession(row as never)),
-      ...(page.nextCursor ? { next_page: page.nextCursor, next_cursor: page.nextCursor } : {}),
+      ...body,
+      // `next_page` is the legacy spelling of the same cursor; keep both.
+      ...(body.next_cursor ? { next_page: body.next_cursor } : {}),
     });
   });
 

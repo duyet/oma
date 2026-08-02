@@ -993,9 +993,9 @@ Any session created with it is driven by `OmaRemoteHarness`
 (`apps/agent/src/harness/oma-remote-loop.ts`), selected from the environment
 exactly like `kind: "local"` selects `acp-proxy` — `config.harness` is ignored.
 Per turn it: opens (or reuses) a session on the remote, posts the user message,
-polls the remote event log to `session.status_idle`, and **mirrors the remote's
-`agent.*` events into the origin's own event log**, tagged with
-`metadata.remote_instance_id` + `metadata.remote_seq`. `GET
+**consumes the remote's SSE event stream** to `session.status_idle`, and
+**mirrors the remote's `agent.*` events into the origin's own event log** as
+they arrive, tagged with `metadata.remote_instance_id` + `metadata.remote_seq`. `GET
 /v1/sessions/:id/events` on the origin therefore renders the remote turn with
 no client change. The bound remote session id is persisted on the origin
 session, so turn N+1 continues the same remote conversation and `/workspace`.
@@ -1012,8 +1012,10 @@ session, so turn N+1 continues the same remote conversation and `/workspace`.
   does not live-proxy reads. Crash recovery is rebuilt from a session's own
   append-only log, and a pure live proxy would make every origin read (and any
   mid-turn origin restart) depend on the remote being up. The trade-off is
-  duplicated storage and a copy that stops at the last poll; the remote's log
-  stays the source of truth for anything the origin missed.
+  duplicated storage and a copy that stops at the last event the origin
+  mirrored; the remote's log stays the source of truth for anything it missed.
+  Streaming (M2) does not change this: every streamed event is still written
+  durably into the origin's log before it is broadcast.
 - **Loop prevention** — a federated session may not itself be an origin.
   A → B is allowed; A → B → C is refused (`MAX_FEDERATION_DEPTH = 1`,
   `assertFederationDepthAllowed`), for both the proxied-session path and
@@ -1039,11 +1041,83 @@ an event, or a log line.
 
 **Limitations:** Cloudflare-only for now (self-host Node selects its harness
 from agent metadata rather than the environment and has no slot for the bound
-remote session id — it fails clearly instead). The mirror is poll-driven, so
-the origin lags the remote by up to one poll interval; true SSE passthrough is
-M2, below. Session pause/resume, workspace backups, memory-store mounts and
+remote session id — it fails clearly instead). Session pause/resume, workspace backups, memory-store mounts and
 file promotion all act on the (absent) local sandbox and are therefore not
 available to a federated session.
+
+### Event-stream passthrough (M2)
+
+The mirror is **SSE-driven**: the origin opens
+`GET <remote>/v1/sessions/:id/events/stream?include=chunks&replay=1` with a
+`Last-Event-ID` of the highest remote `seq` it has already mirrored, and writes
+each event into its own log the moment it arrives — so an origin console
+animates a remote turn live instead of one poll interval behind.
+
+- **Durable, not just broadcast.** Every streamed event goes through the same
+  mirror path M1 used, so it lands in the origin's append-only log; the
+  read-through-copy position above is unchanged.
+- **Resume is seq-exact.** The origin advances its mirrored-seq watermark
+  *before* handing an event on, and persists it per event, so a mid-turn
+  stream drop (or an origin restart) reconnects strictly after the last event
+  it actually wrote. Anything a remote replays at or below that watermark is
+  dropped — no gaps, no duplicates. The reconnect budget is 5 by default;
+  exhausting it fails the turn loudly.
+- **Automatic transport fallback.** A remote that serves no SSE surface (its
+  stream endpoint answers non-2xx) falls back to the M1
+  `GET /events?after_seq=` poll loop *on the same remote*. That is a transport
+  fallback, never a fallback to a local run.
+- The one-shot `call_remote_agent_*` delegate deliberately stays on the poll
+  transport: it mirrors nothing into the caller's log, so a long-lived socket
+  per in-flight sub-agent call would buy no interactivity.
+
+Implementation: `runRemoteTurn` + `parseSseEvents`
+(`packages/shared/src/federation.ts`), driven by `SessionDO#runRemoteProxyTurn`.
+
+### Unified listing across instances (M3)
+
+`GET /v1/sessions` and `GET /v1/agents` can merge rows from registered remotes
+into the local page. **Opt-in only** — making every list call fan out would
+turn a local read into an N-way network call on the two most-hit routes:
+
+```bash
+# Local only (default, unchanged — no remote is contacted at all)
+curl -s "$BASE/v1/sessions" -H "x-api-key: $KEY"
+
+# Merge in every registered remote
+curl -s "$BASE/v1/sessions?include_remotes=1" -H "x-api-key: $KEY"
+
+# ...or just some of them
+curl -s "$BASE/v1/agents?include_remotes=1&remote_instance_ids=fed_eu,fed_us" \
+  -H "x-api-key: $KEY"
+```
+
+| Param | Meaning |
+|---|---|
+| `include_remotes` | `1`/`true` enables fan-out. Absent ⇒ local-only, zero network I/O. |
+| `remote_instance_ids` | Comma-separated `fed_*` ids to narrow the fan-out. Absent ⇒ all registered instances. |
+
+- **Badging.** Every remote row carries `remote_instance_id` +
+  `remote_instance_name`; local rows carry neither, which is how a client
+  tells them apart.
+- **Ordering + cursors.** Each source already lists `(created_at, id) DESC`
+  and speaks the same opaque cursor codec
+  (`packages/shared/src/pagination.ts`), so the merged page is a k-way merge
+  of sorted streams and `next_cursor` is the last merged row's
+  `(created_at, id)` — which every source honours on the next call. All other
+  filters (`status`, `q`, `created_after`, `limit`, `cursor`, …) are forwarded
+  verbatim to each remote.
+- **Degrades, never fails.** A remote that is unresolvable, unreachable,
+  answers non-2xx, or blows its per-remote timeout (5s) contributes no rows
+  and one entry in `remote_errors[]`
+  (`{ instance_id, name, error }`) — the listing still returns 200 with
+  whatever partial data arrived. Same when `PLATFORM_ROOT_SECRET` is unset,
+  so a missing key surfaces instead of silently looking local-only.
+- **Not a new multi-hop path.** The control params are stripped before
+  forwarding, so a remote is never asked to fan out in turn — the depth-1
+  federation model is unaffected.
+
+Implementation: `packages/http-routes/src/federation-fanout.ts`, mounted by
+both runtimes (Cloudflare `apps/main`, self-host `apps/main-node`).
 
 ### Security model
 
@@ -1057,14 +1131,11 @@ available to a federated session.
 
 ### Deferred (follow-ups on #132)
 
-Not yet built: **SSE passthrough** of the remote's `/events/stream` so the
-origin renders the remote turn in real time instead of per-poll (M2);
-**unified listing** — `GET /v1/sessions` / `/v1/agents` fanning out across
-registered remotes and merging with a `remote_instance_id` badge (M3);
-self-host **Node parity** for `oma-remote`; remote **identity mapping** beyond
+Not yet built: self-host **Node parity** for `oma-remote`; remote **identity mapping** beyond
 the shared tenant key; a Console UI for the registry, `remote_agent` roster
-entries and `oma-remote` environments (API-only for now); and
-inbound-federation trust controls distinct from the tenant API key.
+entries, `oma-remote` environments and the `include_remotes` listing toggle
+(API-only for now); and inbound-federation trust controls distinct from the
+tenant API key.
 
 Federated **parallel fan-out** is supported: `call_agents_parallel` accepts
 remote (`remote_agent`) targets alongside local ones — see
