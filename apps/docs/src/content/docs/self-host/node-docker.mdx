@@ -126,6 +126,7 @@ provider available:
 | `boxrun` | Multi-host with KVM, oma pods on managed k8s | `BOXRUN_URL=http://host:8100/v1/default` (+ optional `BOXRUN_TOKEN`). Run `boxlite serve` on a separate KVM host; oma pods reach it over HTTP. |
 | `daytona` | Production / untrusted code | `DAYTONA_API_KEY=...` (+ optional `DAYTONA_API_URL`). Daytona-managed Linux VMs, one per session. |
 | `e2b` | E2B SaaS / E2B Infra self-host / Aliyun Agent Sandbox (e2b-compatible) | `E2B_API_KEY=...` (+ optional `E2B_API_URL` for non-default endpoint). Firecracker microVMs. |
+| `browser-vm` (listed, not usable here) | N/A — Cloudflare only | Seeded from the same shared provider list, but `GET /v1/hosting_types` reports it `not_configured` on main-node — the RuntimeRoom WebSocket relay it needs is Cloudflare-only. |
 
 **The old `SANDBOX_PROVIDER` env var still works** as the fallback default
 when an environment has no explicit provider selection. New deployments should

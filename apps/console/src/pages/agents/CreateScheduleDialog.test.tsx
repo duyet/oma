@@ -7,6 +7,7 @@ import { http, HttpResponse } from "msw";
 import { server } from "../../mocks/server";
 import { CreateScheduleDialog } from "./CreateScheduleDialog";
 import type { AgentRecord } from "../../types/agent";
+import type { AgentSchedule } from "./schedule-types";
 
 const agent: AgentRecord = {
   id: "agent_1",
@@ -16,13 +17,33 @@ const agent: AgentRecord = {
   created_at: "2026-01-01T00:00:00Z",
 };
 
-function renderDialog() {
+const existingSchedule: AgentSchedule = {
+  id: "sch_1",
+  agent_id: "agent_1",
+  cron_expression: "0 8 * * *",
+  input: "Post the daily digest",
+  environment_id: "env_1",
+  timezone: "America/New_York",
+  next_run_at: "2026-02-01T08:00:00Z",
+  max_sessions: 3,
+  enabled: true,
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+};
+
+function renderDialog(schedule?: AgentSchedule | null) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const onCreated = vi.fn();
   const onClose = vi.fn();
   render(
     <QueryClientProvider client={queryClient}>
-      <CreateScheduleDialog open onClose={onClose} agent={agent} onCreated={onCreated} />
+      <CreateScheduleDialog
+        open
+        onClose={onClose}
+        agent={agent}
+        schedule={schedule}
+        onCreated={onCreated}
+      />
     </QueryClientProvider>,
   );
   return { onCreated, onClose };
@@ -87,5 +108,45 @@ describe("<CreateScheduleDialog />", () => {
     await pickEnvironment(user);
 
     await waitFor(() => expect(createBtn).not.toBeDisabled());
+  });
+
+  it("prefills fields from the schedule prop and submits a PATCH", async () => {
+    const user = userEvent.setup();
+    let patched: Record<string, unknown> | undefined;
+    let patchedPath: string | undefined;
+    server.use(
+      http.get("/v1/environments", () =>
+        HttpResponse.json({ data: [{ id: "env_1", name: "Prod" }] }),
+      ),
+      http.patch("/v1/agents/agent_1/schedules/sch_1", async ({ request }) => {
+        patchedPath = request.url;
+        patched = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ ...existingSchedule, ...patched });
+      }),
+    );
+    const { onCreated } = renderDialog(existingSchedule);
+
+    // Prefilled from the schedule prop.
+    expect(screen.getByDisplayValue("0 8 * * *")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("America/New_York")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Post the daily digest")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("3")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument();
+
+    const cronInput = screen.getByDisplayValue("0 8 * * *");
+    await user.clear(cronInput);
+    await user.type(cronInput, "0 9 * * 1");
+
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    expect(patchedPath).toContain("/v1/agents/agent_1/schedules/sch_1");
+    expect(patched).toMatchObject({
+      cron_expression: "0 9 * * 1",
+      timezone: "America/New_York",
+      environment_id: "env_1",
+      input: "Post the daily digest",
+      max_sessions: 3,
+    });
   });
 });

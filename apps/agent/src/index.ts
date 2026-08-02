@@ -14,9 +14,13 @@ import { registerHarness } from "./harness/registry";
 import { DefaultHarness } from "./harness/default-loop";
 import { AcpProxyHarness } from "./harness/acp-proxy-loop";
 import { LongRunningHarness } from "./harness/long-running-loop";
+import { PoolsideHarness } from "./harness/poolside-loop";
 registerHarness("default", () => new DefaultHarness());
 registerHarness("acp-proxy", () => new AcpProxyHarness());
 registerHarness("long-running", () => new LongRunningHarness());
+// Plain-fetch OpenAI-compatible provider (poolside.ai) — no node builtins,
+// so unlike claude-agent-sdk it registers on the CF worker too.
+registerHarness("poolside", () => new PoolsideHarness());
 
 // --- Export DO classes (required by wrangler) ---
 export { SessionDO } from "./runtime/session-do";

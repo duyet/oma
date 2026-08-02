@@ -115,6 +115,51 @@ const lifecycle = [
     </div>
   </section>
 
+  <!-- Request flow diagram -->
+  <section class="border-b border-[var(--color-border)] bg-[var(--color-bg-surface)]" data-reveal id="request-flow">
+    <div class="max-w-5xl mx-auto px-4 py-14 md:py-16">
+      <p class="flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
+        <Icon name="arrowRight" size={14} class="text-[var(--color-brand)]" /> Request flow
+      </p>
+      <h2 class="font-display text-2xl md:text-3xl font-bold mb-2 text-center tracking-tight">
+        One message, five hops
+      </h2>
+      <p class="text-center text-[var(--color-fg-muted)] max-w-2xl mx-auto mb-8 leading-relaxed">
+        A user message walks the same path on Cloudflare and self-hosted Node: the
+        platform hands the harness what it needs, the harness decides how to use it.
+      </p>
+      <div class="overflow-x-auto pb-2">
+        <ol class="arch-path" aria-label="Request flow from client to sandbox">
+          <li class="arch-node">
+            <span class="arch-node-glyph"><Icon name="globe" size={20} /></span>
+            <span class="arch-node-name">Client</span>
+            <span class="arch-node-sub">Console, CLI, or API</span>
+          </li>
+          <li class="arch-node">
+            <span class="arch-node-glyph"><Icon name="server" size={20} /></span>
+            <span class="arch-node-name">API</span>
+            <span class="arch-node-sub">POST /v1/sessions/:id/events</span>
+          </li>
+          <li class="arch-node">
+            <span class="arch-node-glyph"><Icon name="database" size={20} /></span>
+            <span class="arch-node-name">SessionDO</span>
+            <span class="arch-node-sub">Append event, wake harness</span>
+          </li>
+          <li class="arch-node">
+            <span class="arch-node-glyph"><Icon name="layers" size={20} /></span>
+            <span class="arch-node-name">Harness</span>
+            <span class="arch-node-sub">Model loop, tool steps</span>
+          </li>
+          <li class="arch-node">
+            <span class="arch-node-glyph"><Icon name="box" size={20} /></span>
+            <span class="arch-node-name">Sandbox &amp; tools</span>
+            <span class="arch-node-sub">Exec, vault-proxied network</span>
+          </li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
   <!-- How designed: meta-harness -->
   <section
     class="border-b border-[var(--color-border)] bg-[var(--color-bg-surface)]"

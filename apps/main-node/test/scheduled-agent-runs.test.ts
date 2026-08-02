@@ -148,6 +148,16 @@ describe("scheduled-agent-runs on Node", () => {
     // next_run_at was CAS-advanced past the seeded (due) value.
     expect(row?.next_run_at).not.toBe(seed.nextRunAt);
     expect(Date.parse(row!.next_run_at)).toBeGreaterThan(Date.parse(seed.nextRunAt));
+
+    // Durable history row (issue #312, WP3).
+    const historyRow = await sql
+      .prepare("SELECT * FROM agent_schedule_runs WHERE schedule_id = ?")
+      .bind("sch_test1")
+      .first<{ status: string; session_id: string; tenant_id: string; agent_id: string }>();
+    expect(historyRow?.status).toBe("ok");
+    expect(historyRow?.session_id).toBe("sess_launched");
+    expect(historyRow?.tenant_id).toBe("tn_1");
+    expect(historyRow?.agent_id).toBe("agent_1");
   });
 
   it("skips firing when the max_sessions concurrency cap is reached", async () => {
@@ -175,6 +185,13 @@ describe("scheduled-agent-runs on Node", () => {
       .bind("sch_test1")
       .first<{ last_run_status: string }>();
     expect(row?.last_run_status).toBe("skipped_concurrency");
+
+    // Skipped firings still get a durable history row (issue #312, WP3).
+    const historyRow = await sql
+      .prepare("SELECT status FROM agent_schedule_runs WHERE schedule_id = ?")
+      .bind("sch_test1")
+      .first<{ status: string }>();
+    expect(historyRow?.status).toBe("skipped_concurrency");
   });
 
   it("fires a schedule-triggered deployment and records last_run_status=ok", async () => {

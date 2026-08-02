@@ -446,6 +446,7 @@ provider available:
 | `BoxRunSandbox` | Remote BoxLite REST endpoint (no KVM on the OMA host) | `BOXRUN_URL=http://host:8100/v1/default`, optional `BOXRUN_TOKEN`. No mount primitive — bake a custom image with s3fs preinstalled if you need `/mnt/memory`. |
 | `OpenShellSandbox` | NVIDIA OpenShell gateway (gRPC) | `OPENSHELL_GATEWAY_ENDPOINT=host:port`, optional `OPENSHELL_TOKEN` (bearer). Policy-enforced, isolated agent sandboxes. `OPENSHELL_GATEWAY_TLS=1` + `OPENSHELL_GATEWAY_CA_PATH` (and `..._CERT_PATH`/`..._KEY_PATH` for mTLS) enable TLS. Self-host Node speaks gRPC directly; the Cloudflare deployment reaches it over `fetch` via the k8s-bridge OpenShell backend (`OPENSHELL_BRIDGE_URL`). |
 | `CloudflareSandbox` | If you happen to deploy on CF Workers + Containers | Use the regular `apps/agent` worker, not main-node. |
+| `browser-vm` (listed, not usable here) | N/A on self-host | Seeded from the same shared provider list as Cloudflare, but `GET /v1/hosting_types` always reports it `not_configured` on main-node — the RuntimeRoom WebSocket relay it needs is a Cloudflare-only surface. Use one of the providers above instead. |
 
 **The old `SANDBOX_PROVIDER` env var still works** as the fallback default
 when an environment has no explicit provider selection. New deployments should
@@ -513,17 +514,33 @@ selection is per-environment (`config.sandbox_provider: "openshell"`) or
 via the auto-detected default described above.
 
 **On the Cloudflare deployment**, a Worker cannot speak gRPC, so it reaches
-OpenShell through the **k8s-bridge** running its OpenShell backend. Start the
-bridge (`apps/k8s-bridge`) as a Node process next to the gateway with
-`BRIDGE_BACKEND=openshell` plus the same `OPENSHELL_*` env vars above (it
-holds the gRPC client), then point the Worker at it with `wrangler secret put
-OPENSHELL_BRIDGE_URL` (and `OPENSHELL_BRIDGE_TOKEN` matching the bridge's
-`K8S_BRIDGE_TOKEN`). A session with `config.sandbox_provider: "openshell"`
-then resolves to a pure-`fetch` client against the bridge — the Worker never
-touches gRPC. A missing `OPENSHELL_BRIDGE_URL` fails loudly with a
-`session.error` (parity with boxrun's missing `BOXRUN_URL`). Limitation:
-memory-store / session-outputs mounts aren't available over the bridge's HTTP
-API, same as boxrun and k8s-remote.
+OpenShell through the **k8s-bridge** running its OpenShell backend — same
+image, same binary as the Kubernetes-backed bridge, just a different
+`BRIDGE_BACKEND`. The recommended way to run it in-cluster is the
+[`charts/oma-k8s-bridge`](../charts/oma-k8s-bridge/README.md#openshell-backend)
+Helm chart with `config.backend: openshell`:
+
+```bash
+helm install oma-k8s-bridge-openshell ./charts/oma-k8s-bridge \
+  --namespace oma \
+  --set secret.existingSecret=oma-k8s-bridge-token \
+  --set config.backend=openshell \
+  --set openshell.endpoint=openshell.openshell.svc.cluster.local:50051
+```
+
+See that chart's README for TLS/mTLS and token-secret wiring. For local
+testing (no cluster), you can instead run the bridge as a bare Node process
+next to the gateway with `BRIDGE_BACKEND=openshell` plus the same
+`OPENSHELL_*` env vars above (it holds the gRPC client).
+
+Either way, point the Worker at the resulting bridge with `wrangler secret
+put OPENSHELL_BRIDGE_URL` (and `OPENSHELL_BRIDGE_TOKEN` matching the
+bridge's `K8S_BRIDGE_TOKEN`). A session with `config.sandbox_provider:
+"openshell"` then resolves to a pure-`fetch` client against the bridge —
+the Worker never touches gRPC. A missing `OPENSHELL_BRIDGE_URL` fails
+loudly with a `session.error` (parity with boxrun's missing `BOXRUN_URL`).
+Limitation: memory-store / session-outputs mounts aren't available over
+the bridge's HTTP API, same as boxrun and k8s-remote.
 
 #### How OMA environment settings map to OpenShell policy
 

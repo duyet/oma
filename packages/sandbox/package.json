@@ -18,6 +18,7 @@
     "./adapters/remote-agent": "./src/adapters/remote-agent.ts",
     "./adapters/openshell": "./src/adapters/openshell.ts",
     "./adapters/openshell-policy": "./src/adapters/openshell-policy.ts",
+    "./adapters/browser-vm": "./src/adapters/browser-vm.ts",
     "./orchestrator": "./src/orchestrator.ts",
     "./registry": "./src/registry.ts"
   },

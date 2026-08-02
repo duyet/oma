@@ -14,16 +14,28 @@
  *   in   { type: "sandbox.op", op, request_id, session_id, tenant_id?, ...args }
  *   out  { type: "sandbox.result", request_id, session_id, tenant_id?, ok, result?, error? }
  *
- * SECURITY: like LocalSubprocessSandbox, this has ZERO process isolation — it
- * runs on the user's host filesystem. That is the whole point of a "local"
- * environment: the user opted their own machine in via `oma bridge setup`.
- * Per-session workdirs live under <baseDir>/<sessionId>/.
+ * SECURITY: the default subprocess backend, like LocalSubprocessSandbox, has
+ * ZERO process isolation — it runs on the user's host filesystem. That is the
+ * whole point of a "local" environment: the user opted their own machine in
+ * via `oma bridge setup`. Per-session workdirs live under <baseDir>/<sessionId>/.
+ *
+ * The optional `openshell` backend (explicit opt-in — see sandbox-backend.ts)
+ * runs the same ops inside an OpenShell sandbox on this machine instead:
+ * isolated and egress-policed, but EMPTY — none of the user's repos, tools,
+ * or CLI auth are visible. Known limitations of that backend:
+ *   - the relay carries no environment config (there is no `createBox` op),
+ *     so OMA's env→policy mapping cannot be applied; egress is whatever
+ *     default policy the gateway enforces.
+ *   - a daemon crash leaks boxes on the gateway (clean shutdown destroys them).
+ *   - ACP agents (lib/session-manager.ts) still spawn on the host either way;
+ *     this only changes sandbox-op execution.
  */
 
 import { spawn } from "node:child_process";
 import { promises as fs, mkdirSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+import { OpenShellClient, type OpenShellClientOptions } from "./openshell-client.js";
 
 export type SandboxSend = (msg: Record<string, unknown>) => void;
 
@@ -41,12 +53,31 @@ export interface SandboxOpRequest {
   envVars?: Record<string, string>;
 }
 
-interface SessionBox {
-  workdir: string;
-  envVars: Record<string, string>;
+/**
+ * The executor surface behind ONE relayed session. All 8 relay ops — do not
+ * trim this down to the k8s-bridge's `BoxExecutor` (5 ops): dropping
+ * readFileBytes/writeFileBytes would silently break binary file relay.
+ */
+export interface RelaySandboxExecutor {
+  exec(command: string, timeoutMs: number): Promise<string>;
+  readFile(path: string): Promise<string>;
+  readFileBytes(path: string): Promise<Uint8Array>;
+  writeFile(path: string, content: string): Promise<void>;
+  writeFileBytes(path: string, bytes: Uint8Array): Promise<void>;
+  setEnvVars(envVars: Record<string, string>): Promise<void>;
+  ping(): Promise<void>;
+  destroy(): Promise<void>;
+}
+
+/** Mints one executor per relayed session. */
+export interface RelaySandboxBackend {
+  kind: string;
+  create(sessionId: string): RelaySandboxExecutor;
 }
 
 const DEFAULT_TIMEOUT_MS = 120_000;
+/** Bound on how long daemon shutdown waits for remote box teardown. */
+const DESTROY_ALL_TIMEOUT_MS = 10_000;
 
 export function defaultSandboxBaseDir(): string {
   // XDG-ish location under the user's home, isolated from bridge config state.
@@ -55,17 +86,24 @@ export function defaultSandboxBaseDir(): string {
 
 export class BridgeSandboxManager {
   #send: SandboxSend;
-  #baseDir: string;
-  #boxes = new Map<string, SessionBox>();
+  #backend: RelaySandboxBackend;
+  #boxes = new Map<string, RelaySandboxExecutor>();
 
-  constructor(send: SandboxSend, opts?: { baseDir?: string }) {
+  constructor(send: SandboxSend, opts?: { baseDir?: string; backend?: RelaySandboxBackend }) {
     this.#send = send;
-    this.#baseDir = opts?.baseDir ? resolve(opts.baseDir) : defaultSandboxBaseDir();
+    this.#backend = opts?.backend ?? createSubprocessBackend(opts?.baseDir);
+  }
+
+  /** Which backend is executing ops — surfaced by `oma bridge status`. */
+  get backendKind(): string {
+    return this.#backend.kind;
   }
 
   /** Re-point the sender after a WS reconnect (mirrors SessionManager.setSender). */
   setSend(send: SandboxSend): void {
     this.#send = send;
+    // Boxes deliberately survive a reconnect — a network blip must not wipe a
+    // session's workspace (subprocess) or tear down its sandbox (openshell).
   }
 
   /** Handle one relayed op frame: execute locally, then send the result. */
@@ -81,14 +119,20 @@ export class BridgeSandboxManager {
     }
   }
 
-  /** Best-effort teardown of every session workdir. Called on daemon stop. */
-  destroyAll(): void {
-    for (const box of this.#boxes.values()) {
-      try {
-        rmSync(box.workdir, { recursive: true, force: true });
-      } catch { /* best-effort */ }
-    }
+  /**
+   * Best-effort teardown of every session box. Called on daemon stop.
+   * Awaits the destroys (openshell's is an async gRPC DeleteSandbox) under a
+   * bounded timeout so a hung gateway can't block shutdown past launchd's
+   * ExitTimeOut — a slow gateway leaks its own boxes rather than wedging us.
+   */
+  async destroyAll(): Promise<void> {
+    const boxes = [...this.#boxes.values()];
     this.#boxes.clear();
+    if (boxes.length === 0) return;
+    await Promise.race([
+      Promise.allSettled(boxes.map((b) => b.destroy())),
+      new Promise((r) => setTimeout(r, DESTROY_ALL_TIMEOUT_MS)),
+    ]);
   }
 
   // ── op dispatch ──────────────────────────────────────────────────────────
@@ -97,41 +141,37 @@ export class BridgeSandboxManager {
     const box = this.#ensureBox(sessionId);
     switch (req.op) {
       case "exec": {
-        const output = await this.#runCommand(box, req.command ?? "", req.timeout ?? DEFAULT_TIMEOUT_MS);
+        // Always an explicit ms timeout — OpenShellClient.exec requires one.
+        const output = await box.exec(req.command ?? "", req.timeout ?? DEFAULT_TIMEOUT_MS);
         return { output };
       }
       case "readFile": {
-        const content = await fs.readFile(this.#resolvePath(box, req.path ?? ""), "utf8");
+        const content = await box.readFile(req.path ?? "");
         return { content };
       }
       case "readFileBytes": {
-        const buf = await fs.readFile(this.#resolvePath(box, req.path ?? ""));
-        return { base64: buf.toString("base64") };
+        const bytes = await box.readFileBytes(req.path ?? "");
+        return { base64: Buffer.from(bytes).toString("base64") };
       }
       case "writeFile": {
-        const full = this.#resolvePath(box, req.path ?? "");
-        await fs.mkdir(dirname(full), { recursive: true });
-        await fs.writeFile(full, req.content ?? "", "utf8");
+        await box.writeFile(req.path ?? "", req.content ?? "");
         return {};
       }
       case "writeFileBytes": {
-        const full = this.#resolvePath(box, req.path ?? "");
-        await fs.mkdir(dirname(full), { recursive: true });
-        await fs.writeFile(full, Buffer.from(req.base64 ?? "", "base64"));
+        await box.writeFileBytes(req.path ?? "", new Uint8Array(Buffer.from(req.base64 ?? "", "base64")));
         return {};
       }
       case "setEnvVars": {
-        box.envVars = { ...box.envVars, ...(req.envVars ?? {}) };
+        await box.setEnvVars(req.envVars ?? {});
         return {};
       }
       case "ping": {
+        await box.ping();
         return {};
       }
       case "destroy": {
         this.#boxes.delete(sessionId);
-        try {
-          rmSync(box.workdir, { recursive: true, force: true });
-        } catch { /* best-effort */ }
+        await box.destroy();
         return {};
       }
       default:
@@ -139,11 +179,57 @@ export class BridgeSandboxManager {
     }
   }
 
-  #runCommand(box: SessionBox, command: string, timeoutMs: number): Promise<string> {
+  #ensureBox(sessionId: string): RelaySandboxExecutor {
+    let box = this.#boxes.get(sessionId);
+    if (!box) {
+      box = this.#backend.create(sessionId);
+      this.#boxes.set(sessionId, box);
+    }
+    return box;
+  }
+
+  #reply(req: SandboxOpRequest, payload: { ok: boolean; result?: Record<string, unknown>; error?: string }): void {
+    const msg: Record<string, unknown> = {
+      type: "sandbox.result",
+      request_id: req.request_id,
+      session_id: req.session_id,
+      ok: payload.ok,
+    };
+    if (req.tenant_id) msg.tenant_id = req.tenant_id;
+    if (payload.result !== undefined) msg.result = payload.result;
+    if (payload.error !== undefined) msg.error = payload.error;
+    try {
+      this.#send(msg);
+    } catch { /* socket died; relay op will time out */ }
+  }
+}
+
+// ── subprocess backend (default) ───────────────────────────────────────────
+
+export function createSubprocessBackend(baseDirOpt?: string): RelaySandboxBackend {
+  const baseDir = baseDirOpt ? resolve(baseDirOpt) : defaultSandboxBaseDir();
+  return {
+    kind: "subprocess",
+    create: (sessionId) => new SubprocessSandbox(join(baseDir, sanitizeSessionId(sessionId))),
+  };
+}
+
+class SubprocessSandbox implements RelaySandboxExecutor {
+  #workdir: string;
+  #envVars: Record<string, string> = {};
+
+  constructor(workdir: string) {
+    this.#workdir = workdir;
+    mkdirSync(workdir, { recursive: true });
+  }
+
+  exec(command: string, timeoutMs: number): Promise<string> {
+    const workdir = this.#workdir;
+    const envVars = this.#envVars;
     return new Promise<string>((resolveExec) => {
       const child = spawn("/bin/sh", ["-c", command], {
-        cwd: box.workdir,
-        env: { ...(process.env as Record<string, string>), ...box.envVars, PWD: box.workdir },
+        cwd: workdir,
+        env: { ...(process.env as Record<string, string>), ...envVars, PWD: workdir },
         stdio: ["ignore", "pipe", "pipe"],
       });
       let stdout = "";
@@ -173,17 +259,38 @@ export class BridgeSandboxManager {
     });
   }
 
-  // ── helpers ──────────────────────────────────────────────────────────────
+  async readFile(path: string): Promise<string> {
+    return fs.readFile(this.#resolvePath(path), "utf8");
+  }
 
-  #ensureBox(sessionId: string): SessionBox {
-    let box = this.#boxes.get(sessionId);
-    if (!box) {
-      const workdir = join(this.#baseDir, sanitizeSessionId(sessionId));
-      mkdirSync(workdir, { recursive: true });
-      box = { workdir, envVars: {} };
-      this.#boxes.set(sessionId, box);
-    }
-    return box;
+  async readFileBytes(path: string): Promise<Uint8Array> {
+    return new Uint8Array(await fs.readFile(this.#resolvePath(path)));
+  }
+
+  async writeFile(path: string, content: string): Promise<void> {
+    const full = this.#resolvePath(path);
+    await fs.mkdir(dirname(full), { recursive: true });
+    await fs.writeFile(full, content, "utf8");
+  }
+
+  async writeFileBytes(path: string, bytes: Uint8Array): Promise<void> {
+    const full = this.#resolvePath(path);
+    await fs.mkdir(dirname(full), { recursive: true });
+    await fs.writeFile(full, Buffer.from(bytes));
+  }
+
+  async setEnvVars(envVars: Record<string, string>): Promise<void> {
+    this.#envVars = { ...this.#envVars, ...envVars };
+  }
+
+  async ping(): Promise<void> {
+    /* the host is always reachable */
+  }
+
+  async destroy(): Promise<void> {
+    try {
+      rmSync(this.#workdir, { recursive: true, force: true });
+    } catch { /* best-effort */ }
   }
 
   /**
@@ -192,28 +299,36 @@ export class BridgeSandboxManager {
    * land somewhere real. Absolute paths outside /workspace are the caller's
    * responsibility (mirrors LocalSubprocessSandbox).
    */
-  #resolvePath(box: SessionBox, p: string): string {
+  #resolvePath(p: string): string {
     let normalised = p;
     if (normalised.startsWith("/workspace/")) normalised = normalised.slice("/workspace/".length);
     else if (normalised === "/workspace") normalised = "";
     else if (isAbsolute(normalised)) return normalised;
-    return join(box.workdir, normalised);
+    return join(this.#workdir, normalised);
   }
+}
 
-  #reply(req: SandboxOpRequest, payload: { ok: boolean; result?: Record<string, unknown>; error?: string }): void {
-    const msg: Record<string, unknown> = {
-      type: "sandbox.result",
-      request_id: req.request_id,
-      session_id: req.session_id,
-      ok: payload.ok,
-    };
-    if (req.tenant_id) msg.tenant_id = req.tenant_id;
-    if (payload.result !== undefined) msg.result = payload.result;
-    if (payload.error !== undefined) msg.error = payload.error;
-    try {
-      this.#send(msg);
-    } catch { /* socket died; relay op will time out */ }
-  }
+// ── openshell backend (opt-in) ─────────────────────────────────────────────
+
+/**
+ * One OpenShell box per relayed session.
+ *
+ * Paths are passed through VERBATIM — no `/workspace` rewriting. Inside a box
+ * `/workspace` is a real container path, unlike the subprocess backend where
+ * it has to be mapped onto a host workdir.
+ *
+ * Exec output is passed through verbatim too: OpenShell returns
+ * `exit=N\n<stdout>` where the subprocess backend returns combined output plus
+ * `[exit …]`. The other bridge consumers (boxrun, k8s-bridge) already speak the
+ * `exit=N` shape, so normalising it here would break their `parseExecResult`.
+ */
+export function createOpenShellBackend(
+  opts: Omit<OpenShellClientOptions, "sessionId">,
+): RelaySandboxBackend {
+  return {
+    kind: "openshell",
+    create: (sessionId) => new OpenShellClient({ ...opts, sessionId }),
+  };
 }
 
 function sanitizeSessionId(sid: string): string {

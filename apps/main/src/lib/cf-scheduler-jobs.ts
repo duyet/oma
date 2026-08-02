@@ -21,6 +21,8 @@ import { memoryRetentionTick } from "@duyet/oma-scheduler/jobs/memory-retention"
 import { webhookEventsRetentionTick } from "@duyet/oma-scheduler/jobs/webhook-events-retention";
 import {
   scheduledAgentRunsTick,
+  type ClaimedSchedule,
+  type RecordRunInput,
   type ScheduledRunLauncher,
 } from "@duyet/oma-scheduler/jobs/scheduled-agent-runs";
 import { SqlClientScheduledRunsStore } from "@duyet/oma-scheduler/jobs/scheduled-agent-runs-store";
@@ -30,6 +32,10 @@ import {
 } from "@duyet/oma-scheduler/jobs/scheduled-deployment-runs";
 import { SqlClientScheduledDeploymentRunsStore } from "@duyet/oma-scheduler/jobs/scheduled-deployment-runs-store";
 import { withHealthchecks } from "@duyet/oma-shared";
+import { dispatchSessionNotifications } from "@duyet/oma-agent/runtime/notify-dispatch";
+import { WorkerHttpClient } from "@duyet/oma-integrations-adapters-cf";
+import { senderFromCfBinding, type CfSendEmailBinding } from "@duyet/oma-email/adapters/cf";
+import type { SessionNotifyEvent } from "@duyet/oma-integrations-core";
 import { tickEvalRuns } from "../eval-runner";
 import { createInternalSession } from "../routes/internal";
 import { launchDeploymentSession } from "./deployment-runs";
@@ -151,6 +157,7 @@ export function buildCfScheduler(env: Env): CfScheduler {
           resolveStore: async () =>
             new SqlClientScheduledRunsStore(new CfD1SqlClient(env.MAIN_DB)),
           resolveLauncher: async () => launcher,
+          onRunRecorded: (schedule, run) => notifyScheduleRun(env, schedule, run),
         }),
       ),
     });
@@ -212,6 +219,73 @@ export function buildCfScheduler(env: Env): CfScheduler {
   }
 
   return scheduler;
+}
+
+/**
+ * Per-schedule alerts (issue #313) — fan a recorded firing out to the
+ * schedule's own `notify.targets`, reusing the agent DO's notify dispatcher
+ * so target formatting/signing stays in one place.
+ *
+ * The tick already applied the schedule's `on` filter and swallows anything
+ * thrown here; this function is therefore free to be best-effort. Credential
+ * tokens resolve across the tenant's vaults (a schedule has no vault_ids of
+ * its own, unlike a session), mirroring SessionDO#resolveCredentialToken.
+ */
+async function notifyScheduleRun(
+  env: Env,
+  schedule: ClaimedSchedule,
+  run: RecordRunInput,
+): Promise<void> {
+  const targets = schedule.notify?.targets ?? [];
+  if (!targets.length) return;
+
+  const services = await getCfServicesForTenant(env, schedule.tenantId);
+  const resolveCredentialToken = async (credentialId?: string): Promise<string | null> => {
+    if (!credentialId) return null;
+    const vaults = await services.vaults.list({ tenantId: schedule.tenantId });
+    const grouped = await services.credentials.listByVaults({
+      tenantId: schedule.tenantId,
+      vaultIds: vaults.map((v) => v.id),
+    });
+    for (const { credentials } of grouped) {
+      for (const cred of credentials) {
+        if (cred.id === credentialId) {
+          const auth = cred.auth as { token?: string; access_token?: string } | undefined;
+          return auth?.token || auth?.access_token || null;
+        }
+      }
+    }
+    return null;
+  };
+
+  const event: SessionNotifyEvent = {
+    sessionId: run.sessionId ?? schedule.id,
+    status:
+      run.status === "ok"
+        ? "schedule_ok"
+        : run.status === "error"
+          ? "schedule_error"
+          : "schedule_skipped",
+    scheduleId: schedule.id,
+    ...(run.error ? { detail: run.error } : {}),
+  };
+
+  await dispatchSessionNotifications(event, targets, {
+    resolveCredentialToken,
+    resolveSecret: (ref) => resolveCredentialToken(ref),
+    resolveTelegramBotToken: () =>
+      (env as unknown as { TELEGRAM_BOT_TOKEN?: string }).TELEGRAM_BOT_TOKEN ?? null,
+    // `email` targets (issue #317) — CF Email Workers binding; unbound ⇒
+    // null sender ⇒ target skipped with a warning (fail-open).
+    resolveEmailSender: () => senderFromCfBinding(env.SEND_EMAIL as CfSendEmailBinding | undefined),
+    tenantId: schedule.tenantId,
+    httpClient: new WorkerHttpClient(),
+    onError: (target, err) =>
+      logError(
+        { op: "cron.scheduled_agent_runs.notify", schedule_id: schedule.id, target_type: target.type, err },
+        "per-schedule notification failed",
+      ),
+  });
 }
 
 /** Read (or seed) the Cloudflare deployment's stable anonymous instance id

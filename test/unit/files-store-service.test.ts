@@ -424,8 +424,10 @@ describe("toFileRecord — public API shape mapping", () => {
       type: "file",
       filename: "report.pdf",
       media_type: "application/pdf",
+      mime_type: "application/pdf", // AMA SDK alias (FileMetadata.mime_type)
       size_bytes: 1024,
       scope_id: SESSION,
+      scope: { id: SESSION, type: "session" }, // AMA SDK alias (FileMetadata.scope)
       downloadable: true,
       created_at: "2026-01-01T00:00:00.000Z",
     });
@@ -445,10 +447,11 @@ describe("toFileRecord — public API shape mapping", () => {
       created_at: "2026-01-01T00:00:00.000Z",
     });
     expect(record.scope_id).toBeUndefined();
+    expect(record.scope).toBeNull(); // tenant-scoped → AMA scope is null
+    expect(record.mime_type).toBe("application/pdf"); // alias still emitted
     expect(record.downloadable).toBe(false);
-    // r2_key + scope + tenant_id are server-internal — never in API
+    // r2_key + tenant_id are server-internal — never in API
     expect(record).not.toHaveProperty("r2_key");
-    expect(record).not.toHaveProperty("scope");
     expect(record).not.toHaveProperty("tenant_id");
   });
 });

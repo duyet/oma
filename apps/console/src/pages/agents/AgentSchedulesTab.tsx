@@ -1,18 +1,19 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { PlayIcon, TrashIcon } from "lucide-react";
+import { HistoryIcon, PencilIcon, PlayIcon, TrashIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { useApi } from "../../lib/api";
 import { useApiQuery } from "../../lib/useApiQuery";
 import { DataTable, type ColumnDef } from "../../components/DataTable";
 import { RowActionsMenu } from "../../components/RowActionsMenu";
+import { Modal } from "../../components/Modal";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/useConfirm";
 import { formatRelative } from "../../lib/format";
 import { useAgentHub } from "../AgentDetail";
 import { CreateScheduleDialog } from "./CreateScheduleDialog";
-import type { AgentSchedule } from "./schedule-types";
+import type { AgentSchedule, ScheduleRun } from "./schedule-types";
 
 function lastRunCls(status: string | null | undefined) {
   if (status === "ok") return "text-success";
@@ -22,13 +23,17 @@ function lastRunCls(status: string | null | undefined) {
 
 /**
  * Tab — cron schedules scoped to this agent (see AGENTS.md "Agent
- * Schedules"). Unlike deployments, the backend has no PATCH route, so
- * there's no enable/disable toggle here — only Run now and Delete.
+ * Schedules"). Supports create, edit (PATCH — widened in WP1 to accept
+ * cron/input/environment/timezone/max_sessions/enabled), run now, delete,
+ * and viewing per-schedule run history (WP3's
+ * `GET /v1/agents/:id/schedules/:id/runs`).
  */
 export function AgentSchedulesTab() {
   const { agent } = useAgentHub();
   const { api } = useApi();
   const [showCreate, setShowCreate] = useState(false);
+  const [editing, setEditing] = useState<AgentSchedule | null>(null);
+  const [viewingRuns, setViewingRuns] = useState<AgentSchedule | null>(null);
   const confirm = useConfirm();
 
   const {
@@ -150,6 +155,16 @@ export function AgentSchedulesTab() {
                   onSelect: () => runNow(s),
                 },
                 {
+                  label: "Edit",
+                  icon: <PencilIcon className="size-4" />,
+                  onSelect: () => setEditing(s),
+                },
+                {
+                  label: "Run history",
+                  icon: <HistoryIcon className="size-4" />,
+                  onSelect: () => setViewingRuns(s),
+                },
+                {
                   label: "Delete",
                   icon: <TrashIcon className="size-4" />,
                   destructive: true,
@@ -192,6 +207,140 @@ export function AgentSchedulesTab() {
           refetch();
         }}
       />
+
+      <CreateScheduleDialog
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        agent={agent}
+        schedule={editing}
+        onCreated={() => {
+          refetch();
+        }}
+      />
+
+      <ScheduleRunsDialog
+        open={!!viewingRuns}
+        onClose={() => setViewingRuns(null)}
+        agent={agent}
+        schedule={viewingRuns}
+      />
     </>
+  );
+}
+
+interface RunsResponse {
+  data: ScheduleRun[];
+  next_cursor?: string;
+}
+
+function runStatusCls(status: string) {
+  if (status === "ok") return "text-success";
+  if (status === "error" || status === "skipped_concurrency") return "text-danger";
+  return "text-fg-subtle";
+}
+
+/**
+ * Modal listing a schedule's firing history (WP3's `GET
+ * /v1/agents/:agentId/schedules/:scheduleId/runs`, cursor-paginated).
+ * Fetches on open; "Load more" appends the next page via the cursor.
+ */
+function ScheduleRunsDialog({
+  open,
+  onClose,
+  agent,
+  schedule,
+}: {
+  open: boolean;
+  onClose: () => void;
+  agent: { id: string };
+  schedule: AgentSchedule | null;
+}) {
+  const { api } = useApi();
+  const [runs, setRuns] = useState<ScheduleRun[]>([]);
+  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const load = async (scheduleId: string, after?: string) => {
+    setLoading(true);
+    try {
+      const qs = after ? `?cursor=${encodeURIComponent(after)}` : "";
+      const res = await api<RunsResponse>(
+        `/v1/agents/${agent.id}/schedules/${scheduleId}/runs${qs}`,
+      );
+      setRuns((prev) => (after ? [...prev, ...res.data] : res.data));
+      setCursor(res.next_cursor);
+      setHasMore(!!res.next_cursor);
+    } catch {
+      // api() toasts the error.
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch the first page whenever the dialog opens for a (new) schedule.
+  const scheduleId = schedule?.id;
+  useEffect(() => {
+    if (!open || !scheduleId) return;
+    setRuns([]);
+    setCursor(undefined);
+    setHasMore(false);
+    void load(scheduleId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, scheduleId]);
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Run history"
+      subtitle={schedule ? `Firings of cron "${schedule.cron_expression}"` : undefined}
+      maxWidth="max-w-xl"
+    >
+      {loading && runs.length === 0 ? (
+        <p className="text-sm text-fg-subtle">Loading…</p>
+      ) : runs.length === 0 ? (
+        <p className="text-sm text-fg-subtle">No runs yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {runs.map((r) => (
+            <div
+              key={r.id}
+              className="border border-border rounded-md px-3 py-2 flex flex-col gap-1"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className={`text-sm font-medium ${runStatusCls(r.status)}`}>
+                  {r.status}
+                </span>
+                <span className="text-xs text-fg-subtle">
+                  {r.started_at
+                    ? formatRelative(Date.now() - new Date(r.started_at).getTime())
+                    : formatRelative(Date.now() - new Date(r.created_at).getTime())}
+                </span>
+              </div>
+              {r.summary && <p className="text-xs text-fg-muted">{r.summary}</p>}
+              {r.error && <p className="text-xs text-danger">{r.error}</p>}
+              {r.session_id && (
+                <Link to={`/sessions/${r.session_id}`} className="text-xs hover:underline">
+                  View session →
+                </Link>
+              )}
+            </div>
+          ))}
+          {hasMore && (
+            <div className="flex justify-center pt-1">
+              <Button
+                variant="outline"
+                size="sm"
+                loading={loading}
+                onClick={() => schedule && load(schedule.id, cursor)}
+              >
+                Load more
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
   );
 }

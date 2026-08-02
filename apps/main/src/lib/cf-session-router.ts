@@ -107,6 +107,30 @@ export class CfSessionRouter implements SessionRouter {
     return { status: res.status, body: await res.text() };
   }
 
+  async updateRuntimeSettings(
+    sessionId: string,
+    settings: { model?: string | null; reasoningEffort?: string | null },
+  ): Promise<{ status: number; body: string }> {
+    const binding = await this.bindingForSession(sessionId);
+    if (!binding) {
+      return { status: 503, body: JSON.stringify({ error: "sandbox binding unavailable" }) };
+    }
+    const res = await binding.fetch(
+      `https://sandbox/sessions/${sessionId}/runtime-settings`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...(settings.model !== undefined ? { model: settings.model } : {}),
+          ...(settings.reasoningEffort !== undefined
+            ? { reasoning_effort: settings.reasoningEffort }
+            : {}),
+        }),
+      },
+    );
+    return { status: res.status, body: await res.text() };
+  }
+
   async appendEvent(
     sessionId: string,
     event: SessionEvent,

@@ -186,6 +186,19 @@ export class NodeInstallBridge implements InstallBridge {
         managedApp: this.opts.githubManagedApp ?? null,
       });
       const stateRaw = args.state ?? "";
+      if (args.extra?.linkExisting) {
+        // Reconcile callback — user-auth code, links pre-existing installs.
+        const r = await provider.completeManagedInstallLink({
+          code: args.code ?? "",
+          state: stateRaw,
+        });
+        return {
+          publicationId: "",
+          returnUrl: r.returnUrl,
+          login: r.logins[0] ?? null,
+          linked: r.linked,
+        };
+      }
       if (args.extra?.workspaceManaged) {
         // Managed workspace install callback — no publication; records only a
         // github_installations row + credential vault.
@@ -448,6 +461,48 @@ export class NodeInstallBridge implements InstallBridge {
           details: msg,
           remediation: "Configure the managed GitHub App secrets on this deployment.",
         });
+      }
+    }
+
+    if (args.mode === "link-managed-installations") {
+      if (args.provider !== "github") {
+        return jsonResp(400, { error: "link-managed-installations is github-only" });
+      }
+      if (!body.userId || !body.returnUrl) {
+        return jsonResp(400, { error: "userId, returnUrl required" });
+      }
+      try {
+        const result = await providers.github.beginManagedInstallLink({
+          userId: body.userId as string,
+          returnUrl: body.returnUrl as string,
+        });
+        return jsonResp(200, { url: result.url });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return jsonResp(503, {
+          error: "managed_link_unavailable",
+          details: msg,
+          remediation:
+            "Configure GITHUB_MANAGED_CLIENT_ID / GITHUB_MANAGED_CLIENT_SECRET on this deployment.",
+        });
+      }
+    }
+
+    if (args.mode === "managed-installation-detail") {
+      if (args.provider !== "github") {
+        return jsonResp(400, { error: "managed-installation-detail is github-only" });
+      }
+      if (!body.installationId) {
+        return jsonResp(400, { error: "installationId required" });
+      }
+      try {
+        const detail = await providers.github.getManagedInstallationDetail({
+          installationId: body.installationId as string,
+        });
+        return jsonResp(200, detail);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return jsonResp(502, { error: "installation_detail_unavailable", details: msg });
       }
     }
 

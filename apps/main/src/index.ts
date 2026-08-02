@@ -21,6 +21,7 @@ import {
   buildAnalyticsRoutes,
   buildTelemetryRoutes,
   buildScheduleRoutes,
+  buildTenantScheduleRoutes,
   buildModelCardRoutes,
   buildStatsRoutes,
   buildUsageRoutes,
@@ -69,6 +70,7 @@ import costReportRoutes from "./routes/cost-report";
 import internalRoutes from "./routes/internal";
 import integrationsRoutes from "./routes/integrations";
 import { runtimesRoutes, runtimeDaemonRoutes, authenticateRuntimeToken } from "./routes/runtimes";
+import browserVmHostRoutes from "./routes/browser-vm-host";
 import agentStatsRoutes from "./routes/agent-stats";
 import providersRoutes from "./routes/providers";
 import sandboxProvidersRoutes from "./routes/sandbox-providers";
@@ -162,18 +164,22 @@ app.get("/health", (c) => c.json({ status: "ok" }));
 //     The Console shows a "Set up" affordance for these.
 // `health.reason` carries a human-readable explanation for unhealthy /
 // not_configured states so the UI can tell the user *why*.
-// True when at least one bridge runtime has heartbeated within the online
-// window. Used to flip the public `subprocess` health to "healthy" once a
-// paired `oma bridge daemon` is connected. Best-effort — any error → false.
-async function hasOnlineRuntime(env: { MAIN_DB?: D1Database }): Promise<boolean> {
+// True when at least one bridge runtime of the given kind has heartbeated
+// within the online window. Used to flip the public `subprocess` health to
+// "healthy" once a paired `oma bridge daemon` is connected (kind "daemon"),
+// and `browser-vm` once a sandbox tab is open (kind "browser-vm").
+// Best-effort — any error → false.
+async function hasOnlineRuntime(env: { MAIN_DB?: D1Database }, kind: string): Promise<boolean> {
   if (!env.MAIN_DB) return false;
   const row = await env.MAIN_DB
     .prepare(
       `SELECT 1 AS one FROM "runtimes"
        WHERE status = 'online' AND last_heartbeat IS NOT NULL
          AND last_heartbeat > (unixepoch() - 120)
+         AND kind = ?
        LIMIT 1`,
     )
+    .bind(kind)
     .first<{ one: number }>();
   return !!row;
 }
@@ -199,13 +205,16 @@ app.get("/v1/hosting_types", async (c) => {
       // Local subprocess is always seeded but only "healthy" once a daemon
       // is connected. With no daemon it reports not_configured so the UI
       // can offer a connect dialog instead of a confusing "unhealthy".
-      if (p.type === "subprocess" && !desc?.envKeys.some((k) => env[k])) {
+      if ((p.type === "subprocess" || p.type === "browser-vm") && !desc?.envKeys.some((k) => env[k])) {
         // On the Cloudflare deployment a "local" (subprocess) environment runs
-        // by relaying its sandbox ops to a paired `oma bridge daemon` (see
-        // apps/agent/src/runtime/bridge-relay.ts). Report "healthy" once any
-        // runtime is online — this route is public/un-tenant-scoped, so it can
-        // only check global online-runtime presence, not per-tenant.
-        const online = await hasOnlineRuntime(c.env as unknown as { MAIN_DB?: D1Database }).catch(() => false);
+        // by relaying its sandbox ops to a paired `oma bridge daemon`, and a
+        // "browser-vm" environment relays to a user's open sandbox tab (see
+        // apps/agent/src/runtime/bridge-relay.ts + browser-vm-relay.ts).
+        // Report "healthy" once any runtime of the matching kind is online —
+        // this route is public/un-tenant-scoped, so it can only check global
+        // online-runtime presence, not per-tenant.
+        const kind = p.type === "browser-vm" ? "browser-vm" : "daemon";
+        const online = await hasOnlineRuntime(c.env as unknown as { MAIN_DB?: D1Database }, kind).catch(() => false);
         healthResults.set(p.id, online
           ? {
               status: "healthy",
@@ -217,7 +226,9 @@ app.get("/v1/hosting_types", async (c) => {
               status: "not_configured",
               latency_ms: 0,
               last_checked: new Date().toISOString(),
-              reason: "No local runtime connected. Run `npx @getoma/cli bridge setup` and start the oma bridge daemon on this machine to enable it.",
+              reason: p.type === "browser-vm"
+                ? "No sandbox tab connected. Open a browser sandbox tab from the Runtimes page to enable it."
+                : "No local runtime connected. Run `npx @getoma/cli bridge setup` and start the oma bridge daemon on this machine to enable it.",
             });
         continue;
       }
@@ -245,7 +256,7 @@ app.get("/v1/hosting_types", async (c) => {
       description: p.description ?? "",
       type: p.isSystem ? "system" : "byok",
       provider: p.type,
-      external: !p.isSystem || !["subprocess", "cloud"].includes(p.type),
+      external: !p.isSystem || !["subprocess", "cloud", "browser-vm"].includes(p.type),
       capabilities: sysCap(p.type),
       health: health ?? null,
     };
@@ -921,6 +932,11 @@ app.route(
   "/v1/agents",
   buildScheduleRoutes({ db: (c) => new CfD1SqlClient((c.env as Env).MAIN_DB) }),
 );
+// Tenant-wide schedule list — cross-agent read for the Kanban board.
+app.route(
+  "/v1/schedules",
+  buildTenantScheduleRoutes({ db: (c) => new CfD1SqlClient((c.env as Env).MAIN_DB) }),
+);
 app.route("/v1/deployments", deploymentsRoutes);
 // Webhook trigger for deployments — bypasses x-api-key auth (see auth.ts);
 // the opaque hook_token authorizes the run.
@@ -1009,15 +1025,25 @@ app.use("/agents/runtime/*", tenantDbMiddleware);
 app.use("/agents/runtime/*", servicesMiddleware);
 app.route("/agents/runtime", runtimeDaemonRoutes);
 
-// /agents/runtime/_attach — WebSocket upgrade for `oma bridge daemon`. We
-// validate the runtime bearer token here, then forward to the RuntimeRoom
-// DO with x-runtime-id / x-runtime-user headers it trusts.
+// /sandbox-tab — the browser-vm sandbox host page (the browser-tab twin of
+// `oma bridge daemon`). Outside /v1 (no authMiddleware): the page is inert
+// without a one-time pairing code or a previously stored runtime token.
+// Served with COOP/COEP inside the route so WASM engines can use
+// SharedArrayBuffer. See docs/browser-vm-sandbox.md.
+app.route("/sandbox-tab", browserVmHostRoutes);
+
+// /agents/runtime/_attach — WebSocket upgrade for `oma bridge daemon` and
+// the browser-vm sandbox tab. We validate the runtime bearer token here,
+// then forward to the RuntimeRoom DO with x-runtime-id / x-runtime-user
+// headers it trusts. Browser WebSocket clients cannot set an Authorization
+// header, so the token is also accepted as `?access_token=` (transport is
+// wss; the token never appears in a Referer since the WS URL isn't a page).
 app.get("/agents/runtime/_attach", async (c) => {
   if (c.req.header("Upgrade") !== "websocket") {
     return c.text("WebSocket only", 400);
   }
   if (!c.env.RUNTIME_ROOM) return c.text("RUNTIME_ROOM binding missing", 503);
-  const auth = c.req.header("authorization") ?? "";
+  const auth = c.req.header("authorization") ?? c.req.query("access_token") ?? "";
   const ok = await authenticateRuntimeToken(c.env, auth);
   if (!ok) return c.text("unauthorized", 401);
   const stub = c.env.RUNTIME_ROOM.get(c.env.RUNTIME_ROOM.idFromName(ok.runtime_id));

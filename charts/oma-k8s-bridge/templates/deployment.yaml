@@ -31,6 +31,14 @@ spec:
                 name: {{ include "oma-k8s-bridge.fullname" . }}
             - secretRef:
                 name: {{ include "oma-k8s-bridge.secretName" . }}
+          {{- if .Values.openshell.token.existingSecret }}
+          env:
+            - name: OPENSHELL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.openshell.token.existingSecret }}
+                  key: {{ .Values.openshell.token.tokenKey }}
+          {{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}
@@ -57,3 +65,25 @@ spec:
               port: http
             initialDelaySeconds: 15
             periodSeconds: 20
+          {{- if .Values.openshell.tls.enabled }}
+          volumeMounts:
+            - name: openshell-tls-ca
+              mountPath: /etc/openshell/tls
+              readOnly: true
+            {{- if .Values.openshell.tls.certSecret }}
+            - name: openshell-tls-client
+              mountPath: /etc/openshell/tls-client
+              readOnly: true
+            {{- end }}
+          {{- end }}
+      {{- if .Values.openshell.tls.enabled }}
+      volumes:
+        - name: openshell-tls-ca
+          secret:
+            secretName: {{ .Values.openshell.tls.caSecret }}
+        {{- if .Values.openshell.tls.certSecret }}
+        - name: openshell-tls-client
+          secret:
+            secretName: {{ .Values.openshell.tls.certSecret }}
+        {{- end }}
+      {{- end }}

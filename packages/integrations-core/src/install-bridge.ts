@@ -48,6 +48,10 @@ export interface ContinueInstallResult {
    *  account login for the managed workspace flow) so the redirect can add
    *  `&login=<login>`. Absent for flows that don't surface one. */
   login?: string | null;
+  /** How many installation rows the flow CREATED. Only the GitHub reconcile
+   *  ("link existing installation") flow sets it — it can link several
+   *  accounts in one round-trip, and the redirect reports the count. */
+  linked?: number;
   /** Pass-through of the provider's post-install capability probe, if any.
    *  Used by the redirect to surface "install worked but a vendor-side
    *  toggle is off" warnings to the wizard UI. See InstallComplete.
@@ -119,6 +123,8 @@ export interface StartInstallationArgs {
     | "start-a1"
     | "start-managed"
     | "connect-managed-workspace"
+    | "link-managed-installations"
+    | "managed-installation-detail"
     | "credentials"
     | "handoff-link"
     | "personal-token"

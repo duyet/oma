@@ -62,6 +62,7 @@ import {
 } from "@duyet/oma-shared";
 import { DefaultHarness } from "@duyet/oma-agent/harness/default-loop";
 import { ClaudeAgentSdkHarness } from "@duyet/oma-agent/harness/claude-agent-sdk-loop";
+import { PoolsideHarness } from "@duyet/oma-agent/harness/poolside-loop";
 import { buildTools } from "@duyet/oma-agent/harness/tools";
 import { resolveModel } from "@duyet/oma-agent/harness/provider";
 import { composeSystemPrompt } from "@duyet/oma-agent/harness/platform-guidance";
@@ -81,6 +82,7 @@ import {
 import {
   buildAgentRoutes,
   buildScheduleRoutes,
+  buildTenantScheduleRoutes,
   buildVaultRoutes,
   buildMcpServerRoutes,
   buildFederationRoutes,
@@ -136,8 +138,11 @@ import {
   SqlSlackAppRepo,
   WebCryptoAesGcm,
   CryptoIdGenerator,
+  WorkerHttpClient,
   type NodeReposEnv,
 } from "@duyet/oma-integrations-adapters-node";
+import { dispatchSessionNotifications } from "@duyet/oma-agent/runtime/notify-dispatch";
+import type { SessionNotifyEvent } from "@duyet/oma-integrations-core";
 import {
   NodeInstallBridge,
   buildNodeProvidersForRequest,
@@ -174,7 +179,11 @@ import {
 import type { BrowserHarness } from "@duyet/oma-browser-harness";
 import { startMemoryBlobWatcher } from "./lib/memory-blob-watcher.js";
 import { buildNodeScheduler } from "./lib/node-scheduler-jobs.js";
-import type { ScheduledRunLauncher } from "@duyet/oma-scheduler/jobs/scheduled-agent-runs";
+import type {
+  ClaimedSchedule,
+  RecordRunInput,
+  ScheduledRunLauncher,
+} from "@duyet/oma-scheduler/jobs/scheduled-agent-runs";
 import type { ScheduledDeploymentRunLauncher } from "@duyet/oma-scheduler/jobs/scheduled-deployment-runs";
 import { startNodeMemoryQueue } from "./lib/node-memory-queue.js";
 import { mkdirSync, readFileSync } from "node:fs";
@@ -187,6 +196,7 @@ import {
 import { PgEventStreamHub } from "./lib/pg-event-stream-hub";
 import { NodeHarnessRuntime } from "./lib/node-harness-runtime";
 import { selectHarnessName } from "./lib/harness-select";
+import { resolveAgentModelBinding } from "./lib/claude-sdk-model";
 import { SessionRegistry } from "./registry.js";
 import {
   TelegramClient,
@@ -840,9 +850,20 @@ function resolveProviderCreds(
     return { apiKey: "", baseUrl: process.env.ANTHROPIC_BASE_URL };
   }
 
+  // Same escape for the "poolside" harness: it resolves its own
+  // OpenAI-compatible model from POOLSIDE_API_KEY/POOLSIDE_BASE_URL inside
+  // run() and never reads ctx.model, so an Anthropic key is not required.
+  if (
+    selectHarnessName(agent?.metadata?.harness, process.env.DEFAULT_HARNESS) === "poolside" &&
+    process.env.POOLSIDE_API_KEY
+  ) {
+    return { apiKey: "", baseUrl: undefined };
+  }
+
   throw new Error(
     "ANTHROPIC_API_KEY env var required for harness turns (or connect AnyRouter via the Console, " +
-      "or set CLAUDE_CODE_OAUTH_TOKEN for a claude-agent-sdk agent)",
+      "or set CLAUDE_CODE_OAUTH_TOKEN for a claude-agent-sdk agent, " +
+      "or POOLSIDE_API_KEY for a poolside agent)",
   );
 }
 
@@ -941,18 +962,44 @@ const sessionRegistry = new SessionRegistry({
     // rationale.
     const def = new DefaultHarness();
     const claudeAgentSdk = new ClaudeAgentSdkHarness();
+    // PoolsideHarness is plain-fetch (OpenAI-compatible) with no node
+    // builtins, so unlike claude-agent-sdk it is ALSO registered on the CF
+    // worker registry (apps/agent/src/index.ts). It is wired here too
+    // because main-node routes harnesses through this switch rather than
+    // through that registry.
+    const poolside = new PoolsideHarness();
     return {
       run: (ctx: unknown) => {
         const c = ctx as HarnessContext;
         const meta = (c.agent as { metadata?: Record<string, unknown> })?.metadata;
         const harnessName = selectHarnessName(meta?.harness, process.env.DEFAULT_HARNESS);
         if (harnessName === "claude-agent-sdk") return claudeAgentSdk.run(c);
+        if (harnessName === "poolside") return poolside.run(c);
         return def.run(c);
       },
     };
   },
   buildHarnessContext: async (input) => {
     const { apiKey, baseUrl } = resolveProviderCreds(input.agent);
+    // Per-agent model + provider for the claude-agent-sdk harness (issue
+    // #316): resolve the agent's model card into a binding the harness maps
+    // onto its CLI subprocess env. Only that harness consumes it; every
+    // other harness still routes through buildModel's process-global
+    // provider, so this is a no-op for them. A null binding (no card, or a
+    // lookup failure) leaves the pre-#316 global-env behavior untouched.
+    const harnessName = selectHarnessName(
+      (input.agent as { metadata?: Record<string, unknown> })?.metadata?.harness,
+      process.env.DEFAULT_HARNESS,
+    );
+    const modelProvider =
+      harnessName === "claude-agent-sdk"
+        ? ((await resolveAgentModelBinding({
+            modelCards: modelCardsService,
+            tenantId: input.tenantId,
+            agent: input.agent as { model?: string | { id?: string }; metadata?: Record<string, unknown> },
+            logger: { warn: (ctx, msg) => logger.warn(ctx, msg) },
+          })) ?? undefined)
+        : undefined;
     const runtime = new NodeHarnessRuntime({
       sessionId: input.sessionId,
       log: input.eventLog,
@@ -973,6 +1020,7 @@ const sessionRegistry = new SessionRegistry({
         ANTHROPIC_API_KEY: apiKey,
         ANTHROPIC_BASE_URL: baseUrl,
         CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
+        ...(modelProvider ? { modelProvider } : {}),
       },
       runtime,
     } satisfies HarnessContext;
@@ -1285,6 +1333,8 @@ v1.route("/agents", buildAgentRoutes({ services }));
 // the same /agents prefix (CF mounts it the same way). Node's control-plane
 // DB is the single `sql` client — agent_schedules lives there.
 v1.route("/agents", buildScheduleRoutes({ db: sql }));
+// Tenant-wide schedule list — cross-agent read for the Kanban board.
+v1.route("/schedules", buildTenantScheduleRoutes({ db: sql }));
 // Published-agent management API (issue #72) — tenant-authed CRUD backing
 // the public /p/:slug chat surface. Runtime-neutral (only needs `services`),
 // mirroring apps/main's mounts at the same paths (issue #226).
@@ -1599,6 +1649,18 @@ v1.get("/hosting_types", async (c) => {
         });
         continue;
       }
+      // browser-vm relays sandbox ops to a browser tab via the RuntimeRoom
+      // Durable Object — a Cloudflare-only surface. On self-host Node it's
+      // listed (shared SYSTEM_PROVIDERS seed) but not yet wired.
+      if (p.type === "browser-vm") {
+        healthResults.set(p.id, {
+          status: "not_configured",
+          latency_ms: 0,
+          last_checked: new Date().toISOString(),
+          reason: "Browser sandbox tabs are only supported on the Cloudflare deployment for now.",
+        });
+        continue;
+      }
       const h = await sandboxRegistry.checkHealth(p.id).catch(() => null);
       if (h) {
         healthResults.set(p.id, {
@@ -1887,7 +1949,14 @@ v1.get("/files", async (c) => {
     sessionId: scopeId,
     limit: requested,
   });
-  return c.json({ data: rows.map(toFileRecord), has_more: false });
+  return c.json({
+    data: rows.map(toFileRecord),
+    has_more: false,
+    // Anthropic SDK Family B list schema: `next_page` is `string | null`.
+    // Node's read-only files route isn't cursor-paginated (always one page),
+    // so emit null to satisfy strict AMA spec validators.
+    next_page: null,
+  });
 });
 v1.get("/files/:id/content", async (c) => {
   const id = c.req.param("id");
@@ -2262,6 +2331,9 @@ if (installBridge) {
         slack: (req) => buildNodeProvidersForRequest(installBridge!, gatewayOrigin).slack.handleWebhook(req),
       },
       internalSecret: integrationsInternalToken,
+      // Self-host serves the Console off the same origin as this gateway, so
+      // PUBLIC_BASE_URL is the console origin too.
+      consoleOrigin: process.env.CONSOLE_ORIGIN ?? process.env.PUBLIC_BASE_URL ?? null,
       // Node has no per-tenant rate-limit binding by default; soft-pass.
       rateLimit: undefined,
     }),
@@ -2448,6 +2520,74 @@ const scheduledRunLauncher: ScheduledRunLauncher = {
   },
 };
 
+// Per-schedule alerts (issue #313) — fan a recorded schedule firing out to
+// the schedule's own `notify.targets`, reusing the agent runtime's notify
+// dispatcher so target formatting/signing lives in one place (the CF twin is
+// `notifyScheduleRun` in apps/main/src/lib/cf-scheduler-jobs.ts). The tick
+// already applied the schedule's `on` filter and swallows anything thrown
+// here, so this is deliberately best-effort. A schedule has no vault_ids of
+// its own (unlike a session), so credentials resolve across the tenant's
+// vaults.
+const scheduleRunNotifier = async (
+  schedule: ClaimedSchedule,
+  run: RecordRunInput,
+): Promise<void> => {
+  const targets = schedule.notify?.targets ?? [];
+  if (!targets.length) return;
+
+  const resolveCredentialToken = async (credentialId?: string): Promise<string | null> => {
+    if (!credentialId) return null;
+    const vaults = await vaultService.list({ tenantId: schedule.tenantId });
+    const grouped = await credentialService.listByVaults({
+      tenantId: schedule.tenantId,
+      vaultIds: vaults.map((v) => v.id),
+    });
+    for (const { credentials } of grouped) {
+      for (const cred of credentials) {
+        if (cred.id === credentialId) {
+          const auth = cred.auth as { token?: string; access_token?: string } | undefined;
+          return auth?.token || auth?.access_token || null;
+        }
+      }
+    }
+    return null;
+  };
+
+  const event: SessionNotifyEvent = {
+    sessionId: run.sessionId ?? schedule.id,
+    status:
+      run.status === "ok"
+        ? "schedule_ok"
+        : run.status === "error"
+          ? "schedule_error"
+          : "schedule_skipped",
+    scheduleId: schedule.id,
+    ...(run.error ? { detail: run.error } : {}),
+  };
+
+  await dispatchSessionNotifications(event, targets, {
+    resolveCredentialToken,
+    resolveSecret: (ref) => resolveCredentialToken(ref),
+    resolveTelegramBotToken: () => process.env.TELEGRAM_BOT_TOKEN ?? null,
+    // `email` targets (issue #317) — the same SMTP/nodemailer seam the
+    // magic-link + invite emails use. No SMTP_HOST ⇒ null sender ⇒ the
+    // target is skipped with a logged warning (fail-open).
+    resolveEmailSender: () => sender,
+    tenantId: schedule.tenantId,
+    httpClient: new WorkerHttpClient(),
+    onError: (target, err) =>
+      logger.warn(
+        {
+          err,
+          op: "main-node.scheduled_agent_runs.notify_failed",
+          schedule_id: schedule.id,
+          target_type: target.type,
+        },
+        "per-schedule notification failed",
+      ),
+  });
+};
+
 // Scheduled-deployment-runs launcher (issue #262) — mirrors the CF
 // launchDeploymentSession, carrying the deployment's vaults + memory stores
 // into each fired session. Node has no deployment CRUD routes yet, so no rows
@@ -2525,6 +2665,7 @@ const scheduler = buildNodeScheduler({
   omaVersion: nodeOmaVersion(),
   scheduledRunLauncher,
   scheduledDeploymentRunLauncher,
+  scheduleRunNotifier,
 });
 await scheduler.start();
 logger.info({ op: "main-node.scheduler.started" }, "scheduler started");
@@ -2616,6 +2757,32 @@ function bridgeAsInstallProxy(bridge: NodeInstallBridge): InstallProxyForwarder 
         const result = await bridge.startInstallation!({
           provider: "github",
           mode: "connect-managed-workspace",
+          body: (body ?? {}) as Record<string, unknown>,
+        });
+        return new Response(JSON.stringify(result.body), {
+          status: result.status,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      // GitHub reconcile: link pre-existing installations + live detail.
+      const managedLink = /^github\/managed\/link$/.exec(subpath);
+      if (managedLink && (method ?? "POST") === "POST") {
+        const result = await bridge.startInstallation!({
+          provider: "github",
+          mode: "link-managed-installations",
+          body: (body ?? {}) as Record<string, unknown>,
+        });
+        return new Response(JSON.stringify(result.body), {
+          status: result.status,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      const installDetail = /^github\/managed\/installation-detail$/.exec(subpath);
+      if (installDetail && (method ?? "POST") === "POST") {
+        const result = await bridge.startInstallation!({
+          provider: "github",
+          mode: "managed-installation-detail",
           body: (body ?? {}) as Record<string, unknown>,
         });
         return new Response(JSON.stringify(result.body), {
