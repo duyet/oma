@@ -1346,13 +1346,19 @@ const v1 = new Hono<{
 }>();
 v1.use("*", authMw);
 
+// Federation at-rest crypto — shared by the registry routes and the
+// federated-listing fan-out on /agents + /sessions (issue #132 M3).
+const federationCrypto = platformRootSecret
+  ? buildLabeledCrypto(platformRootSecret, FEDERATION_CRYPTO_LABEL)
+  : undefined;
+
 // CLI telemetry — public rate limiting bucket (issue #269 item 5). Separate
 // gates instance from publicSessionCapGates/consumerRateLimitGates (defined
 // later in this file) since this is needed at mount time, above.
 const telemetryGates = buildMemoryGates();
 
 // Mount route bundles. Same paths CF uses; behavior preserved.
-v1.route("/agents", buildAgentRoutes({ services }));
+v1.route("/agents", buildAgentRoutes({ services, federationCrypto }));
 // Agent schedules CRUD (issue #262) — shared http-routes builder, mounted on
 // the same /agents prefix (CF mounts it the same way). Node's control-plane
 // DB is the single `sql` client — agent_schedules lives there.
@@ -1372,6 +1378,7 @@ const sessionRouter = new NodeSessionRouter({
 });
 v1.route("/sessions", buildSessionRoutes({
   services,
+  federationCrypto,
   router: sessionRouter,
   outputs: nodeOutputsAdapter(outputsRoot),
   lifecycle: nodeSessionLifecycle({ files: filesService, filesBlob }),
@@ -1389,9 +1396,7 @@ v1.route(
   "/federation",
   buildFederationRoutes({
     services,
-    crypto: platformRootSecret
-      ? buildLabeledCrypto(platformRootSecret, FEDERATION_CRYPTO_LABEL)
-      : undefined,
+    crypto: federationCrypto,
   }),
 );
 v1.route("/analytics", buildAnalyticsRoutes({ services }));

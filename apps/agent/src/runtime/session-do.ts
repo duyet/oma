@@ -4822,7 +4822,26 @@ export class SessionDO extends DurableObject<Env> {
         message: opts.message,
         remoteSessionId: this.state.remote_session_id,
         afterSeq: this.state.remote_last_seq,
-        onRemoteEvent: opts.onRemoteEvent,
+        // M2: consume the remote's SSE stream so the origin's log (and any
+        // console tailing it) lands each remote event as it happens instead
+        // of one poll interval later. Falls back to the poll transport by
+        // itself if the remote serves no SSE surface.
+        transport: "stream",
+        onRemoteSessionBound: (remoteSessionId) => {
+          if (this.state.remote_session_id !== remoteSessionId) {
+            this.setState({ ...this.state, remote_session_id: remoteSessionId });
+          }
+        },
+        onRemoteEvent: (event) => {
+          opts.onRemoteEvent(event);
+          // Advance the durable resume point per mirrored event, not once per
+          // turn: the harness has already persisted this event into our own
+          // log, so an origin crash mid-stream must not re-mirror it on the
+          // next turn's Last-Event-ID.
+          if (typeof event.seq === "number" && event.seq > (this.state.remote_last_seq ?? 0)) {
+            this.setState({ ...this.state, remote_last_seq: event.seq });
+          }
+        },
       },
       "proxy_session",
     );

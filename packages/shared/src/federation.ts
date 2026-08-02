@@ -103,6 +103,97 @@ export interface RemoteInstanceTarget {
   api_key?: string;
 }
 
+// ── SSE transport (M2) ────────────────────────────────────────────────────
+//
+// The polling transport (M1) only surfaces the remote's events once a poll
+// interval elapses, so an origin console animates in 1.5s steps and only
+// really "moves" after the turn is done. M2 consumes the remote's
+// `/v1/sessions/:id/events/stream` SSE endpoint instead, so each remote event
+// reaches the origin's log the moment the remote emits it.
+//
+// The mirrored event shape is unchanged — both transports feed the same
+// `onRemoteEvent(RemoteMirroredEvent)` callback, so the harness's tagging
+// (`metadata.remote_instance_id` / `remote_seq`) and the origin's
+// read-through-copy durability model are identical either way.
+
+/** A streaming HTTP response, reduced to what the SSE reader needs. */
+export interface SseResponseLike {
+  ok: boolean;
+  status: number;
+  text(): Promise<string>;
+  /** Body chunks, decoded to strings, in arrival order. */
+  chunks(): AsyncIterable<string>;
+}
+
+export type SseFetchLike = (
+  input: string,
+  init?: { method?: string; headers?: Record<string, string> },
+) => Promise<SseResponseLike>;
+
+/** Adapt a WHATWG `Response` to `SseResponseLike`. Used by the default
+ *  transport; tests inject a fake instead. */
+export function sseResponseFrom(res: Response): SseResponseLike {
+  return {
+    ok: res.ok,
+    status: res.status,
+    text: () => res.text(),
+    chunks: () => readBodyChunks(res.body),
+  };
+}
+
+async function* readBodyChunks(body: ReadableStream<Uint8Array> | null): AsyncIterable<string> {
+  if (!body) return;
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) yield decoder.decode(value, { stream: true });
+    }
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      /* already released */
+    }
+  }
+}
+
+const defaultSseFetch: SseFetchLike = async (input, init) =>
+  sseResponseFrom(await fetch(input, init as RequestInit));
+
+/**
+ * Parse a stream of raw SSE body chunks into JSON-decoded event payloads.
+ * Deliberately minimal: we only care about `data:` lines (the origin ignores
+ * the `event:`/`id:` lines because the payload itself carries `type` + `seq`),
+ * and non-JSON frames (comments, `retry:` preamble) are skipped.
+ */
+export async function* parseSseEvents(
+  chunks: AsyncIterable<string>,
+): AsyncIterable<RemoteMirroredEvent> {
+  let buffer = "";
+  for await (const chunk of chunks) {
+    buffer += chunk;
+    let idx: number;
+    while ((idx = buffer.indexOf("\n\n")) !== -1) {
+      const frame = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+      const data = frame
+        .split("\n")
+        .filter((l) => l.startsWith("data:"))
+        .map((l) => l.slice(5).trim())
+        .join("\n");
+      if (!data) continue;
+      try {
+        yield JSON.parse(data) as RemoteMirroredEvent;
+      } catch {
+        /* not a JSON frame — ignore */
+      }
+    }
+  }
+}
+
 export interface RemoteDelegateOptions {
   remoteAgentId: string;
   message: string;
@@ -119,6 +210,7 @@ export interface RemoteDelegateOptions {
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const DEFAULT_POLL_INTERVAL_MS = 1_500;
+const DEFAULT_MAX_STREAM_RECONNECTS = 5;
 
 function apiBase(baseUrl: string): string {
   const trimmed = baseUrl.replace(/\/+$/, "");
@@ -239,6 +331,25 @@ export interface RemoteTurnOptions extends RemoteDelegateOptions {
    * origin's own event log so the origin console renders the turn.
    */
   onRemoteEvent?: (event: RemoteMirroredEvent) => void;
+  /**
+   * Transport for observing the remote turn (M2).
+   *   `"stream"` (default) — consume the remote's SSE `/events/stream`, so
+   *      the origin's log lands each remote event as it happens.
+   *   `"poll"` — the M1 `GET /events?after_seq=` loop. Kept as the automatic
+   *      fallback when a remote doesn't serve SSE, and selectable explicitly.
+   */
+  transport?: "stream" | "poll";
+  /** Injected for tests; defaults to a streaming global-fetch wrapper. */
+  streamFetchImpl?: SseFetchLike;
+  /** Reconnect budget for a mid-turn stream drop. Each reconnect resumes
+   *  from the last seq the origin actually saw. */
+  maxStreamReconnects?: number;
+  /**
+   * Called as soon as the remote session exists (created or reused), before
+   * any event is observed. The proxy path persists the binding here so an
+   * origin crash mid-turn doesn't orphan the remote session.
+   */
+  onRemoteSessionBound?: (remoteSessionId: string) => void;
 }
 
 /**
@@ -300,6 +411,7 @@ export async function runRemoteTurn(
   //    already bound to).
   const remoteSessionId =
     opts.remoteSessionId ?? (await createRemoteSession(base, headers, fetchImpl, opts, origin));
+  opts.onRemoteSessionBound?.(remoteSessionId);
 
   // 2. Post the user message.
   const postRes = await fetchImpl(`${base}/sessions/${remoteSessionId}/events`, {
@@ -315,41 +427,102 @@ export async function runRemoteTurn(
     );
   }
 
-  // 3. Poll the event log until idle, collecting agent.message text emitted
-  //    after our message. We track by seq so a slow first poll still captures
-  //    everything from the start. On a reused session we start from the seq
-  //    the caller last saw so earlier turns aren't replayed.
+  // 3. Observe the remote turn to idle. Both transports share one consumer
+  //    (`consume`) so mirroring, text collection, seq tracking, and the
+  //    fail-loud rules can't drift apart between them.
+  //
+  //    Seq tracking is what makes a mid-turn stream drop safe: every event we
+  //    hand to `onRemoteEvent` advances `afterSeq` first, so a reconnect asks
+  //    the remote to resume strictly *after* the last event the origin
+  //    actually mirrored — no gap, no duplicate. On a reused session we start
+  //    from the seq the caller last saw so earlier turns aren't replayed.
   let afterSeq = opts.remoteSessionId ? (opts.afterSeq ?? 0) : 0;
   const texts: string[] = [];
-  for (;;) {
-    if (Date.now() > deadline) {
-      throw new Error(`remote agent timed out after ${timeoutMs}ms (session ${remoteSessionId})`);
+
+  /** Feed one remote event through the mirror. Returns true at idle. */
+  const consume = (ev: RemoteMirroredEvent): boolean => {
+    if (typeof ev.seq === "number") {
+      if (ev.seq <= afterSeq) return false; // already mirrored (replay/resume overlap)
+      afterSeq = ev.seq;
     }
-    await sleep(pollIntervalMs);
-    const evRes = await fetchImpl(
-      `${base}/sessions/${remoteSessionId}/events?after_seq=${afterSeq}&order=asc`,
-      { method: "GET", headers },
-    );
-    if (!evRes.ok) {
-      throw new Error(`remote events poll failed (${evRes.status})`);
+    opts.onRemoteEvent?.(ev);
+    if (ev.type === "agent.message") {
+      const t = extractText(ev.content);
+      if (t) texts.push(t);
+    } else if (ev.type === "session.error") {
+      const msg = extractText(ev.content) || "remote session.error";
+      throw new Error(`remote agent error: ${msg.slice(0, 300)}`);
+    } else if (ev.type === "session.status_idle") {
+      return true;
     }
-    const page = (await evRes.json()) as { data?: RemoteMirroredEvent[] };
-    const events = Array.isArray(page.data) ? page.data : [];
-    let reachedIdle = false;
-    for (const ev of events) {
-      if (typeof ev.seq === "number" && ev.seq > afterSeq) afterSeq = ev.seq;
-      opts.onRemoteEvent?.(ev);
-      if (ev.type === "agent.message") {
-        const t = extractText(ev.content);
-        if (t) texts.push(t);
-      } else if (ev.type === "session.error") {
-        const msg = extractText(ev.content) || "remote session.error";
-        throw new Error(`remote agent error: ${msg.slice(0, 300)}`);
-      } else if (ev.type === "session.status_idle") {
-        reachedIdle = true;
+    return false;
+  };
+
+  const expired = () => Date.now() > deadline;
+  const timedOut = () =>
+    new Error(`remote agent timed out after ${timeoutMs}ms (session ${remoteSessionId})`);
+
+  const poll = async (): Promise<void> => {
+    for (;;) {
+      if (expired()) throw timedOut();
+      await sleep(pollIntervalMs);
+      const evRes = await fetchImpl(
+        `${base}/sessions/${remoteSessionId}/events?after_seq=${afterSeq}&order=asc`,
+        { method: "GET", headers },
+      );
+      if (!evRes.ok) {
+        throw new Error(`remote events poll failed (${evRes.status})`);
+      }
+      const page = (await evRes.json()) as { data?: RemoteMirroredEvent[] };
+      const events = Array.isArray(page.data) ? page.data : [];
+      for (const ev of events) {
+        if (consume(ev)) return;
       }
     }
-    if (reachedIdle) break;
+  };
+
+  if ((opts.transport ?? "stream") === "poll") {
+    await poll();
+  } else {
+    const sseFetch = opts.streamFetchImpl ?? defaultSseFetch;
+    const maxReconnects = opts.maxStreamReconnects ?? DEFAULT_MAX_STREAM_RECONNECTS;
+    let reconnects = 0;
+    for (;;) {
+      if (expired()) throw timedOut();
+      // `replay=1` + Last-Event-ID makes the remote resume from our last seen
+      // seq; `include=chunks` admits OMA extension events (agent.status) so
+      // the streamed mirror covers the same set the poll transport did.
+      const res = await sseFetch(
+        `${base}/sessions/${remoteSessionId}/events/stream?include=chunks&replay=1`,
+        { method: "GET", headers: { ...headers, "Last-Event-ID": String(afterSeq) } },
+      );
+      if (!res.ok) {
+        // A remote without the SSE surface (or blocking it) is not a reason to
+        // fail the turn — fall back to the M1 poll transport on the SAME
+        // remote. This is never a fall back to a *local* run.
+        if (reconnects === 0) {
+          await poll();
+          break;
+        }
+        throw new Error(`remote events stream failed (${res.status})`);
+      }
+      let reachedIdle = false;
+      for await (const ev of parseSseEvents(res.chunks())) {
+        if (consume(ev)) {
+          reachedIdle = true;
+          break;
+        }
+      }
+      if (reachedIdle) break;
+      // Stream ended before idle: the remote closed, a proxy timed out, or the
+      // connection dropped. Reconnect from `afterSeq` within the budget.
+      if (++reconnects > maxReconnects) {
+        throw new Error(
+          `remote events stream dropped ${reconnects - 1} times before idle (session ${remoteSessionId})`,
+        );
+      }
+      await sleep(pollIntervalMs);
+    }
   }
 
   return { text: texts.join("\n\n"), remote_session_id: remoteSessionId, last_seq: afterSeq };
@@ -366,5 +539,10 @@ export async function delegateToRemoteAgent(
   target: RemoteInstanceTarget,
   opts: RemoteDelegateOptions,
 ): Promise<{ text: string; remote_session_id: string }> {
-  return runRemoteTurn(target, opts, "callable_agent");
+  // Poll transport on purpose: a one-shot delegate mirrors nothing into the
+  // caller's event log (only the final text is returned to the tool), so a
+  // live SSE connection would buy no interactivity and only add a long-lived
+  // socket per in-flight sub-agent call. The proxied-session path (M2) is the
+  // one that streams.
+  return runRemoteTurn(target, { transport: "poll", ...opts }, "callable_agent");
 }

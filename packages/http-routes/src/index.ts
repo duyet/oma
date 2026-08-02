@@ -125,6 +125,20 @@ export type {
 export { buildFederationRoutes } from "./federation";
 export type { FederationRoutesDeps } from "./federation";
 
+export {
+  federatedListBody,
+  fanOutRemoteList,
+  mergeFederatedPages,
+  wantsRemoteFanOut,
+  parseInstanceIds,
+  forwardableSearch,
+} from "./federation-fanout";
+export type {
+  FederationCryptoDep,
+  FederatedRow,
+  RemoteListError,
+} from "./federation-fanout";
+
 export { buildIntegrationsRoutes } from "./integrations";
 export type {
   IntegrationsRoutesDeps,
