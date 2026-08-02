@@ -55,7 +55,7 @@ matters, and only one direction is correct:
   during the run land under OLD *behind* the script's cursor, so a second
   pass is required and correctness now depends on catching every straggler.
 
-Run a `--dry-run` across everything *before* the flip and confirm
+Run the script without `--apply` (a dry run) across everything *before* the flip and confirm
 `failures=0`. That is the check that proves the old secret you hold is
 actually the one encrypting the data — do it while the system is still
 healthy, not after you have already flipped.

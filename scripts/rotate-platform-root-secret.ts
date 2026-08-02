@@ -47,11 +47,11 @@
  *   CF_ACCOUNT_ID=… CF_API_TOKEN=… \
  *   PLATFORM_ROOT_SECRET_OLD=… PLATFORM_ROOT_SECRET_NEW=… \
  *     pnpm tsx scripts/rotate-platform-root-secret.ts \
- *       --db=<d1-database-id> [--shard=<label>] [--dry-run] [--continue-on-error]
+ *       --db=<d1-database-id> [--shard=<label>] [--apply] [--continue-on-error]
  *
  *   --db                 D1 database UUID for the tenant shard (required).
  *   --shard              Optional human-readable label used in log lines.
- *   --dry-run            Report counts; never write.
+ *   --apply              Actually write. WITHOUT this the run is a dry run.
  *   --continue-on-error  Collect+report undecryptable rows instead of
  *                        aborting on the first one. Default: abort.
  *   --account            CF account UUID (or CF_ACCOUNT_ID env).
@@ -619,14 +619,18 @@ async function main(): Promise<void> {
   const oldSecret = args["old-secret"] ?? process.env.PLATFORM_ROOT_SECRET_OLD;
   const newSecret = args["new-secret"] ?? process.env.PLATFORM_ROOT_SECRET_NEW;
   const pageSize = parseInt(args.page ?? "200", 10);
-  const dryRun = args["dry-run"] === "true";
+  // Write mode is opt-IN. A bad rekey makes every encrypted row unreadable,
+  // so the default run must be the harmless one: you have to type --apply to
+  // touch data. `--dry-run` stays accepted so an explicit dry run still reads
+  // naturally in a runbook.
+  const dryRun = args.apply !== "true";
   const continueOnError = args["continue-on-error"] === "true";
 
   if (!accountId || !token || !dbId || !oldSecret || !newSecret) {
     console.error(
       "Usage: pnpm tsx scripts/rotate-platform-root-secret.ts \\\n" +
         "  --db=<tenant-d1-id> --integrations-db=<integrations-d1-id> --kv-namespace=<kv-id> \\\n" +
-        "  [--shard=<label>] [--dry-run] [--continue-on-error] [--no-integrations] [--no-federation]\n" +
+        "  [--shard=<label>] [--apply] [--continue-on-error] [--no-integrations] [--no-federation]\n" +
         "Required env (or flags): CF_ACCOUNT_ID, CF_API_TOKEN, PLATFORM_ROOT_SECRET_OLD, PLATFORM_ROOT_SECRET_NEW",
     );
     process.exit(1);
@@ -788,13 +792,13 @@ async function main(): Promise<void> {
   }
 
   if (dryRun) {
-    console.log(`\n✓ Dry run complete. No writes performed. Re-run without --dry-run to apply.`);
+    console.log(`\n✓ Dry run complete. No writes performed. Re-run with --apply to write.`);
   } else {
     const remaining =
       results.reduce((sum, r) => sum + r.wouldRotate, 0) + (fedResult?.wouldRotate ?? 0);
     console.log(
       remaining === 0
-        ? `\n✓ Rotation complete. Verify by re-running with --dry-run; wouldRotate must be 0 for every table.`
+        ? `\n✓ Rotation complete. Verify by re-running without --apply; wouldRotate must be 0 for every table.`
         : `\n✗ ${remaining} rows still need rotation. Re-run.`,
     );
   }

@@ -19,7 +19,7 @@ with:
 - **Verify-before-commit**: OLD-decrypt → NEW-encrypt → NEW-decrypt the fresh
   ciphertext → assert it equals the original plaintext byte-for-byte.
   Nothing is written to the DB unless that check passes.
-- **Dry-run**: `--dry-run` reports exactly what would change; zero writes.
+- **Dry-run is the default**: a run without `--apply` reports exactly what would change and writes nothing. You must pass `--apply` to touch data.
 - **No plaintext logging**: only row ids, counts, and error classes/messages
   ever hit stdout/stderr.
 - **Fail-loud by default**: a row that doesn't decrypt under OLD or NEW
@@ -97,7 +97,7 @@ for db in $(./scripts/list-shards.sh); do
   CF_ACCOUNT_ID=... CF_API_TOKEN=... \
   PLATFORM_ROOT_SECRET_OLD=... PLATFORM_ROOT_SECRET_NEW=... \
     pnpm tsx scripts/rotate-platform-root-secret.ts \
-      --db="$db" --integrations-db="$INTEGRATIONS_DB" --kv-namespace="$KV_NS" --dry-run
+      --db="$db" --integrations-db="$INTEGRATIONS_DB" --kv-namespace="$KV_NS"
 done
 ```
 
@@ -122,8 +122,11 @@ echo "$SHARDS" | xargs -P 8 -I {} \
   env CF_ACCOUNT_ID=... CF_API_TOKEN=... \
       PLATFORM_ROOT_SECRET_OLD=... PLATFORM_ROOT_SECRET_NEW=... \
     pnpm tsx scripts/rotate-platform-root-secret.ts \
-      --db={} --shard={} --integrations-db="$INTEGRATIONS_DB" --kv-namespace="$KV_NS"
+      --db={} --shard={} --integrations-db="$INTEGRATIONS_DB" --kv-namespace="$KV_NS" --apply
 ```
+
+`--apply` is what makes this step write. Every other invocation in this
+runbook deliberately omits it and is therefore a dry run.
 
 The integrations D1 and the federation KV namespace are **global, not
 per-shard** — running the fan-out above rotates them repeatedly, which is
@@ -138,7 +141,7 @@ for db in $(./scripts/list-shards.sh); do
   CF_ACCOUNT_ID=... CF_API_TOKEN=... \
   PLATFORM_ROOT_SECRET_OLD=... PLATFORM_ROOT_SECRET_NEW=... \
     pnpm tsx scripts/rotate-platform-root-secret.ts \
-      --db="$db" --integrations-db="$INTEGRATIONS_DB" --kv-namespace="$KV_NS" --dry-run
+      --db="$db" --integrations-db="$INTEGRATIONS_DB" --kv-namespace="$KV_NS"
 done
 ```
 
