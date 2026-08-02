@@ -164,6 +164,86 @@ describe("K8sManager cluster endpoints", () => {
 
     expect(capacity.estimatedAdditionalSandboxes).toBe(0);
   });
+
+  it("reports a node with no capacity/allocatable data as contributing nothing, not as NaN", async () => {
+    // A node that has joined but whose kubelet hasn't reported status yet.
+    // The figures must stay numeric and the headroom estimate must be 0 —
+    // a NaN or Infinity here would render as unlimited free capacity and
+    // let the scheduler over-commit the cluster.
+    const { K8sManager } = await import("../src/k8s-manager");
+    world.nodes = [{ metadata: { name: "node-unreported" }, status: {} } as unknown as FakeNode];
+    world.pods = [];
+
+    const manager = new K8sManager("default");
+    const capacity = await manager.getClusterCapacity();
+
+    expect(capacity.available).toBe(true);
+    expect(capacity.allocatableCpuMillicores).toBe(0);
+    expect(capacity.allocatableMemoryMib).toBe(0);
+    expect(capacity.maxPods).toBe(0);
+    expect(capacity.estimatedAdditionalSandboxes).toBe(0);
+    expect(Number.isFinite(capacity.estimatedAdditionalSandboxes)).toBe(true);
+  });
+
+  it("reports all-zero sandbox lifecycle counts on an empty cluster", async () => {
+    const { K8sManager } = await import("../src/k8s-manager");
+    world.nodes = [makeNode()];
+    world.pods = [];
+
+    const manager = new K8sManager("default");
+    const capacity = await manager.getClusterCapacity();
+
+    expect(capacity.sandboxPods).toEqual({
+      total: 0,
+      running: 0,
+      pending: 0,
+      terminating: 0,
+      succeeded: 0,
+      failed: 0,
+      unknown: 0,
+    });
+    // With no pods requesting anything, the whole allocatable pool is headroom.
+    expect(capacity.requestedCpuMillicores).toBe(0);
+  });
+
+  it("breaks sandbox pods down by lifecycle state", async () => {
+    const { K8sManager } = await import("../src/k8s-manager");
+    world.nodes = [makeNode()];
+    world.pods = [
+      { status: { phase: "Running" } },
+      { status: { phase: "Running" } },
+      { status: { phase: "Pending" } },
+      // Still phase=Running, but being torn down: must count as terminating
+      // only, or a draining cluster looks fully occupied.
+      { metadata: { deletionTimestamp: "2026-08-01T00:00:00Z" }, status: { phase: "Running" } },
+      { status: { phase: "Failed" } },
+    ] as unknown as FakePod[];
+
+    const manager = new K8sManager("default");
+    const capacity = await manager.getClusterCapacity();
+
+    expect(capacity.sandboxPods).toEqual({
+      total: 5,
+      running: 2,
+      pending: 1,
+      terminating: 1,
+      succeeded: 0,
+      failed: 1,
+      unknown: 0,
+    });
+  });
+});
+
+describe("countSandboxLifecycle", () => {
+  it("classifies an unrecognized or missing phase as unknown rather than dropping it", async () => {
+    // Total must always equal the pod count so a caller can trust it as the
+    // namespace's sandbox pod count regardless of phase vocabulary drift.
+    const { countSandboxLifecycle } = await import("../src/k8s-manager");
+    const counts = countSandboxLifecycle([{}, { status: {} }, { status: { phase: "Weird" } }]);
+
+    expect(counts.total).toBe(3);
+    expect(counts.unknown).toBe(3);
+  });
 });
 
 // The K8s client is loaded lazily via a private getCoreApi() helper. These

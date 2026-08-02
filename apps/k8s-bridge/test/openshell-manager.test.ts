@@ -94,6 +94,28 @@ describe("OpenShellManager box lifecycle", () => {
     expect(await mgr.getPodMetrics()).toEqual([]);
     expect(await mgr.getSandboxDetail("anything")).toBeNull();
   });
+
+  it("reports capacity as unavailable with a reason instead of zeros that read as real", async () => {
+    const mgr = new OpenShellManager(ENV);
+    const capacity = await mgr.getClusterCapacity();
+
+    expect(capacity.available).toBe(false);
+    expect(capacity.reason).toMatch(/openshell/i);
+    // No fabricated phase breakdown — the gateway exposes no pod phases.
+    expect(capacity.sandboxPods).toBeNull();
+  });
+
+  it("serves the capacity endpoint over the router without crashing on the openshell backend", async () => {
+    const mgr = new OpenShellManager(ENV);
+    const router = createRouter(mgr);
+
+    const res = await router.request("/api/v1/cluster/capacity");
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { available: boolean; reason?: string };
+    expect(body.available).toBe(false);
+    expect(body.reason).toBeTruthy();
+  });
 });
 
 describe("OpenShellManager behind the HTTP router", () => {

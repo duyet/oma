@@ -27,6 +27,8 @@
 //   POST   /api/v1/boxes/:id/env               — set env vars
 //   GET    /api/v1/boxes/:id/status            — box status
 //   GET    /api/v1/health                       — health check
+//   GET    /api/v1/cluster/info                 — cluster info (observational)
+//   GET    /api/v1/cluster/capacity             — cluster capacity (observational)
 //
 // Box lifecycle: lazy-create on first exec/readFile/writeFile.
 
@@ -35,6 +37,54 @@ import type { OpenShellSandboxPolicy } from "./openshell-policy";
 import { getLogger } from "@duyet/oma-observability";
 
 const moduleLogger = getLogger("k8s-bridge-sandbox");
+
+/** Sandbox-pod lifecycle counts, mirroring the bridge's
+ *  `SandboxLifecycleCounts` (apps/k8s-bridge/src/k8s-manager.ts). Declared
+ *  here rather than imported: the bridge app depends on this package, not
+ *  the other way round. */
+export interface BridgeSandboxLifecycleCounts {
+  total: number;
+  running: number;
+  pending: number;
+  terminating: number;
+  succeeded: number;
+  failed: number;
+  unknown: number;
+}
+
+/** `GET /cluster/capacity` response — mirrors the bridge's `ClusterCapacity`. */
+export interface BridgeClusterCapacity {
+  /** False when the bridge owns no cluster (OpenShell backend); every
+   *  numeric field below is then meaningless. */
+  available: boolean;
+  reason?: string;
+  totalCpu: string;
+  totalMemory: string;
+  allocatableCpu: string;
+  allocatableMemory: string;
+  requestedCpu: string;
+  requestedMemory: string;
+  allocatableCpuMillicores: number;
+  requestedCpuMillicores: number;
+  allocatableMemoryMib: number;
+  requestedMemoryMib: number;
+  runningPods: number;
+  maxPods: number;
+  estimatedAdditionalSandboxes: number;
+  sandboxPods: BridgeSandboxLifecycleCounts | null;
+}
+
+/** `GET /cluster/info` response — mirrors the bridge's `ClusterInfo`. */
+export interface BridgeClusterInfo {
+  k8sVersion: string;
+  platform: string;
+  nodeCount: number;
+  totalCpu: string;
+  totalMemory: string;
+  allocatableCpu: string;
+  allocatableMemory: string;
+  maxPods: number;
+}
 
 export interface K8sBridgeSandboxOptions {
   /** K8s bridge base URL with API prefix.
@@ -247,40 +297,72 @@ export class K8sBridgeSandbox implements SandboxExecutor {
   }
 
   /**
-   * Cluster capacity snapshot, if the bridge exposes `/cluster/capacity`.
-   * Returns `null` on any failure (404, network error, unexpected shape) —
-   * capacity is best-effort and must never fail a health check.
+   * Raw cluster capacity payload from `GET /cluster/capacity`, verbatim.
+   * Returns `null` on any failure (404 on an old bridge, network error,
+   * non-JSON body) — capacity is observational and must never fail a call
+   * path. An OpenShell-backed bridge answers with `available: false`; that
+   * is a successful response, not a failure, so it is returned as-is and the
+   * caller decides how to render it.
    */
-  async getCapacity(): Promise<SandboxCapacity | null> {
+  async getClusterCapacity(): Promise<BridgeClusterCapacity | null> {
     try {
       const ac = new AbortController();
       const t = setTimeout(() => ac.abort(), 10000);
       const res = await this.fetch(`/cluster/capacity`, { signal: ac.signal });
       clearTimeout(t);
       if (!res.ok) return null;
-      const body = (await res.json()) as {
-        cpu?: { used?: number; total?: number };
-        memory?: { used?: number; total?: number; unit?: "MiB" | "GiB" };
-        pods?: { used?: number; total?: number };
-      };
-      const capacity: SandboxCapacity = {};
-      if (body.cpu?.total !== undefined) {
-        capacity.cpu = { used: body.cpu.used ?? 0, total: body.cpu.total, unit: "cores" };
-      }
-      if (body.memory?.total !== undefined) {
-        capacity.memory = {
-          used: body.memory.used ?? 0,
-          total: body.memory.total,
-          unit: body.memory.unit ?? "GiB",
-        };
-      }
-      if (body.pods?.total !== undefined) {
-        capacity.pods = { used: body.pods.used ?? 0, total: body.pods.total };
-      }
-      return Object.keys(capacity).length > 0 ? capacity : null;
+      return (await res.json()) as BridgeClusterCapacity;
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Cluster info snapshot from `GET /cluster/info` (versions, node count,
+   * total/allocatable). Same best-effort contract as getClusterCapacity.
+   */
+  async getClusterInfo(): Promise<BridgeClusterInfo | null> {
+    try {
+      const ac = new AbortController();
+      const t = setTimeout(() => ac.abort(), 10000);
+      const res = await this.fetch(`/cluster/info`, { signal: ac.signal });
+      clearTimeout(t);
+      if (!res.ok) return null;
+      return (await res.json()) as BridgeClusterInfo;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Provider-agnostic capacity view, mapped from the bridge payload onto the
+   * `SandboxCapacity` port. Returns `null` when the bridge reports
+   * `available: false` (OpenShell backend) — a provider that owns no cluster
+   * must report "unknown", never a zeroed reading that looks like a full one.
+   */
+  async getCapacity(): Promise<SandboxCapacity | null> {
+    const body = await this.getClusterCapacity();
+    if (!body || body.available === false) return null;
+
+    const capacity: SandboxCapacity = {};
+    if (body.allocatableCpuMillicores) {
+      capacity.cpu = {
+        used: (body.requestedCpuMillicores ?? 0) / 1000,
+        total: body.allocatableCpuMillicores / 1000,
+        unit: "cores",
+      };
+    }
+    if (body.allocatableMemoryMib) {
+      capacity.memory = {
+        used: body.requestedMemoryMib ?? 0,
+        total: body.allocatableMemoryMib,
+        unit: "MiB",
+      };
+    }
+    if (body.maxPods) {
+      capacity.pods = { used: body.runningPods ?? 0, total: body.maxPods };
+    }
+    return Object.keys(capacity).length > 0 ? capacity : null;
   }
 
   // ── helpers ──────────────────────────────────────────────────────────

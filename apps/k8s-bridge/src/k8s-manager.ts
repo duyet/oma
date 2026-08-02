@@ -62,16 +62,83 @@ export interface ClusterInfo {
   maxPods: number;
 }
 
+/** Per-lifecycle-state counts for the sandbox pods in the bridge's namespace. */
+export interface SandboxLifecycleCounts {
+  total: number;
+  running: number;
+  pending: number;
+  /** Pods with a deletionTimestamp — counted here and NOT in running/pending. */
+  terminating: number;
+  succeeded: number;
+  failed: number;
+  unknown: number;
+}
+
 export interface ClusterCapacity {
+  /** False when the backend owns no Kubernetes cluster (OpenShell). Consumers
+   *  must treat every numeric field below as meaningless in that case rather
+   *  than rendering zeros as a real reading. */
+  available: boolean;
+  /** Human-readable explanation, present only when `available` is false. */
+  reason?: string;
   totalCpu: string;
   totalMemory: string;
   allocatableCpu: string;
   allocatableMemory: string;
   requestedCpu: string;
   requestedMemory: string;
+  /** Numeric companions to the formatted strings above, so a client doesn't
+   *  have to re-parse "3.50" / "500m" / "15500Mi" to do arithmetic. */
+  allocatableCpuMillicores: number;
+  requestedCpuMillicores: number;
+  allocatableMemoryMib: number;
+  requestedMemoryMib: number;
   runningPods: number;
   maxPods: number;
   estimatedAdditionalSandboxes: number;
+  /** Lifecycle breakdown of the sandbox pods in the bridge's own namespace.
+   *  `null` when the backend can't observe pods at all (OpenShell). */
+  sandboxPods: SandboxLifecycleCounts | null;
+}
+
+/** Raw pod fields the lifecycle tally reads. */
+interface LifecycleRawPod {
+  metadata?: { deletionTimestamp?: string };
+  status?: { phase?: string };
+}
+
+/** Pure tally of sandbox pod lifecycle states. Exported for unit tests. */
+export function countSandboxLifecycle(pods: unknown[]): SandboxLifecycleCounts {
+  const counts: SandboxLifecycleCounts = {
+    total: 0,
+    running: 0,
+    pending: 0,
+    terminating: 0,
+    succeeded: 0,
+    failed: 0,
+    unknown: 0,
+  };
+
+  for (const raw of pods) {
+    const pod = raw as LifecycleRawPod;
+    counts.total++;
+    // A pod being deleted keeps its old phase (usually Running) until the
+    // kubelet finishes teardown, so deletionTimestamp wins over phase —
+    // otherwise a draining cluster reads as fully occupied.
+    if (pod.metadata?.deletionTimestamp) {
+      counts.terminating++;
+      continue;
+    }
+    switch (pod.status?.phase) {
+      case "Running": counts.running++; break;
+      case "Pending": counts.pending++; break;
+      case "Succeeded": counts.succeeded++; break;
+      case "Failed": counts.failed++; break;
+      default: counts.unknown++; break;
+    }
+  }
+
+  return counts;
 }
 
 export interface SandboxPodInfo {
@@ -387,28 +454,15 @@ export class K8sManager implements BridgeBackend {
 
   async getClusterCapacity(): Promise<ClusterCapacity> {
     const nodes = await this.listNodesRaw();
-    let totalCpuMcpu = 0;
-    let totalMemMi = 0;
-    let allocCpuMcpu = 0;
-    let allocMemMi = 0;
-    let maxPods = 0;
-
-    for (const raw of nodes) {
-      const node = raw as {
-        status?: { capacity?: Record<string, string>; allocatable?: Record<string, string> };
-      };
-      if (node.status?.capacity) {
-        totalCpuMcpu += this.parseResourceQuantity(node.status.capacity.cpu);
-        totalMemMi += this.parseResourceQuantity(node.status.capacity.memory);
-      }
-      if (node.status?.allocatable) {
-        allocCpuMcpu += this.parseResourceQuantity(node.status.allocatable.cpu);
-        allocMemMi += this.parseResourceQuantity(node.status.allocatable.memory);
-      }
-      maxPods += this.parsePodCount(
-        (node as { status?: { capacity?: Record<string, string> } })?.status?.capacity?.["pods"] ?? "0",
-      );
-    }
+    // Same aggregation getClusterInfo/getCapacityUsage use — a node missing
+    // status.capacity or status.allocatable simply contributes nothing.
+    const {
+      totalCpuMcpu,
+      totalMemMi,
+      allocCpuMcpu,
+      allocMemMi,
+      maxPods,
+    } = this.aggregateNodeCapacity(nodes);
 
     const pods = await this.listAllPodsRaw();
     let requestedCpuMcpu = 0;
@@ -442,16 +496,30 @@ export class K8sManager implements BridgeBackend {
     );
 
     return {
+      available: true,
       totalCpu: this.formatMillicores(totalCpuMcpu),
       totalMemory: this.formatMemoryMi(totalMemMi),
       allocatableCpu: this.formatMillicores(allocCpuMcpu),
       allocatableMemory: this.formatMemoryMi(allocMemMi),
       requestedCpu: this.formatMillicores(requestedCpuMcpu),
       requestedMemory: this.formatMemoryMi(requestedMemMi),
+      allocatableCpuMillicores: allocCpuMcpu,
+      requestedCpuMillicores: requestedCpuMcpu,
+      allocatableMemoryMib: allocMemMi,
+      requestedMemoryMib: requestedMemMi,
       runningPods,
       maxPods,
       estimatedAdditionalSandboxes,
+      sandboxPods: countSandboxLifecycle(await this.listNamespacedPodsRaw()),
     };
+  }
+
+  /** Pods in the bridge's own namespace — the sandbox pods it manages. */
+  private async listNamespacedPodsRaw(): Promise<unknown[]> {
+    const coreApi = await this.getCoreApi();
+    const res = await coreApi.listNamespacedPod(this.namespace);
+    const body = unwrapBody<{ items?: unknown[] }>(res);
+    return body?.items ?? [];
   }
 
   private async listAllPodsRaw(): Promise<unknown[]> {
