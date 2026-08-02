@@ -28,6 +28,7 @@ import { hostname } from "node:os";
 import { randomBytes } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { writeCreds, readCreds, getOrCreateMachineId, readSettings, writeSettings } from "../lib/config.js";
+import { resolveSandboxBackend } from "../lib/sandbox-backend.js";
 import {
   DEFAULT_OPENSHELL_ENDPOINT,
   probeOpenShellGateway,
@@ -294,7 +295,12 @@ async function offerOpenShellBackend(): Promise<void> {
  *  whatever `gh auth login` / git credentials already exist here, not an
  *  OMA-managed, session-scoped one. See AGENTS.md's sandbox provider table
  *  (`"subprocess"` row) and docs/runtimes.md for the full limitation. */
-function warnLocalCredentialFallback(): void {
+async function warnLocalCredentialFallback(): Promise<void> {
+  // Only true of the subprocess relay. An OpenShell sandbox is isolated and
+  // empty — none of this machine's files or CLI auth are visible inside it —
+  // so warning there would be actively misleading.
+  const sel = resolveSandboxBackend(process.env, await readSettings());
+  if (sel.kind !== "subprocess") return;
   log.warn("local sandbox ops use THIS machine's own `gh`/git credentials");
   log.hint("not OMA-managed or scoped to a session's vaults — only pair machines you trust the agent to authenticate as.");
 }
@@ -314,7 +320,7 @@ async function installServiceOrFallback(opts: SetupOpts): Promise<void> {
       log.step("--no-service: starting daemon in foreground");
     }
     log.hint("Ctrl-C to stop. To run as a system service, re-run setup without --no-service.");
-    warnLocalCredentialFallback();
+    await warnLocalCredentialFallback();
     process.stderr.write("\n");
     execIntoDaemon();
     return;
@@ -337,7 +343,7 @@ async function refreshServiceOrFallback(opts: SetupOpts): Promise<void> {
     process.stderr.write("\n");
     log.step(opts.noService ? "--no-service: starting daemon in foreground" : `service install not supported on ${process.platform}; running daemon in foreground`);
     log.hint("Ctrl-C to stop. To run as a system service, re-run setup without --no-service.");
-    warnLocalCredentialFallback();
+    await warnLocalCredentialFallback();
     process.stderr.write("\n");
     execIntoDaemon();
     return;
@@ -400,7 +406,7 @@ async function installAndReport(opts: SetupOpts): Promise<void> {
   process.stderr.write(
     `${c.dim("  After joining new workspaces, run `oma bridge refresh` to authorize them on this daemon.")}\n\n`,
   );
-  warnLocalCredentialFallback();
+  await warnLocalCredentialFallback();
   process.stderr.write("\n");
 }
 
