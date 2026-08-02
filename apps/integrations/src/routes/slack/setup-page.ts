@@ -32,9 +32,18 @@ app.get("/:token", async (c) => {
   const manifestLaunchUrl = form.publicationId
     ? slack.buildManifestLaunchUrlForPublication(form.publicationId, form.persona.name)
     : null;
+  // Same manifest the launch URL encodes, for an admin who already has an App
+  // and wants to paste it into that App's "App Manifest" page instead.
+  const manifestJson = form.publicationId
+    ? JSON.stringify(
+        slack.buildManifestForPublication(form.publicationId, form.persona.name),
+        null,
+        2,
+      )
+    : null;
 
   return c.html(
-    landingPage({ token, personaName: form.persona.name, manifestLaunchUrl }),
+    landingPage({ token, personaName: form.persona.name, manifestLaunchUrl, manifestJson }),
   );
 });
 
@@ -42,6 +51,7 @@ function landingPage(opts: {
   token: string;
   personaName: string;
   manifestLaunchUrl: string | null;
+  manifestJson: string | null;
 }): string {
   const escapedToken = escapeHtml(opts.token);
   const escapedName = escapeHtml(opts.personaName);
@@ -55,7 +65,16 @@ function landingPage(opts: {
     <p style="margin:8px 0 0;font-size:13px;color:#555">
       Slack will open with the manifest pre-filled. Confirm Create, then come back here and copy the secrets from your new App's <strong>Basic Information</strong> page.
     </p>
-  </div>
+${
+  opts.manifestJson
+    ? `    <details style="margin-top:10px">
+      <summary style="font-size:13px">Already have a Slack App? View the manifest JSON</summary>
+      <p style="margin:8px 0 4px;font-size:13px;color:#555">Paste this into your App's <strong>App Manifest</strong> page to apply the same scopes, events, and URLs.</p>
+      <pre style="max-height:260px;overflow:auto;background:#f7f7f7;border:1px solid #e2e2e2;border-radius:6px;padding:10px;font-size:12px">${escapeHtml(opts.manifestJson)}</pre>
+    </details>
+`
+    : ""
+}  </div>
 `
     : "";
   return `<!DOCTYPE html>

@@ -567,6 +567,9 @@ function A1CredentialsStep(props: {
             <strong> Signing Secret</strong> from the App's <em>Basic Information</em>
             page and paste them below.
           </p>
+          {props.form.manifestJson && (
+            <ManifestJsonDisclosure json={props.form.manifestJson} />
+          )}
         </section>
       )}
 
@@ -732,6 +735,45 @@ function A1InstallStep({ link, onBack }: { link: A1InstallLink; onBack: () => vo
         </div>
       </details>
     </div>
+  );
+}
+
+/**
+ * The raw App Manifest behind the one-click button. The launch URL only helps
+ * when creating a *new* App — an admin who already has one (or who wants to
+ * read the scopes before granting them) needs the JSON itself, which Slack's
+ * "App Manifest" settings page accepts as a paste. No secrets in it: just this
+ * deployment's public gateway URLs, scopes, and event subscriptions.
+ */
+function ManifestJsonDisclosure({ json }: { json: string }) {
+  const [copied, setCopied] = useState(false);
+  function copy() {
+    void navigator.clipboard.writeText(json);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+  return (
+    <details className="mt-3">
+      <summary className="text-[12px] text-fg-muted cursor-pointer hover:text-fg transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]">
+        Already have a Slack App? View the manifest JSON
+      </summary>
+      <div className="mt-2 space-y-2">
+        <p className="text-[12px] text-fg-subtle">
+          Paste this into your App's <strong>App Manifest</strong> settings page to apply
+          the same scopes, events, and URLs to an App that already exists.
+        </p>
+        <button
+          type="button"
+          onClick={copy}
+          className="text-[12px] px-2.5 py-1 rounded-md border border-border text-fg-muted hover:text-fg hover:bg-bg-surface transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
+        >
+          {copied ? "Copied" : "Copy manifest JSON"}
+        </button>
+        <pre className="max-h-64 overflow-auto rounded-md border border-border bg-bg-surface/50 p-3 text-[11px] font-mono text-fg-muted leading-relaxed">
+          {json}
+        </pre>
+      </div>
+    </details>
   );
 }
 

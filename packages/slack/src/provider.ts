@@ -288,6 +288,11 @@ export class SlackProvider implements IntegrationProvider {
           publication.id,
           input.persona.name,
         ),
+        manifestJson: JSON.stringify(
+          this.buildManifestForPublication(publication.id, input.persona.name),
+          null,
+          2,
+        ),
       },
     };
   }
@@ -311,7 +316,21 @@ export class SlackProvider implements IntegrationProvider {
     publicationId: string,
     personaName: string,
   ): string {
-    const manifest = buildManifest({
+    return buildManifestLaunchUrl(this.buildManifestForPublication(publicationId, personaName));
+  }
+
+  /**
+   * The manifest object itself, for operators who can't use the launch URL:
+   * an admin applying it to an App that already exists (Slack's "App
+   * Manifest" editor takes a paste), or anyone who wants to read the scopes
+   * before creating anything. Same bytes the launch URL encodes — contains
+   * no secrets, only this deployment's public gateway URLs.
+   */
+  buildManifestForPublication(
+    publicationId: string,
+    personaName: string,
+  ): Record<string, unknown> {
+    return buildManifest({
       personaName,
       // Webhook URL is keyed on pub_id which we already have here. The
       // gateway resolves pub_id → publication.slack_app_id at delivery
@@ -323,7 +342,6 @@ export class SlackProvider implements IntegrationProvider {
       userScopes: this.config.userScopes ?? DEFAULT_SLACK_USER_SCOPES,
       subscribedEvents: DEFAULT_SLACK_SUBSCRIBED_EVENTS,
     });
-    return buildManifestLaunchUrl(manifest);
   }
 
   /**
@@ -487,6 +505,11 @@ export class SlackProvider implements IntegrationProvider {
         manifestLaunchUrl: this.buildManifestLaunchUrlForPublication(
           pub.id,
           pub.persona.name,
+        ),
+        manifestJson: JSON.stringify(
+          this.buildManifestForPublication(pub.id, pub.persona.name),
+          null,
+          2,
         ),
       },
     };

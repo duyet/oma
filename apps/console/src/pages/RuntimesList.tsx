@@ -16,6 +16,12 @@ import { ProviderMark } from "../components/ProviderMark";
 import { RuntimesIcon } from "../components/icons";
 import { cn, rowActivateKeyDown } from "@/lib/utils";
 import { useConfirm } from "@/hooks/useConfirm";
+import {
+  partitionByAvailability,
+  providerAvailabilityView,
+  runtimeLabel,
+} from "../lib/providerAvailability";
+import type { ProviderAvailability } from "../lib/providerAvailability";
 
 interface LocalSkill {
   id: string;
@@ -65,6 +71,12 @@ interface HostingType {
     reason?: string;
     capacity?: ProviderCapacity;
   } | null;
+  /**
+   * Can this deployment run the provider at all — and if not, why. Optional
+   * because an older backend won't send it; the view helper then falls back
+   * to the neutral "available" rendering.
+   */
+  availability?: ProviderAvailability | null;
 }
 
 const HEALTH_REFRESH_INTERVAL_MS = 30_000;
@@ -264,10 +276,49 @@ function providerHealth(p: HostingType): {
   return { dot, label, status };
 }
 
+// Env vars / secrets that would unblock a provider, as copy-friendly chips.
+function MissingEnvChips({ names }: { names: string[] }) {
+  if (names.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {names.map((n) => (
+        <code
+          key={n}
+          className="rounded bg-bg-surface px-1.5 py-0.5 font-mono text-[10px] text-fg-muted"
+        >
+          {n}
+        </code>
+      ))}
+    </div>
+  );
+}
+
+// Why a provider can't (or can't yet) be used on this deployment. Rendered on
+// both the card and the detail dialog — the diagnostic is the whole point of
+// this page, so it never hides behind a hover or a tooltip.
+function AvailabilityNote({ p }: { p: HostingType }) {
+  const view = providerAvailabilityView(p.availability);
+  if (!view.reason) return null;
+  return (
+    <div
+      className={cn(
+        "rounded-md px-2 py-1.5 text-[11px] leading-relaxed space-y-1.5",
+        view.state === "unavailable"
+          ? "bg-bg-surface text-fg-muted"
+          : "bg-warning-subtle/40 text-fg-muted",
+      )}
+    >
+      <p>{view.reason}</p>
+      <MissingEnvChips names={view.missingEnv} />
+    </div>
+  );
+}
+
 function ProviderCard({ p, onSetup, onRemove, onOpenDetail, onOpenSandboxTab }: { p: HostingType; onSetup?: (p: HostingType) => void; onRemove?: (p: HostingType) => void; onOpenDetail?: (p: HostingType) => void; onOpenSandboxTab?: () => void }) {
   const health = p.health;
   const { dot: healthDot, label: healthLabel, status } = providerHealth(p);
   const isBrowserVm = p.provider === "browser-vm";
+  const availability = providerAvailabilityView(p.availability);
 
   const clickable = !!onOpenDetail;
 
@@ -276,6 +327,7 @@ function ProviderCard({ p, onSetup, onRemove, onOpenDetail, onOpenSandboxTab }: 
       size="sm"
       className={cn(
         "flex flex-col",
+        !availability.usable && "opacity-70",
         clickable &&
           "cursor-pointer transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
       )}
@@ -321,7 +373,22 @@ function ProviderCard({ p, onSetup, onRemove, onOpenDetail, onOpenSandboxTab }: 
           {p.external && (
             <Badge variant="outline" className="text-[10px]">External</Badge>
           )}
+          {availability.badge && (
+            <Badge
+              variant={availability.usable ? "secondary" : "outline"}
+              className={cn(
+                "text-[10px]",
+                availability.usable ? "text-warning" : "text-fg-subtle",
+              )}
+            >
+              {availability.badge}
+            </Badge>
+          )}
         </div>
+
+        {/* Availability sits above health: a provider that can't run here at
+            all makes its health irrelevant. */}
+        <AvailabilityNote p={p} />
 
         {p.capabilities.length > 0 && (
           <div className="flex flex-wrap gap-1">
@@ -378,7 +445,7 @@ function ProviderCard({ p, onSetup, onRemove, onOpenDetail, onOpenSandboxTab }: 
           {/* Browser VM → a pairing code + a new tab, not a CLI daemon.
               Shown regardless of health so a user can open another tab
               (or reopen a closed one) at any time. */}
-          {isBrowserVm && onOpenSandboxTab && (
+          {isBrowserVm && onOpenSandboxTab && availability.usable && (
             <div className="flex flex-col gap-2">
               {status === "not_configured" && health?.reason && (
                 <p className="text-[11px] text-fg-muted leading-relaxed">
@@ -399,8 +466,9 @@ function ProviderCard({ p, onSetup, onRemove, onOpenDetail, onOpenSandboxTab }: 
             </div>
           )}
 
-          {/* Not configured → offer setup */}
-          {status === "not_configured" && !isBrowserVm && (
+          {/* Not configured → offer setup. Skipped when the provider can't run
+              on this deployment at all — there is nothing to set up. */}
+          {status === "not_configured" && !isBrowserVm && availability.usable && (
             <div className="flex flex-col gap-2">
               {health?.reason && (
                 <p className="text-[11px] text-fg-muted leading-relaxed">
@@ -765,6 +833,7 @@ function ProviderDetailDialog({
   const health = p.health;
   const { dot: healthDot, label: healthLabel, status } = providerHealth(p);
   const isBrowserVm = p.provider === "browser-vm";
+  const availability = providerAvailabilityView(p.availability);
   return (
     <Modal
       open
@@ -777,12 +846,12 @@ function ProviderDetailDialog({
           <Button variant="ghost" onClick={onClose}>
             Close
           </Button>
-          {isBrowserVm && (
+          {isBrowserVm && availability.usable && (
             <Button variant="secondary" onClick={onOpenSandboxTab}>
               Open sandbox tab
             </Button>
           )}
-          {status === "not_configured" && !isBrowserVm && (
+          {status === "not_configured" && !isBrowserVm && availability.usable && (
             <Button
               variant="secondary"
               onClick={() => {
@@ -825,6 +894,14 @@ function ProviderDetailDialog({
         <DetailRow label="External">
           {p.external ? "Yes — off-host service" : "No — runs on this host"}
         </DetailRow>
+        <DetailRow label="Availability">
+          {availability.state === "unavailable"
+            ? "Not available on this deployment"
+            : availability.state === "needs_config"
+              ? "Supported — needs configuration"
+              : "Available"}
+        </DetailRow>
+        <AvailabilityNote p={p} />
         <DetailRow label="Health">
           <span className="inline-flex items-center gap-1.5">
             <span className={cn("w-2 h-2 rounded-full", healthDot)} />
@@ -1107,6 +1184,9 @@ export function RuntimesList() {
   }, [api]);
 
   const [providers, setProviders] = useState<HostingType[]>([]);
+  // Which deployment answered — Cloudflare and self-host Node support
+  // different provider sets, so the page says which one it's describing.
+  const [deploymentRuntime, setDeploymentRuntime] = useState<string | null>(null);
   const [providersLoading, setProvidersLoading] = useState(true);
   const [providersError, setProvidersError] = useState<string | null>(null);
 
@@ -1117,8 +1197,9 @@ export function RuntimesList() {
     if (!isBackground) setProvidersLoading(true);
     setProvidersError(null);
     try {
-      const res = await api<{ data: HostingType[] }>("/v1/hosting_types");
+      const res = await api<{ data: HostingType[]; runtime?: string }>("/v1/hosting_types");
       if (Array.isArray(res.data)) setProviders(res.data);
+      setDeploymentRuntime(res.runtime ?? null);
     } catch (err) {
       setProvidersError(err instanceof Error ? err.message : "Failed to load");
     } finally {
@@ -1177,6 +1258,15 @@ export function RuntimesList() {
     } catch { /* ignore */ }
   };
 
+  // Providers this deployment genuinely can't run are kept, not dropped —
+  // they move into their own section so the main grid stays scannable while
+  // the "why not" stays one click away.
+  const { usable: usableProviders, unavailableProviders } = (() => {
+    const { usable, unavailable } = partitionByAvailability(providers, (p) => p.availability);
+    return { usable, unavailableProviders: unavailable };
+  })();
+  const deploymentLabel = runtimeLabel(deploymentRuntime);
+
   const loading = providersLoading || runtimesLoading;
   const isEmpty =
     !loading &&
@@ -1200,6 +1290,12 @@ export function RuntimesList() {
               BYOK providers, and machines you connected via{" "}
               <code className="text-xs bg-bg-surface px-1 py-0.5 rounded font-mono">oma bridge daemon</code>
             </p>
+            {deploymentLabel && (
+              <p className="text-xs text-fg-subtle mt-1">
+                Showing availability for the{" "}
+                <span className="text-fg-muted">{deploymentLabel}</span>.
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Button size="sm" variant="secondary" onClick={() => setShowAddProvider(true)}>
@@ -1243,9 +1339,9 @@ export function RuntimesList() {
           </div>
         )}
 
-        {!loading && (providers.length > 0 || runtimes.length > 0) && (
+        {!loading && (usableProviders.length > 0 || runtimes.length > 0) && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {providers.map((p) => (
+            {usableProviders.map((p) => (
               <ProviderCard
                 key={p.id}
                 p={p}
@@ -1266,6 +1362,30 @@ export function RuntimesList() {
               />
             ))}
           </div>
+        )}
+
+        {/* Providers this build ships that this deployment can't run. They
+            used to be omitted entirely, which left an operator unable to tell
+            "unsupported here" from "I typed it wrong". Collapsed by default so
+            they don't crowd the runtimes you can actually use. */}
+        {!loading && unavailableProviders.length > 0 && (
+          <details className="mt-6 rounded-lg border border-border bg-bg-surface/50">
+            <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-fg select-none">
+              Not available on this deployment ({unavailableProviders.length})
+            </summary>
+            <div className="px-4 pb-4">
+              <p className="text-xs text-fg-muted mb-3 leading-relaxed">
+                These sandbox providers exist in this build but can't run
+                {deploymentLabel ? ` on the ${deploymentLabel.toLowerCase()}` : " here"}.
+                Each card explains why.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {unavailableProviders.map((p) => (
+                  <ProviderCard key={p.id} p={p} onOpenDetail={setDetailProvider} />
+                ))}
+              </div>
+            </div>
+          </details>
         )}
       </section>
 
