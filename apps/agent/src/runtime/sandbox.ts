@@ -551,8 +551,12 @@ export class CloudflareSandbox implements SandboxExecutor {
         }
       }
     } catch (err) {
+      // Format defensively: a non-Error rejection (null/undefined included)
+      // must not throw here, or it would escape this catch and skip the
+      // stale-stub invalidation below — reintroducing the very wedge this
+      // bounded destroy exists to prevent.
       console.error(
-        `[sandbox] destroy failed: ${(err as Error).message ?? err}`,
+        `[sandbox] destroy failed: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
     // Invalidate the cached stub. Next `getSandbox()` call will rebuild via
