@@ -7,8 +7,13 @@
 // a session.status_idle/error/terminated event is already committed; this
 // module must never throw back into the caller.
 
-import type { HttpClient, SessionNotifyEvent, WebhookEnvelope } from "@duyet/oma-integrations-core";
-import { summarizeSessionNotifyEvent } from "@duyet/oma-integrations-core";
+import type {
+  HttpClient,
+  SandboxNotifyKind,
+  SessionNotifyEvent,
+  WebhookEnvelope,
+} from "@duyet/oma-integrations-core";
+import { SANDBOX_NOTIFY_STATUS, summarizeSessionNotifyEvent } from "@duyet/oma-integrations-core";
 import type { EmailMessage, EmailSender } from "@duyet/oma-email";
 import type { NotificationTarget } from "@duyet/oma-api-types";
 import { GitHubApiClient, postSessionStatusComment } from "@duyet/oma-github";
@@ -55,6 +60,67 @@ export interface NotifyDispatchDeps {
    * `onError`, exactly like an unresolvable credential — never a throw.
    */
   resolveEmailSender?: () => EmailSender | null | Promise<EmailSender | null>;
+  /**
+   * Optional rate-limit gate for sandbox-lifecycle notifications (issue #80).
+   * A cluster-wide incident fails many sessions at once, so the whole fan-out
+   * consumes ONE token from `sandbox-notify:${tenantId}`; on exhaustion every
+   * target is skipped fail-open (reported via `onError`, never blocking the
+   * session) rather than paging an operator hundreds of times.
+   */
+  sandboxNotifyRateLimitGate?: {
+    consume(key: string): Promise<{ ok: boolean; retryAfter?: number }>;
+  };
+}
+
+/**
+ * Fan out a SANDBOX lifecycle notification (issue #80). Deliberately a thin
+ * wrapper over the same per-target `dispatchOne` the session-status path
+ * uses — same providers, same credential resolution, same never-throw
+ * contract — differing only in the opt-in filter and its own rate-limit
+ * bucket.
+ *
+ * Targets are opt-in: a target with no `sandbox_events` (the default for
+ * every agent configured before this existed) receives nothing.
+ */
+export async function dispatchSandboxNotifications(
+  event: SessionNotifyEvent & { status: "sandbox_provision_failed" | "sandbox_unhealthy" },
+  kind: SandboxNotifyKind,
+  targets: readonly NotificationTarget[],
+  deps: NotifyDispatchDeps,
+): Promise<void> {
+  const subscribed = targets.filter((t) => t.sandbox_events?.includes(kind));
+  if (!subscribed.length) return;
+
+  if (deps.sandboxNotifyRateLimitGate && deps.tenantId) {
+    const r = await deps.sandboxNotifyRateLimitGate.consume(`sandbox-notify:${deps.tenantId}`);
+    if (!r.ok) {
+      for (const target of subscribed) {
+        deps.onError?.(target, new Error(`sandbox notification rate limit exceeded for tenant=${deps.tenantId}`));
+      }
+      return;
+    }
+  }
+
+  const safe: SessionNotifyEvent = {
+    ...event,
+    status: SANDBOX_NOTIFY_STATUS[kind],
+    ...(event.detail ? { detail: redactSecrets(event.detail) } : {}),
+  };
+  await Promise.allSettled(subscribed.map((target) => dispatchOne(safe, target, deps)));
+}
+
+/**
+ * Sandbox failure detail is raw provider/container error text, so it must be
+ * scrubbed before it leaves the platform: token-shaped substrings are masked
+ * and the string is truncated. Never include raw pod manifests, env dumps, or
+ * credentials in a notification payload.
+ */
+export function redactSecrets(detail: string): string {
+  const masked = detail
+    .replace(/\b(?:sk|sk-ant|omak|ghp|ghs|gho|xoxb|xoxp|glpat|AKIA)[-_][A-Za-z0-9._-]{6,}/gi, "[redacted]")
+    .replace(/\b(?:bearer|token|authorization|api[_-]?key|password|secret)\b\s*[:=]?\s*\S+/gi, "[redacted]")
+    .replace(/eyJ[A-Za-z0-9._-]{10,}/g, "[redacted]");
+  return masked.length > 500 ? `${masked.slice(0, 500)}…` : masked;
 }
 
 /**
@@ -193,6 +259,12 @@ function isScheduleStatus(status: SessionNotifyEvent["status"]): boolean {
   return status === "schedule_ok" || status === "schedule_error" || status === "schedule_skipped";
 }
 
+/** Sandbox statuses carry their own opt-in filter (`sandbox_events`), applied
+ *  before dispatch — the session-only `events` enum never gates them. */
+function isSandboxStatus(status: SessionNotifyEvent["status"]): boolean {
+  return status === "sandbox_provision_failed" || status === "sandbox_unhealthy";
+}
+
 /**
  * Build the JSON envelope POSTed to a `webhook` target. Field order is fixed
  * so the receiver can reproduce the exact signed payload (HMAC is computed
@@ -212,6 +284,13 @@ export function buildWebhookEnvelope(event: SessionNotifyEvent, target: Extract<
     // existing receiver's reproduced signing bytes — is untouched for
     // non-schedule deliveries.
     ...(event.scheduleId ? { schedule_id: event.scheduleId } : {}),
+    // Sandbox-only fields (issue #80), appended last for the same
+    // signature-stability reason as schedule_id. Never carries pod
+    // manifests, env vars, or credentials — only ids, the provider, and a
+    // redacted phase/reason.
+    ...(event.tenantId ? { tenant_id: event.tenantId } : {}),
+    ...(event.sandboxProvider ? { sandbox_provider: event.sandboxProvider } : {}),
+    ...(event.sandboxPhase ? { sandbox_phase: event.sandboxPhase } : {}),
   };
   return envelope;
 }
@@ -239,7 +318,7 @@ async function dispatchWebhook(
   // Schedule alerts (`schedule_*`, issue #313) bypass it — their own
   // outcome filter is the schedule's `notify.on`, applied before dispatch,
   // and the `events` enum deliberately stays session-only.
-  if (!isScheduleStatus(event.status) && target.events && !target.events.includes(event.status as "idle" | "error" | "terminated")) {
+  if (!isScheduleStatus(event.status) && !isSandboxStatus(event.status) && target.events && !target.events.includes(event.status as "idle" | "error" | "terminated")) {
     return;
   }
 

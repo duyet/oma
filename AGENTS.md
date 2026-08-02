@@ -1834,6 +1834,52 @@ Crypto `crypto.subtle` so it runs identically on Cloudflare Workers and Node.
   `packages/rate-limit` (a `webhook:<tenantId>` bucket). On exhaustion the
   delivery is dropped (fail-open) rather than blocking the session.
 
+### Sandbox lifecycle events (`sandbox_events`)
+
+Beyond session status, **any** notify target can opt into sandbox lifecycle
+alerts — the operator-facing half of the k8s-bridge work (issue #80). Add a
+`sandbox_events` filter to the target:
+
+```json
+{
+  "type": "slack_message",
+  "credential_id": "cred_xxx",
+  "channel": "C123",
+  "sandbox_events": ["provision_failed", "unhealthy"]
+}
+```
+
+| Kind | Fires when |
+|---|---|
+| `provision_failed` | The session's sandbox never came up — container health probes exhausted during warmup, or the environment's `sandbox_provider` isn't available on this deployment (`SandboxProviderUnavailableError`). |
+| `unhealthy` | A wedged container had to be force-destroyed and recreated mid-session (the OOM / evicted / crashloop signal). |
+
+The set is deliberately small. Pause/resume, per-turn warmups, and routine
+teardown are **not** notified: they're operator-initiated or routine, and an
+alert stream that includes them gets muted — at which point the real failures
+are missed too.
+
+Semantics:
+
+- **Opt-in.** A target without `sandbox_events` (i.e. every target configured
+  before this existed) receives nothing new. An empty array is the same as
+  absent.
+- **Independent of `events`.** A `webhook` target's `events`
+  (`idle | error | terminated`) stays session-only and never gates sandbox
+  statuses — `sandbox_events` is applied before dispatch instead.
+- **Same dispatcher, same fail-safes.** Delivery reuses
+  `dispatchSandboxNotifications` in `notify-dispatch.ts`, which shares the
+  per-target posting, credential resolution, and never-throw contract with the
+  session-status path.
+- **Rate limited per tenant**, in its own `sandbox-notify:<tenantId>` bucket —
+  a cluster-wide incident consumes one token for the whole fan-out, and on
+  exhaustion the notification is dropped fail-open rather than paging in a loop.
+- **Payload**: statuses `sandbox_provision_failed` / `sandbox_unhealthy`, plus
+  `tenant_id`, `sandbox_provider`, and `sandbox_phase` appended last in the
+  webhook envelope (existing receivers' signed bytes are unchanged). The
+  failure reason is truncated and scrubbed of token-shaped text; raw pod
+  manifests, env dumps, and credentials are never included.
+
 ### Validation
 
 The `notify` array is zod-validated at agent create/update in

@@ -7,18 +7,27 @@
 
 import { z } from "zod";
 
+// Opt-in sandbox lifecycle filter (issue #80), shared by every target
+// variant. Absent/empty ⇒ the target gets no sandbox notifications at all;
+// sandbox alerting never turns itself on for an existing target.
+const sandboxEventsField = {
+  sandbox_events: z.array(z.enum(["provision_failed", "unhealthy"])).optional(),
+};
+
 const githubCommentTarget = z.object({
   type: z.literal("github_comment"),
   credential_id: z.string(),
   owner: z.string(),
   repo: z.string(),
   issue_number: z.number().int(),
+  ...sandboxEventsField,
 });
 
 const slackMessageTarget = z.object({
   type: z.literal("slack_message"),
   credential_id: z.string(),
   channel: z.string(),
+  ...sandboxEventsField,
 });
 
 const matrixMessageTarget = z.object({
@@ -26,6 +35,7 @@ const matrixMessageTarget = z.object({
   credential_id: z.string(),
   homeserver_url: z.string(),
   room_id: z.string(),
+  ...sandboxEventsField,
 });
 
 // No `credential_id` — Telegram auth is a single bot token resolved from
@@ -33,6 +43,7 @@ const matrixMessageTarget = z.object({
 const telegramMessageTarget = z.object({
   type: z.literal("telegram_message"),
   chat_id: z.number().int(),
+  ...sandboxEventsField,
 });
 
 // No `credential_id` — email delivery uses the deployment's configured
@@ -42,6 +53,7 @@ const emailTarget = z.object({
   type: z.literal("email"),
   to: z.string().email(),
   subject_prefix: z.string().optional(),
+  ...sandboxEventsField,
 });
 
 const webhookTarget = z.object({
@@ -51,6 +63,7 @@ const webhookTarget = z.object({
   events: z
     .array(z.enum(["idle", "error", "terminated"]))
     .optional(),
+  ...sandboxEventsField,
 });
 
 export const notificationTargetSchema = z.discriminatedUnion("type", [

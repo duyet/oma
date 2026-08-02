@@ -94,9 +94,10 @@ import { spawnStdioMcpServers, type StdioMcpConfig } from "./mcp-spawner";
 import {
   findLatestBackup as findWorkspaceBackup,
 } from "./workspace-backups";
-import type { SessionNotifyEvent, SessionNotifyStatus } from "@duyet/oma-integrations-core";
+import type { SandboxNotifyKind, SessionNotifyEvent, SessionNotifyStatus } from "@duyet/oma-integrations-core";
+import { SANDBOX_NOTIFY_STATUS } from "@duyet/oma-integrations-core";
 import { WorkerHttpClient } from "@duyet/oma-integrations-adapters-cf";
-import { dispatchSessionNotifications } from "./notify-dispatch";
+import { dispatchSandboxNotifications, dispatchSessionNotifications } from "./notify-dispatch";
 import { senderFromCfBinding, type CfSendEmailBinding } from "@duyet/oma-email/adapters/cf";
 import { meterTurnDebit } from "./turn-metering";
 import { resolveSessionMetadata, walletFromMetadata } from "./resolve-session-metadata";
@@ -3231,7 +3232,10 @@ export class SessionDO extends DurableObject<Env> {
           // setup" text under a generic "container failed to start". Fail
           // fast with the original typed error — callers (runSubAgent) also
           // branch on `instanceof SandboxProviderUnavailableError`.
-          if (err instanceof SandboxProviderUnavailableError) throw err;
+          if (err instanceof SandboxProviderUnavailableError) {
+            this.fireSandboxNotification("provision_failed", "provider_unavailable", lastError);
+            throw err;
+          }
           if (attempt === NUKE_AFTER_ATTEMPT && !destroyed) {
             console.warn(
               `[warmup] container unhealthy after ${attempt + 1} probes ` +
@@ -3245,12 +3249,16 @@ export class SessionDO extends DurableObject<Env> {
               console.warn(`[warmup] destroy failed: ${destroyErr?.message ?? destroyErr}`);
             }
             destroyed = true;
+            // A container wedged badly enough to need a force-destroy is the
+            // OOM/evicted/crashloop signal an operator actually wants.
+            this.fireSandboxNotification("unhealthy", "container_recreated", lastError);
           }
           const delay = 1000 * Math.pow(1.5, attempt);
           await new Promise(r => setTimeout(r, Math.min(delay, 5000)));
         }
       }
       if (!ready) {
+        this.fireSandboxNotification("provision_failed", "warmup", lastError);
         throw new Error(`Sandbox container failed to start after 10 attempts. Last error: ${lastError}`);
       }
 
@@ -3796,6 +3804,63 @@ export class SessionDO extends DurableObject<Env> {
       });
     })().catch((err) => {
       console.error(`[maybeFireSessionNotifications] unexpected failure: ${(err as Error).message}`);
+    });
+  }
+
+  /**
+   * Fire-and-forget sandbox-lifecycle notification (issue #80). Same seam,
+   * same fail-open discipline as maybeFireSessionNotifications: opt-in per
+   * target (`sandbox_events`), never awaited, never throws back into the
+   * sandbox path. Only the two states an operator must act on are wired —
+   * failure to provision and a container that went unhealthy and had to be
+   * recreated. Routine pause/resume and per-turn warmups are deliberately
+   * NOT notified: an alert stream that includes them gets muted.
+   */
+  private fireSandboxNotification(kind: SandboxNotifyKind, phase: string, detail: string): void {
+    (async () => {
+      const agent = await this.getAgentConfig(this.state.agent_id);
+      const targets = agent?.notify;
+      if (!targets || targets.length === 0) return;
+      if (!targets.some((t) => t.sandbox_events?.includes(kind))) return;
+
+      const cfg = this.state.environment_snapshot?.config as
+        | { sandbox_provider?: string; type?: string }
+        | undefined;
+      await dispatchSandboxNotifications(
+        {
+          sessionId: this.state.session_id,
+          status: SANDBOX_NOTIFY_STATUS[kind] as "sandbox_provision_failed" | "sandbox_unhealthy",
+          ...(agent?.name ? { agentName: agent.name } : {}),
+          ...(this.state.tenant_id ? { tenantId: this.state.tenant_id } : {}),
+          sandboxProvider: cfg?.sandbox_provider ?? cfg?.type ?? "cloud",
+          sandboxPhase: phase,
+          detail,
+        },
+        kind,
+        targets,
+        {
+          resolveCredentialToken: (id) => this.resolveCredentialToken(id),
+          resolveSecret: (ref) => this.resolveWebhookSecret(ref),
+          resolveTelegramBotToken: () => (this.env as { TELEGRAM_BOT_TOKEN?: string }).TELEGRAM_BOT_TOKEN ?? null,
+          resolveEmailSender: () => senderFromCfBinding(this.env.SEND_EMAIL as CfSendEmailBinding | undefined),
+          tenantId: this.state.tenant_id,
+          sandboxNotifyRateLimitGate: this.webhookRateLimitGate(),
+          httpClient: new WorkerHttpClient(),
+          onError: (target, err) => {
+            logWarn(
+              {
+                op: "session_do.sandbox_notify_dispatch",
+                session_id: this.state.session_id,
+                target_type: target.type,
+                err,
+              },
+              "sandbox notification failed",
+            );
+          },
+        },
+      );
+    })().catch((err) => {
+      console.error(`[fireSandboxNotification] unexpected failure: ${(err as Error).message}`);
     });
   }
 
