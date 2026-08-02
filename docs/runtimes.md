@@ -29,7 +29,8 @@ Registered in `apps/agent/src/index.ts` (Cloudflare) and additionally in
 | Default | `"default"` (or omitted) | CF + self-host | In-process `generateText`/`streamText` loop over `ai-sdk`. |
 | ACP proxy | `"acp-proxy"` | CF + self-host | Bridges an Agent Client Protocol server. |
 | Long-running | `"long-running"` | CF + self-host | Default loop + periodic `agent.status` heartbeats. |
-| Claude Agent SDK | `"claude-agent-sdk"` | **self-host only** | Spawns Claude Code's CLI as a native subprocess via `@anthropic-ai/claude-agent-sdk`. Requires `child_process` + a real filesystem — unavailable inside a Cloudflare Workers isolate, so it's wired into `apps/main-node`'s harness router only, never the CF worker registry. |
+| Poolside | `"poolside"` | CF + self-host | Default loop against a [poolside.ai](https://poolside.ai) model (`laguna`/`malibu`) over plain OpenAI-compatible `/chat/completions` — pure `fetch`, no Node builtins. Requires `POOLSIDE_API_KEY`; defaults `agent.model` to `poolside/laguna-s-2.1`. See [`AGENTS.md` § Poolside models](../AGENTS.md#poolside-models-harness-poolside). |
+| Claude Agent SDK | `"claude-agent-sdk"` | **self-host only** | Spawns Claude Code's CLI as a native subprocess via `@anthropic-ai/claude-agent-sdk`. Requires `child_process` + a real filesystem — unavailable inside a Cloudflare Workers isolate, so it's wired into `apps/main-node`'s harness router only, never the CF worker registry. A copy-paste Docker template for running it lives in `examples/claude-agent-sdk-server/`. |
 
 ### Recommended default: `claude-agent-sdk` on self-host
 
@@ -177,6 +178,7 @@ its sandboxes (`packages/sandbox/src/provider-config.ts`):
 | `k8s` | Pod via the agent-sandbox controller | provider config `image`, default `ghcr.io/duyet/oma-runtime-base:latest` |
 | `cloud` | Cloudflare Containers | fixed — `ghcr.io/duyet/sandbox-base:latest` |
 | `openshell` | NVIDIA OpenShell gateway (gRPC) | provider config `image`, default `ghcr.io/nvidia/openshell-community/sandboxes/base:latest` |
+| `browser-vm` | Browser tab (WASM VM) — **Cloudflare only** | N/A — no image; the browser host page boots the engine itself (v86 by default). Self-host Node lists the provider but reports `not_configured`. See [Browser-VM Sandbox](browser-vm-sandbox.md). |
 
 Point `daytona`/`e2b`/`k8s`/`boxrun` at `oma-runtime-base:latest` (or a
 registry-pushed tag of it) instead of the bare `node:22-slim` default to

@@ -77,6 +77,12 @@ curl -H "Authorization: Bearer $K8S_BRIDGE_TOKEN" http://localhost:8100/api/v1/h
 | `config.namespace` | `sandboxes` | Namespace the bridge provisions sandbox pods into |
 | `config.sandboxImage` | `node:22-slim` | Default sandbox container image |
 | `config.runtimeClass` / `config.serviceAccount` | `""` | Optional RuntimeClass / ServiceAccount for sandbox pods |
+| `config.backend` | `k8s` | `k8s` \| `openshell` \| `auto` — which `BridgeBackend` the process runs, see [OpenShell backend](#openshell-backend) below |
+| `openshell.endpoint` | `""` | `host:port` of the OpenShell gateway (required when `config.backend: openshell`) |
+| `openshell.image` | `""` | Sandbox image OpenShell launches; empty = gateway default |
+| `openshell.tls.enabled` / `.caSecret` | `false` / `""` | Server-auth TLS to the gateway; `caSecret` holds the CA |
+| `openshell.tls.certSecret` | `""` | Secret holding the client cert/key — setting it is what enables **mTLS**. May name the same Secret as `caSecret` if it holds all three keys |
+| `openshell.token.existingSecret` / `.tokenKey` | `""` / `OPENSHELL_TOKEN` | Pre-existing Secret carrying the gateway bearer token |
 | `service.type` / `service.port` | `ClusterIP` / `8100` | Bridge Service |
 | `ingress.enabled` | `false` | Expose the bridge via Ingress |
 | `ingress.tls.enabled` / `ingress.tls.secretName` | `false` / `oma-k8s-bridge-tls` | TLS via a Secret you provide (no cert-manager dependency) |
@@ -123,9 +129,86 @@ hardening of the ephemeral sandbox pods it creates for sessions, which are
 controlled separately by the `agent-sandbox` controller's `Sandbox` CRD
 (`podTemplate.spec`) and the cluster's own `RuntimeClass`/PodSecurity setup.
 
+## OpenShell backend
+
+By default this chart runs `apps/k8s-bridge`'s Kubernetes backend (creates a
+`Sandbox` CR per session, per the RBAC above). Setting `config.backend:
+openshell` switches the same Deployment to front an
+[NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) gateway over gRPC
+instead — see `apps/k8s-bridge/src/backend.ts` and
+`apps/k8s-bridge/src/openshell-manager.ts`. This is the in-cluster half of
+what `docs/self-host.md`'s ["Running an OpenShell
+gateway"](../../docs/self-host.md#running-an-openshell-gateway) section
+describes; that doc also covers running the bridge as a bare Node process,
+which remains the option for local/non-cluster setups.
+
+**Prerequisites** (same as the OpenShell adapter needs anywhere):
+
+- The [Agent Sandbox controller + CRDs](https://github.com/kubernetes-sigs/agent-sandbox)
+  installed in the cluster the gateway itself deploys into.
+- The NVIDIA OpenShell gateway chart installed and reachable, e.g.:
+
+  ```bash
+  helm install openshell oci://ghcr.io/nvidia/openshell/helm-chart \
+    -n openshell --create-namespace
+  ```
+
+**Install this chart pointed at that gateway.** RBAC is skipped entirely for
+this backend (it owns no pods — see `templates/rbac.yaml`), so no
+`rbac.targetNamespace` / `config.namespace` tuning is needed for it:
+
+```bash
+helm install oma-k8s-bridge-openshell ./charts/oma-k8s-bridge \
+  --namespace oma \
+  --set secret.existingSecret=oma-k8s-bridge-token \
+  --set config.backend=openshell \
+  --set openshell.endpoint=openshell.openshell.svc.cluster.local:50051
+```
+
+With mTLS to the gateway, create the CA/cert/key material as a Secret
+out-of-band first (never `--set` real certs on the command line):
+
+```bash
+kubectl -n oma create secret generic openshell-tls \
+  --from-file=ca.crt=./ca.crt --from-file=tls.crt=./client.crt --from-file=tls.key=./client.key
+kubectl -n oma create secret generic openshell-token \
+  --from-literal=OPENSHELL_TOKEN="$(openssl rand -base64 32)"
+```
+
+```bash
+helm upgrade oma-k8s-bridge-openshell ./charts/oma-k8s-bridge \
+  --namespace oma \
+  --set secret.existingSecret=oma-k8s-bridge-token \
+  --set config.backend=openshell \
+  --set openshell.endpoint=openshell.openshell.svc.cluster.local:50051 \
+  --set openshell.tls.enabled=true \
+  --set openshell.tls.caSecret=openshell-tls \
+  --set openshell.tls.certSecret=openshell-tls \
+  --set openshell.token.existingSecret=openshell-token
+```
+
+**Wire the Cloudflare deployment at this Service** — the Worker cannot speak
+gRPC, so it reaches OpenShell through this bridge's HTTP API:
+
+```bash
+wrangler secret put OPENSHELL_BRIDGE_URL
+# → http://oma-k8s-bridge-openshell.oma.svc.cluster.local:8100 (or your Ingress URL)
+wrangler secret put OPENSHELL_BRIDGE_TOKEN
+# → the same value as K8S_BRIDGE_TOKEN / secret.existingSecret above
+```
+
+A session with `config.sandbox_provider: "openshell"` then resolves through
+this bridge without the Worker ever touching gRPC. Known limitation, shared
+with the `boxrun` and `k8s-remote` sandbox providers: memory-store /
+session-outputs mounts aren't available over the bridge's HTTP API.
+
 ## Verify
 
 ```bash
 helm lint ./charts/oma-k8s-bridge
 helm template oma-k8s-bridge ./charts/oma-k8s-bridge --set secret.token=test
+
+# OpenShell backend
+helm template oma-k8s-bridge ./charts/oma-k8s-bridge --set secret.token=test \
+  --set config.backend=openshell --set openshell.endpoint=host:50051
 ```

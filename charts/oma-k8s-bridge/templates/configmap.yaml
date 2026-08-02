@@ -9,3 +9,34 @@ data:
   SANDBOX_IMAGE: {{ .Values.config.sandboxImage | quote }}
   RUNTIME_CLASS: {{ .Values.config.runtimeClass | quote }}
   SANDBOX_SERVICE_ACCOUNT: {{ .Values.config.serviceAccount | quote }}
+  BRIDGE_BACKEND: {{ .Values.config.backend | quote }}
+  {{- /*
+  OPENSHELL_* vars are only emitted when the openshell backend is actually
+  selected (or possible under "auto") AND an endpoint is configured. Note
+  that resolveBridgeBackendKind's own check (apps/k8s-bridge/src/backend.ts)
+  is a plain `if (env.OPENSHELL_GATEWAY_ENDPOINT)`, and an empty string is
+  falsy — so an empty key wouldn't actually trip the bridge's auto-detect.
+  The chart still omits it: an env var that renders but does nothing is a
+  confusing, load-bearing-looking no-op in `kubectl get cm -o yaml`.
+  */ -}}
+  {{- if and (or (eq .Values.config.backend "openshell") (eq .Values.config.backend "auto")) .Values.openshell.endpoint }}
+  OPENSHELL_GATEWAY_ENDPOINT: {{ .Values.openshell.endpoint | quote }}
+  {{- if .Values.openshell.image }}
+  OPENSHELL_IMAGE: {{ .Values.openshell.image | quote }}
+  {{- end }}
+  {{- /*
+  certSecret is what turns on mTLS — leave it unset for plain server-auth
+  TLS (CA only). It's gated separately from tls.enabled because a CA-only
+  Secret has no tls.crt/tls.key to mount; emitting these paths regardless
+  would point the adapter at files that don't exist. certSecret may name
+  the same Secret as caSecret when it carries all three keys.
+  */}}
+  {{- if .Values.openshell.tls.enabled }}
+  OPENSHELL_GATEWAY_TLS: "1"
+  OPENSHELL_GATEWAY_CA_PATH: /etc/openshell/tls/{{ .Values.openshell.tls.caKey }}
+  {{- if .Values.openshell.tls.certSecret }}
+  OPENSHELL_GATEWAY_CERT_PATH: /etc/openshell/tls-client/{{ .Values.openshell.tls.certKey }}
+  OPENSHELL_GATEWAY_KEY_PATH: /etc/openshell/tls-client/{{ .Values.openshell.tls.keyKey }}
+  {{- end }}
+  {{- end }}
+  {{- end }}

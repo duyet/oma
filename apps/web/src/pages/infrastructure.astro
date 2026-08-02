@@ -20,6 +20,7 @@ const sandboxProviders: { label: string; logo: string; blurb: string }[] = [
   { label: "Daytona", logo: "Daytona", blurb: "Managed cloud dev environments — bring your account." },
   { label: "Docker Compose", logo: "Docker", blurb: "Containers on any Docker host for the self-host runtime." },
   { label: "Subprocess", logo: "Subprocess", blurb: "Zero-isolation local dev — the fastest inner loop." },
+  { label: "Browser VM", logo: "Browser", blurb: "A WASM Linux VM in your own browser tab — zero server compute." },
   { label: "BYOK & more", logo: "", blurb: "LiteBox, BoxRun, GitHub Actions, remote agents — or register your own." },
 ];
 
@@ -48,6 +49,11 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
     label: "Subprocess",
     mode: "stroke",
     inner: `<path d="m4 17 6-6-6-6"/><path d="M12 19h8"/>`,
+  },
+  {
+    label: "Browser",
+    mode: "stroke",
+    inner: `<path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/><path d="M2 9h20"/><path d="M6 6.5h.01"/><path d="M9 6.5h.01"/>`,
   },
   {
     label: "Daytona",
@@ -85,6 +91,81 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
     </div>
   </section>
 
+  <!-- Deployment topology: two parallel paths, not a pipeline -->
+  <section class="border-b border-[var(--color-border)] bg-[var(--color-bg-surface)]" data-reveal id="topology">
+    <div class="max-w-5xl mx-auto px-4 py-14 md:py-16">
+      <p class="flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
+        <Icon name="layers" size={14} class="text-[var(--color-brand)]" /> Deployment
+      </p>
+      <h2 class="font-display text-2xl md:text-3xl font-bold mb-2 text-center tracking-tight">
+        Two deployment paths, one codebase
+      </h2>
+      <p class="text-center text-[var(--color-fg-muted)] max-w-2xl mx-auto mb-8 leading-relaxed">
+        Cloudflare and self-hosted Node aren't stages of a pipeline — they're
+        parallel options. Same business logic, same API surface, pick one per
+        deployment.
+      </p>
+      <div class="topology-grid">
+        <div class="topology-track">
+          <div class="topology-track-head">
+            <Icon name="globe" size={18} class="text-[var(--color-brand)]" /> Cloudflare
+          </div>
+          <ul class="topology-nodes">
+            <li class="topology-node">
+              <span class="topology-node-glyph"><Icon name="server" size={16} /></span>
+              <span>
+                <span class="topology-node-name block">Workers</span>
+                <span class="topology-node-sub">HTTP API, MCP proxy</span>
+              </span>
+            </li>
+            <li class="topology-node">
+              <span class="topology-node-glyph"><Icon name="database" size={16} /></span>
+              <span>
+                <span class="topology-node-name block">Durable Objects</span>
+                <span class="topology-node-sub">SessionDO, SQLite event log</span>
+              </span>
+            </li>
+            <li class="topology-node">
+              <span class="topology-node-glyph"><Icon name="box" size={16} /></span>
+              <span>
+                <span class="topology-node-name block">Containers</span>
+                <span class="topology-node-sub">Cloudflare Sandbox, or boxrun / k8s-remote / OpenShell over HTTP</span>
+              </span>
+            </li>
+          </ul>
+        </div>
+        <div class="topology-track">
+          <div class="topology-track-head">
+            <Icon name="terminal" size={18} class="text-[var(--color-brand)]" /> Self-hosted Node
+          </div>
+          <ul class="topology-nodes">
+            <li class="topology-node">
+              <span class="topology-node-glyph"><Icon name="server" size={16} /></span>
+              <span>
+                <span class="topology-node-name block">apps/main-node</span>
+                <span class="topology-node-sub">Same route implementation as Workers</span>
+              </span>
+            </li>
+            <li class="topology-node">
+              <span class="topology-node-glyph"><Icon name="database" size={16} /></span>
+              <span>
+                <span class="topology-node-name block">SQLite / Postgres</span>
+                <span class="topology-node-sub">Control-plane DB, agent DO logic in-process</span>
+              </span>
+            </li>
+            <li class="topology-node">
+              <span class="topology-node-glyph"><Icon name="box" size={16} /></span>
+              <span>
+                <span class="topology-node-name block">docker compose</span>
+                <span class="topology-node-sub">Full SandboxProviderRegistry — every adapter available</span>
+              </span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Fleet operations -->
   <section class="border-b border-[var(--color-border)]" data-reveal id="fleets">
     <div class="max-w-5xl mx-auto px-4 py-16 md:py-20 text-center">
@@ -97,7 +178,7 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
         notifications to GitHub, Slack, and Matrix.
       </p>
       <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10 text-left">
-        <article data-lift class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5 hover:border-[var(--color-border-strong)]">
+        <article data-lift class="rounded-xl border border-[var(--color-border)] bg-card p-5 hover:border-[var(--color-border-strong)]">
           <span class="arch-badge arch-badge-green mb-3">any sandbox</span>
           <h3 class="font-display text-base font-semibold mb-2 tracking-tight">Run on any sandbox</h3>
           <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed">
@@ -105,7 +186,7 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
             swappable without touching agents.
           </p>
         </article>
-        <article data-lift class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5 hover:border-[var(--color-border-strong)]">
+        <article data-lift class="rounded-xl border border-[var(--color-border)] bg-card p-5 hover:border-[var(--color-border-strong)]">
           <span class="arch-badge arch-badge-orange mb-3">cost control</span>
           <h3 class="font-display text-base font-semibold mb-2 tracking-tight">Pause &amp; resume</h3>
           <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed">
@@ -113,7 +194,7 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
             restores it exactly, so idle agents cost nothing.
           </p>
         </article>
-        <article data-lift class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5 hover:border-[var(--color-border-strong)]">
+        <article data-lift class="rounded-xl border border-[var(--color-border)] bg-card p-5 hover:border-[var(--color-border-strong)]">
           <span class="arch-badge arch-badge-blue mb-3">coding agents</span>
           <h3 class="font-display text-base font-semibold mb-2 tracking-tight">Coding agents inside</h3>
           <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed">
@@ -121,7 +202,7 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
             sandbox, one Docker image per runtime.
           </p>
         </article>
-        <article data-lift class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5 hover:border-[var(--color-border-strong)]">
+        <article data-lift class="rounded-xl border border-[var(--color-border)] bg-card p-5 hover:border-[var(--color-border-strong)]">
           <span class="arch-badge arch-badge-green mb-3">delegation</span>
           <h3 class="font-display text-base font-semibold mb-2 tracking-tight">Cross-sandbox sub-agents</h3>
           <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed">
@@ -131,7 +212,7 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
         </article>
       </div>
 
-      <!-- Sandbox-provider fleet — real brand marks, monochrome, iris on hover -->
+      <!-- Sandbox-provider fleet — real brand marks, monochrome, amber on hover -->
       <div class="pixel-fleet">
         {
           fleetLogos.map((f) => (
@@ -174,7 +255,7 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
       {sandboxProviders.map((p) => {
         const mark = fleetLogos.find((f) => f.label === p.logo);
         return (
-          <article class="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-4 hover:border-[var(--color-border-strong)]">
+          <article class="rounded-lg border border-[var(--color-border)] bg-card p-4 hover:border-[var(--color-border-strong)]">
             <div class="flex items-center gap-2.5 mb-2">
               {mark ? (
                 <svg

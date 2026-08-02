@@ -122,6 +122,14 @@ early** for the node-only ones rather than half-working. Keeping one codebase
 honest across two runtimes with different physics is a constant tension — even
 the test suite is split by execution pool because of it.
 
+There's a third shape: a host the platform can't `fetch()` at all, only relay
+to over a WebSocket — a paired laptop (`subprocess` via `oma bridge daemon`)
+or, newest, a user's own browser tab running a WASM VM (`browser-vm`, v86 by
+default). `browser-vm` pushes sandbox compute all the way to zero — no
+container, no VM, no server cost — at the cost of proxied-only networking, no
+vault-injected outbound calls from the tab, and no memory/output mounts.
+Cloudflare only for now; see [`docs/browser-vm-sandbox.md`](https://github.com/duyet/oma/blob/main/docs/browser-vm-sandbox.md).
+
 ### 5. Talking to a sandbox is harder than it looks
 
 Executing a command in a remote sandbox — a Kubernetes pod, say — means opening

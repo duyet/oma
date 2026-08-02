@@ -36,17 +36,26 @@ export interface FileRow {
 
 /**
  * Map a FileRow to the public FileRecord API shape that
- * apps/main/src/routes/files.ts returns. r2_key + scope + tenant_id are
- * server-internal — they don't show up in the API surface.
+ * apps/main/src/routes/files.ts (and apps/main-node) return. r2_key + scope
+ * + tenant_id are server-internal — they don't show up in the API surface.
+ *
+ * Emits BOTH OMA-native identifiers and Anthropic SDK aliases so the same
+ * route serves `client.beta.files.*` (AMA Files API, beta header
+ * `files-api-2025-04-14`) and legacy OMA clients:
+ *   - media_type  ⟷  mime_type   (same value)
+ *   - scope_id    ⟷  scope: { id, type:"session" } | null
  */
 export function toFileRecord(row: FileRow): FileRecord {
+  const scoped = row.session_id !== null;
   return {
     id: row.id,
     type: "file",
     filename: row.filename,
     media_type: row.media_type,
+    mime_type: row.media_type,
     size_bytes: row.size_bytes,
     scope_id: row.session_id ?? undefined,
+    scope: scoped ? { id: row.session_id!, type: "session" } : null,
     downloadable: row.downloadable,
     created_at: row.created_at,
   };

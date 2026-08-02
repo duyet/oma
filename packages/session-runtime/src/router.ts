@@ -154,6 +154,18 @@ export interface SessionRouter {
    *  snapshot. No-op (200) when the session isn't paused. */
   resume(sessionId: string): Promise<{ status: number; body: string }>;
 
+  /** Change the session-level model / reasoning-effort override mid-flight.
+   *  Same resolution slots the create-time `model` + `reasoning_effort`
+   *  body fields write to, so the next turn picks the new value up without
+   *  touching the agent record (which is shared by every other session).
+   *  Returns 409 while a turn is in flight — swapping the model under a
+   *  running harness would split one turn across two providers. Runtimes
+   *  that can't mutate a live session return 501. */
+  updateRuntimeSettings?(
+    sessionId: string,
+    settings: { model?: string | null; reasoningEffort?: string | null },
+  ): Promise<{ status: number; body: string }>;
+
   /** Submit a user.* event. Returns the underlying status + body so
    *  routes can pass non-202 (terminated 409) verbatim. */
   appendEvent(

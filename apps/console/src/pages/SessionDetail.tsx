@@ -8,7 +8,9 @@ import { Badge, StatusPill } from "../components/Badge";
 import { Modal } from "../components/Modal";
 import { Button } from "@/components/ui/button";
 import { AgentIcon, ClockIcon, DurationIcon, EnvIcon, VaultIcon } from "../components/icons";
-import { FilesPanel, ResourcePanel } from "./session-detail/Panels";
+import { ResourcePanel } from "./session-detail/Panels";
+import { SessionInspector, type InspectorTab } from "./session-detail/Inspector";
+import { RuntimeSettingsDialog } from "./session-detail/RuntimeSettings";
 import {
   TrajectoryOutcomeChip,
   TrajectoryRewardChip,
@@ -52,6 +54,11 @@ import { CodeBlock } from "../components/ai-elements/code-block";
 import { renderToolCall, getToolTitle } from "../components/ai-elements/tool-renderers";
 import { Attachment, type ContentBlockLike } from "../components/ai-elements/attachment";
 import { CoinsIcon } from "lucide-react";
+import {
+  estimateCostUsd,
+  formatEstCostUsd,
+  useSessionAnalytics,
+} from "./session-detail/analytics";
 
 type View = "chat" | "timeline";
 
@@ -105,6 +112,8 @@ export function SessionDetail() {
     createdAt?: string;
     agentSnapshot?: { id?: string; name?: string; model?: string | { id: string }; description?: string; version?: number };
     envSnapshot?: { id?: string; name?: string; description?: string };
+    sandboxUsage?: { instance_type?: string; active_seconds?: number };
+    resources?: unknown[];
   }>({});
   /** Best-effort `runtime_binding.reasoning_effort` for the session's agent.
    *  Stripped from the session's own `agent` snapshot (snapshotToSessionAgent
@@ -112,13 +121,48 @@ export function SessionDetail() {
    *  once the agent id is known. Undefined = not set or fetch failed/pending
    *  — the context strip simply omits the badge in that case. */
   const [reasoningEffort, setReasoningEffort] = useState<string | undefined>(undefined);
+  /** Raw JSON dump panel for a clicked vault badge. Agent + environment
+   *  badges now open the Inspector on their richer dedicated tabs; vaults
+   *  have no Inspector tab (credentials are never surfaced), so they keep
+   *  the original fetch-and-dump panel. */
   const [resourcePanel, setResourcePanel] = useState<
     | { kind: "agent"; id: string }
     | { kind: "environment"; id: string }
     | { kind: "vault"; id: string }
     | null
   >(null);
-  const [showFiles, setShowFiles] = useState(false);
+  /** Right-rail Inspector. Visible by default — the whole point is that an
+   *  operator can read model / sandbox / usage / tool telemetry without
+   *  clicking anything. The preference is sticky across sessions because
+   *  hiding it is a deliberate "give me the full-width transcript" choice. */
+  const [showInspector, setShowInspector] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("oma.session.inspector") !== "hidden";
+    } catch {
+      return true;
+    }
+  });
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>("overview");
+  /** Session-scoped model override dialog (prompt-input toolbar). Once
+   *  applied, `modelOverride` shadows the agent snapshot's model in the
+   *  context strip + Inspector until the next model call reports the real
+   *  one back over the event log. */
+  const [showRuntimeSettings, setShowRuntimeSettings] = useState(false);
+  const [modelOverride, setModelOverride] = useState<string | undefined>(undefined);
+  const [effortOverride, setEffortOverride] = useState<string | undefined>(undefined);
+  /** Effort actually in force: the session override if one was applied,
+   *  else the agent's runtime_binding value. */
+  const effectiveEffort = effortOverride ?? reasoningEffort;
+  const toggleInspector = (next: boolean, tab?: InspectorTab) => {
+    setShowInspector(next);
+    if (tab) setInspectorTab(tab);
+    try {
+      localStorage.setItem("oma.session.inspector", next ? "shown" : "hidden");
+    } catch {
+      // Private-mode / disabled storage — the toggle still works, it just
+      // doesn't persist. Never let this throw into the render path.
+    }
+  };
   const [linear, setLinear] = useState<{
     issueId?: string;
     issueIdentifier?: string;
@@ -497,6 +541,11 @@ export function SessionDetail() {
       // separately; tolerate its absence (treated as "running") until
       // every deployment serves it.
       sandbox_status?: "running" | "paused" | "none";
+      /** Live extras merged in by GET /:id from the DO's full-status —
+       *  billed sandbox uptime and the attached resource list. Feed the
+       *  Inspector's Sandbox tab; absent when the DO is cold. */
+      sandbox_usage?: { instance_type?: string; active_seconds?: number };
+      resources?: unknown[];
     }>(`/v1/sessions/${id}`)
       .then((s) => {
         setAgentId(s.agent?.id || "");
@@ -505,6 +554,8 @@ export function SessionDetail() {
           vaultIds: s.vault_ids,
           createdAt: s.created_at,
           agentSnapshot: s.agent,
+          sandboxUsage: s.sandbox_usage,
+          resources: s.resources,
         });
         if (s.sandbox_status) setSandboxStatus(s.sandbox_status);
 
@@ -847,18 +898,14 @@ export function SessionDetail() {
             <Badge
               icon={<AgentIcon />}
               label={sessionMeta.agentSnapshot?.name || shortenId(sessionMeta.agentSnapshot?.id || agentId)}
-              onClick={() =>
-                setResourcePanel({ kind: "agent", id: sessionMeta.agentSnapshot?.id || agentId })
-              }
+              onClick={() => toggleInspector(true, "overview")}
             />
           )}
           {sessionMeta.environmentId && (
             <Badge
               icon={<EnvIcon />}
               label={sessionMeta.envSnapshot?.name || shortenId(sessionMeta.environmentId)}
-              onClick={() =>
-                setResourcePanel({ kind: "environment", id: sessionMeta.environmentId! })
-              }
+              onClick={() => toggleInspector(true, "sandbox")}
             />
           )}
           {(sessionMeta.vaults ?? sessionMeta.vaultIds?.map((id) => ({ id, display_name: undefined })) ?? []).map((v) => (
@@ -927,15 +974,29 @@ export function SessionDetail() {
               </button>
             )}
             <button
-              onClick={() => setShowFiles((v) => !v)}
+              onClick={() =>
+                toggleInspector(!(showInspector && inspectorTab === "files"), "files")
+              }
               className={`inline-flex items-center justify-center px-2.5 py-1 min-h-11 sm:min-h-0 rounded-md text-xs font-medium transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)] ${
-                showFiles
+                showInspector && inspectorTab === "files"
                   ? "bg-bg-surface text-fg"
                   : "bg-bg-surface/60 text-fg-muted hover:bg-bg-surface hover:text-fg"
               }`}
               title="Files the agent wrote to /mnt/session/outputs/"
             >
               Files
+            </button>
+            <button
+              onClick={() => toggleInspector(!showInspector)}
+              aria-pressed={showInspector}
+              className={`inline-flex items-center justify-center px-2.5 py-1 min-h-11 sm:min-h-0 rounded-md text-xs font-medium transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)] ${
+                showInspector
+                  ? "bg-bg-surface text-fg"
+                  : "bg-bg-surface/60 text-fg-muted hover:bg-bg-surface hover:text-fg"
+              }`}
+              title="Model, sandbox, usage and tool telemetry for this session"
+            >
+              Inspector
             </button>
           </div>
         </div>
@@ -1086,8 +1147,9 @@ export function SessionDetail() {
               breakdown. */}
           <ContextInfoStrip
             events={events}
-            agentModel={sessionMeta.agentSnapshot?.model}
-            reasoningEffort={reasoningEffort}
+            agentModel={modelOverride ?? sessionMeta.agentSnapshot?.model}
+            reasoningEffort={effectiveEffort}
+            onOpenUsage={() => toggleInspector(true, "usage")}
           />
           {/* Latest structured progress report (long-running harness). */}
           <LatestAgentStatus events={events} />
@@ -1344,6 +1406,25 @@ export function SessionDetail() {
               <PromptInputFooter>
                 <PromptInputTools>
                   <AttachButton />
+                  <PromptInputButton
+                    type="button"
+                    onClick={() => setShowRuntimeSettings(true)}
+                    title="Switch the model or reasoning effort for this session"
+                    aria-label="Session model settings"
+                  >
+                    <span className="font-mono text-[11px] max-w-[14ch] truncate">
+                      {modelOverride ??
+                        (typeof sessionMeta.agentSnapshot?.model === "string"
+                          ? sessionMeta.agentSnapshot.model
+                          : sessionMeta.agentSnapshot?.model?.id) ??
+                        "model"}
+                    </span>
+                  </PromptInputButton>
+                  {effectiveEffort && (
+                    <span className="text-[11px] text-fg-subtle px-1 self-center">
+                      {effectiveEffort}
+                    </span>
+                  )}
                 </PromptInputTools>
                 <PromptInputSubmit
                   status={sending ? "submitted" : undefined}
@@ -1368,10 +1449,41 @@ export function SessionDetail() {
             onClose={() => setResourcePanel(null)}
           />
         )}
-        {showFiles && id && (
-          <FilesPanel sessionId={id} onClose={() => setShowFiles(false)} />
+        {showInspector && id && (
+          <SessionInspector
+            sessionId={id}
+            events={events}
+            meta={sessionMeta}
+            agentId={agentId}
+            status={status}
+            sandboxStatus={sandboxStatus}
+            streaming={status === "running"}
+            reasoningEffort={effectiveEffort}
+            tab={inspectorTab}
+            onTabChange={setInspectorTab}
+            onClose={() => toggleInspector(false)}
+          />
         )}
       </div>
+      {id && (
+        <RuntimeSettingsDialog
+          open={showRuntimeSettings}
+          onClose={() => setShowRuntimeSettings(false)}
+          sessionId={id}
+          currentModel={
+            modelOverride ??
+            (typeof sessionMeta.agentSnapshot?.model === "string"
+              ? sessionMeta.agentSnapshot.model
+              : sessionMeta.agentSnapshot?.model?.id)
+          }
+          currentEffort={effectiveEffort}
+          sessionRunning={status === "running"}
+          onApplied={({ model, reasoningEffort: eff }) => {
+            setModelOverride(model);
+            setEffortOverride(eff);
+          }}
+        />
+      )}
       <TrajectoryViewerModal
         open={showTrajectory}
         onClose={() => setShowTrajectory(false)}
@@ -1644,144 +1756,31 @@ function LatestAgentStatus({ events }: { events: Event[] }) {
   );
 }
 
-/** Rough USD-per-million-token pricing, keyed by substring match against
- *  the (lowercased) model id. Not exhaustive — an unrecognized model id
- *  (custom model card, future release) simply hides the cost figure
- *  rather than showing a wrong number. Mirrors the Sonnet-class rate
- *  already assumed by apps/main/src/routes/agent-stats.ts (3 in / 15 out),
- *  extended with rough Opus/Haiku tiers for this per-session estimate. */
-const MODEL_PRICING_USD_PER_MTOK: Array<{
-  match: (modelId: string) => boolean;
-  inputPerMtok: number;
-  outputPerMtok: number;
-}> = [
-  { match: (id) => id.includes("opus"), inputPerMtok: 15, outputPerMtok: 75 },
-  { match: (id) => id.includes("haiku"), inputPerMtok: 0.8, outputPerMtok: 4 },
-  { match: (id) => id.includes("sonnet"), inputPerMtok: 3, outputPerMtok: 15 },
-];
-
-/** Estimate USD cost for a token count against the pricing table above.
- *  Returns undefined when the model is unset or matches no known tier —
- *  callers must hide the cost figure entirely in that case rather than
- *  imply a number for an unrecognized/custom model. */
-function estimateCostUsd(
-  model: string | undefined,
-  inputTokens: number,
-  outputTokens: number,
-): number | undefined {
-  if (!model) return undefined;
-  const id = model.toLowerCase();
-  const pricing = MODEL_PRICING_USD_PER_MTOK.find((p) => p.match(id));
-  if (!pricing) return undefined;
-  return (inputTokens / 1e6) * pricing.inputPerMtok + (outputTokens / 1e6) * pricing.outputPerMtok;
-}
-
-/** Cost display with a few significant figures for small per-session
- *  amounts — `formatUsd` in lib/format.ts rounds to 2 decimals, which
- *  would show "$0.00" for the common case of a cheap short session. */
-function formatEstCostUsd(n: number): string {
-  if (n <= 0) return "$0.00";
-  return n < 1 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`;
-}
-
-/** Aggregates derived from the event log for the context-info strip:
- *  the latest model call's duration + token counts, and cumulative
- *  input/output tokens across every span.model_request_end seen so far.
- *  Pairs span.model_request_start ↔ span.model_request_end via
- *  model_request_start_id (both wire shapes: top-level or nested under
- *  `.data`, matching the defensive access already used for the inline
- *  per-turn token line at EventRender's span.model_request_end case). */
-function useModelUsageAggregates(events: Event[]): {
-  latestModel?: string;
-  latestDurationMs?: number;
-  latestInputTokens?: number;
-  latestOutputTokens?: number;
-  cumulativeInputTokens: number;
-  cumulativeOutputTokens: number;
-} {
-  return useMemo(() => {
-    const startTsById = new Map<string, number>();
-    let cumulativeInputTokens = 0;
-    let cumulativeOutputTokens = 0;
-    let latestModel: string | undefined;
-    let latestDurationMs: number | undefined;
-    let latestInputTokens: number | undefined;
-    let latestOutputTokens: number | undefined;
-
-    for (const e of events) {
-      if (e.type === "span.model_request_start") {
-        const id = (e as { id?: string }).id;
-        const ts = (e as { ts?: string }).ts;
-        if (id && ts) {
-          const t = new Date(ts).getTime();
-          if (Number.isFinite(t)) startTsById.set(id, t);
-        }
-        continue;
-      }
-      if (e.type !== "span.model_request_end") continue;
-
-      const raw = e as {
-        data?: {
-          model?: string;
-          model_usage?: { input_tokens?: number; output_tokens?: number };
-          model_request_start_id?: string;
-        };
-        model?: string;
-        model_usage?: { input_tokens?: number; output_tokens?: number };
-        model_request_start_id?: string;
-        ts?: string;
-      };
-      const model = raw.data?.model ?? raw.model;
-      const usage = raw.data?.model_usage ?? raw.model_usage;
-      const startId = raw.data?.model_request_start_id ?? raw.model_request_start_id;
-      const inputTokens = usage?.input_tokens ?? 0;
-      const outputTokens = usage?.output_tokens ?? 0;
-      cumulativeInputTokens += inputTokens;
-      cumulativeOutputTokens += outputTokens;
-
-      // Events arrive in chronological order, so the last end event seen
-      // wins as "latest" — no separate max-ts comparison needed.
-      latestModel = model ?? latestModel;
-      latestInputTokens = inputTokens;
-      latestOutputTokens = outputTokens;
-      const endTs = raw.ts ? new Date(raw.ts).getTime() : undefined;
-      const startTs = startId ? startTsById.get(startId) : undefined;
-      latestDurationMs =
-        endTs !== undefined && Number.isFinite(endTs) && startTs !== undefined
-          ? endTs - startTs
-          : undefined;
-    }
-
-    return {
-      latestModel,
-      latestDurationMs,
-      latestInputTokens,
-      latestOutputTokens,
-      cumulativeInputTokens,
-      cumulativeOutputTokens,
-    };
-  }, [events]);
-}
-
 /**
  * Compact context strip above the conversation surface: model name,
  * reasoning effort (if the agent's ACP runtime_binding sets one), the
  * latest turn's duration, and an estimated cumulative session cost.
  * Collapsed by default; expanding reveals the latest-turn vs
- * cumulative-session input/output token breakdown. Renders nothing until
- * at least one span.model_request_end has landed (nothing to show yet).
+ * cumulative-session token breakdown. The full telemetry — cache hit
+ * rate, context occupancy, per-tool stats, sandbox detail — lives in the
+ * right-rail Inspector; this strip stays a one-line glance.
+ *
+ * Aggregates come from the same `useSessionAnalytics` derivation the
+ * Inspector uses, so the two can never disagree about a number.
  */
 function ContextInfoStrip({
   events,
   agentModel,
   reasoningEffort,
+  onOpenUsage,
 }: {
   events: Event[];
   agentModel?: string | { id: string };
   reasoningEffort?: string;
+  onOpenUsage: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const agg = useModelUsageAggregates(events);
+  const agg = useSessionAnalytics(events);
 
   // Prefer the model actually reported by the latest model call over the
   // agent snapshot's configured model — the snapshot can lag a mid-flight
@@ -1794,7 +1793,11 @@ function ContextInfoStrip({
   // model to fall back on) — don't render an empty strip.
   if (!model) return null;
 
-  const cost = estimateCostUsd(model, agg.cumulativeInputTokens, agg.cumulativeOutputTokens);
+  const cost = estimateCostUsd(model, agg.totals);
+  const ctxPct =
+    agg.contextTokens && agg.contextWindow
+      ? Math.min(100, (agg.contextTokens / agg.contextWindow) * 100)
+      : undefined;
 
   return (
     <div className="px-3 pt-3">
@@ -1816,9 +1819,25 @@ function ContextInfoStrip({
               reasoning: {reasoningEffort}
             </span>
           )}
-          {agg.latestDurationMs !== undefined && (
+          {agg.latest?.durationMs !== undefined && (
             <span className="shrink-0 text-xs text-fg-subtle" title="Latest turn duration">
-              turn {formatDuration(agg.latestDurationMs)}
+              turn {formatDuration(agg.latest.durationMs)}
+            </span>
+          )}
+          {ctxPct !== undefined && (
+            <span
+              className={`shrink-0 text-xs font-mono ${ctxPct > 85 ? "text-warning" : "text-fg-subtle"}`}
+              title="Share of the model's context window occupied by the latest prompt"
+            >
+              ctx {ctxPct.toFixed(0)}%
+            </span>
+          )}
+          {agg.cacheHitRate !== undefined && (
+            <span
+              className="shrink-0 text-xs font-mono text-fg-subtle"
+              title="Cache reads as a share of all prompt tokens billed"
+            >
+              cache {(agg.cacheHitRate * 100).toFixed(0)}%
             </span>
           )}
           {cost !== undefined && (
@@ -1827,20 +1846,37 @@ function ContextInfoStrip({
             </span>
           )}
           <span className={`shrink-0 text-fg-subtle text-xs ${cost === undefined ? "ml-auto" : ""}`} aria-hidden>
-            {expanded ? "▲" : "▼"}
+            {expanded ? "\u25b2" : "\u25bc"}
           </span>
         </button>
         {expanded && (
           <div className="px-3 pb-2 pt-1 border-t border-border grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-fg-muted">
             <div>
-              Latest turn: {agg.latestInputTokens !== undefined ? agg.latestInputTokens.toLocaleString() : "—"} in
+              Latest turn: {agg.latest ? agg.latest.usage.input.toLocaleString() : "\u2014"} in
               {" / "}
-              {agg.latestOutputTokens !== undefined ? agg.latestOutputTokens.toLocaleString() : "—"} out
+              {agg.latest ? agg.latest.usage.output.toLocaleString() : "\u2014"} out
             </div>
             <div>
-              Session total: {agg.cumulativeInputTokens.toLocaleString()} in
+              Session total: {agg.totals.input.toLocaleString()} in
               {" / "}
-              {agg.cumulativeOutputTokens.toLocaleString()} out
+              {agg.totals.output.toLocaleString()} out
+            </div>
+            <div>
+              Cache: {agg.totals.cacheRead.toLocaleString()} read
+              {" / "}
+              {agg.totals.cacheCreation.toLocaleString()} written
+            </div>
+            <div className="text-right">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenUsage();
+                }}
+                className="text-info hover:text-info/80 font-medium"
+              >
+                Full breakdown \u2192
+              </button>
             </div>
           </div>
         )}

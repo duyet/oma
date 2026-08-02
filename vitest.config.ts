@@ -61,6 +61,9 @@ export default defineConfig({
       { find: "@duyet/oma-evals-store", replacement: "./packages/evals-store/src/index.ts" },
       { find: "@duyet/oma-model-cards-store/test-fakes", replacement: "./packages/model-cards-store/src/test-fakes.ts" },
       { find: "@duyet/oma-model-cards-store", replacement: "./packages/model-cards-store/src/index.ts" },
+      // apps/agent subpath — apps/main re-uses the agent DO's notify
+      // dispatcher for per-schedule alerts (issue #313).
+      { find: "@duyet/oma-agent/runtime/notify-dispatch", replacement: "./apps/agent/src/runtime/notify-dispatch.ts" },
       { find: "@duyet/oma-agents-store/test-fakes", replacement: "./packages/agents-store/src/test-fakes.ts" },
       { find: "@duyet/oma-agents-store", replacement: "./packages/agents-store/src/index.ts" },
       { find: "@duyet/oma-publications-store/test-fakes", replacement: "./packages/publications-store/src/test-fakes.ts" },
@@ -141,6 +144,7 @@ export default defineConfig({
       { find: "@duyet/oma-sandbox/adapters/dynamic-workers", replacement: "./packages/sandbox/src/adapters/dynamic-workers.ts" },
       { find: "@duyet/oma-sandbox/adapters/kubernetes", replacement: "./packages/sandbox/src/adapters/kubernetes.ts" },
       { find: "@duyet/oma-sandbox/adapters/k8s-bridge", replacement: "./packages/sandbox/src/adapters/k8s-bridge.ts" },
+      { find: "@duyet/oma-sandbox/adapters/browser-vm", replacement: "./packages/sandbox/src/adapters/browser-vm.ts" },
       { find: "@duyet/oma-sandbox/adapters/kubernetes-remote", replacement: "./packages/sandbox/src/adapters/kubernetes-remote.ts" },
       { find: "@duyet/oma-sandbox/adapters/docker-compose", replacement: "./packages/sandbox/src/adapters/docker-compose.ts" },
       { find: "@duyet/oma-sandbox/adapters/github-actions", replacement: "./packages/sandbox/src/adapters/github-actions.ts" },
@@ -157,6 +161,7 @@ export default defineConfig({
       { find: "@duyet/oma-auth-config", replacement: "./packages/auth-config/src/index.ts" },
       { find: "@duyet/oma-email/adapters/nodemailer", replacement: "./packages/email/src/adapters/nodemailer.ts" },
       { find: "@duyet/oma-email/adapters/cf-send-email", replacement: "./packages/email/src/adapters/cf-send-email.ts" },
+      { find: "@duyet/oma-email/adapters/cf", replacement: "./packages/email/src/adapters/cf.ts" },
       { find: "@duyet/oma-email", replacement: "./packages/email/src/index.ts" },
       { find: "@duyet/oma-kv-store/adapters/sql", replacement: "./packages/kv-store/src/adapters/sql.ts" },
       { find: "@duyet/oma-kv-store/adapters/in-memory", replacement: "./packages/kv-store/src/adapters/in-memory.ts" },

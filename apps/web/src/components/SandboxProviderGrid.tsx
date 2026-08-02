@@ -17,6 +17,7 @@ const PROVIDERS: Provider[] = [
   { id: "openshell", name: "NVIDIA OpenShell", status: "cloudflare", line: "Default-deny egress, Landlock FS." },
   { id: "boxrun", name: "BoxRun", status: "cloudflare", line: "Remote boxlite control plane, no SDK." },
   { id: "subprocess", name: "Your machine", status: "bridge relay", line: "`oma bridge daemon` — fastest inner loop." },
+  { id: "browser-vm", name: "Browser VM", status: "bridge relay", line: "A WASM VM in your own tab — zero server compute." },
   { id: "docker-compose", name: "Docker Compose", status: "self-host", line: "Containers on any Docker host." },
   { id: "e2b", name: "E2B", status: "self-host", line: "Firecracker micro-VMs, bring your key." },
   { id: "daytona", name: "Daytona", status: "self-host", line: "Managed cloud dev environments." },

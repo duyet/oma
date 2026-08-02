@@ -6,6 +6,14 @@ import { Button } from "@/components/ui/button";
 import { PopoverContent } from "@/components/ui/popover";
 import { useConfirm } from "@/hooks/useConfirm";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -19,6 +27,7 @@ import { TextInput, SecretInput } from "../components/Input";
 import { toast } from "sonner";
 import type { ModelCard } from "@duyet/oma-api-types";
 import { INITIAL_FORM as AGENT_INITIAL_FORM, formToConfig } from "./agents/AgentFormDialog";
+import { AnyRouterIcon } from "@/components/icons";
 
 // ─── AnyRouter — "Connect to AnyRouter" OAuth (PKCE) button ────────────
 //
@@ -40,6 +49,17 @@ interface AnyRouterStatus {
   model_card_id?: string;
   /** The card's current wire-level target, e.g. "anthropic/claude-sonnet-4-6". */
   model?: string;
+  /** Every model card bound to this connection (base card + starter siblings
+   *  + cards added via "Add model"), all sharing the one stored key. Empty on
+   *  deployments without a model-cards store. */
+  cards?: AnyRouterBoundCard[];
+}
+
+interface AnyRouterBoundCard {
+  id: string;
+  model_id: string;
+  model: string;
+  is_default: boolean;
 }
 
 interface AnyRouterModelOption {
@@ -73,7 +93,15 @@ function composeTarget(model: string, preset: string): string {
   return `${model}@preset/${preset}`;
 }
 
-function AnyRouterConnectCard({ onStatus }: { onStatus?: (s: AnyRouterStatus) => void }) {
+function AnyRouterConnectCard({
+  onStatus,
+  onCardsChanged,
+}: {
+  onStatus?: (s: AnyRouterStatus) => void;
+  /** Fired when this panel created/removed a card, so the table above can
+   *  reload — the panel owns AnyRouter-bound cards, the table owns the rest. */
+  onCardsChanged?: () => void;
+}) {
   const { api } = useApi();
   const [status, setStatus] = useState<AnyRouterStatus | null>(null);
   const [busy, setBusy] = useState(false);
@@ -81,6 +109,10 @@ function AnyRouterConnectCard({ onStatus }: { onStatus?: (s: AnyRouterStatus) =>
   const [presets, setPresets] = useState<AnyRouterPreset[]>([]);
   const [credits, setCredits] = useState<AnyRouterCredits | null>(null);
   const [modelBusy, setModelBusy] = useState(false);
+  const [showConnectDialog, setShowConnectDialog] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [newCardId, setNewCardId] = useState("");
+  const [newCardModel, setNewCardModel] = useState("");
 
   const refresh = useCallback(() => {
     api<AnyRouterStatus>("/v1/providers/anyrouter/status")
@@ -156,19 +188,70 @@ function AnyRouterConnectCard({ onStatus }: { onStatus?: (s: AnyRouterStatus) =>
     }
   };
 
-  const changeTarget = async (model: string, preset: string) => {
-    const target = composeTarget(model, preset);
-    if (!status?.model_card_id || !target || target === status.model) return;
+  const startConnect = () => {
+    setShowConnectDialog(false);
+    window.location.assign("/v1/providers/anyrouter/connect");
+  };
+
+  // Retarget any AnyRouter-backed card — the base card or a sibling. Goes
+  // through the generic model-cards update route because changing `model`
+  // needs no credential (the card keeps the key it was created with).
+  const changeCardTarget = async (cardId: string, current: string, target: string) => {
+    if (!cardId || !target || target === current) return;
     setModelBusy(true);
     try {
-      await api(`/v1/model_cards/${status.model_card_id}`, {
+      await api(`/v1/model_cards/${cardId}`, {
         method: "POST",
         body: JSON.stringify({ model: target }),
       });
-      toast.success(`AnyRouter now targets ${target}.`);
+      toast.success(`Now targeting ${target}.`);
       refresh();
     } catch (e: any) {
       toast.error(e?.message || "Failed to update the target model");
+    } finally {
+      setModelBusy(false);
+    }
+  };
+
+  const changeTarget = (model: string, preset: string) => {
+    if (!status?.model_card_id) return;
+    changeCardTarget(status.model_card_id, status.model ?? "", composeTarget(model, preset));
+  };
+
+  // "Add model" — mint another card on the SAME connected key. The key never
+  // reaches the browser, so this can't go through POST /v1/model_cards.
+  const addCard = async () => {
+    const modelId = newCardId.trim();
+    const model = newCardModel.trim();
+    if (!modelId || !model) return;
+    setModelBusy(true);
+    try {
+      await api("/v1/providers/anyrouter/cards", {
+        method: "POST",
+        body: JSON.stringify({ model_id: modelId, model }),
+      });
+      toast.success(`Model card "${modelId}" created on your AnyRouter key.`);
+      setNewCardId("");
+      setNewCardModel("");
+      setAdding(false);
+      refresh();
+      onCardsChanged?.();
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to create the model card");
+    } finally {
+      setModelBusy(false);
+    }
+  };
+
+  const removeCard = async (card: AnyRouterBoundCard) => {
+    setModelBusy(true);
+    try {
+      await api(`/v1/model_cards/${card.id}`, { method: "DELETE" });
+      toast.success(`Removed ${card.model_id}.`);
+      refresh();
+      onCardsChanged?.();
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to remove the model card");
     } finally {
       setModelBusy(false);
     }
@@ -251,12 +334,15 @@ function AnyRouterConnectCard({ onStatus }: { onStatus?: (s: AnyRouterStatus) =>
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border bg-bg-surface px-4 py-3">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="text-sm font-medium text-fg">AnyRouter</div>
-          <div className="text-xs text-fg-subtle">
-            {status.connected
-              ? "Connected — agents with model \"anyrouter\" route through AnyRouter's gateway (150+ models, unified billing)."
-              : "Connect once via OAuth to route agents through AnyRouter, without pasting an sk-ar-… key by hand."}
+        <div className="flex items-center gap-2.5">
+          <AnyRouterIcon className="w-5 h-5 text-fg" />
+          <div>
+            <div className="text-sm font-medium text-fg">AnyRouter</div>
+            <div className="text-xs text-fg-subtle">
+              {status.connected
+                ? "Connected — agents with model \"anyrouter\" route through AnyRouter's gateway (177+ models, unified billing)."
+                : "Connect once via OAuth to route agents through AnyRouter, without pasting an sk-ar-… key by hand."}
+            </div>
           </div>
         </div>
         {status.connected ? (
@@ -264,11 +350,74 @@ function AnyRouterConnectCard({ onStatus }: { onStatus?: (s: AnyRouterStatus) =>
             Disconnect
           </Button>
         ) : (
-          <Button onClick={() => window.location.assign("/v1/providers/anyrouter/connect")}>
+          <Button
+            onClick={() => setShowConnectDialog(true)}
+            className="gap-1.5"
+          >
+            <AnyRouterIcon className="w-4 h-4" />
             Connect to AnyRouter
           </Button>
         )}
       </div>
+      {/* AnyRouter connect guideline dialog — explains what AnyRouter is, that
+          the key is stored securely in a vault and reused across all model
+          cards, and that the OAuth flow mints an sk-ar-… key without the
+          user ever copy-pasting one. One click from here into the backend
+          PKCE flow; the dialog is dismissed so a page refresh doesn't re-show
+          it (the redirect back carries ?anyrouter_connected=1). */}
+      <Dialog open={showConnectDialog} onOpenChange={setShowConnectDialog}>
+        <DialogContent className="p-0 max-w-md">
+          <DialogHeader className="px-6 py-5 pb-3">
+            <DialogTitle className="flex items-center gap-2.5 text-lg">
+              <AnyRouterIcon className="w-6 h-6 text-fg" />
+              Connect to AnyRouter
+            </DialogTitle>
+            <DialogDescription className="text-sm text-fg-subtle pt-1">
+              AnyRouter is an OpenAI-compatible LLM gateway that routes requests behind
+              one API key across 17 providers and 177+ models — including free-tier
+              models, key balancing, automatic failover, and presets (model bundles).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-6 py-4 space-y-3 text-sm">
+            <ul className="space-y-2 text-sm text-fg-subtle">
+              <li className="flex gap-2">
+                <span className="text-fg font-medium">• &nbsp; One-click OAuth</span>
+                <span>Mints an <span className="font-mono">sk-ar-…</span> inference key via OAuth (PKCE) — no manual key paste.</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-fg font-medium">• &nbsp; Key stored securely</span>
+                <span>The key is saved in a <strong>vault</strong> and never enters the sandbox. It's reused across every model card that points at it, so you can swap models freely without re-pasting credentials.</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-fg font-medium">• &nbsp; Pick any model</span>
+                <span>Change the target model or preset from the picker below after connecting — agents using <span className="font-mono">model: "anyrouter"</span> instantly follow.</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-fg font-medium">• &nbsp; Unified billing</span>
+                <span>$2 credit every month, $0 markup on your own keys, and a shared free-tier pool.</span>
+              </li>
+            </ul>
+            <div className="pt-2 border-t border-border">
+              <a
+                href="https://anyrouter.dev"
+                target="_blank"
+                rel="noreferrer"
+                className="text-brand hover:underline text-xs"
+              >
+                Learn more about AnyRouter ↗
+              </a>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowConnectDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={startConnect}>
+              Connect now
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {status.connected && credits && (
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-border pt-3 text-xs">
           <span className="text-fg-subtle">
@@ -350,6 +499,111 @@ function AnyRouterConnectCard({ onStatus }: { onStatus?: (s: AnyRouterStatus) =>
           </div>
         );
       })()}
+      {status.connected && status.model_card_id && (
+        <div className="border-t border-border pt-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-fg-subtle">
+              Other models on this key — each is a model card agents can name.
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setAdding((v) => !v)}
+              disabled={modelBusy || models.length === 0}
+            >
+              {adding ? "Cancel" : "+ Add model"}
+            </Button>
+          </div>
+          {adding && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={newCardModel || undefined} onValueChange={setNewCardModel}>
+                <SelectTrigger size="sm" className="min-w-56">
+                  <SelectValue placeholder="Pick a model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {models.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.name ? `${m.name} (${m.id})` : m.id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <TextInput
+                value={newCardId}
+                onChange={(e) => setNewCardId(e.target.value)}
+                placeholder="Card handle, e.g. anyrouter-opus"
+                aria-label="Model card handle"
+                className="w-56 border border-border rounded-md px-3 py-1.5 text-sm bg-bg text-fg outline-none focus:border-brand"
+              />
+              <Button size="sm" onClick={addCard} disabled={modelBusy || !newCardId.trim() || !newCardModel}>
+                Create card
+              </Button>
+            </div>
+          )}
+          {(status.cards ?? [])
+            .filter((card) => card.id !== status.model_card_id)
+            .map((card) => (
+              <div key={card.id} className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-xs text-fg-muted min-w-40">{card.model_id}</span>
+                <Select
+                  value={parseTarget(card.model).model || undefined}
+                  onValueChange={(m) =>
+                    changeCardTarget(card.id, card.model, composeTarget(m, parseTarget(card.model).preset))
+                  }
+                  disabled={modelBusy || models.length === 0}
+                >
+                  <SelectTrigger size="sm" className="min-w-56">
+                    <SelectValue placeholder={card.model} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(models.some((m) => m.id === parseTarget(card.model).model)
+                      ? models
+                      : [{ id: parseTarget(card.model).model, name: card.model }, ...models]
+                    ).map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.name ? `${m.name} (${m.id})` : m.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {presets.length > 0 && (
+                  <Select
+                    value={parseTarget(card.model).preset || "__none__"}
+                    onValueChange={(v) =>
+                      changeCardTarget(
+                        card.id,
+                        card.model,
+                        composeTarget(parseTarget(card.model).model, v === "__none__" ? "" : v),
+                      )
+                    }
+                    disabled={modelBusy}
+                  >
+                    <SelectTrigger size="sm" className="min-w-40">
+                      <SelectValue placeholder="No preset" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">No preset</SelectItem>
+                      {presets.map((pr) => (
+                        <SelectItem key={pr.slug} value={pr.slug}>
+                          {pr.name ? `${pr.name} (@${pr.slug})` : `@${pr.slug}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeCard(card)}
+                  disabled={modelBusy}
+                  className="text-danger hover:text-danger"
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -412,7 +666,7 @@ export function ModelCardsList() {
   // The card row auto-minted by the AnyRouter connect flow — managed from
   // the AnyRouter panel above the table, so it's excluded from the table
   // itself (editing/deleting it by hand would fight the managed connection).
-  const [anyrouterCardId, setAnyrouterCardId] = useState<string | null>(null);
+  const [anyrouterCardIds, setAnyrouterCardIds] = useState<string[]>([]);
   // api_key_preview of the card being edited — shown under the key field so
   // "type to replace" is explicit.
   const [editingPreview, setEditingPreview] = useState<string | null>(null);
@@ -683,14 +937,15 @@ export function ModelCardsList() {
 
   // Stable identity — an inline arrow would re-trigger the card's
   // status-fetch effect on every parent render.
-  const handleAnyRouterStatus = useCallback(
-    (s: AnyRouterStatus) => setAnyrouterCardId(s.model_card_id ?? null),
-    [],
-  );
+  const handleAnyRouterStatus = useCallback((s: AnyRouterStatus) => {
+    const ids = (s.cards ?? []).map((c) => c.id);
+    if (s.model_card_id && !ids.includes(s.model_card_id)) ids.push(s.model_card_id);
+    setAnyrouterCardIds(ids);
+  }, []);
 
-  // AnyRouter's managed card lives in the panel above, not the table.
+  // AnyRouter's managed cards live in the panel below, not the table.
   const tableCards = cards.filter(
-    (c) => c.id !== anyrouterCardId && c.model_id !== "anyrouter",
+    (c) => !anyrouterCardIds.includes(c.id) && c.model_id !== "anyrouter",
   );
 
   return (
@@ -928,11 +1183,14 @@ export function ModelCardsList() {
           `anyrouterCardId`, which filters the managed card out of the table
           above. */}
       <section className="border border-border rounded-lg bg-bg-surface/30 p-4 sm:p-5">
-        <h2 className="font-display text-lg font-semibold text-fg mb-1">Provider connections</h2>
+        <h2 className="font-display text-lg font-semibold text-fg mb-1 flex items-center gap-2">
+          <AnyRouterIcon className="w-5 h-5 text-fg" />
+          Provider connections
+        </h2>
         <p className="text-[13px] text-fg-muted mb-3">
-          Managed connections — one click, keys minted for you.
+          Managed connections — one click, keys minted for you and stored securely in a vault.
         </p>
-        <AnyRouterConnectCard onStatus={handleAnyRouterStatus} />
+        <AnyRouterConnectCard onStatus={handleAnyRouterStatus} onCardsChanged={load} />
       </section>
     </div>
   );

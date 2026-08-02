@@ -100,10 +100,19 @@ interface Vars {
 
 const KV_CLIENT_KEY = "anyrouter:oauth_client";
 const KV_PENDING_PREFIX = "anyrouter:oauth_pending:";
+/** Global models catalog cache — the upstream /models catalog is the same
+ *  for every account, so caching it globally is a pure win (one upstream
+ *  call per hour across all tenants instead of N). */
 const KV_MODELS_CACHE_KEY = "anyrouter:models_cache";
+/** Per-tenant presets cache — saved presets are account-specific (each
+ *  AnyRouter user curates their own), so caching them globally would leak
+ *  one tenant's presets into another's picker. Separate key prefix keeps
+ *  the shared catalog cold-free while keeping presets isolated. */
+const KV_PRESETS_CACHE_PREFIX = "anyrouter:presets_cache:";
 const KV_CREDITS_CACHE_PREFIX = "anyrouter:credits_cache:";
 const PENDING_TTL_SECONDS = 10 * 60;
 const MODELS_CACHE_TTL_MS = 60 * 60 * 1000;
+const PRESETS_CACHE_TTL_MS = 15 * 60 * 1000;
 const CREDITS_CACHE_TTL_MS = 60 * 1000;
 const VAULT_NAME = "AnyRouter";
 const CREDENTIAL_DISPLAY_NAME = "AnyRouter inference key";
@@ -217,6 +226,38 @@ export function buildAnyRouterRoutes(deps: AnyRouterRoutesDeps) {
     }
   }
 
+  /** Every model card bound to this tenant's AnyRouter connection — the
+   *  auto-minted "anyrouter" card, the starter siblings, and anything the
+   *  Console's "Add model" action created. Identified structurally (the
+   *  AnyRouter compat + base URL) rather than by a handle whitelist, so a
+   *  user-named card still rotates/cleans up with the connection. */
+  async function listBoundCards(services: RouteServices, tenantId: string) {
+    if (!services.modelCards) return [];
+    const all = await services.modelCards.list({ tenantId });
+    return all.filter(
+      (c) => c.provider === ANYROUTER_API_COMPAT && c.base_url === ANYROUTER_API_BASE,
+    );
+  }
+
+  /** Rotate the stored key on every bound card. Reconnect is the only
+   *  rotation mechanism (the minted token doesn't self-refresh), so a
+   *  sibling card left on the old key would silently 401 at agent-run
+   *  time. Best-effort per the connect flow's contract. */
+  async function rotateBoundCards(
+    services: RouteServices,
+    tenantId: string,
+    apiKey: string,
+  ): Promise<void> {
+    if (!services.modelCards) return;
+    try {
+      for (const card of await listBoundCards(services, tenantId)) {
+        await services.modelCards.update({ tenantId, cardId: card.id, apiKey });
+      }
+    } catch (err) {
+      services.logger?.warn({ err }, "anyrouter: sibling card key rotation failed");
+    }
+  }
+
   /**
    * Upsert the `model_cards` row a connected key binds to. Idempotent on
    * `model_id: "anyrouter"` — a reconnect finds the same row and rotates
@@ -255,20 +296,19 @@ export function buildAnyRouterRoutes(deps: AnyRouterRoutesDeps) {
     }
   }
 
-  /** Mirror of upsertModelCard for disconnect: deletes the bound card so a
-   *  revoked connection can't keep routing agents through a dead key.
-   *  ModelCardService has no soft-delete, so this is a hard delete —
-   *  matches the credential side, which is archived (not deletable) but
-   *  functionally dead once archived. No-ops when unwired (Node). */
-  async function deleteModelCard(services: RouteServices, tenantId: string): Promise<void> {
+  /** Mirror of upsertModelCard for disconnect: deletes EVERY bound card
+   *  (base card + starter siblings + user-added ones) so a revoked
+   *  connection can't keep routing agents through a dead key. They all
+   *  share the one revoked key, so keeping them would only leave cards
+   *  that 401 at agent-run time. ModelCardService has no soft-delete, so
+   *  this is a hard delete — matches the credential side, which is
+   *  archived (not deletable) but functionally dead once archived.
+   *  No-ops when unwired (Node). */
+  async function deleteModelCards(services: RouteServices, tenantId: string): Promise<void> {
     if (!services.modelCards) return;
     try {
-      const existing = await services.modelCards.findByModelId({
-        tenantId,
-        modelId: MODEL_CARD_MODEL_ID,
-      });
-      if (existing) {
-        await services.modelCards.delete({ tenantId, cardId: existing.id });
+      for (const card of await listBoundCards(services, tenantId)) {
+        await services.modelCards.delete({ tenantId, cardId: card.id });
       }
     } catch (err) {
       services.logger?.warn({ err }, "anyrouter: model card delete failed");
@@ -372,6 +412,9 @@ export function buildAnyRouterRoutes(deps: AnyRouterRoutesDeps) {
     // resolves with zero further setup. Best-effort — never fails the
     // callback (mirrors the onConnected hook right below it).
     await upsertModelCard(services, pending.tenantId, token.accessToken);
+    // …and rotate the key on every sibling card bound to this connection,
+    // so a reconnect doesn't leave "add model" / starter cards on a dead key.
+    await rotateBoundCards(services, pending.tenantId, token.accessToken);
 
     try {
       await deps.hooks?.onConnected?.({
@@ -400,6 +443,10 @@ export function buildAnyRouterRoutes(deps: AnyRouterRoutesDeps) {
     const card = services.modelCards
       ? await services.modelCards.findByModelId({ tenantId, modelId: MODEL_CARD_MODEL_ID })
       : null;
+    // Every card bound to this connection, so the Console can list + retarget
+    // the siblings ("add model") without a second round-trip. Never carries a
+    // key — only the handle + current wire target.
+    const bound = await listBoundCards(services, tenantId);
     return c.json({
       connected: true,
       vault_id: hit.vaultId,
@@ -408,6 +455,12 @@ export function buildAnyRouterRoutes(deps: AnyRouterRoutesDeps) {
       compat: ANYROUTER_API_COMPAT,
       connected_at: hit.createdAt,
       ...(card ? { model_card_id: card.id, model: card.model } : {}),
+      cards: bound.map((b) => ({
+        id: b.id,
+        model_id: b.model_id,
+        model: b.model,
+        is_default: b.is_default,
+      })),
     });
   });
 
@@ -417,7 +470,7 @@ export function buildAnyRouterRoutes(deps: AnyRouterRoutesDeps) {
     if (!tenantId) return c.json({ error: "authentication required" }, 401);
     const hit = await findCredential(services, tenantId);
     if (!hit) return c.json({ disconnected: false });
-    await deleteModelCard(services, tenantId);
+    await deleteModelCards(services, tenantId);
     await services.credentials.archive({ tenantId, vaultId: hit.vaultId, credentialId: hit.credentialId });
     try {
       await deps.hooks?.onDisconnected?.(tenantId);
@@ -476,23 +529,86 @@ export function buildAnyRouterRoutes(deps: AnyRouterRoutesDeps) {
     return c.json({ cards });
   });
 
+  // ── Additional model cards on the connected key ─────────────────────────
+  //
+  // "Add model": mint another `model_cards` row pointing at a different
+  // AnyRouter catalog model, reusing the SAME stored key. Runs backend-side
+  // for the same reason /presets does — the key never leaves the server, so
+  // the Console can't create such a card through the generic
+  // `POST /v1/model_cards` route (it has no key to send). Retargeting or
+  // deleting an existing card is plain `POST/DELETE /v1/model_cards/:id`;
+  // neither needs the key, so they stay on the generic route.
+  app.post("/cards", async (c) => {
+    const services = resolveServices(deps.services, c);
+    const tenantId = c.var.tenant_id;
+    if (!tenantId) return c.json({ error: "authentication required" }, 401);
+
+    const body = await c.req
+      .json<{ model_id?: string; model?: string }>()
+      .catch(() => ({}) as { model_id?: string; model?: string });
+    const modelId = body.model_id?.trim();
+    const model = body.model?.trim();
+    if (!modelId || !model) return c.json({ error: "model_id and model are required" }, 400);
+
+    const hit = await findCredential(services, tenantId);
+    if (!hit) return c.json({ error: "connect AnyRouter first", connect_required: true }, 400);
+
+    if (!services.modelCards) {
+      return c.json(
+        { error: "model cards unavailable on this deployment", model_cards_unavailable: true },
+        501,
+      );
+    }
+
+    const existing = await services.modelCards.findByModelId({ tenantId, modelId });
+    if (existing) return c.json({ error: `model card "${modelId}" already exists` }, 409);
+
+    const card = await services.modelCards.create({
+      tenantId,
+      modelId,
+      provider: ANYROUTER_API_COMPAT,
+      model,
+      apiKey: hit.token,
+      baseUrl: ANYROUTER_API_BASE,
+    });
+    return c.json({ id: card.id, model_id: card.model_id, model: card.model }, 201);
+  });
+
   // ── Model catalog (for a model picker) ──────────────────────────────────
+  //
+  // Cache strategy: models are shared globally (the upstream catalog is the
+  // same for every account), presets are per-tenant (each AnyRouter user
+  // curates their own saved presets). Splitting them avoids leaking one
+  // tenant's presets into another's picker while still letting the catalog
+  // ride a single global hourly fetch across the whole deployment.
   app.get("/models", async (c) => {
     const services = resolveServices(deps.services, c);
     const tenantId = c.var.tenant_id;
     if (!tenantId) return c.json({ error: "authentication required" }, 401);
 
-    const cached = await services.kv.get(KV_MODELS_CACHE_KEY);
-    if (cached) {
-      // Old cache entries predate presets — treat a missing `presets` as [].
-      const parsed = JSON.parse(cached) as {
-        fetchedAt: number;
-        models: AnyRouterModel[];
-        presets?: AnyRouterPreset[];
-      };
-      if (Date.now() - parsed.fetchedAt < MODELS_CACHE_TTL_MS) {
-        return c.json({ data: parsed.models, presets: parsed.presets ?? [], cached: true });
-      }
+    const now = Date.now();
+
+    // ── Read both caches ──────────────────────────────────────────────────
+    const cachedModelsRaw = await services.kv.get(KV_MODELS_CACHE_KEY);
+    const presetsCacheKey = `${KV_PRESETS_CACHE_PREFIX}${tenantId}`;
+    const cachedPresetsRaw = await services.kv.get(presetsCacheKey);
+
+    const cachedModels = cachedModelsRaw
+      ? (JSON.parse(cachedModelsRaw) as { fetchedAt: number; models: AnyRouterModel[] })
+      : null;
+    const cachedPresets = cachedPresetsRaw
+      ? (JSON.parse(cachedPresetsRaw) as { fetchedAt: number; presets: AnyRouterPreset[] })
+      : null;
+
+    const modelsFresh = cachedModels && now - cachedModels.fetchedAt < MODELS_CACHE_TTL_MS;
+    const presetsFresh = cachedPresets && now - cachedPresets.fetchedAt < PRESETS_CACHE_TTL_MS;
+
+    if (modelsFresh && presetsFresh) {
+      return c.json({
+        data: cachedModels.models,
+        presets: cachedPresets.presets,
+        cached: true,
+      });
     }
 
     const hit = await findCredential(services, tenantId);
@@ -502,12 +618,15 @@ export function buildAnyRouterRoutes(deps: AnyRouterRoutesDeps) {
     const res = await fetchImpl(req.url, { headers: req.headers });
     if (!res.ok) return c.json({ data: [], error: `HTTP ${res.status}` }, 502);
     // AnyRouter's authenticated /models response carries both the catalog
-    // (`data`) and the account's saved presets (`presets`) — cache them
-    // together off one read of the body.
+    // (`data`) and the account's saved presets (`presets`) — cache them into
+    // their respective stores off one read of the body.
     const body = await res.text();
     const models = parseModelsResponse(body);
     const presets = parsePresetsResponse(body);
-    await services.kv.put(KV_MODELS_CACHE_KEY, JSON.stringify({ fetchedAt: Date.now(), models, presets }));
+
+    await services.kv.put(KV_MODELS_CACHE_KEY, JSON.stringify({ fetchedAt: now, models }));
+    await services.kv.put(presetsCacheKey, JSON.stringify({ fetchedAt: now, presets }));
+
     return c.json({ data: models, presets });
   });
 

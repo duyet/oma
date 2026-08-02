@@ -13,7 +13,19 @@
 
 import type { SessionId } from "./domain";
 
-export type SessionNotifyStatus = "idle" | "terminated" | "error";
+/**
+ * `idle` / `terminated` / `error` describe a SESSION's lifecycle. The
+ * `schedule_*` variants describe one firing of an agent schedule
+ * (issue #313) — the same envelope + provider formatting reused for
+ * per-schedule alerts, so target posters need no schedule-specific code.
+ */
+export type SessionNotifyStatus =
+  | "idle"
+  | "terminated"
+  | "error"
+  | "schedule_ok"
+  | "schedule_error"
+  | "schedule_skipped";
 
 export interface SessionNotifyEvent {
   sessionId: SessionId;
@@ -30,6 +42,9 @@ export interface SessionNotifyEvent {
   endUserId?: string;
   /** Final agent message text, when the session reached an idle/terminal state. */
   finalMessage?: string;
+  /** Agent schedule id (`sch_*`) this notification is about, for the
+   *  `schedule_*` statuses. Absent for ordinary session notifications. */
+  scheduleId?: string;
 }
 
 /**
@@ -45,12 +60,19 @@ export interface WebhookEnvelope {
   stop_reason?: string;
   message?: string;
   session_url?: string;
+  /** Present only for the `schedule_*` statuses (issue #313). Appended last
+   *  so the pre-existing field order — and therefore every existing
+   *  receiver's signature check — is unchanged. */
+  schedule_id?: string;
 }
 
 const STATUS_LABEL: Record<SessionNotifyStatus, string> = {
   idle: "finished and is waiting for input",
   terminated: "was terminated",
   error: "hit an error",
+  schedule_ok: "scheduled run succeeded",
+  schedule_error: "scheduled run failed",
+  schedule_skipped: "scheduled run was skipped (concurrency cap reached)",
 };
 
 /**

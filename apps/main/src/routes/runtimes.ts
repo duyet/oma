@@ -111,7 +111,7 @@ runtimesRoutes.get("/", async (c) => {
 
   const { results } = await c.env.MAIN_DB
     .prepare(
-      `SELECT id, machine_id, hostname, os, agents_json, local_skills_json, version, status, last_heartbeat, created_at
+      `SELECT id, machine_id, hostname, os, agents_json, local_skills_json, version, status, last_heartbeat, created_at, kind
        FROM "runtimes" WHERE owner_user_id = ? ORDER BY created_at DESC`,
     )
     .bind(userId)
@@ -126,6 +126,7 @@ runtimesRoutes.get("/", async (c) => {
       status: string;
       last_heartbeat: number | null;
       created_at: number;
+      kind: string;
     }>();
 
   return c.json({
@@ -140,6 +141,7 @@ runtimesRoutes.get("/", async (c) => {
       status: r.status,
       last_heartbeat: r.last_heartbeat,
       created_at: r.created_at,
+      kind: r.kind ?? "daemon",
     })),
   });
 });
@@ -191,6 +193,7 @@ runtimeDaemonRoutes.post("/exchange", async (c) => {
     os?: string;
     version?: string;
     multi_tenant?: boolean;
+    kind?: string;
   };
 
   const { code, state, machine_id, hostname, os, version, multi_tenant } = body;
@@ -199,6 +202,14 @@ runtimeDaemonRoutes.post("/exchange", async (c) => {
       { error: "code, state, machine_id, hostname, os, version all required" },
       400,
     );
+  }
+
+  // Runtime kind: `daemon` (a paired local machine running `oma bridge
+  // daemon`) or `browser-vm` (a browser tab hosting a WASM VM). Default
+  // daemon so existing CLI clients that don't send the field keep working.
+  const kind = body.kind ?? "daemon";
+  if (kind !== "daemon" && kind !== "browser-vm") {
+    return c.json({ error: "kind must be 'daemon' or 'browser-vm'" }, 400);
   }
 
   const now = Math.floor(Date.now() / 1000);
@@ -231,17 +242,17 @@ runtimeDaemonRoutes.post("/exchange", async (c) => {
   if (existing) {
     runtimeId = existing.id;
     await c.env.MAIN_DB
-      .prepare(`UPDATE "runtimes" SET hostname = ?, os = ?, version = ? WHERE id = ?`)
-      .bind(hostname, os, version, runtimeId)
+      .prepare(`UPDATE "runtimes" SET hostname = ?, os = ?, version = ?, kind = ? WHERE id = ?`)
+      .bind(hostname, os, version, kind, runtimeId)
       .run();
   } else {
     runtimeId = crypto.randomUUID();
     await c.env.MAIN_DB
       .prepare(
-        `INSERT INTO "runtimes" (id, owner_user_id, owner_tenant_id, machine_id, hostname, os, agents_json, version, status, last_heartbeat, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, '[]', ?, 'offline', NULL, ?)`,
+        `INSERT INTO "runtimes" (id, owner_user_id, owner_tenant_id, machine_id, hostname, os, agents_json, version, status, last_heartbeat, created_at, kind)
+         VALUES (?, ?, ?, ?, ?, ?, '[]', ?, 'offline', NULL, ?, ?)`,
       )
-      .bind(runtimeId, row.user_id, row.tenant_id, machine_id, hostname, os, version, now)
+      .bind(runtimeId, row.user_id, row.tenant_id, machine_id, hostname, os, version, now, kind)
       .run();
   }
 

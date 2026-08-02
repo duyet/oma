@@ -27,7 +27,13 @@ import { spawn } from "node:child_process";
 import { hostname } from "node:os";
 import { randomBytes } from "node:crypto";
 import { realpathSync } from "node:fs";
-import { writeCreds, readCreds, getOrCreateMachineId } from "../lib/config.js";
+import { writeCreds, readCreds, getOrCreateMachineId, readSettings, writeSettings } from "../lib/config.js";
+import {
+  DEFAULT_OPENSHELL_ENDPOINT,
+  probeOpenShellGateway,
+  resolveOpenShellTlsFromEnv,
+} from "../lib/openshell-client.js";
+import select from "@inquirer/select";
 import { paths, currentProfile, osTag } from "../lib/platform.js";
 import {
   install as installService,
@@ -233,11 +239,61 @@ async function runSetupInner(opts: SetupOpts): Promise<void> {
   await installServiceOrFallback(opts);
 }
 
+/**
+ * Offer — never assume — the OpenShell sandbox backend when a gateway is
+ * reachable on this machine.
+ *
+ * The user opted their machine in expecting subprocess semantics: their real
+ * repos, their installed toolchains, their `gh` auth. An OpenShell box is
+ * isolated but EMPTY, so flipping them silently would break every agent that
+ * relies on any of that. Hence: prompt once, persist whichever way they
+ * answer, and never re-ask. Non-TTY contexts keep the default.
+ *
+ * This changes ONLY sandbox-op execution — ACP agents still spawn on the host
+ * either way.
+ */
+async function offerOpenShellBackend(): Promise<void> {
+  const settings = await readSettings();
+  if (settings?.sandboxBackend) return; // already answered
+  const tty = Boolean(process.stdin.isTTY) && Boolean(process.stdout.isTTY);
+  if (!tty) return;
+  const endpoint = process.env.OPENSHELL_GATEWAY_ENDPOINT || DEFAULT_OPENSHELL_ENDPOINT;
+  const reachable = await probeOpenShellGateway(endpoint, resolveOpenShellTlsFromEnv(process.env));
+  if (!reachable) return;
+
+  process.stderr.write("\n");
+  log.ok(`OpenShell gateway detected  ${c.dim(endpoint)}`);
+  const choice = await select<"subprocess" | "openshell">({
+    message: "Where should relayed sandbox commands run?",
+    choices: [
+      {
+        name: "This machine directly (default)",
+        value: "subprocess",
+        description: "Agents see your real files, toolchains and CLI auth. No isolation.",
+      },
+      {
+        name: "Inside an OpenShell sandbox",
+        value: "openshell",
+        description: "Isolated with policed egress, but empty — none of your files or tools.",
+      },
+    ],
+  }).catch(() => "subprocess" as const);
+
+  await writeSettings({
+    ...(settings ?? {}),
+    sandboxBackend: choice,
+    ...(choice === "openshell" ? { openshellEndpoint: endpoint } : {}),
+  });
+  log.ok(`sandbox backend set to ${c.cyan(choice)}  ${c.dim(paths().configDir + "/settings.json")}`);
+  log.hint("ACP agents still spawn on this host; this only affects relayed sandbox ops.");
+}
+
 /** Slow-path tail: install the system service if supported, otherwise
  *  exec into the daemon foreground. Either way the user has a running
  *  daemon by the time this returns (or the process is gone, replaced
  *  by daemon). `--no-service` always takes the foreground path. */
 async function installServiceOrFallback(opts: SetupOpts): Promise<void> {
+  await offerOpenShellBackend();
   const kind = detectServiceKind();
   if (opts.noService || kind === "unsupported") {
     process.stderr.write("\n");
@@ -259,6 +315,7 @@ async function installServiceOrFallback(opts: SetupOpts): Promise<void> {
  *  daemon when service mode is off / unsupported. Same return contract
  *  as installServiceOrFallback. */
 async function refreshServiceOrFallback(opts: SetupOpts): Promise<void> {
+  await offerOpenShellBackend();
   const kind = detectServiceKind();
   if (opts.noService || kind === "unsupported") {
     // Symmetrical with installServiceOrFallback: --no-service means
