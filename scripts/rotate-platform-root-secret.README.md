@@ -7,9 +7,11 @@ secret value afterwards.
 
 ## What this does
 
-Rewrites `credentials.auth` and `model_cards.api_key_cipher` in a tenant D1
-shard from ciphertext-under-OLD-secret to ciphertext-under-NEW-secret,
-row by row, with:
+Rewrites every value encrypted under `PLATFORM_ROOT_SECRET` — across the
+tenant D1 shard, the integrations D1, and the federation registry in KV (see
+[Coverage](#coverage-every-platform_root_secret-derived-key)) — from
+ciphertext-under-OLD-secret to ciphertext-under-NEW-secret, row by row,
+with:
 
 - **Idempotency**: every row is try-decrypted under NEW first; success means
   "already rotated" and the row is skipped. Safe to re-run after any
@@ -17,7 +19,7 @@ row by row, with:
 - **Verify-before-commit**: OLD-decrypt → NEW-encrypt → NEW-decrypt the fresh
   ciphertext → assert it equals the original plaintext byte-for-byte.
   Nothing is written to the DB unless that check passes.
-- **Dry-run**: `--dry-run` reports exactly what would change; zero writes.
+- **Dry-run is the default**: a run without `--apply` reports exactly what would change and writes nothing. You must pass `--apply` to touch data.
 - **No plaintext logging**: only row ids, counts, and error classes/messages
   ever hit stdout/stderr.
 - **Fail-loud by default**: a row that doesn't decrypt under OLD or NEW
@@ -35,7 +37,9 @@ row by row, with:
 | | |
 |---|---|
 | `CF_ACCOUNT_ID` | Cloudflare account UUID |
-| `CF_API_TOKEN` | API token with `D1: Edit` on the shard you're rotating |
+| `CF_API_TOKEN` | API token with `D1: Edit` on the shards you're rotating **and** `Workers KV Storage: Edit` on the namespace holding the federation registry |
+| `CF_INTEGRATIONS_DB_ID` | Integrations D1 UUID (or `--integrations-db`) |
+| `CF_KV_NAMESPACE_ID` | KV namespace UUID holding `federation:*` (or `--kv-namespace`) |
 | `PLATFORM_ROOT_SECRET_OLD` | The secret currently in the worker (`wrangler secret list oma-agent` to confirm which one is live — the value itself isn't retrievable, use the value you have on record) |
 | `PLATFORM_ROOT_SECRET_NEW` | The new secret you're rotating to |
 
@@ -92,7 +96,8 @@ note) before touching anything.
 for db in $(./scripts/list-shards.sh); do
   CF_ACCOUNT_ID=... CF_API_TOKEN=... \
   PLATFORM_ROOT_SECRET_OLD=... PLATFORM_ROOT_SECRET_NEW=... \
-    pnpm tsx scripts/rotate-platform-root-secret.ts --db="$db" --dry-run
+    pnpm tsx scripts/rotate-platform-root-secret.ts \
+      --db="$db" --integrations-db="$INTEGRATIONS_DB" --kv-namespace="$KV_NS"
 done
 ```
 
@@ -116,8 +121,18 @@ SHARDS=$(./scripts/list-shards.sh)
 echo "$SHARDS" | xargs -P 8 -I {} \
   env CF_ACCOUNT_ID=... CF_API_TOKEN=... \
       PLATFORM_ROOT_SECRET_OLD=... PLATFORM_ROOT_SECRET_NEW=... \
-    pnpm tsx scripts/rotate-platform-root-secret.ts --db={} --shard={}
+    pnpm tsx scripts/rotate-platform-root-secret.ts \
+      --db={} --shard={} --integrations-db="$INTEGRATIONS_DB" --kv-namespace="$KV_NS" --apply
 ```
+
+`--apply` is what makes this step write. Every other invocation in this
+runbook deliberately omits it and is therefore a dry run.
+
+The integrations D1 and the federation KV namespace are **global, not
+per-shard** — running the fan-out above rotates them repeatedly, which is
+harmless (the second pass sees every row as `alreadyRotated`) but wasteful.
+To rotate them exactly once, pass `--no-integrations --no-federation` in the
+fan-out and do a single separate run with a shard that carries them.
 
 ### 4. Verify
 
@@ -125,11 +140,13 @@ echo "$SHARDS" | xargs -P 8 -I {} \
 for db in $(./scripts/list-shards.sh); do
   CF_ACCOUNT_ID=... CF_API_TOKEN=... \
   PLATFORM_ROOT_SECRET_OLD=... PLATFORM_ROOT_SECRET_NEW=... \
-    pnpm tsx scripts/rotate-platform-root-secret.ts --db="$db" --dry-run
+    pnpm tsx scripts/rotate-platform-root-secret.ts \
+      --db="$db" --integrations-db="$INTEGRATIONS_DB" --kv-namespace="$KV_NS"
 done
 ```
 
-Every shard must show `wouldRotate=0` for both tables. Non-zero means
+Every shard must show `wouldRotate=0` for every table **and** for
+`federation(KV)`. Non-zero means
 re-run step 3 for that shard (it's fully idempotent).
 
 ## Recovery from interruption
@@ -138,21 +155,70 @@ Just re-run step 3 for the affected shard. The try-NEW-first check means
 already-rotated rows are instantly skipped; only remaining OLD-only rows are
 touched. No manual bookkeeping needed.
 
+## Coverage: every PLATFORM_ROOT_SECRET-derived key
+
+`PLATFORM_ROOT_SECRET` is not one key — each subsystem derives its own AES
+key as `SHA-256(secret | label)`. A rotation that misses a label leaves that
+subsystem's ciphertext permanently unreadable. The complete map:
+
+| Label | Store | Rows | Covered by |
+|---|---|---|---|
+| `credentials.auth` | tenant D1 | `credentials.auth` | `--db` |
+| `model.cards.keys` | tenant D1 | `model_cards.api_key_cipher` | `--db` |
+| `integrations.tokens` | **integrations D1** (separate database) | 21 `*_cipher` columns across `linear_apps`, `linear_installations`, `linear_publications`, `github_apps`, `github_installations`, `github_publications`, `slack_apps`, `slack_installations`, `slack_publications` | `--integrations-db` |
+| `federation.api_key` | **Workers KV** (not D1) | `api_key_enc` inside the JSON row at `federation:<tenant>:<id>` | `--kv-namespace` |
+
+The script **refuses to run** if `--integrations-db` or `--kv-namespace` is
+omitted, unless you explicitly pass `--no-integrations` / `--no-federation`
+to assert that deployment has none. That is deliberate: silently skipping a
+store is exactly how a rotation ends in unreadable data.
+
+### Derived from the secret but NOT rotatable
+
+These use `PLATFORM_ROOT_SECRET` but store no at-rest ciphertext, so there is
+nothing to rewrite — rotating simply invalidates them:
+
+- **Integrations JWTs** (`WebCryptoJwtSigner(PLATFORM_ROOT_SECRET)`) —
+  in-flight tokens stop verifying; clients re-authenticate. No action needed.
+- **OAuth state signing** (`apps/integrations/src/oauth-unified.ts`) —
+  OAuth handshakes in flight at the moment of the flip fail and must be
+  restarted by the user. Expect a handful of "please try connecting again".
+
+## Envelope format: why there is no key-version field
+
+The stored envelope is bare `base64url(iv || ciphertext)` with no version
+byte, and this change deliberately **does not add one**. Reasoning:
+
+- Idempotency does not need it. Try-decrypt-under-NEW-first already
+  classifies every row correctly, is self-correcting after a crash, and
+  cannot double-encrypt (AES-GCM authentication makes a wrong-key decrypt
+  fail rather than return garbage).
+- Adding a version prefix is a wire-format change to a security-critical
+  path shared by five independent decrypt implementations (`packages/shared`
+  credential-crypto, the CF and Node `WebCryptoAesGcm` classes,
+  `apps/oma-vault` reading the column directly, plus the integrations repos).
+  Every one would need backward-compatible dual-read, and getting any of
+  them wrong is a data-loss bug — a strictly larger risk than the problem it
+  would solve.
+
+If a future rotation needs to distinguish generations for another reason,
+add it then, as its own change with its own migration — not bundled into a
+rotation.
+
 ## Known limitation / scope
 
-This script rotates the same two columns `scripts/backfill-encrypt-secrets.ts`
-introduced encryption for (`credentials.auth`, `model_cards.api_key_cipher`)
-in the tenant control-plane D1. It does **not** yet cover the separate
-`apps/integrations` D1 tables that also derive their AES key from
-`PLATFORM_ROOT_SECRET` under the `"integrations.tokens"` label (GitHub/Slack/
-Linear app installs — `client_secret_cipher`, `access_token_cipher`, etc. in
-`packages/db-schema/src/cf-integrations/*` and the node-pg mirrors). Rotating
-those requires a second invocation against the integrations D1 with a
-different table/column list; the `rotateColumn()` helper this script exports
-is deliberately table-agnostic so a follow-up can reuse it without
-duplicating the decrypt/verify/CAS logic. Track that as a fast-follow before
-actually rotating a production secret that also has integrations installed.
-
-Self-host Postgres is not covered by this script's D1-over-HTTP transport
-(same gap as `backfill-encrypt-secrets.ts`) — a Postgres variant would swap
-the `d1Query` helper for a `pg` client using the same `rotateColumn()` logic.
+- **Cloudflare only.** The transport is the D1 + KV HTTP APIs. Self-host
+  Postgres/SQLite is not covered (same gap as
+  `scripts/backfill-encrypt-secrets.ts`); a Node variant would swap the
+  `d1Query` / `kv*` helpers for a `pg` (or better-sqlite3) client and reuse
+  `rotateColumn()` unchanged.
+- **KV has no CAS.** The D1 pass guards each write with
+  `WHERE id = ? AND col = ?<what-we-read>`. Workers KV offers no equivalent,
+  so the federation pass writes, then re-reads and verifies the bytes are
+  ours — that detects a concurrent write but cannot prevent it. The
+  maintenance window below is the mitigation.
+- **Legacy plaintext rows are left alone.** `credentials.auth` rows written
+  before at-rest encryption existed hold verbatim JSON. The runtime reads
+  those unchanged under any secret, so they are counted (`legacyPlaintext=N`)
+  and skipped rather than encrypted — encrypting them would be a behavior
+  change smuggled into a rotation.
