@@ -21,20 +21,22 @@ npx wrangler login
 
 ## Custom Domain
 
-`apps/main/wrangler.jsonc` and `apps/integrations/wrangler.jsonc` each own a
-different subdomain; `apps/agent/wrangler.jsonc` has no `routes` block at all
+`setup-cf.sh` writes your account's config to gitignored
+`apps/<app>/wrangler.local.jsonc` copies — edit those, not the tracked
+`wrangler.jsonc` files. `apps/main` and `apps/integrations` each own a
+different subdomain; `apps/agent` has no `routes` block at all
 (the agent worker is only reached internally, not via a public route). Edit
 the `routes` in the two worker configs that do have one:
 
 ```jsonc
-// apps/main/wrangler.jsonc
+// apps/main/wrangler.local.jsonc
 "routes": [
   { "pattern": "app.yourdomain.com", "custom_domain": true }
 ]
 ```
 
 ```jsonc
-// apps/integrations/wrangler.jsonc
+// apps/integrations/wrangler.local.jsonc
 "routes": [
   { "pattern": "integrations.yourdomain.com", "custom_domain": true }
 ]
@@ -43,8 +45,8 @@ the `routes` in the two worker configs that do have one:
 Redeploy:
 
 ```bash
-npx wrangler deploy --config apps/main/wrangler.jsonc
-npx wrangler deploy --config apps/integrations/wrangler.jsonc
+npx wrangler deploy --config apps/main/wrangler.local.jsonc
+npx wrangler deploy --config apps/integrations/wrangler.local.jsonc
 ```
 
 DNS records auto-create on first deploy (cert provisioning ~1 min).
@@ -60,8 +62,8 @@ This adds GitHub as a sign-in option for the Console, alongside email/password.
 3. Set secrets on the **main** worker:
 
 ```bash
-npx wrangler secret put GITHUB_CLIENT_ID --config apps/main/wrangler.jsonc
-npx wrangler secret put GITHUB_CLIENT_SECRET --config apps/main/wrangler.jsonc
+npx wrangler secret put GITHUB_CLIENT_ID --config apps/main/wrangler.local.jsonc
+npx wrangler secret put GITHUB_CLIENT_SECRET --config apps/main/wrangler.local.jsonc
 ```
 
 ### Slack OAuth

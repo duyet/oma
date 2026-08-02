@@ -5,7 +5,7 @@ description: One command takes you from clone to a working CF deployment in ~5 m
 
 import { Steps, Tabs, TabItem, Aside, LinkCard } from '@astrojs/starlight/components';
 
-`scripts/setup-cf.sh` is an interactive wizard that provisions every Cloudflare resource, patches the wrangler files, sets secrets, applies migrations, and deploys the three workers. Plan on ~5 minutes hands-on, plus a few minutes of network-bound waits.
+`scripts/setup-cf.sh` is an interactive wizard that provisions every Cloudflare resource, generates your local wrangler configs, sets secrets, applies migrations, and deploys the three workers. Plan on ~5 minutes hands-on, plus a few minutes of network-bound waits.
 
 ## Prerequisites
 
@@ -40,7 +40,7 @@ You do **not** need a custom domain to start — workers default to `*.workers.d
    1. Creates 2 D1 databases (`openma-auth`, `openma-integrations`)
    2. Creates 1 KV namespace (`CONFIG_KV`)
    3. Creates 4 R2 buckets (`managed-agents-files`, `-workspace`, `-memory`, `-backups`)
-   4. Splices the captured IDs into `apps/{main,agent,integrations}/wrangler.jsonc` (preserving comments)
+   4. Copies each `apps/{main,agent,integrations}/wrangler.jsonc` to a gitignored `wrangler.local.jsonc` sibling and splices the captured IDs into the copy (preserving comments) — the tracked files stay pristine
    5. Sets secrets — auto-generates `BETTER_AUTH_SECRET`, `API_KEY`, `INTEGRATIONS_INTERNAL_SECRET`, `PLATFORM_ROOT_SECRET`; prompts for `ANTHROPIC_API_KEY`
    6. Applies migrations (one consolidated file per D1)
    7. Deploys main + agent + integrations
@@ -69,9 +69,9 @@ If you have a domain on this Cloudflare account, set up routes in each `apps/*/w
 Then redeploy:
 
 ```bash
-npx wrangler deploy --config apps/main/wrangler.jsonc
-npx wrangler deploy --config apps/agent/wrangler.jsonc
-npx wrangler deploy --config apps/integrations/wrangler.jsonc
+npx wrangler deploy --config apps/main/wrangler.local.jsonc
+npx wrangler deploy --config apps/agent/wrangler.local.jsonc
+npx wrangler deploy --config apps/integrations/wrangler.local.jsonc
 ```
 
 DNS records auto-create on first deploy with a custom domain (cert provisioning ~1 min).
@@ -82,8 +82,8 @@ Skip if you only want bare agent functionality. To enable them:
 
 ```bash
 # Per provider — see the dashboard maze in oauth-apps.mdx
-npx wrangler secret put LINEAR_CLIENT_ID --config apps/integrations/wrangler.jsonc
-npx wrangler secret put LINEAR_CLIENT_SECRET --config apps/integrations/wrangler.jsonc
+npx wrangler secret put LINEAR_CLIENT_ID --config apps/integrations/wrangler.local.jsonc
+npx wrangler secret put LINEAR_CLIENT_SECRET --config apps/integrations/wrangler.local.jsonc
 # ... and so on for GITHUB_*, SLACK_*
 ```
 
@@ -96,7 +96,7 @@ See [OAuth Apps](/self-host/oauth-apps/) for the per-provider walkthrough.
 The wrangler files include `env.staging` overlays preconfigured against oma.duyet.net's staging DB IDs. To use these for **your** staging deployment, you'd need to create a parallel set of staging DBs and patch those IDs in. Most self-hosters don't need this — `--env staging` is primarily for oma.duyet.net itself.
 
 ```bash
-npx wrangler deploy --config apps/main/wrangler.jsonc --env staging
+npx wrangler deploy --config apps/main/wrangler.local.jsonc --env staging
 ```
 
 ### Multi-shard scaling
@@ -106,9 +106,9 @@ The default deployment is single-D1: every tenant lives in one `openma-auth` D1.
 ## Redeploy after code changes
 
 ```bash
-npx wrangler deploy --config apps/main/wrangler.jsonc
-npx wrangler deploy --config apps/agent/wrangler.jsonc
-npx wrangler deploy --config apps/integrations/wrangler.jsonc
+npx wrangler deploy --config apps/main/wrangler.local.jsonc
+npx wrangler deploy --config apps/agent/wrangler.local.jsonc
+npx wrangler deploy --config apps/integrations/wrangler.local.jsonc
 ```
 
 You can run any subset — e.g. iterate on agent code with just `apps/agent` redeploys.
@@ -120,7 +120,7 @@ You can run any subset — e.g. iterate on agent code with just `apps/agent` red
 </Aside>
 
 <Aside type="caution" title="`<set-by-setup-cf-sh>` placeholders">
-  The wrangler files ship with `<set-by-setup-cf-sh>` placeholders. The setup wizard fills them in. If you skip the wizard and try to `wrangler deploy` directly, deploys will fail until you replace the placeholders manually.
+  The tracked wrangler files ship with `<set-by-setup-cf-sh>` placeholders and **keep them** — the wizard fills in a gitignored `wrangler.local.jsonc` copy instead, so a configured checkout has no permanently-modified tracked files. Always deploy with `--config apps/<app>/wrangler.local.jsonc`. If you skip the wizard and deploy against the tracked file directly, deploys will fail until you replace the placeholders manually.
 </Aside>
 
 <Aside type="caution" title="Workers Paid plan required">
