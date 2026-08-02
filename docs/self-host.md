@@ -624,7 +624,7 @@ that only set `config.type` continue to work unchanged.
 | `E2B` | ✓ | ✓ | ✓ | ✓ (s3fs, requires `MEMORY_S3_*` + template with s3fs) | ✓ (same bucket, session-outputs prefix) | ⚠ (template must allow sudo writes to /etc/ssl/) | ✓ (tar via exec + readFileBytes) |
 | `BoxRun` | ✓ | ✓ | ✓ | ✗ (HTTP API has no mount primitive — use a custom image with s3fs preinstalled) | ✗ (same — no host-bind primitive) | ✓ (CA upload via tar PUT) | ⚠ (best-effort tar via exec) |
 | `CloudflareSandbox` | ✓ | ✓ | ✓ | ✓ (R2 + FUSE) | ✓ | ✓ (interceptHttps + outboundHandlers) | ✓ (squashfs to R2 backup bucket) |
-| `dynamic-workers` | ✗ (JS/Wasm eval only, no shell) | ✗ (no filesystem — `readFile`/`writeFile` fail clearly) | ✗ by default (`allow_network: true` inherits worker egress) | ✗ | ✗ | n/a | ✗ (nothing persists between calls) |
+| `dynamic-workers` | ✗ (JS/Wasm eval only, no shell) | ✗ (no filesystem — `readFile`/`writeFile` fail clearly) | ✗ by default (`allowNetwork: false` ⇒ `globalOutbound: null` blocks all egress; set it true to inherit the worker's) | ✗ | ✗ | n/a | ✗ (nothing persists between calls) |
 
 Read-only memory mounts: enforced via `chmod -R a-w` on the mount target where supported (LocalSubprocess, Daytona, E2B). LiteBox honors the `readOnly` flag on its volume mount. CloudflareSandbox does not enforce ro at the FS layer — the harness's write tool checks `assertWritable` and refuses writes regardless of provider.
 

@@ -28,7 +28,7 @@ adapter). Switch between them by changing env vars, not code.
 |---|---|---|
 | Where it runs | Your VPS / Mac / k8s / fly.io | Cloudflare Workers + DO + Containers |
 | Storage | SQLite or Postgres + local FS | D1 + KV + R2 |
-| Sandbox | LocalSubprocess / LiteBox / Daytona / E2B / BoxRun | Cloudflare Sandbox (Containers) |
+| Sandbox | LocalSubprocess / LiteBox / Daytona / E2B / BoxRun | Cloudflare Sandbox (Containers) or Dynamic Workers (JS-eval isolate, CF-only) |
 | Time to running | ~2 min | ~10 min once configured |
 | Best for | OSS / on-prem / no CF account / data-resident | Edge scale / no host mgmt / already on CF |
 | Cost floor | Hetzner €5–50/mo, or your own hardware | Workers Paid plan ($5/mo) + usage |
