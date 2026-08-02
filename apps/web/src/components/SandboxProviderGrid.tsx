@@ -22,6 +22,7 @@ const PROVIDERS: Provider[] = [
   { id: "e2b", name: "E2B", status: "self-host", line: "Firecracker micro-VMs, bring your key." },
   { id: "daytona", name: "Daytona", status: "self-host", line: "Managed cloud dev environments." },
   { id: "litebox", name: "LiteBox", status: "self-host", line: "Native micro-VM binding." },
+  { id: "dynamic-workers", name: "Dynamic Workers", status: "cloudflare", line: "JS eval in a fresh V8 isolate — no shell or disk." },
 ];
 
 export default function SandboxProviderGrid() {
