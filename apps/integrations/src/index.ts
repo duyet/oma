@@ -177,6 +177,7 @@ app.use("*", async (c, next) => {
       slack: (req) => providers.slack.handleWebhook(req),
     },
     internalSecret: env.INTEGRATIONS_INTERNAL_SECRET ?? null,
+    consoleOrigin: env.CONSOLE_ORIGIN ?? null,
     rateLimit: {
       shouldDropForTenant: (tenantId) => shouldDropForTenantRateLimit(env, tenantId),
     },

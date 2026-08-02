@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { FakeHttpClient } from "@duyet/oma-integrations-core/test-fakes";
 import type { NotificationTarget } from "@duyet/oma-api-types";
-import { dispatchSessionNotifications } from "./notify-dispatch";
+import { dispatchSessionNotifications, buildSessionStatusEmail } from "./notify-dispatch";
 
 const githubTarget: NotificationTarget = {
   type: "github_comment",
@@ -24,6 +24,12 @@ const matrixTarget: NotificationTarget = {
 const telegramTarget: NotificationTarget = {
   type: "telegram_message",
   chat_id: -1001234567890,
+};
+
+const emailTarget: NotificationTarget = {
+  type: "email",
+  to: "ops@example.com",
+  subject_prefix: "[oma]",
 };
 
 const event = { sessionId: "sess_1", status: "idle" as const, agentName: "Reviewer" };
@@ -224,6 +230,58 @@ describe("dispatchSessionNotifications", () => {
     expect(fetchCalled).toBe(false);
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onError.mock.calls[0][0]).toBe(telegramTarget);
+  });
+
+  it("sends an email target through the configured email sender", async () => {
+    const sent: Array<{ to: string; subject: string; text: string; html: string }> = [];
+    await dispatchSessionNotifications(
+      { ...event, sessionUrl: "https://console.example.com/s/sess_1", finalMessage: "All done <ok>" },
+      [emailTarget],
+      {
+        resolveCredentialToken: async () => null,
+        resolveSecret: async () => null,
+        httpClient: new FakeHttpClient(),
+        resolveEmailSender: () => ({
+          send: async (msg) => {
+            sent.push(msg as (typeof sent)[number]);
+          },
+        }),
+      },
+    );
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0].to).toBe("ops@example.com");
+    expect(sent[0].subject).toBe('[oma] Agent "Reviewer" session sess_1: idle');
+    // Same status wording every other provider renders.
+    expect(sent[0].text).toContain('Agent "Reviewer" session sess_1 finished and is waiting for input.');
+    expect(sent[0].text).toContain("All done <ok>");
+    expect(sent[0].text).toContain("Session: https://console.example.com/s/sess_1");
+    // HTML body escapes the message text.
+    expect(sent[0].html).toContain("All done &lt;ok&gt;");
+  });
+
+  it("renders the subject without a prefix when subject_prefix is unset", () => {
+    const msg = buildSessionStatusEmail(
+      { sessionId: "sess_2", status: "error" },
+      { type: "email", to: "a@b.com" },
+    );
+    expect(msg.subject).toBe("Agent session sess_2: error");
+  });
+
+  it("fails open with a warning when no email sender is configured", async () => {
+    const onError = vi.fn();
+    await expect(
+      dispatchSessionNotifications(event, [emailTarget], {
+        resolveCredentialToken: async () => null,
+        resolveSecret: async () => null,
+        httpClient: new FakeHttpClient(),
+        onError,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0][0]).toBe(emailTarget);
+    expect(String((onError.mock.calls[0][1] as Error).message)).toContain("no email sender configured");
   });
 
   it("is a no-op when there are no targets", async () => {

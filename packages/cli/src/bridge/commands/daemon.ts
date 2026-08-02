@@ -15,11 +15,13 @@
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { mkdirSync, writeFileSync, unlinkSync } from "node:fs";
-import { readCreds } from "../lib/config.js";
+import { readCreds, readSettings } from "../lib/config.js";
 import { osTag, currentProfile, paths } from "../lib/platform.js";
 import { detectAll, loadRegistry } from "@duyet/oma-acp-runtime/registry";
 import { SessionManager } from "../lib/session-manager.js";
-import { BridgeSandboxManager } from "../lib/bridge-sandbox.js";
+import { BridgeSandboxManager, createOpenShellBackend } from "../lib/bridge-sandbox.js";
+import { resolveSandboxBackend } from "../lib/sandbox-backend.js";
+import { resolveOpenShellTlsFromEnv } from "../lib/openshell-client.js";
 import { detectLocalSkills } from "../lib/local-skills.js";
 import { attachAgentVersions } from "../lib/agent-versions.js";
 
@@ -124,7 +126,9 @@ export async function runDaemon(): Promise<void> {
       try { unlinkSync(join(paths().configDir, "daemon.pid")); } catch { /* missing */ }
       try { unlinkSync(join(paths().configDir, "daemon-state.json")); } catch { /* missing */ }
       void sessions.disposeAll();
-      sandboxes.destroyAll();
+      // Force path: don't wait — the user asked to exit NOW. Remote boxes
+      // (openshell) may leak; that's the price of the second signal.
+      void sandboxes.destroyAll();
       if (currentWs) {
         try { currentWs.close(1000, "shutdown"); } catch { /* already closing */ }
       }
@@ -154,7 +158,9 @@ export async function runDaemon(): Promise<void> {
         `drained ${r.sessions} session(s) (${naturallyCompleted}/${r.initialTurns} turns completed cleanly)`,
       );
       stopping = true;
-      sandboxes.destroyAll();
+      // Awaited (bounded internally) so an openshell box actually gets its
+      // DeleteSandbox before the process goes away.
+      await sandboxes.destroyAll();
       if (currentWs) {
         try { currentWs.close(1000, "shutdown"); } catch { /* already closing */ }
       }
@@ -254,9 +260,32 @@ export async function runDaemon(): Promise<void> {
   // Relayed sandbox ops for cloud agents with a *local* environment. Like
   // SessionManager it survives WS drops (per-session workdirs persist); each
   // attach re-points its sender at the new socket via setSend().
-  const sandboxes = new BridgeSandboxManager(() => {
-    /* placeholder — replaced on first attach via setSend */
-  });
+  //
+  // Which substrate runs those ops is an explicit opt-in (daemon settings or
+  // BRIDGE_SANDBOX_BACKEND) — see lib/sandbox-backend.ts for why there is no
+  // "gateway is installed → use it" auto-detect here. Log the resolved
+  // backend + reason once so the choice is visible in the daemon log.
+  const backendSel = resolveSandboxBackend(process.env, await readSettings());
+  const sandboxes = new BridgeSandboxManager(
+    () => {
+      /* placeholder — replaced on first attach via setSend */
+    },
+    backendSel.kind === "openshell"
+      ? {
+          backend: createOpenShellBackend({
+            endpoint: backendSel.endpoint!,
+            token: process.env.OPENSHELL_TOKEN,
+            image: process.env.OPENSHELL_IMAGE,
+            tls: resolveOpenShellTlsFromEnv(process.env),
+            logger: { warn: (m) => log.warn(m), log: (m) => log.step(m) },
+          }),
+        }
+      : undefined,
+  );
+  log.ok(
+    `sandbox backend: ${c.cyan(backendSel.kind)}` +
+      `${backendSel.kind === "openshell" ? ` → ${backendSel.endpoint}` : ""}  ${c.dim(backendSel.reason)}`,
+  );
 
   while (!stopping) {
     try {

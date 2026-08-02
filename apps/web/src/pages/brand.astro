@@ -4,10 +4,11 @@ import Logo from "../components/Logo.astro";
 import Icon from "../components/Icon.astro";
 import PixelAgent from "../components/PixelAgent.astro";
 
-// Brand / identity reference page. Documents the 2026 redesign: the frame +
-// edge + node logo mark, the mascot, the neutral-zinc + iris token system, the
-// Geist type voice, and usage rules. Theme-aware and built from the same
-// shadcn-clean primitives as the rest of the site.
+// Brand / identity reference page. Documents the AnyRouter shadcn redesign:
+// the frame + edge + node logo mark, the mascot, the neutral + amber primary
+// token system, the Inter / JetBrains Mono / Instrument Serif type voice, and
+// usage rules. Theme-aware and built from the same shadcn-clean primitives
+// as the rest of the site.
 
 interface Swatch {
   name: string;
@@ -17,42 +18,42 @@ interface Swatch {
 }
 
 const ground: Swatch[] = [
-  { name: "Background", varName: "--color-bg", light: "#ffffff", dark: "#09090b" },
-  { name: "Surface", varName: "--color-bg-surface", light: "#fafafa", dark: "#131316" },
-  { name: "Elevated", varName: "--color-bg-elevated", light: "#f4f4f5", dark: "#1c1c20" },
+  { name: "Background", varName: "--color-bg", light: "oklch(1 0 0)", dark: "oklch(0.145 0 0)" },
+  { name: "Surface", varName: "--color-bg-surface", light: "oklch(0.97 0 0)", dark: "oklch(0.269 0 0)" },
+  { name: "Elevated", varName: "--color-bg-elevated", light: "oklch(0.967 0.001 286.375)", dark: "oklch(0.274 0.006 286.033)" },
 ];
 const text: Swatch[] = [
-  { name: "Foreground", varName: "--color-fg", light: "#18181b", dark: "#fafafa" },
-  { name: "Muted", varName: "--color-fg-muted", light: "#52525b", dark: "#a1a1aa" },
-  { name: "Subtle", varName: "--color-fg-subtle", light: "#71717a", dark: "#71717a" },
+  { name: "Foreground", varName: "--color-fg", light: "oklch(0.145 0 0)", dark: "oklch(0.985 0 0)" },
+  { name: "Muted", varName: "--color-fg-muted", light: "oklch(0.44 0 0)", dark: "oklch(0.78 0 0)" },
+  { name: "Subtle", varName: "--color-fg-subtle", light: "oklch(0.556 0 0)", dark: "oklch(0.708 0 0)" },
 ];
 const lines: Swatch[] = [
-  { name: "Border", varName: "--color-border", light: "#e4e4e7", dark: "#27272a" },
-  { name: "Border strong", varName: "--color-border-strong", light: "#d4d4d8", dark: "#3f3f46" },
+  { name: "Border", varName: "--color-border", light: "oklch(0.922 0 0)", dark: "oklch(1 0 0 / 10%)" },
+  { name: "Border strong", varName: "--color-border-strong", light: "oklch(0.87 0 0)", dark: "oklch(1 0 0 / 18%)" },
 ];
 const primary: Swatch[] = [
-  { name: "Iris (primary)", varName: "--color-brand", light: "#4f46e5", dark: "#818cf8" },
-  { name: "Iris hover", varName: "--color-brand-hover", light: "#4338ca", dark: "#a5b4fc" },
-  { name: "Iris subtle", varName: "--color-brand-subtle", light: "#eef2ff", dark: "#1e1b3a" },
+  { name: "Amber (primary)", varName: "--color-brand", light: "oklch(0.555 0.163 48.998)", dark: "oklch(0.473 0.137 46.201)" },
+  { name: "Amber hover", varName: "--color-brand-hover", light: "oklch(0.473 0.137 46.201)", dark: "oklch(0.666 0.179 58.318)" },
+  { name: "Amber subtle", varName: "--color-brand-subtle", light: "color-mix(in oklch, oklch(0.555 0.163 48.998) 9%, white)", dark: "color-mix(in oklch, oklch(0.473 0.137 46.201) 16%, oklch(0.145 0 0))" },
 ];
 const dataviz: Swatch[] = [
-  { name: "Orange", varName: "--color-accent", light: "#d97757", dark: "#e08a68" },
+  { name: "Amber accent", varName: "--color-dv-accent", light: "oklch(0.666 0.179 58.318)", dark: "oklch(0.666 0.179 58.318)" },
   { name: "Blue", varName: "--color-blue", light: "#6a9bcc", dark: "#6a9bcc" },
   { name: "Green", varName: "--color-green", light: "#788c5d", dark: "#788c5d" },
 ];
 
 const groups: { title: string; note: string; rows: Swatch[] }[] = [
-  { title: "Ground", note: "Neutral zinc greyscale. Pages sit on Background; Surface bands and Elevated chips step up.", rows: ground },
-  { title: "Text", note: "One warm-neutral gray family, three levels of emphasis.", rows: text },
+  { title: "Ground", note: "Neutral grayscale. Pages sit on Background; Surface bands and Elevated chips step up.", rows: ground },
+  { title: "Text", note: "One neutral gray family, three levels of emphasis.", rows: text },
   { title: "Lines", note: "Crisp 1px hairlines carry structure instead of heavy shadows.", rows: lines },
-  { title: "Primary — iris", note: "The single ownable accent. All chrome: logo, links, focus, primary buttons.", rows: primary },
+  { title: "Primary — amber", note: "The single ownable accent. All chrome: logo, links, focus, primary buttons.", rows: primary },
   { title: "Data-viz accents", note: "Functional only — inside the architecture diagram, lifecycle, badges and use-case tabs. Never page chrome.", rows: dataviz },
 ];
 ---
 
 <Base
   title="Brand — Open Managed Agents"
-  description="The Open Managed Agents brand system: the frame + node logo mark, color tokens for light and dark, the Geist type voice, and usage guidelines."
+  description="The Open Managed Agents brand system: the frame + node logo mark, color tokens for light and dark, the Inter/JetBrains Mono type voice, and usage guidelines."
   canonical="/brand/"
   keywords="open managed agents brand, oma logo, brand guidelines, design tokens, oma identity"
 >
@@ -65,9 +66,10 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
       The oma identity
     </h1>
     <p class="text-lg text-[var(--color-fg-muted)] leading-relaxed max-w-2xl">
-      A neutral engineering-tool language: a zinc greyscale ground, one confident
-      iris accent, crisp hairlines, and the Geist type voice. This page is the
-      reference — the mark, the tokens, the type, and how to use them.
+      A neutral engineering-tool language: a grayscale ground, one confident
+      amber accent, crisp hairlines, and the Inter / JetBrains Mono type voice.
+      This page is the reference — the mark, the tokens, the type, and how to
+      use them.
     </p>
   </section>
 
@@ -84,13 +86,13 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
       </p>
 
       <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <!-- Light / iris -->
+        <!-- Light / amber -->
         <figure class="rounded-lg border border-[var(--color-border)] overflow-hidden">
-          <div class="flex items-center justify-center py-12" style="background:#ffffff;color:#4f46e5">
+          <div class="flex items-center justify-center py-12" style="background:#ffffff;color:oklch(0.555 0.163 48.998)">
             <Logo size={72} class="block" />
           </div>
           <figcaption class="px-4 py-2.5 text-xs font-mono text-[var(--color-fg-subtle)] border-t border-[var(--color-border)]">
-            light · iris
+            light · amber
           </figcaption>
         </figure>
         <!-- Light / mono -->
@@ -102,13 +104,13 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
             light · mono
           </figcaption>
         </figure>
-        <!-- Dark / iris -->
+        <!-- Dark / amber -->
         <figure class="rounded-lg border border-[var(--color-border)] overflow-hidden">
-          <div class="flex items-center justify-center py-12" style="background:#09090b;color:#818cf8">
+          <div class="flex items-center justify-center py-12" style="background:#09090b;color:oklch(0.473 0.137 46.201)">
             <Logo size={72} class="block" />
           </div>
           <figcaption class="px-4 py-2.5 text-xs font-mono text-[var(--color-fg-subtle)] border-t border-[var(--color-border)]">
-            dark · iris
+            dark · amber
           </figcaption>
         </figure>
         <!-- Dark / mono -->
@@ -120,9 +122,9 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
             dark · mono
           </figcaption>
         </figure>
-        <!-- White, reversed out on the brand iris -->
+        <!-- White, reversed out on the brand amber -->
         <figure class="rounded-lg border border-[var(--color-border)] overflow-hidden">
-          <div class="flex items-center justify-center py-12" style="background:#4f46e5">
+          <div class="flex items-center justify-center py-12" style="background:oklch(0.555 0.163 48.998)">
             <Logo size={72} tone="white" class="block" />
           </div>
           <figcaption class="px-4 py-2.5 text-xs font-mono text-[var(--color-fg-subtle)] border-t border-[var(--color-border)]">
@@ -147,7 +149,7 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
             light · ink
           </figcaption>
         </figure>
-        <!-- Iris auto (theme-aware via the brand token) -->
+        <!-- Amber auto (theme-aware via the brand token) -->
         <figure class="rounded-lg border border-[var(--color-border)] overflow-hidden">
           <div class="flex items-center justify-center py-12 bg-[var(--color-bg-surface)]">
             <Logo size={72} tone="brand" class="block" />
@@ -182,14 +184,14 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
         <a
           href="/logo.svg"
           download
-          class="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-[var(--color-border-strong)] text-sm font-medium no-underline hover:no-underline hover:bg-[var(--color-bg-surface)] transition-colors"
+          class="inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-2xl border border-border bg-background text-sm font-medium whitespace-nowrap transition-all select-none no-underline hover:no-underline hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px dark:bg-transparent dark:hover:bg-input/30 [&_svg:not([class*='size-'])]:size-4"
         >
           <Icon name="download" size={15} /> logo.svg
         </a>
         <a
           href="/og-default.svg"
           download
-          class="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-[var(--color-border-strong)] text-sm font-medium no-underline hover:no-underline hover:bg-[var(--color-bg-surface)] transition-colors"
+          class="inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-2xl border border-border bg-background text-sm font-medium whitespace-nowrap transition-all select-none no-underline hover:no-underline hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px dark:bg-transparent dark:hover:bg-input/30 [&_svg:not([class*='size-'])]:size-4"
         >
           <Icon name="download" size={15} /> og-default.svg
         </a>
@@ -206,10 +208,11 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
       <div>
         <h2 class="font-display text-2xl font-bold tracking-tight mb-2">Mascot</h2>
         <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed max-w-xl">
-          A cheerful pixel robot, kept deliberately <strong class="text-[var(--color-fg)] font-semibold">warm</strong>
-          — terracotta, not iris. It's a playful secondary mark for friendly
-          moments (empty states, get-started); the iris chrome stays for the
-          serious tool surface. Use it sparingly, never as the primary logo.
+          A cheerful pixel robot, kept deliberately <strong class="text-[var(--color-fg)] font-semibold">illustrative</strong>
+          — its own warm palette, not the flat amber primary. It's a playful
+          secondary mark for friendly moments (empty states, get-started);
+          the amber chrome stays for the serious tool surface. Use it
+          sparingly, never as the primary logo.
         </p>
       </div>
     </div>
@@ -260,38 +263,44 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
     <div class="max-w-5xl mx-auto px-4 py-14">
       <h2 class="font-display text-2xl font-bold tracking-tight mb-2">Typography</h2>
       <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed max-w-2xl mb-8">
-        <strong class="text-[var(--color-fg)] font-semibold">Geist</strong> for
+        <strong class="text-[var(--color-fg)] font-semibold">Inter Variable</strong> for
         everything — display and body share the family, differing by weight and
-        tracking. <strong class="text-[var(--color-fg)] font-semibold">Geist Mono</strong>
-        carries the terminal, code, and label vocabulary.
+        tracking. <strong class="text-[var(--color-fg)] font-semibold">JetBrains Mono</strong>
+        carries the terminal, code, and label vocabulary, and
+        <strong class="text-[var(--color-fg)] font-semibold">Instrument Serif</strong>
+        appears sparingly as an italic display accent.
       </p>
 
       <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] divide-y divide-[var(--color-border)]">
         <div class="px-6 py-5 flex flex-wrap items-baseline justify-between gap-2">
           <span class="font-display text-5xl font-bold tracking-tight">Durable agents</span>
-          <span class="font-mono text-[10px] text-[var(--color-fg-subtle)]">Geist · 48 / 700 / -0.02em</span>
+          <span class="font-mono text-[10px] text-[var(--color-fg-subtle)]">Inter · 48 / 700 / -0.02em</span>
         </div>
         <div class="px-6 py-5 flex flex-wrap items-baseline justify-between gap-2">
           <span class="font-display text-3xl font-bold tracking-tight">Section heading</span>
-          <span class="font-mono text-[10px] text-[var(--color-fg-subtle)]">Geist · 30 / 700</span>
+          <span class="font-mono text-[10px] text-[var(--color-fg-subtle)]">Inter · 30 / 700</span>
         </div>
         <div class="px-6 py-5 flex flex-wrap items-baseline justify-between gap-2">
           <span class="font-display text-xl font-semibold tracking-tight">Card title</span>
-          <span class="font-mono text-[10px] text-[var(--color-fg-subtle)]">Geist · 20 / 600</span>
+          <span class="font-mono text-[10px] text-[var(--color-fg-subtle)]">Inter · 20 / 600</span>
         </div>
         <div class="px-6 py-5 flex flex-wrap items-baseline justify-between gap-3">
           <span class="text-base text-[var(--color-fg-muted)] leading-relaxed max-w-md">
             Body copy sits at a relaxed line-height and a muted foreground so
             headings and accents lead the eye.
           </span>
-          <span class="font-mono text-[10px] text-[var(--color-fg-subtle)]">Geist · 16 / 400</span>
+          <span class="font-mono text-[10px] text-[var(--color-fg-subtle)]">Inter · 16 / 400</span>
+        </div>
+        <div class="px-6 py-5 flex flex-wrap items-baseline justify-between gap-3">
+          <span class="font-serif italic text-3xl text-[var(--color-fg)]">the managed layer, open</span>
+          <span class="font-mono text-[10px] text-[var(--color-fg-subtle)]">Instrument Serif · 30 / italic</span>
         </div>
         <div class="px-6 py-5 flex flex-wrap items-center justify-between gap-3">
           <span class="font-mono text-sm text-[var(--color-fg-muted)]">
             <span class="text-[var(--color-green)]">oma@fleet:~$</span>
-            <span class="text-[var(--color-accent)]">oma</span> sessions tail sess_9f2
+            <span class="text-[var(--color-brand)]">oma</span> sessions tail sess_9f2
           </span>
-          <span class="font-mono text-[10px] text-[var(--color-fg-subtle)]">Geist Mono · 14</span>
+          <span class="font-mono text-[10px] text-[var(--color-fg-subtle)]">JetBrains Mono · 14</span>
         </div>
       </div>
     </div>
@@ -308,7 +317,7 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
           </h3>
           <ul class="space-y-3 text-sm text-[var(--color-fg-muted)] leading-relaxed">
             <li class="flex gap-2"><Icon name="check" size={16} class="text-[var(--color-green)] mt-0.5 shrink-0" /> Give the mark clearspace of at least its own node's diameter on every side.</li>
-            <li class="flex gap-2"><Icon name="check" size={16} class="text-[var(--color-green)] mt-0.5 shrink-0" /> Use iris on neutral grounds, or a single mono ink/paper tone.</li>
+            <li class="flex gap-2"><Icon name="check" size={16} class="text-[var(--color-green)] mt-0.5 shrink-0" /> Use amber on neutral grounds, or a single mono ink/paper tone.</li>
             <li class="flex gap-2"><Icon name="check" size={16} class="text-[var(--color-green)] mt-0.5 shrink-0" /> Keep it 16px or larger — below that the node fills in.</li>
             <li class="flex gap-2"><Icon name="check" size={16} class="text-[var(--color-green)] mt-0.5 shrink-0" /> Let it inherit <code class="font-mono text-xs">currentColor</code> so it stays theme-aware.</li>
           </ul>
@@ -318,9 +327,9 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
             <Icon name="x" size={18} style="color:#dc2626" /> Don't
           </h3>
           <ul class="space-y-3 text-sm text-[var(--color-fg-muted)] leading-relaxed">
-            <li class="flex gap-2"><Icon name="x" size={16} style="color:#dc2626" class="mt-0.5 shrink-0" /> Recolor the mark to terracotta, a gradient, or any non-brand hue.</li>
+            <li class="flex gap-2"><Icon name="x" size={16} style="color:#dc2626" class="mt-0.5 shrink-0" /> Recolor the mark to a gradient, or any non-brand hue.</li>
             <li class="flex gap-2"><Icon name="x" size={16} style="color:#dc2626" class="mt-0.5 shrink-0" /> Stretch, rotate, or restyle the frame corners or node.</li>
-            <li class="flex gap-2"><Icon name="x" size={16} style="color:#dc2626" class="mt-0.5 shrink-0" /> Swap the mascot in as the primary logo, or tint it iris.</li>
+            <li class="flex gap-2"><Icon name="x" size={16} style="color:#dc2626" class="mt-0.5 shrink-0" /> Swap the mascot in as the primary logo, or tint it amber.</li>
             <li class="flex gap-2"><Icon name="x" size={16} style="color:#dc2626" class="mt-0.5 shrink-0" /> Set the mark on a busy photo without a solid backing tile.</li>
           </ul>
         </div>

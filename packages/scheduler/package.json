@@ -16,6 +16,7 @@
     "./jobs/scheduled-deployment-runs-store": "./src/jobs/scheduled-deployment-runs-store.ts"
   },
   "dependencies": {
+    "@duyet/oma-api-types": "workspace:*",
     "@duyet/oma-shared": "workspace:*",
     "@duyet/oma-sql-client": "workspace:*",
     "@duyet/oma-memory-store": "workspace:*",

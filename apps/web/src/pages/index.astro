@@ -4,6 +4,10 @@ import { softwareApplicationSchema } from "../lib/seo";
 import Logo from "../components/Logo.astro";
 import HowItFits from "../components/HowItFits.astro";
 import WiredFlows from "../components/WiredFlows.tsx";
+import RequestFlowInteractive from "../components/RequestFlowInteractive.tsx";
+import ProviderFan from "../components/ProviderFan.astro";
+import BuildingBlocks from "../components/BuildingBlocks.astro";
+import ControlPlaneFlow from "../components/ControlPlaneFlow.astro";
 import Icon from "../components/Icon.astro";
 
 // SoftwareApplication is the homepage-only schema — anchors the
@@ -11,29 +15,42 @@ import Icon from "../components/Icon.astro";
 // the page eligible for software-style rich snippets (price, license).
 const schemas = [softwareApplicationSchema()];
 
+// Shared button recipes. shadcn's own button variants at the preset radius
+// (0.625rem → rounded-md); previously each anchor carried a 400-char inline
+// copy of these, which drifted between call sites.
+const btnPrimary =
+  "inline-flex h-11 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground no-underline transition-colors hover:bg-primary/90 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 [&_svg]:shrink-0 sm:h-9 sm:w-auto";
+const btnOutline =
+  "inline-flex h-11 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground no-underline transition-colors hover:bg-muted hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 [&_svg]:shrink-0 sm:h-9 sm:w-auto";
+
+// Section frame — the page is white throughout and sections are separated by a
+// hairline top border. Padding is deliberately tighter than the previous
+// rhythm so the body reads as one compact scroll, not a stack of billboard
+// sections.
+const section = "border-t border-border py-10 sm:py-12";
+const container = "max-w-5xl mx-auto px-4";
+const eyebrow =
+  "font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--color-brand)]";
+const sectionTitle =
+  "mt-3 text-balance text-[1.6rem] font-semibold tracking-tighter text-[var(--color-fg)] sm:text-[2.1rem]";
+const sectionIntro =
+  "mt-2 max-w-2xl text-pretty text-sm leading-relaxed text-[var(--color-fg-muted)] sm:text-base";
+
 const concepts = [
   {
     name: "Agent",
-    badge: "config",
-    accent: "orange" as const,
     body: "A versioned config: model, prompt, tools, skills, MCP, harness. Sessions pin a version at creation; updates never rewrite live runs.",
   },
   {
     name: "Session",
-    badge: "runtime",
-    accent: "blue" as const,
     body: "A conversation backed by an append-only event log. Streaming, crash recovery, and lifecycle all hang off this durable state.",
   },
   {
     name: "Environment",
-    badge: "sandbox",
-    accent: "green" as const,
     body: "The execution sandbox: packages, network policy, container image. Reusable across agents, so a fleet shares one runtime shape.",
   },
   {
     name: "Vault",
-    badge: "secrets",
-    accent: "orange" as const,
     body: "A credential store that never enters the sandbox. An outbound proxy injects tokens at the network layer, matched by URL.",
   },
 ];
@@ -45,208 +62,218 @@ const explore = [
   { title: "Features", href: "/features/", icon: "grid", body: "Everything the platform gives you — and why it's drop-in compatible." },
   { title: "Use cases", href: "/use-cases/", icon: "workflow", body: "Real workflows: ship code, run production, answer customers, work a thread." },
   { title: "Infrastructure", href: "/infrastructure/", icon: "server", body: "Multi-agent fleets, any sandbox provider, and bridging your own machine." },
-];
+] as const;
 ---
 
 <Base
   title="oma — Open Managed Agents: self-hosted agent platform for any LLM provider and any sandbox"
-  description="oma (Open Managed Agents) is an open-source, self-hostable agent platform — durable sessions, sandboxed execution, MCP tools — that runs on any LLM provider (Anthropic, OpenAI-compatible gateways, or your own model) and any sandbox platform (Cloudflare Containers, Kubernetes, E2B, Daytona, subprocess), on Cloudflare Workers or Docker."
+  description="oma (Open Managed Agents) is an open-source, self-hostable agent platform — durable sessions, sandboxed execution, MCP tools — that runs on any LLM provider (Anthropic, OpenAI-compatible gateways, or your own model) and any sandbox platform (Cloudflare Containers, Kubernetes, E2B, Daytona, subprocess, or a WASM VM in your browser tab), on Cloudflare Workers or Docker."
   canonical="/"
   keywords="open managed agents, oma agent platform, self host ai agent, any llm provider agent platform, byok ai agent, claude agent sdk, mcp server host, ai agent cloudflare workers, self host claude code, claude code skills, claude managed agents alternative, claude tag alternative, open source claude tag"
   schemas={schemas}
 >
-  <!-- Hero -->
-  {/* 69px = the fixed header's height (nav py + border in Base.astro) —
-      the hero bleeds under the transparent header by exactly that much.
-      If the header's height changes, this pair must change with it. */}
-  <section class="relative overflow-hidden border-b border-[var(--color-border)] -mt-[69px] pt-[69px]">
-    <!-- A soft iris glow bleeds in over the top; the dithered pattern now
-         frames only the fit diagram below instead of the whole hero. -->
-    <div class="pointer-events-none absolute inset-0 bg-[var(--color-bg)]" aria-hidden="true"></div>
-    <div
-      class="pointer-events-none absolute inset-0 opacity-[0.5] dark:opacity-[0.35]"
-      aria-hidden="true"
-      style="background: radial-gradient(ellipse 70% 45% at 50% -10%, color-mix(in srgb, var(--color-brand) 22%, transparent), transparent 70%);"
-    ></div>
-    <div class="relative max-w-5xl mx-auto px-4 py-16 md:py-20">
-      <div>
-        <!-- Full-width first: the Console's "How it fits together" diagram
-             leads the hero — the product's mental model before the pitch. -->
-        <!-- Dithered-pattern frame around the fit diagram (reference: framed
-             dashboard screenshots) — full-strength in light, damped in dark. -->
-        <!-- Breaks out wider than the text column on large screens. -->
-        <div class="mb-12 relative overflow-hidden rounded-2xl p-5 md:p-10 lg:-mx-20 xl:-mx-32">
-          <div
-            class="pointer-events-none absolute inset-0"
-            aria-hidden="true"
-            style="background: url('/hero-tint.jpg') center / cover no-repeat;"
-          ></div>
-          <div class="relative">
-            <HowItFits />
-          </div>
-        </div>
-
-        <!-- Pitch -->
-        <div class="hero-pitch text-left">
-          <h1 class="font-display text-4xl sm:text-5xl md:text-[3.1rem] lg:text-[3.4rem] font-bold tracking-tight leading-[1.07]">
-            The self-hosted agent platform for
-            <span
-              class="hero-accent hero-rotate"
-              data-rotate='["LLM provider","Sandbox"]'
-              >any <span class="tw-rot">LLM provider</span><span class="typewriter-caret" aria-hidden="true"></span></span
-            >
-          </h1>
-          <p class="mt-5 text-lg md:text-xl text-[var(--color-fg-muted)] leading-relaxed font-medium max-w-xl">
-            Run your own agents on <strong class="text-[var(--color-fg)] font-semibold">any model</strong>,
-            in <strong class="text-[var(--color-fg)] font-semibold">any sandbox</strong>. Deploy to Cloudflare or run
-            <code class="font-mono text-base md:text-lg">docker compose up</code>.
-          </p>
-
-          <!-- Primary CTAs: repo (brand) + docs (hairline). Mirror the
-               get-started section so the hero has a clear next action. -->
-          <div class="hero-cta">
-            <a
-              href="https://github.com/duyet/oma"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="inline-flex items-center gap-2 px-5 py-3 rounded-md bg-[var(--color-brand)] text-[var(--color-brand-fg)] font-medium font-display no-underline hover:no-underline hover:bg-[var(--color-brand-hover)] transition-colors"
-              ><Icon name="download" size={16} /> Clone the repo</a
-            >
-            <a
-              href="https://docs.oma.duyet.net"
-              class="inline-flex items-center gap-2 px-5 py-3 rounded-md border border-[var(--color-border-strong)] font-medium font-display no-underline hover:no-underline hover:bg-[var(--color-bg-surface)] transition-colors"
-              ><Icon name="book" size={16} /> Read the docs</a
-            >
-          </div>
-
-          <!-- Proof chips: compact, scannable differentiators under the CTAs. -->
-          <ul class="hero-chips">
-            <li>Any&nbsp;LLM&nbsp;provider</li>
-            <li>Any&nbsp;sandbox&nbsp;platform</li>
-            <li>Self-hostable</li>
-            <li>Apache&nbsp;2.0</li>
-          </ul>
-        </div>
-
-      </div>
+  {/* Hero — the assembly diagram leads, full width: it is the product's
+      mental model and the thing worth seeing first. The pitch sits directly
+      under it. Breaks out wider than the text column on large screens.
+      (Kept verbatim from the previous rebuild.) */}
+  <section class:list={[container, "pt-10 pb-12 sm:pt-12 sm:pb-16 lg:pt-14 lg:pb-24"]}>
+    <div class="mb-12 lg:-mx-20 xl:-mx-32">
+      <HowItFits />
     </div>
-  </section>
 
-  <!-- What it is — the four primitives that carry the whole model. -->
-  <section class="max-w-5xl mx-auto px-4 py-16 md:py-20" data-reveal id="what-is-oma">
-    <p class="flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
-      <Icon name="box" size={14} class="text-[var(--color-brand)]" /> Product
-    </p>
-    <h2 class="font-display text-3xl md:text-4xl font-bold mb-4 text-center tracking-tight">
-      What Open Managed Agents is
-    </h2>
-    <p class="text-center text-[var(--color-fg-muted)] max-w-2xl mx-auto mb-12 leading-relaxed">
-      A platform for running agent fleets, not a chat UI. Four primitives
-      carry the whole model.
-    </p>
-    <div class="grid sm:grid-cols-2 gap-5">
-      {
-        concepts.map((c) => (
-          <article
-            data-lift
-            class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-6 hover:border-[var(--color-border-strong)]"
-          >
-            <div class="flex items-center justify-between gap-3 mb-3">
-              <h3 class="font-display text-xl font-semibold tracking-tight">{c.name}</h3>
-              <span
-                class:list={[
-                  "arch-badge",
-                  c.accent === "blue"
-                    ? "arch-badge-blue"
-                    : c.accent === "green"
-                      ? "arch-badge-green"
-                      : "arch-badge-orange",
-                ]}
-              >
-                {c.badge}
-              </span>
-            </div>
-            <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed">{c.body}</p>
-          </article>
-        ))
-      }
-    </div>
-  </section>
-
-  <!-- Example use case — the interactive flow demo stays on the landing page. -->
-  <section class="border-y border-[var(--color-border)] bg-[var(--color-bg-surface)]" data-reveal id="example">
-    <div class="max-w-5xl mx-auto px-4 py-16 md:py-20">
-      <p class="flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
-        <Icon name="workflow" size={14} class="text-[var(--color-brand)]" /> Example
+    <div class="max-w-3xl">
+      <h1
+        class="text-balance text-[clamp(1.75rem,7vw,2.125rem)] font-semibold leading-[1.08] tracking-tighter text-[var(--color-fg)] sm:text-[2.75rem] lg:text-[3.25rem]"
+      >
+        The self-hosted agent platform for any LLM provider and any sandbox
+      </h1>
+      <p
+        class="mt-5 max-w-xl text-pretty text-base leading-relaxed text-[var(--color-fg-muted)] sm:text-lg"
+      >
+        Run your own agents on any model, in any sandbox. Deploy to Cloudflare
+        Workers, or run it yourself with Docker.
       </p>
-      <h2 class="font-display text-3xl md:text-4xl font-bold mb-4 text-center tracking-tight">
-        See it run
-      </h2>
-      <p class="text-center text-[var(--color-fg-muted)] max-w-2xl mx-auto mb-12 leading-relaxed">
-        Pick a use case, see its trigger → agent → result pipeline and a terminal
-        demo of how to wire it — including the local bridge relay and K8s.
-      </p>
-      <div class="hero-visual hero-visual-band">
-        <WiredFlows client:load />
-      </div>
-    </div>
-  </section>
 
-  <!-- Explore — compact links into the deep-dive pages split off this page. -->
-  <section class="max-w-5xl mx-auto px-4 py-16 md:py-20" data-reveal id="explore">
-    <p class="flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
-      <Icon name="grid" size={14} class="text-[var(--color-brand)]" /> Explore
-    </p>
-    <h2 class="font-display text-3xl md:text-4xl font-bold mb-4 text-center tracking-tight">
-      Dig deeper
-    </h2>
-    <p class="text-center text-[var(--color-fg-muted)] max-w-2xl mx-auto mb-12 leading-relaxed">
-      The details live on their own pages — pick a thread to pull.
-    </p>
-    <div class="grid sm:grid-cols-2 gap-5">
-      {
-        explore.map((e) => (
-          <a
-            href={e.href}
-            data-lift
-            class="block rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-6 no-underline hover:no-underline hover:border-[var(--color-border-strong)]"
-          >
-            <div class="flex items-center gap-2.5 mb-2">
-              <Icon name={e.icon} size={18} class="text-[var(--color-brand)]" />
-              <h3 class="font-display text-lg font-semibold tracking-tight text-[var(--color-fg)]">{e.title}</h3>
-              <span class="ml-auto text-[var(--color-fg-subtle)]">→</span>
-            </div>
-            <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed">{e.body}</p>
-          </a>
-        ))
-      }
-    </div>
-  </section>
-
-  <!-- Get started -->
-  <section class="border-t border-[var(--color-border)] bg-[var(--color-bg-surface)]" data-reveal id="get-started">
-    <div class="max-w-3xl mx-auto px-4 py-16 md:py-20 text-center">
-      <Logo size={64} class="block mx-auto mb-6 text-[var(--color-brand)]" />
-      <h2 class="font-display text-3xl font-bold mb-3 tracking-tight">Get started</h2>
-      <p class="text-[var(--color-fg-muted)] mb-8 leading-relaxed">
-        Clone, deploy, or try the hosted deployment of the same codebase.
-      </p>
-      <div class="flex items-center justify-center gap-3 flex-wrap">
+      <div class="mt-8 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <a
           href="https://github.com/duyet/oma"
           target="_blank"
           rel="noopener noreferrer"
-          class="inline-flex items-center gap-2 px-5 py-3 rounded-md bg-[var(--color-brand)] text-[var(--color-brand-fg)] font-medium font-display no-underline hover:no-underline hover:bg-[var(--color-brand-hover)] transition-colors"
-          ><Icon name="download" size={16} /> Clone the repo</a
+          class={btnPrimary}><Icon name="download" size={16} /> Clone the repo</a
         >
-        <a
-          href="https://docs.oma.duyet.net"
-          class="inline-flex items-center gap-2 px-5 py-3 rounded-md border border-[var(--color-border-strong)] font-medium font-display no-underline hover:no-underline hover:bg-[var(--color-bg-surface)] transition-colors"
+        <a href="https://docs.oma.duyet.net" class={btnOutline}
           ><Icon name="book" size={16} /> Read the docs</a
         >
+      </div>
+
+      <p class="mt-6 text-sm text-[var(--color-fg-subtle)]">
+        Apache 2.0 · self-hostable · no vendor lock-in
+      </p>
+    </div>
+  </section>
+
+  {/* Primitives — the four objects that carry the whole model, as a compact
+      four-up card row. Tighter than before: no banded fills, reduced padding. */}
+  <section class={section} data-reveal id="what-is-oma">
+    <div class={container}>
+      <header class="mb-6 sm:mb-8">
+        <p class={eyebrow}>Product</p>
+        <h2 class={sectionTitle}>What Open Managed Agents is</h2>
+        <p class={sectionIntro}>
+          A platform for running agent fleets, not a chat UI. Four primitives
+          carry the whole model.
+        </p>
+      </header>
+      <div class="grid gap-4 sm:grid-cols-2">
+        {
+          concepts.map((c) => (
+            <article
+              data-lift
+              class="rounded-xl border border-border bg-[var(--color-card)] p-5"
+            >
+              <h3 class="text-lg font-semibold tracking-tight text-[var(--color-fg)]">
+                {c.name}
+              </h3>
+              <p class="mt-2 text-sm leading-relaxed text-[var(--color-fg-muted)]">
+                {c.body}
+              </p>
+            </article>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  {/* Example — the interactive use-case flow demo. */}
+  <section class={section} data-reveal id="example">
+    <div class={container}>
+      <header class="mb-6 sm:mb-8">
+        <p class={eyebrow}>Example</p>
+        <h2 class={sectionTitle}>See it run</h2>
+        <p class={sectionIntro}>
+          Pick a use case and follow its trigger → agent → result pipeline,
+          including the local bridge relay, Kubernetes, and the browser sandbox.
+        </p>
+      </header>
+      <WiredFlows client:load />
+    </div>
+  </section>
+
+  {/* Building blocks — Skills, MCP, Artifacts: what an agent wires together. */}
+  <BuildingBlocks />
+
+  {/* Anatomy — the durable request path, now an interactive walkthrough that
+      explains what actually runs at each step. It autoplays, pauses on hover,
+      and click-to-pin lets you read a step in full. The replayable event log
+      is what makes a crashed turn resumable. */}
+  <section class={section} data-reveal id="architecture">
+    <div class={container}>
+      <header class="mb-6 sm:mb-8">
+        <p class={eyebrow}>Anatomy</p>
+        <h2 class={sectionTitle}>What one request touches</h2>
+        <p class={sectionIntro}>
+          Every message runs the same durable path. The session's append-only
+          event log records it, the harness drives the model loop, tools execute
+          in the sandbox, and the outbound proxy injects vault credentials the
+          sandbox never sees.
+        </p>
+      </header>
+      <RequestFlowInteractive client:load />
+    </div>
+  </section>
+
+  {/* Reach — any provider in, any sandbox out. */}
+  <section class={section} data-reveal id="reach">
+    <div class={container}>
+      <header class="mb-6 sm:mb-8">
+        <p class={eyebrow}>Reach</p>
+        <h2 class={sectionTitle}>Any model, any sandbox</h2>
+        <p class={sectionIntro}>
+          The control plane is the constant. Point it at Anthropic, any
+          OpenAI-compatible gateway, or your own model; run tools on Cloudflare
+          Containers, Kubernetes, an OpenShell bridge, a WASM VM in a browser
+          tab, your own machine over the CLI, or a micro-VM vendor. In the
+          middle, one durable spine owns context, state, and memory — so the
+          session survives whichever model or sandbox you swap in.
+        </p>
+      </header>
+      <ProviderFan />
+    </div>
+  </section>
+
+  {/* Layers — the three routing layers the fan routes across: control plane,
+      the sandbox platform, and AnyRouter models. Bare viz, no border/scroll. */}
+  <section class={section} data-reveal id="layers">
+    <div class={container}>
+      <header class="mb-6 sm:mb-8">
+        <p class={eyebrow}>Layers</p>
+        <h2 class={sectionTitle}>Control plane → Sandbox platform → AnyRouter models</h2>
+        <p class={sectionIntro}>
+          The interchangeability in the fan above is real because these three
+          layers are independently swappable: OMA's durable spine (context, state,
+          memory) lives in the control plane, your pick of sandbox runs the tools,
+          and AnyRouter routes the model calls — swap any layer without touching
+          the others.
+        </p>
+      </header>
+      <ControlPlaneFlow />
+    </div>
+  </section>
+
+  {/* Explore — links into the deep-dive pages split off this page. */}
+  <section class={section} data-reveal id="explore">
+    <div class={container}>
+      <header class="mb-6 sm:mb-8">
+        <p class={eyebrow}>Explore</p>
+        <h2 class={sectionTitle}>Dig deeper</h2>
+        <p class={sectionIntro}>
+          The details live on their own pages — pick a thread to pull.
+        </p>
+      </header>
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {
+          explore.map((e) => (
+            <a
+              href={e.href}
+              data-lift
+              class="block rounded-xl border border-border bg-[var(--color-card)] p-5 no-underline hover:no-underline"
+            >
+              <div class="mb-2 flex items-center gap-2.5">
+                <Icon name={e.icon} size={18} class="text-[var(--color-brand)]" />
+                <h3 class="text-base font-semibold tracking-tight text-[var(--color-fg)]">
+                  {e.title}
+                </h3>
+                <span class="ml-auto text-[var(--color-fg-subtle)]">→</span>
+              </div>
+              <p class="text-sm leading-relaxed text-[var(--color-fg-muted)]">{e.body}</p>
+            </a>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  {/* Get started */}
+  <section class={section} data-reveal id="get-started">
+    <div class:list={[container, "text-center"]}>
+      <Logo size={56} class="mx-auto mb-6 block text-[var(--color-brand)]" />
+      <h2 class="text-[1.6rem] font-semibold tracking-tighter text-[var(--color-fg)] sm:text-2xl">
+        Get started
+      </h2>
+      <p class="mx-auto mt-2 max-w-md text-pretty text-sm leading-relaxed text-[var(--color-fg-muted)] sm:text-base">
+        Clone, deploy, or try the hosted deployment of the same codebase.
+      </p>
+      <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
         <a
-          href="https://app.oma.duyet.net/login"
-          class="inline-flex items-center gap-2 px-5 py-3 rounded-md border border-[var(--color-border-strong)] font-medium font-display no-underline hover:no-underline hover:bg-[var(--color-bg-surface)] transition-colors"
+          href="https://github.com/duyet/oma"
+          target="_blank"
+          rel="noopener noreferrer"
+          class={btnPrimary}><Icon name="download" size={16} /> Clone the repo</a
+        >
+        <a href="https://docs.oma.duyet.net" class={btnOutline}
+          ><Icon name="book" size={16} /> Read the docs</a
+        >
+        <a href="https://app.oma.duyet.net/login" class={btnOutline}
           ><Icon name="server" size={16} /> Try hosted</a
         >
       </div>

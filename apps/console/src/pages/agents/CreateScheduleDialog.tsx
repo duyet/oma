@@ -12,7 +12,10 @@ interface Props {
   open: boolean;
   onClose: () => void;
   agent: Agent;
-  /** Fired after a successful create so the list can refresh. */
+  /** When set, the dialog opens in edit mode: fields prefill from this
+   *  schedule and submit goes out as a PATCH instead of a POST. */
+  schedule?: AgentSchedule | null;
+  /** Fired after a successful create/update so the list can refresh. */
   onCreated: (schedule: AgentSchedule) => void;
 }
 
@@ -20,12 +23,18 @@ const inputCls =
   "w-full border border-border rounded-md px-3 py-2 min-h-11 sm:min-h-0 text-sm bg-bg text-fg outline-none focus:border-brand transition-colors placeholder:text-fg-subtle";
 
 /**
- * Create Schedule modal — mirrors CreateDeploymentDialog's shape but scoped
- * to the simpler agent-schedule contract (cron + timezone + environment +
- * input, no vaults/memory/version pinning — see AGENTS.md "Agent Schedules").
+ * Create/Edit Schedule modal — mirrors CreateDeploymentDialog's shape but
+ * scoped to the simpler agent-schedule contract (cron + timezone +
+ * environment + input, no vaults/memory/version pinning — see AGENTS.md
+ * "Agent Schedules"). Edit mode is driven by the optional `schedule` prop:
+ * when set, fields prefill from it and submit PATCHes
+ * `/v1/agents/:agentId/schedules/:scheduleId` (widened in WP1 to accept
+ * any of enabled/cron_expression/input/environment_id/timezone/
+ * max_sessions) instead of POSTing a new row.
  */
-export function CreateScheduleDialog({ open, onClose, agent, onCreated }: Props) {
+export function CreateScheduleDialog({ open, onClose, agent, schedule, onCreated }: Props) {
   const { api } = useApi();
+  const isEdit = !!schedule;
 
   const [cron, setCron] = useState("0 9 * * 1");
   const [timezone, setTimezone] = useState("UTC");
@@ -36,13 +45,21 @@ export function CreateScheduleDialog({ open, onClose, agent, onCreated }: Props)
 
   useEffect(() => {
     if (!open) return;
-    setCron("0 9 * * 1");
-    setTimezone("UTC");
-    setEnvironmentId("");
-    setInput("");
-    setMaxSessions("1");
+    if (schedule) {
+      setCron(schedule.cron_expression);
+      setTimezone(schedule.timezone || "UTC");
+      setEnvironmentId(schedule.environment_id);
+      setInput(schedule.input);
+      setMaxSessions(String(schedule.max_sessions ?? 1));
+    } else {
+      setCron("0 9 * * 1");
+      setTimezone("UTC");
+      setEnvironmentId("");
+      setInput("");
+      setMaxSessions("1");
+    }
     setSubmitting(false);
-  }, [open]);
+  }, [open, schedule]);
 
   const canSubmit =
     cron.trim().length > 0 && environmentId.length > 0 && input.trim().length > 0;
@@ -58,12 +75,18 @@ export function CreateScheduleDialog({ open, onClose, agent, onCreated }: Props)
         input: input.trim(),
         max_sessions: Number(maxSessions) || 1,
       };
-      const created = await api<AgentSchedule>(`/v1/agents/${agent.id}/schedules`, {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-      onCreated(created);
-      toast.success("Schedule created");
+      const result =
+        isEdit && schedule
+          ? await api<AgentSchedule>(`/v1/agents/${agent.id}/schedules/${schedule.id}`, {
+              method: "PATCH",
+              body: JSON.stringify(body),
+            })
+          : await api<AgentSchedule>(`/v1/agents/${agent.id}/schedules`, {
+              method: "POST",
+              body: JSON.stringify(body),
+            });
+      onCreated(result);
+      toast.success(isEdit ? "Schedule updated" : "Schedule created");
       onClose();
     } catch {
       // api() already toasts the error.
@@ -76,8 +99,12 @@ export function CreateScheduleDialog({ open, onClose, agent, onCreated }: Props)
     <Modal
       open={open}
       onClose={onClose}
-      title="Create schedule"
-      subtitle="Fire this agent as a fresh session on a cron cadence — no human turn required."
+      title={isEdit ? "Edit schedule" : "Create schedule"}
+      subtitle={
+        isEdit
+          ? "Update this schedule's cron cadence, environment, or input."
+          : "Fire this agent as a fresh session on a cron cadence — no human turn required."
+      }
       maxWidth="max-w-xl"
       footer={
         <>
@@ -85,7 +112,7 @@ export function CreateScheduleDialog({ open, onClose, agent, onCreated }: Props)
             Cancel
           </Button>
           <Button onClick={submit} disabled={!canSubmit || submitting} loading={submitting}>
-            Create schedule
+            {isEdit ? "Save changes" : "Create schedule"}
           </Button>
         </>
       }

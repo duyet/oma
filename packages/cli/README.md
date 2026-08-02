@@ -94,6 +94,14 @@ Once paired, the machine appears on the Console's **Sandbox Runtime** page and c
 
 `bridge status` reports the local daemon's health alongside the server probe: whether the background process is running and currently connected, how fresh its last heartbeat is, its uptime, and the workspaces it's authorized to run agents for. It also lists the **running sessions** on this machine's runtime — session id, agent name, status, and started/last-activity age — with a clickable dashboard link (`<server>/sessions/<id>`) and an `oma sessions tail <id>` hint per row. The daemon keeps its connection alive with a 25s heartbeat, drops and reconnects (with jittered backoff) if the server stops responding, and survives transient network loss without killing in-flight conversations.
 
+### Where relayed sandbox ops run
+
+By default those ops run **directly on the paired machine** (`/bin/sh` in a per-session workdir): the agent sees your real files, toolchains, and CLI auth, with no isolation — that's the point of a local environment.
+
+If you run an [OpenShell](https://github.com/NVIDIA/OpenShell) gateway on the same machine, you can have them run inside an OpenShell sandbox instead — isolated, with gateway-enforced egress, but **empty**: none of your repos or installed tools are visible. It's opt-in only; `bridge setup` offers it when it detects a gateway, or set `BRIDGE_SANDBOX_BACKEND=openshell` (plus `OPENSHELL_GATEWAY_ENDPOINT`) for the daemon. `bridge status` shows the active backend and, for OpenShell, whether the gateway is reachable.
+
+This changes **only** sandbox-op execution — local ACP agents (Claude Code and friends) still spawn on the host either way. Two known limitations: the relay carries no environment config, so OMA's environment→policy mapping isn't applied (the gateway's own default policy governs egress), and a daemon crash leaves boxes behind on the gateway.
+
 ## Environment variables
 
 | Var | Purpose |
@@ -101,6 +109,10 @@ Once paired, the machine appears on the Console's **Sandbox Runtime** page and c
 | `OMA_BASE_URL` | API base (default `https://app.oma.duyet.net`) |
 | `OMA_API_KEY` | API key — overrides stored credentials when set |
 | `XDG_CONFIG_HOME` | Base dir for credentials (default `~/.config`) |
+| `BRIDGE_SANDBOX_BACKEND` | `subprocess` (default) or `openshell` — where the bridge daemon runs relayed sandbox ops |
+| `OPENSHELL_GATEWAY_ENDPOINT` | OpenShell gateway `host:port` (default `127.0.0.1:8080`) |
+| `OPENSHELL_TOKEN` / `OPENSHELL_IMAGE` | Gateway bearer token / sandbox image |
+| `OPENSHELL_GATEWAY_TLS`, `..._CA_PATH`, `..._CERT_PATH`, `..._KEY_PATH` | TLS / mTLS material for the gateway channel |
 
 Stored credentials live at `~/.config/oma/credentials.json`.
 

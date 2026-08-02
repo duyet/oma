@@ -1,14 +1,34 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import type { Env } from "@duyet/oma-shared";
 import { generateFileId, fileR2Key, sessionOutputsPrefix } from "@duyet/oma-shared";
 import { toFileRecord, FileNotFoundError } from "@duyet/oma-files-store";
 import type { Services } from "@duyet/oma-services";
 import { checkUploadFreq, checkUploadSize } from "../quotas";
+import { parseBetaHeader } from "../lib/beta-header";
 
-const app = new Hono<{
+interface FilesHonoEnv {
   Bindings: Env;
   Variables: { tenant_id: string; services: Services };
-}>();
+}
+
+const app = new Hono<FilesHonoEnv>();
+
+/**
+ * AMA Files API beta flag. `client.beta.files.upload()` from
+ * `@anthropic-ai/sdk` sends `anthropic-beta: files-api-2025-04-14` (plus the
+ * `?beta=true` query). When present (or `?beta=true`), OMA treats the upload
+ * as an artifact-producing call: the file is stored `downloadable: true` so
+ * the same AMA caller can round-trip it via `client.beta.files.download()`,
+ * and the response is shaped as Anthropic's `FileMetadata` (`mime_type` /
+ * `scope` object) alongside the OMA-native `media_type` / `scope_id`.
+ */
+export const FILES_API_BETA = "files-api-2025-04-14";
+
+function isAmaFilesRequest(c: Context<FilesHonoEnv>): boolean {
+  return parseBetaHeader(c).has(FILES_API_BETA) || c.req.query("beta") === "true";
+}
+
 
 // ─── Session-outputs synthesis ──────────────────────────────────────
 //
@@ -71,9 +91,14 @@ interface ApiFileRecord {
   type: "file";
   filename: string;
   media_type: string;
+  /** Anthropic SDK alias of `media_type` (`FileMetadata.mime_type`). */
+  mime_type?: string;
   size_bytes: number;
   created_at: string;
-  scope?: { type: "session"; id: string };
+  /** OMA-native scoping session id (when the file is session-scoped). */
+  scope_id?: string;
+  /** Anthropic SDK alias of `scope_id` (object form). */
+  scope?: { type: "session"; id: string } | null;
   downloadable?: boolean;
 }
 
@@ -86,13 +111,16 @@ async function listSessionOutputAsFiles(
   const list = await bucket.list({ prefix, limit: 1000 });
   return list.objects.map((o: R2Object) => {
     const filename = o.key.slice(prefix.length);
+    const mediaType = o.httpMetadata?.contentType || guessOutputMime(filename);
     return {
       id: encodeOutputId(sessionId, filename),
       type: "file" as const,
       filename,
-      media_type: o.httpMetadata?.contentType || guessOutputMime(filename),
+      media_type: mediaType,
+      mime_type: mediaType,
       size_bytes: o.size,
       created_at: o.uploaded.toISOString(),
+      scope_id: sessionId,
       scope: { type: "session" as const, id: sessionId },
       downloadable: true,
     };
@@ -116,7 +144,11 @@ app.post("/", async (c) => {
   let mediaType: string;
   let body: ArrayBuffer;
   let scopeId: string | undefined;
-  let downloadable = false;
+  // AMA files are uploaded via `client.beta.files.upload()` (or
+  // `?beta=true`) and are meant to be retrieved again as artifacts, so mark
+  // them downloadable. Non-AMA (e.g. Console) uploads keep OMA's default of
+  // opaque, non-downloadable input files unless the caller opts in.
+  let downloadable = isAmaFilesRequest(c);
 
   const contentType = c.req.header("content-type") || "";
 
@@ -231,6 +263,10 @@ app.get("/", async (c) => {
     has_more: hasMore,
     first_id: data[0]?.id,
     last_id: data[data.length - 1]?.id,
+    // Anthropic SDK Family B list schema: `next_page` is `string | null`.
+    // The AMA files pager actually paginates via `after_id`/`last_id` (see
+    // core/pagination.js), so null here just satisfies strict validators.
+    next_page: null,
   });
 });
 
@@ -248,13 +284,16 @@ app.get("/:id", async (c) => {
     const r2Key = `${sessionOutputsPrefix(t, decoded.sessionId)}${decoded.filename}`;
     const head = await bucket.head(r2Key);
     if (!head) return c.json({ error: "File not found" }, 404);
+    const mediaType = head.httpMetadata?.contentType || guessOutputMime(decoded.filename);
     const record: ApiFileRecord = {
       id,
       type: "file",
       filename: decoded.filename,
-      media_type: head.httpMetadata?.contentType || guessOutputMime(decoded.filename),
+      media_type: mediaType,
+      mime_type: mediaType,
       size_bytes: head.size,
       created_at: head.uploaded.toISOString(),
+      scope_id: decoded.sessionId,
       scope: { type: "session", id: decoded.sessionId },
       downloadable: true,
     };

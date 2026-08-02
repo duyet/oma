@@ -285,13 +285,21 @@ describe("buildAnyRouterRoutes — model card bind (#136)", () => {
       expect(secondBody.presets[0].id).toBe("pre_1");
     });
 
-    it("an old-shape cache entry (no presets field) yields presets []", async () => {
+    it("a fresh models cache + fresh presets cache serve both from cache", async () => {
       const { app, kv } = makeApp({ withModelCards: true });
+      // Pre-populate both caches for this tenant.
       await kv.put(
         "anyrouter:models_cache",
         JSON.stringify({
           fetchedAt: Date.now(),
           models: [{ id: "openai/gpt-5", raw: { id: "openai/gpt-5" } }],
+        }),
+      );
+      await kv.put(
+        "anyrouter:presets_cache:tenant-1",
+        JSON.stringify({
+          fetchedAt: Date.now(),
+          presets: [{ id: "pre_1", slug: "fast-coder", name: "Fast Coder", raw: {} }],
         }),
       );
 
@@ -303,7 +311,37 @@ describe("buildAnyRouterRoutes — model card bind (#136)", () => {
       };
       expect(body.cached).toBe(true);
       expect(body.data).toHaveLength(1);
-      expect(body.presets).toEqual([]);
+      expect(body.data[0].id).toBe("openai/gpt-5");
+      expect(body.presets).toHaveLength(1);
+      expect((body.presets[0] as { id: string }).id).toBe("pre_1");
+    });
+
+    it("does not serve presets from the global models cache", async () => {
+      // Pre-populate ONLY the global models cache (simulating a cache entry
+      // that previously bundled presets). With the old global cache, this
+      // would return cached:true with whatever presets were in the entry.
+      // Now presets live in a separate per-tenant cache, so a models-cache-
+      // only hit is NOT sufficient — the endpoint must refetch.
+      const { app, kv } = makeApp({ withModelCards: true });
+      await kv.put(
+        "anyrouter:models_cache",
+        JSON.stringify({
+          fetchedAt: Date.now(),
+          models: [{ id: "openai/gpt-5", raw: { id: "openai/gpt-5" } }],
+          // NOTE: no presets in this entry — the old format bundled them
+          // here, but the new split cache never reads presets from this key.
+        }),
+      );
+      // No credential for this tenant → findCredential returns null.
+      // The endpoint should NOT return cached:true (presets cache is empty),
+      // it should try upstream and return connect_required.
+      const res = await app.request("/v1/providers/anyrouter/models");
+      const body = (await res.json()) as {
+        connect_required?: boolean;
+        cached?: boolean;
+      };
+      expect(body.connect_required).toBe(true);
+      expect(body.cached).toBeUndefined();
     });
   });
 

@@ -27,7 +27,7 @@
  */
 
 import { mkdir, readFile, writeFile, chmod } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { paths } from "./platform.js";
 
@@ -191,6 +191,39 @@ export async function deleteCreds(): Promise<void> {
   } catch (e: unknown) {
     if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
   }
+}
+
+/**
+ * Daemon settings — non-secret, user-chosen daemon behavior. Kept in a
+ * separate `settings.json` next to (never inside) `credentials.json` so
+ * rotating credentials can't clobber the user's choices and vice versa.
+ * Absent file = all defaults.
+ */
+export interface DaemonSettings {
+  /** Which substrate executes relayed sandbox ops. See lib/sandbox-backend.ts. */
+  sandboxBackend?: "subprocess" | "openshell";
+  /** OpenShell gateway endpoint (`host:port`) when sandboxBackend=openshell. */
+  openshellEndpoint?: string;
+}
+
+function settingsFile(): string {
+  return join(dirname(paths().credsFile), "settings.json");
+}
+
+export async function readSettings(): Promise<DaemonSettings | null> {
+  try {
+    return JSON.parse(await readFile(settingsFile(), "utf-8")) as DaemonSettings;
+  } catch (e: unknown) {
+    // A corrupt settings file must never stop the daemon — defaults win.
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return null;
+    return null;
+  }
+}
+
+export async function writeSettings(settings: DaemonSettings): Promise<void> {
+  const file = settingsFile();
+  await mkdir(dirname(file), { recursive: true, mode: 0o700 });
+  await writeFile(file, JSON.stringify(settings, null, 2), { mode: 0o600 });
 }
 
 /**

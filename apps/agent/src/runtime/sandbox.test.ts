@@ -18,6 +18,7 @@ import {
   SandboxProviderUnavailableError,
 } from "./sandbox";
 import { BridgeRelaySandbox } from "./bridge-relay";
+import { BrowserVmRelaySandbox } from "./browser-vm-relay";
 
 // @cloudflare/sandbox is aliased to test/sandbox-stub.ts in vitest.config.ts
 // — getSandbox() there ignores its arguments, so any object satisfies the
@@ -133,6 +134,12 @@ describe("resolveCfSandbox", () => {
       expect(sandbox).toBeInstanceOf(BridgeRelaySandbox);
     },
   );
+
+  it("resolves the browser-vm provider to a BrowserVmRelaySandbox (relayed to a browser tab)", () => {
+    const sandbox = resolveCfSandbox(baseEnv, "sess_1", { sandbox_provider: "browser-vm" }, "tenant_1");
+    expect(sandbox).toBeInstanceOf(BrowserVmRelaySandbox);
+    expect(sandbox).not.toBeInstanceOf(BridgeRelaySandbox);
+  });
 });
 
 describe("createSandbox", () => {

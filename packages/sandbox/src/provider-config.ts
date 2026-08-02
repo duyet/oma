@@ -207,6 +207,15 @@ export const SYSTEM_PROVIDERS: SystemProviderDescriptor[] = [
     cfCompatible: true,
     capabilities: ["exec", "files"],
   },
+  {
+    type: "browser-vm",
+    label: "Browser VM (WASM)",
+    description: "Agent sandbox running as a WASM VM (WebContainers / CheerpX) inside a user's browser tab. Relayed over the RuntimeRoom WebSocket — zero server-side sandbox compute.",
+    envKeys: [],
+    factoryPath: "@duyet/oma-sandbox/adapters/browser-vm",
+    cfCompatible: true,
+    capabilities: ["exec", "files"],
+  },
 ];
 
 // ─── Cloudflare-side classification ──────────────────────────────────
@@ -254,6 +263,9 @@ export function classifyCfSandboxProvider(
   if (!id || id === "cloud") return { kind: "cloudflare" };
   // Local subprocess environments relay to a paired bridge runtime.
   if (id === "subprocess" || id === "local") return { kind: "bridge", type: "subprocess" };
+  // Browser VM environments relay to a user's browser tab over the
+  // RuntimeRoom WebSocket — same relay shape as subprocess, different peer.
+  if (id === "browser-vm") return { kind: "bridge", type: "browser-vm" };
   const desc = SYSTEM_PROVIDERS.find((p) => p.type === id);
   if (!desc) return { kind: "cloudflare" };
   return desc.cfCompatible ? { kind: "remote", type: id } : { kind: "unavailable", type: id };
@@ -270,8 +282,10 @@ export function seedSystemProviders(
   const providers: SandboxProviderConfig[] = [];
 
   for (const desc of SYSTEM_PROVIDERS) {
-    // subprocess and cloud are always available
-    if (desc.type === "subprocess" || desc.type === "cloud") {
+    // subprocess, cloud, and browser-vm are always available — like
+    // subprocess, browser-vm needs no env key: reachability is a runtime
+    // question (is a paired tab online?), answered per-op by the relay.
+    if (desc.type === "subprocess" || desc.type === "cloud" || desc.type === "browser-vm") {
       providers.push({
         id: desc.type,
         type: desc.type,

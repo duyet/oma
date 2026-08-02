@@ -7,7 +7,7 @@ const faqItems = [
   {
     question: "Which sandbox providers work on the Cloudflare deployment?",
     answer:
-      "Cloudflare Containers work out of the box. BoxRun, k8s-remote, OpenShell, and subprocess (via the bridge relay) also work on Cloudflare — each talks to a remote control plane over plain fetch, since a Worker can't spawn processes or speak gRPC. Daytona and E2B are outbound-HTTP-only in principle but not yet wired into the Worker bundle. LiteBox, raw Kubernetes, and Docker Compose need Node builtins or a Docker socket, so they only run on the self-hosted Node runtime.",
+      "Cloudflare Containers work out of the box. BoxRun, k8s-remote, OpenShell, and subprocess (via the bridge relay) also work on Cloudflare — each talks to a remote control plane over plain fetch, since a Worker can't spawn processes or speak gRPC. Browser VM relays sandbox ops to a WASM Linux VM running in your own browser tab — zero server compute, opened with one click from the Console. Daytona and E2B are outbound-HTTP-only in principle but not yet wired into the Worker bundle. LiteBox, raw Kubernetes, and Docker Compose need Node builtins or a Docker socket, so they only run on the self-hosted Node runtime.",
   },
   {
     question: "Do credentials ever reach the sandbox?",
@@ -82,7 +82,7 @@ const schemas = [
               href="https://docs.oma.duyet.net"
               target="_blank"
               rel="noopener noreferrer"
-              class="px-5 py-3 rounded-md bg-[var(--color-fg)] text-[var(--color-bg)] font-medium"
+              class="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-2xl border border-transparent text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px bg-primary text-primary-foreground hover:bg-primary/80 [&_svg:not([class*=size-])]:size-4"
             >
               Read the docs
             </a>
@@ -90,7 +90,7 @@ const schemas = [
               href="https://github.com/duyet/oma"
               target="_blank"
               rel="noopener noreferrer"
-              class="px-5 py-3 rounded-md border border-[var(--color-border)] font-medium"
+              class="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-2xl border border-border bg-background text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px hover:bg-muted hover:text-foreground dark:bg-transparent dark:hover:bg-input/30 [&_svg:not([class*=size-])]:size-4"
             >
               Star on GitHub
             </a>

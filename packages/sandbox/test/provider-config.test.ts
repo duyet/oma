@@ -10,6 +10,7 @@ import {
   SYSTEM_PROVIDERS,
   parseOpenShellMode,
   resolveDefaultLocalSandboxProvider,
+  seedSystemProviders,
 } from "../src/provider-config";
 
 describe("classifyCfSandboxProvider", () => {
@@ -52,6 +53,13 @@ describe("classifyCfSandboxProvider", () => {
     },
   );
 
+  it.each(["browser-vm", "BROWSER-VM", " browser-vm "])(
+    "classifies browser-vm provider %s as bridge-relayed",
+    (id) => {
+      expect(classifyCfSandboxProvider(id)).toEqual({ kind: "bridge", type: "browser-vm" });
+    },
+  );
+
   it("trims whitespace before classifying", () => {
     expect(classifyCfSandboxProvider("  boxrun  ")).toEqual({ kind: "remote", type: "boxrun" });
   });
@@ -72,6 +80,7 @@ describe("classifyCfSandboxProvider", () => {
       "github-actions": true,
       "remote-agent": true,
       openshell: true,
+      "browser-vm": true,
     });
   });
 
@@ -162,5 +171,17 @@ describe("resolveDefaultLocalSandboxProvider", () => {
     );
     expect(result.providerId).toBe("subprocess");
     expect(probe).not.toHaveBeenCalled();
+  });
+});
+
+describe("seedSystemProviders", () => {
+  it("always seeds browser-vm (no env key required, like subprocess)", () => {
+    const seeded = seedSystemProviders({});
+    const types = seeded.map((p) => p.type);
+    expect(types).toContain("browser-vm");
+    expect(types).toContain("subprocess");
+    expect(types).toContain("cloud");
+    const bv = seeded.find((p) => p.type === "browser-vm");
+    expect(bv?.isSystem).toBe(true);
   });
 });

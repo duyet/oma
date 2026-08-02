@@ -17,3 +17,16 @@ export interface AgentSchedule {
   created_at: string;
   updated_at: string;
 }
+
+/** One `agent_schedule_runs` row — history of a schedule's firings, as
+ *  returned by `GET /v1/agents/:agentId/schedules/:scheduleId/runs`
+ *  (cursor-paginated, `(created_at, id) DESC`). */
+export interface ScheduleRun {
+  id: string;
+  session_id: string | null;
+  status: string;
+  error?: string | null;
+  summary?: string | null;
+  started_at: string | null;
+  created_at: string;
+}

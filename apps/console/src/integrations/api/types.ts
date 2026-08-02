@@ -227,6 +227,21 @@ export interface GitHubInstallation {
   created_at: number;
 }
 
+/** Live GitHub-side detail for one connected account. Read through to GitHub
+ *  on demand (`GET /v1/integrations/github/installations/:id/detail`) — not
+ *  persisted, so it always reflects the current grant. */
+export interface GitHubInstallationDetail {
+  /** Permission name → level ("read" | "write" | "admin"). */
+  permissions: Record<string, string>;
+  repositorySelection: "all" | "selected";
+  /** ISO-8601 install timestamp from GitHub, when it reports one. */
+  installedAt: string | null;
+  repoCount: number;
+  /** "owner/name" for the first page of accessible repos (up to 100). */
+  repos: string[];
+  htmlUrl: string;
+}
+
 export interface GitHubPublication {
   id: string;
   user_id: string;

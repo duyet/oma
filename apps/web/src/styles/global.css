@@ -6,68 +6,90 @@
    ring-bg) are never generated and borders fall back to currentColor. */
 @source "../../../../packages/fit-diagram/src";
 
-/* Brand fonts: Geist (Vercel) — same family Cursor.com ships. Self-hosted
-   via @fontsource-variable so there's no external font request and the
-   marketing site matches the console's type. Geist Sans for everything,
-   Geist Mono for code / terminal / ASCII art. */
-@import "@fontsource-variable/geist/index.css";
-@import "@fontsource-variable/geist-mono/index.css";
+/* Brand fonts — matched to AnyRouter's type stack: Inter Variable for all
+   text, JetBrains Mono for code / terminal / ASCII art, Instrument Serif
+   for italic display accents. Self-hosted via fontsource, no external
+   font request. */
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+@import "@fontsource/instrument-serif/latin-400.css";
+@import "@fontsource/instrument-serif/latin-400-italic.css";
+
+/* Metric-compatible fallback for Inter Variable so the font-display:swap
+   repaint is size-stable (values match next/font's Inter fallback). */
+@font-face {
+  font-family: "Inter Fallback";
+  src: local("Arial");
+  ascent-override: 90.44%;
+  descent-override: 22.52%;
+  line-gap-override: 0.00%;
+  size-adjust: 107.12%;
+}
+
+@custom-variant dark (&:is(.dark *));
 
 /* ===========================================================================
-   Design system — 2026 redesign.
+   Design system — AnyRouter/shadcn alignment (preset b1HXwyDE8).
 
-   Prior identity leaned warm-craft (cream #faf9f5 ground, terracotta #d97757
-   chrome, soft pill cards) which read as an Anthropic clone. New identity is a
-   neutral, engineering-tool language: a zinc greyscale ground, a single
-   near-mono primary (ink in light, paper in dark), crisp 1px hairline borders,
-   tight radii, and restrained shadows. The three warm/cool hues (orange, blue,
-   green) survive ONLY as *functional* data-viz accents inside the interactive
-   architecture diagram, lifecycle, badges and use-case tabs — never as page
-   chrome. Type voice stays Geist (the neutral grotesk shadcn/Vercel ship).
+   The shadcn preset (bottom of this file) is the single source of truth:
+   neutral scale + amber primary oklch(0.555 0.163 49), radius 0.625rem,
+   Inter Variable type. The legacy site tokens (bg/fg/brand/…) used across
+   every page are aliased onto those shadcn variables here so the whole
+   site restyles from one token set. */
+@theme inline {
+  --font-sans: "Inter Variable", "Inter Fallback", ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-sans);
+  --font-serif: "Instrument Serif", Georgia, serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 
-   Retired warm anchors kept here for reference (and so the palette history is
-   greppable): ink #141413, paper #faf9f5, stone #b0aea5, sand #e8e6dc,
-   orange #d97757, blue #6a9bcc, green #788c5d. */
+  /* Legacy aliases → shadcn preset variables. */
+  --color-bg: var(--background);
+  --color-bg-surface: var(--muted);
+  --color-bg-elevated: var(--secondary);
+  --color-fg: var(--foreground);
+  --color-fg-muted: var(--legacy-fg-muted);
+  --color-fg-subtle: var(--muted-foreground);
+  --color-border-strong: var(--legacy-border-strong);
+
+  /* Brand = shadcn primary (amber). */
+  --color-brand: var(--primary);
+  --color-brand-hover: var(--legacy-brand-hover);
+  --color-brand-subtle: var(--legacy-brand-subtle);
+  --color-brand-fg: var(--primary-foreground);
+
+  /* Functional data-viz accents — diagrams/badges/tabs only. Remapped onto
+     the shadcn chart ramp (amber family) + cool complements. */
+  --color-dv-accent: var(--chart-3);
+  --color-accent-subtle: var(--legacy-accent-subtle);
+  --color-blue: var(--legacy-blue);
+  --color-blue-subtle: var(--legacy-blue-subtle);
+  --color-green: var(--legacy-green);
+  --color-green-subtle: var(--legacy-green-subtle);
+
+  /* Status dot colors for the shared @duyet/oma-fit-diagram component. */
+  --color-success: var(--legacy-success);
+  --color-warning: var(--legacy-warning);
+}
+
+:root {
+  --legacy-fg-muted: oklch(0.44 0 0);
+  --legacy-border-strong: oklch(0.87 0 0);
+  --legacy-brand-hover: var(--chart-5);
+  --legacy-brand-subtle: color-mix(in oklch, var(--primary) 9%, var(--background));
+  --legacy-accent-subtle: color-mix(in oklch, var(--chart-3) 10%, var(--background));
+  --legacy-blue: #6a9bcc;
+  --legacy-blue-subtle: #eaf2f8;
+  --legacy-green: #788c5d;
+  --legacy-green-subtle: #eef1ea;
+  --legacy-success: oklch(0.596 0.145 163.2);
+  --legacy-warning: oklch(0.79 0.184 86);
+}
+
 @theme {
-  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-
-  /* Neutral ground — zinc greyscale. */
-  --color-bg: #ffffff;
-  --color-bg-surface: #fafafa;
-  --color-bg-elevated: #f4f4f5;
-  --color-fg: #18181b;
-  --color-fg-muted: #52525b;
-  --color-fg-subtle: #71717a;
-  --color-border: #e4e4e7;
-  --color-border-strong: #d4d4d8;
-
-  /* Primary — "iris", one confident ownable accent. Carries all chrome:
-     logo, links, focus ring, section-marker icons, highlight borders,
-     primary buttons. Deliberately not terracotta (the Anthropic tell) and
-     not a washed AI-purple gradient — a single saturated indigo, used flat.
-     #4f46e5 on #ffffff = 6.6:1 (AA text); #fafafa on #4f46e5 = 6.6:1. */
-  --color-brand: #4f46e5;
-  --color-brand-hover: #4338ca;
-  --color-brand-subtle: #eef2ff;
-  --color-brand-fg: #ffffff;
-
-  /* Functional data-viz accents — used inside diagrams/badges/tabs only. */
-  --color-accent: #d97757;
-  --color-accent-subtle: #fbf1ee;
-  --color-blue: #6a9bcc;
-  --color-blue-subtle: #eaf2f8;
-  --color-green: #788c5d;
-  --color-green-subtle: #eef1ea;
-
-  /* Status dot colors for the shared @duyet/oma-fit-diagram component —
-     mirrors console's --color-success/--color-warning tokens. */
-  --color-success: #22c55e;
-  --color-warning: #d97706;
-
   /* Motion tokens the shared fit-diagram (and its card transitions)
-     reference — mirrors console's --dur-*/--ease-* values. */
+     reference — mirrors console's --dur- and --ease- values. */
   --dur-quick: 100ms;
   --dur-base: 150ms;
   --dur-slow: 220ms;
@@ -75,30 +97,53 @@
   --ease-snap: cubic-bezier(0.5, 0, 0.1, 1);
 }
 
-.dark {
-  --color-bg: #09090b;
-  --color-bg-surface: #131316;
-  --color-bg-elevated: #1c1c20;
-  --color-fg: #fafafa;
-  --color-fg-muted: #a1a1aa;
-  --color-fg-subtle: #71717a;
-  --color-border: #27272a;
-  --color-border-strong: #3f3f46;
-
-  /* Iris lifts in dark for contrast on the near-black ground:
-     #818cf8 on #09090b ≈ 8.4:1; dark ink text on the button = ~7:1. */
-  --color-brand: #818cf8;
-  --color-brand-hover: #a5b4fc;
-  --color-brand-subtle: #1e1b3a;
-  --color-brand-fg: #0b0b12;
-
-  --color-accent: #e08a68;
-  --color-accent-subtle: #2d1a15;
-  --color-blue-subtle: #16232f;
-  --color-green-subtle: #1a2016;
-
-  --color-success: #4ade80;
-  --color-warning: #f59e0b;
+/* `:root.dark`, not `.dark` — the shadcn preset appends its own `:root` token
+   block to the BOTTOM of this file. `:root` and `.dark` are both specificity
+   (0,1,0), so on `<html class="dark">` the later-declared preset `:root` won
+   every tie and silently reset all of these to their light values (dark mode
+   was fully dead sitewide). (0,2,0) wins regardless of source order, which
+   survives the preset being regenerated at the bottom again. */
+:root.dark {
+  --legacy-fg-muted: oklch(0.78 0 0);
+  --legacy-border-strong: oklch(1 0 0 / 18%);
+  --legacy-brand-hover: var(--chart-3);
+  --legacy-brand-subtle: color-mix(in oklch, var(--primary) 16%, var(--background));
+  --legacy-accent-subtle: color-mix(in oklch, var(--chart-3) 14%, var(--background));
+  --legacy-blue-subtle: #16232f;
+  --legacy-green-subtle: #1a2016;
+  --legacy-success: oklch(0.696 0.17 162.5);
+  --legacy-warning: oklch(0.828 0.176 83.8);
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.473 0.137 46.201);
+  --primary-foreground: oklch(0.987 0.022 95.277);
+  --secondary: oklch(0.274 0.006 286.033);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.879 0.169 91.605);
+  --chart-2: oklch(0.769 0.188 70.08);
+  --chart-3: oklch(0.666 0.179 58.318);
+  --chart-4: oklch(0.555 0.163 48.998);
+  --chart-5: oklch(0.473 0.137 46.201);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.769 0.188 70.08);
+  --sidebar-primary-foreground: oklch(0.279 0.077 45.635);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
 }
 
 html {
@@ -196,6 +241,15 @@ code, pre, kbd, samp,
   }
   /* No hover underline — nav/footer/CTA links signal hover via color
      transitions instead; prose links are always-underlined below. */
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
 }
 
 /* Inline body links: text inherits fg (passes AA-normal at 14:1+), brand
@@ -203,16 +257,29 @@ code, pre, kbd, samp,
    subject to WCAG 1.4.3, so we get visible brand presence without using
    coral as the readable text color (which would fail 4.5:1 on white). */
 :where(p, li, dd, td, blockquote) a {
-  color: inherit;
-  text-decoration: underline;
-  text-decoration-color: var(--color-brand);
-  text-decoration-thickness: 2px;
-  text-underline-offset: 3px;
+  color: var(--color-brand);
+  font-weight: 500;
+  text-decoration: none;
   transition: color 120ms ease-out, text-decoration-color 120ms ease-out;
 }
 :where(p, li, dd, td, blockquote) a:hover {
-  color: var(--color-brand);
+  color: var(--color-brand-hover);
+  text-decoration: underline;
   text-decoration-color: var(--color-brand-hover);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
+
+/* …except in nav chrome. Footer columns and header menus are marked up as
+   <ul><li><a> too, so the `li a` half of the prose selector above was
+   underlining them — body-copy styling leaking into navigation. Those links
+   signal hover with a color transition instead (see the anchor defaults),
+   so opt them back out. Hover color is left alone: the utility classes on
+   those links out-specify this rule. */
+:where(nav, footer) :where(p, li, dd, td, blockquote) a {
+  color: inherit;
+  font-weight: inherit;
+  text-decoration: none;
 }
 
 /* Brand-colored focus ring on every interactive element. The site had no
@@ -251,6 +318,23 @@ input:focus-visible,
 .prose h1 { font-family: var(--font-display); font-size: 2rem; font-weight: 700; margin-top: 2.5rem; margin-bottom: 1rem; }
 .prose h2 { font-family: var(--font-display); font-size: 1.5rem; font-weight: 600; margin-top: 2rem; margin-bottom: 0.75rem; }
 .prose h3 { font-family: var(--font-display); font-size: 1.2rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 0.5rem; }
+/* Belt-and-suspenders for markdown-rendered links: the `:where(p, li, dd,
+   td, blockquote) a` rule below already covers most of these, but rendered
+   markdown can place an <a> outside those wrappers (e.g. a linked image).
+   No default underline; brand-colored underline appears on hover only. */
+.prose a {
+  color: var(--color-brand);
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 120ms ease-out, text-decoration-color 120ms ease-out;
+}
+.prose a:hover {
+  color: var(--color-brand-hover);
+  text-decoration: underline;
+  text-decoration-color: var(--color-brand-hover);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
 
 /* Architecture / lifecycle visualization helpers (landing page). */
 .arch-stack {
@@ -286,15 +370,15 @@ input:focus-visible,
   color: var(--color-fg);
 }
 .arch-layer + .arch-layer {
-  margin-top: 0.75rem;
+  margin-top: 1.25rem;
 }
 .arch-layer::before {
   content: "";
   position: absolute;
   left: 1.5rem;
-  top: -0.75rem;
+  top: -1.25rem;
   width: 2px;
-  height: 0.75rem;
+  height: 1.25rem;
   background: var(--color-border-strong);
 }
 .arch-layer:first-child::before {
@@ -312,10 +396,13 @@ input:focus-visible,
   border-radius: 0.3rem;
   border: 1px solid transparent;
 }
+/* `--color-accent` is shadcn's *surface* token (a near-white neutral), not a
+   foreground — using it as `color` rendered the label invisible against its
+   own subtle fill. The orange variant is the brand accent. */
 .arch-badge-orange {
-  color: var(--color-accent);
-  background: var(--color-accent-subtle);
-  border-color: color-mix(in srgb, var(--color-accent) 24%, transparent);
+  color: var(--color-brand);
+  background: var(--color-brand-subtle);
+  border-color: color-mix(in srgb, var(--color-brand) 24%, transparent);
 }
 .arch-badge-blue {
   color: var(--color-blue);
@@ -348,6 +435,24 @@ input:focus-visible,
   flex: none;
   align-self: center;
   color: var(--color-border-strong);
+}
+/* Lifecycle step cards (how-it-works page) — was rendering as plain
+   stacked blocks with no gap between them; grid + gap gives the cards
+   breathing room, matching the spacing used elsewhere on the page. */
+.lifecycle-track {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+@media (min-width: 640px) {
+  .lifecycle-track {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 1024px) {
+  .lifecycle-track {
+    grid-template-columns: repeat(5, 1fr);
+  }
 }
 /* Step number lights up in brand on hover (pairs with the data-lift). */
 .lifecycle-num {
@@ -513,70 +618,6 @@ input:focus-visible,
     grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
     gap: 3rem;
   }
-}
-.hero-pitch {
-  min-width: 0;
-}
-/* Emphasis on the headline's closing phrase. Monochrome now: the phrase
-   stays full-strength ink and picks up a thin accent underline so the
-   emphasis reads as intent, not as a colored word dropped into a headline. */
-.hero-accent {
-  color: var(--color-fg);
-  box-shadow: inset 0 -0.12em 0 color-mix(in srgb, var(--color-brand) 60%, transparent);
-}
-/* Rotating headline phrase ("any LLM provider" ⇄ "any Sandbox").
-   The .tw-rot span is driven by the shared data-rotate script in Base.astro;
-   these overrides tune the caret + phrase for display type. */
-.hero-rotate .tw-rot {
-  color: inherit;
-  font-weight: inherit;
-}
-.hero-rotate .typewriter-caret {
-  width: 0.09em;
-  height: 0.82em;
-  margin-left: 0.06em;
-  vertical-align: -0.08em;
-  background: var(--color-brand);
-  box-shadow: none;
-}
-/* Primary CTA row in the hero pitch. */
-.hero-cta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-top: 2rem;
-}
-
-/* Proof chips: compact, scannable differentiators under the CTAs. No
-   bullets, soft pill borders, mono label so they share the terminal
-   vocabulary. */
-.hero-chips {
-  list-style: none;
-  /* Top margin lives here (not a Tailwind utility) — this component class
-     loads after the utilities layer and would silently override mt-*. Sits
-     directly under the CTA row, so the gap is tighter than the CTA's own. */
-  margin: 1.25rem 0 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-.hero-chips li {
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--color-fg-muted);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-surface);
-  padding: 0.28rem 0.6rem;
-  border-radius: 0.3rem;
-}
-
-.hero-visual {
-  min-width: 0;
-  display: flex;
-  justify-content: center;
 }
 
 /* ── Hero use-case flow diagrams ─────────────────────────────────────────
@@ -817,24 +858,6 @@ input:focus-visible,
   color: var(--color-fg-subtle);
 }
 
-/* Typewriter caret for the rotating tagline in the hero. */
-.typewriter-caret {
-  display: inline-block;
-  width: 0.55ch;
-  height: 1.05em;
-  background: var(--color-accent);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--color-accent) 55%, transparent);
-  animation: tw-blink 1.05s steps(1, end) infinite;
-}
-@keyframes tw-blink {
-  50% { opacity: 0; }
-}
-
-/* Typewriter rotate: the terminal prompt's verb cycles through a list of
-   verbs pulled from the element's data-rotate JSON. Pure CSS can't swap text,
-   so a tiny inline script (Base.astro) drives .tw-rot; this just styles it. */
-.tw-rot { color: var(--color-fg); font-weight: 600; }
-
 /* Pixel-art sandbox fleet — small icons row in the fleet section, given a
    subtle brand halo so the band feels like part of the same system. */
 .pixel-fleet {
@@ -856,14 +879,12 @@ input:focus-visible,
   color: var(--color-fg-subtle);
 }
 
-/* Reduced-motion: kill the blink / caret / scanline animation, keep static
-   art. The reveal observer already has its own reduced-motion guard. */
+/* Reduced-motion: kill the scanline animation, keep static art. The reveal
+   observer already has its own reduced-motion guard. */
 @media (prefers-reduced-motion: reduce) {
-  .pa-eye,
-  .typewriter-caret {
+  .pa-eye {
     animation: none;
   }
-  .typewriter-caret { opacity: 1; }
 }
 
 /* ── Use cases: interactive tabs + animated visual ────────────────────── */
@@ -977,4 +998,316 @@ input:focus-visible,
 @media (prefers-reduced-motion: reduce) {
   .usecase-line { transition: none; opacity: 1; transform: none; }
   .usecase-progress { display: none; }
+}
+
+/* ============================================================
+   Blueprint canvas — technical-diagram framing borrowed from the
+   AnyRouter / Cloudflare "gateway" visual language. A dotted
+   measurement grid bounded by corner-bracket tick marks, so a
+   framed diagram reads as a schematic on a plate rather than a
+   floating image. Theme-aware via --color-border tokens.
+   ============================================================ */
+.blueprint-grid {
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--color-fg) 12%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 22px 22px;
+  background-position: -1px -1px;
+}
+.dark .blueprint-grid {
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--color-fg) 14%, transparent) 1px,
+    transparent 1px
+  );
+}
+
+/* Corner-bracket frame — four L-shaped ticks at the canvas corners,
+   drawn on pseudo-elements so they sit over the dotted grid without
+   affecting layout. */
+.blueprint-frame {
+  position: relative;
+}
+.blueprint-frame::before,
+.blueprint-frame::after,
+.blueprint-frame > .bp-corner-bl,
+.blueprint-frame > .bp-corner-br {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: color-mix(in srgb, var(--color-brand) 55%, transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+.blueprint-frame::before {
+  top: -1px;
+  left: -1px;
+  border-top: 1.5px solid;
+  border-left: 1.5px solid;
+}
+.blueprint-frame::after {
+  top: -1px;
+  right: -1px;
+  border-top: 1.5px solid;
+  border-right: 1.5px solid;
+}
+.blueprint-frame > .bp-corner-bl {
+  bottom: -1px;
+  left: -1px;
+  border-bottom: 1.5px solid;
+  border-left: 1.5px solid;
+}
+.blueprint-frame > .bp-corner-br {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 1.5px solid;
+  border-right: 1.5px solid;
+}
+
+/* Architecture pipeline — equal-width nodes joined by a dashed rail that
+   actually touches the glyphs.
+
+   The rail is drawn by each node's own ::before rather than as a free-standing
+   flex item. The previous .bp-wire was a sibling sized to the inter-node gap,
+   but each node was a fixed 8rem box holding a 3rem glyph — so ~2.5rem of empty
+   node padding sat between every glyph and the wire, and the connector visibly
+   floated free of the boxes. With equal-width items, ±50% resolves to the
+   neighbouring node's centre, so ±(50% ∓ 1.5rem) lands exactly on the adjacent
+   glyph edges regardless of how wide the row gets. */
+.arch-path {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  /* Keeps the pipeline legible on narrow screens — the wrapper scrolls, the
+     page does not. */
+  min-width: 42rem;
+}
+.arch-node {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  text-align: center;
+}
+.arch-node + .arch-node::before {
+  content: "";
+  position: absolute;
+  /* Half the 3rem glyph, less half the 2px rail. */
+  top: calc(1.5rem - 1px);
+  left: calc(-50% + 1.5rem);
+  right: calc(50% + 1.5rem);
+  height: 2px;
+  background-image: repeating-linear-gradient(
+    to right,
+    color-mix(in srgb, var(--color-brand) 55%, transparent) 0 6px,
+    transparent 6px 12px
+  );
+  background-size: 12px 2px;
+  background-repeat: repeat-x;
+}
+@keyframes bp-wire-flow {
+  to {
+    background-position-x: 12px;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .arch-node + .arch-node::before {
+    animation: bp-wire-flow 0.9s linear infinite;
+  }
+}
+.arch-node-glyph {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--color-brand) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-brand) 6%, var(--color-card));
+  color: var(--color-brand);
+  box-shadow: 0 1px 2px rgba(24, 24, 27, 0.05);
+}
+.arch-node-name {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-fg);
+}
+.arch-node-sub {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  line-height: 1.35;
+  color: var(--color-fg-subtle);
+}
+
+/* Deployment topology — two parallel tracks (Cloudflare vs self-host Node),
+   not a sequential pipeline: the same business logic runs either way, an
+   operator picks one. Each track is its own vertical stack of nodes; the
+   two tracks sit side by side on desktop and stack on mobile. */
+.topology-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+@media (min-width: 768px) {
+  .topology-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.topology-track {
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  background: var(--color-bg);
+  padding: 1.25rem;
+}
+.topology-track-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.topology-nodes {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.topology-node {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  background: var(--color-bg-surface);
+}
+.topology-node-glyph {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.4rem;
+  border: 1px solid color-mix(in srgb, var(--color-brand) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-brand) 6%, var(--color-card));
+  color: var(--color-brand);
+}
+.topology-node-name {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-fg);
+}
+.topology-node-sub {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--color-fg-subtle);
+}
+/* Vertical dashed connector between stacked nodes, same visual language as
+   .arch-node's horizontal rail. */
+.topology-node + .topology-node {
+  position: relative;
+  margin-top: 1.1rem;
+}
+.topology-node + .topology-node::before {
+  content: "";
+  position: absolute;
+  top: -1.1rem;
+  left: 1.75rem;
+  width: 2px;
+  height: 1.1rem;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--color-brand) 55%, transparent) 0 5px,
+    transparent 5px 10px
+  );
+}
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: 'Inter Variable', sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.555 0.163 48.998);
+  --primary-foreground: oklch(0.987 0.022 95.277);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.879 0.169 91.605);
+  --chart-2: oklch(0.769 0.188 70.08);
+  --chart-3: oklch(0.666 0.179 58.318);
+  --chart-4: oklch(0.555 0.163 48.998);
+  --chart-5: oklch(0.473 0.137 46.201);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.666 0.179 58.318);
+  --sidebar-primary-foreground: oklch(0.987 0.022 95.277);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
 }
