@@ -67,7 +67,7 @@ const explore = [
 
 <Base
   title="oma — Open Managed Agents: self-hosted agent platform for any LLM provider and any sandbox"
-  description="oma (Open Managed Agents) is an open-source, self-hostable agent platform — durable sessions, sandboxed execution, MCP tools — that runs on any LLM provider (Anthropic, OpenAI-compatible gateways, or your own model) and any sandbox platform (Cloudflare Containers, Kubernetes, E2B, Daytona, subprocess, or a WASM VM in your browser tab), on Cloudflare Workers or Docker."
+  description="oma (Open Managed Agents) is an open-source, self-hostable agent platform — durable sessions, sandboxed execution, MCP tools — that runs on any LLM provider (Anthropic, OpenAI-compatible gateways, or your own model) and any sandbox platform (Cloudflare Containers, Kubernetes, E2B, Daytona, subprocess, a WASM VM in your browser tab, or a Cloudflare Worker isolate), on Cloudflare Workers or Docker."
   canonical="/"
   keywords="open managed agents, oma agent platform, self host ai agent, any llm provider agent platform, byok ai agent, claude agent sdk, mcp server host, ai agent cloudflare workers, self host claude code, claude code skills, claude managed agents alternative, claude tag alternative, open source claude tag"
   schemas={schemas}
@@ -192,7 +192,8 @@ const explore = [
           The control plane is the constant. Point it at Anthropic, any
           OpenAI-compatible gateway, or your own model; run tools on Cloudflare
           Containers, Kubernetes, an OpenShell bridge, a WASM VM in a browser
-          tab, your own machine over the CLI, or a micro-VM vendor. In the
+          tab, your own machine over the CLI, a micro-VM vendor, or a
+          Cloudflare Worker isolate for pure code-eval ("Code Mode"). In the
           middle, one durable spine owns context, state, and memory — so the
           session survives whichever model or sandbox you swap in.
         </p>
