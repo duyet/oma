@@ -477,6 +477,7 @@ because a Worker is a single-file V8 isolate with no filesystem, no
 | `"openshell"` | Works — the OpenShell gateway is gRPC-only (a Worker can't speak gRPC), so CF talks to a **k8s-bridge running its OpenShell backend** (`BRIDGE_BACKEND=openshell`) over plain `fetch`, reusing the same `K8sBridgeSandbox` client as `k8s-bridge`. Requires `OPENSHELL_BRIDGE_URL` (`wrangler secret put`; optional `OPENSHELL_BRIDGE_TOKEN`); missing it fails clearly with a `session.error` (parity with boxrun's missing-`BOXRUN_URL`). The self-host Node path keeps speaking gRPC to the gateway directly. **Limitation:** memory-store / session-outputs mounts aren't available over the HTTP API — like boxrun and k8s-remote. |
 | `"daytona"` / `"e2b"` | Outbound-HTTP-only in principle (no Node builtins), but **not yet wired on Cloudflare** — their driver SDKs (`@daytonaio/sdk`, `e2b`) aren't bundled into the Worker. Selecting either fails clearly with a `session.error`; both already work on the self-host Node runtime. |
 | `"subprocess"` (alias `"local"`) | Works **via the bridge relay** when the tenant has a paired machine online. A Worker can't spawn `child_process`, so each sandbox op (exec, read/write files, setEnvVars, destroy) is relayed to the tenant's most-recently-heartbeated `oma bridge daemon` over the RuntimeRoom DO WebSocket, executed on that machine, and streamed back — the sandbox sibling of the ACP agent relay. Enable it by running `npx @getoma/cli bridge setup` on the machine; no `wrangler secret`. When no runtime is online, the first sandbox op fails clearly with a `session.error` ("no bridge runtime connected — run `bridge setup`…"). **Limitations:** no outbound vault-credential MITM proxy on the user's machine (outbound HTTP is un-injected), and memory-store / session-outputs mounts aren't wired. See `BridgeRelaySandbox` (`apps/agent/src/runtime/bridge-relay.ts`) and `BridgeSandboxManager` (`packages/cli/src/bridge/lib/bridge-sandbox.ts`). |
+| `"browser-vm"` | Works **via the RuntimeRoom relay** to a browser tab hosting a WASM VM — the tab twin of the `subprocess` bridge daemon. The user opens `GET /sandbox-tab` (Console → Runtimes → "Open sandbox tab"), which pairs as a runtime with `kind: "browser-vm"` and services sandbox ops against an in-tab engine (v86 by default; WebContainers/CheerpX are BYO-license). No online tab ⇒ the first op fails clearly with a `session.error`. **Limitations:** no vault outbound MITM from the tab, no memory-store / session-outputs mounts, networking is engine-proxied (no raw TCP). See `docs/browser-vm-sandbox.md` and `BrowserVmRelaySandbox` (`apps/agent/src/runtime/browser-vm-relay.ts`). |
 | `"litebox"` / `"k8s"` / `"docker-compose"` | Node-only (a native micro-VM binding, local kubeconfig/filesystem access, or a Docker socket) — cannot run in a Worker at all, and no relay path. Selecting one fails clearly with a `session.error` explaining to use the self-host runtime instead. |
 
 See `classifyCfSandboxProvider` (`packages/sandbox/src/provider-config.ts`)
@@ -994,6 +995,32 @@ Use it:
 
 The platform handles everything else — tool construction, skill mounting, sandbox lifecycle, event persistence, crash recovery, and WebSocket broadcasting.
 
+### Poolside models (`harness: "poolside"`)
+
+Drives a turn against a [poolside.ai](https://poolside.ai) model (the
+`laguna` / `malibu` agentic-coding family). Poolside exposes plain
+**OpenAI-compatible** `/chat/completions` inference, so `PoolsideHarness`
+extends `DefaultHarness` and swaps only the resolved model — the tool loop,
+compaction, and event emission are entirely the default harness's. It is
+pure `fetch` (no Node builtins), so it is registered on **both** runtimes.
+
+```json
+{
+  "name": "Poolside coder",
+  "model": "poolside/laguna-s-2.1",
+  "system": "You are a careful coding assistant.",
+  "tools": [{ "type": "agent_toolset_20260401" }],
+  "harness": "poolside"
+}
+```
+
+`POOLSIDE_API_KEY` is required (mint one at platform.poolside.ai);
+`POOLSIDE_BASE_URL` defaults to `https://inference.poolside.ai/v1` and should
+be set to `https://<api-domain>/openai/v1` when pointing at a self-hosted
+poolside deployment. `agent.model` is passed through verbatim, including the
+`provider/model` prefix. Poolside's separate `pool` ACP coding agent is not
+this harness — drive that through `acp-proxy` + a local runtime binding.
+
 ### Local ACP Runtime (`harness: "acp-proxy"`)
 
 Instead of running in OMA's cloud sandbox, an agent can delegate its whole
@@ -1120,10 +1147,22 @@ An explicit Model Card always wins over both. See
 `resolveModelCardCredentials` in `apps/agent/src/runtime/session-do.ts`.
 
 The `claude-agent-sdk` harness (self-host Node only — see
-[Custom Harness](#custom-harness)) authenticates its CLI subprocess
-independently: `ANTHROPIC_API_KEY`, or `CLAUDE_CODE_OAUTH_TOKEN` (minted via
+[Custom Harness](#custom-harness)) resolves its CLI subprocess's model +
+credentials per-agent (issue #316): when `agent.model` matches a **model
+card** handle (or `metadata.model_card_id` pins one), that card's `model`,
+API key and `base_url` are exported into the spawned CLI for the turn
+(`ANTHROPIC_API_KEY` / `ANTHROPIC_BASE_URL` / `ANTHROPIC_MODEL`, plus the
+SDK's own `model` option). The card's provider must be Anthropic-wire
+(`ant` / `ant-compatible` — `anthropic` normalizes to `ant`); an
+`oai` / `oai-compatible` card **fails the turn** with an explicit
+`session.error` rather than silently falling back, because the Claude Code
+CLI speaks only the Anthropic `/v1/messages` format. When no card resolves,
+it falls back to the deployment's global env exactly as before:
+`ANTHROPIC_API_KEY`, or `CLAUDE_CODE_OAUTH_TOKEN` (minted via
 `claude setup-token`) when that's unset — the CI/CD alternative for
-non-interactive deploys.
+non-interactive deploys — plus `ANTHROPIC_BASE_URL`. Resolution lives in
+`apps/main-node/src/lib/claude-sdk-model.ts` (card lookup) and
+`apps/agent/src/harness/claude-agent-sdk/model.ts` (pure env mapping).
 
 ### Connecting AnyRouter (one-click, no pasted key)
 
@@ -1301,14 +1340,17 @@ curl -s $BASE/v1/agents/$AGENT_ID/schedules \
 | `timezone` | No | IANA zone, default `UTC` — DST-correct next-run math (via `croner`) |
 | `max_sessions` | No | Concurrency cap 1–100, default 1 |
 | `enabled` | No | Default true |
+| `notify` | No | Per-schedule alert config — `{ on?, targets }`. See [Per-schedule alerts](#per-schedule-alerts) |
 
 Routes (all tenant-scoped):
 
 ```http
 POST   /v1/agents/:agentId/schedules                    # Create (201)
 GET    /v1/agents/:agentId/schedules                    # List
+PATCH  /v1/agents/:agentId/schedules/:scheduleId        # Partial update
 DELETE /v1/agents/:agentId/schedules/:scheduleId        # Delete
 POST   /v1/agents/:agentId/schedules/:scheduleId/run    # Run now → {status:"queued", next_run_at}
+GET    /v1/agents/:agentId/schedules/:scheduleId/runs   # Durable run history — cursor-paginated
 ```
 
 `next_run_at` is seeded at create from the cron + timezone and advanced to the
@@ -1317,6 +1359,67 @@ ticks or replicas never double-fire. Each firing records
 `last_run_at` / `last_run_status` / `last_run_error` / `last_session_id`; a
 failing run is fail-open (logged, next occurrence still scheduled). An
 unparseable cron leaves `next_run_at` null and the schedule never fires.
+
+### Per-schedule alerts
+
+A schedule can raise its own alerts, independent of the agent's `notify`
+(which fires for *every* session that agent runs). Set `notify` on the
+schedule with the same [`NotificationTarget`](#notify-targets) shapes:
+
+```json
+{
+  "notify": {
+    "on": ["error", "skipped_concurrency"],
+    "targets": [
+      { "type": "slack_message", "credential_id": "cred_xxx", "channel": "C123" }
+    ]
+  }
+}
+```
+
+- **`on`** filters which firing outcomes alert — any of `ok` | `error` |
+  `skipped_concurrency`. **When omitted it defaults to
+  `["error", "skipped_concurrency"]`**: the two outcomes an operator usually
+  wants paged about. Success alerts are opt-in via an explicit `on`.
+- The filter is applied **before** dispatch, in the tick
+  (`shouldNotifyRun`), so it is independent of a `webhook` target's own
+  `events` filter — that enum stays session-only and schedule deliveries
+  bypass it.
+- Deliveries reuse the agent runtime's notify dispatcher, so a schedule
+  firing surfaces as a `schedule_ok` / `schedule_error` /
+  `schedule_skipped` status ("Scheduled run succeeded", …) and a `webhook`
+  envelope gains a trailing `schedule_id` field (appended last, so existing
+  receivers' signature reproduction is unchanged).
+- Credentials resolve across the **tenant's vaults** (a schedule has no
+  `vault_ids` of its own). Alerting is purely observational and fail-open —
+  an unresolvable credential or a dead endpoint is logged and never affects
+  the firing. `PATCH` with `"notify": null` clears the config.
+
+### Run history
+
+`agent_schedules`' `last_run_*` columns only ever hold the *latest* firing —
+they don't answer "what happened over the last week." Every firing (a normal
+success, a launch error, or a `skipped_concurrency` skip) also appends an
+immutable row to `agent_schedule_runs` (`srun_*` ids, issue #312 WP3):
+`schedule_id`, `tenant_id`, `agent_id`, `session_id`, `status`, `error`,
+`summary`, `started_at`, `created_at`. History writes are best-effort — a
+failed INSERT is logged and swallowed so it can never break `last_run_*`
+recording or the tick's concurrency gate.
+
+`GET /v1/agents/:agentId/schedules/:scheduleId/runs` reads it back, following
+the repo's standard cursor contract: `WHERE schedule_id = ? AND tenant_id = ?`,
+ordered `(created_at, id) DESC`, opaque `next_cursor`, `{ data, next_cursor }`
+response shape (`buildScheduleRoutes` in
+`packages/http-routes/src/schedules/index.ts`). `summary` is currently always
+`null` — a nullable slot reserved for a follow-up that fills in a short
+human-readable description of what the run did.
+
+`PATCH` takes any subset of `cron_expression` / `input` / `environment_id` /
+`timezone` / `max_sessions` / `enabled` (at least one required; empty body →
+400). When `cron_expression` or `timezone` is in the patch, `next_run_at` is
+recomputed atomically in the same request from the new value (or the
+existing row's, for the field not patched) — same seeding logic as create,
+including the "unparseable cron → null → never fires" fallback.
 
 Fires on **both runtimes** (issue #262). Cloudflare evaluates the tick via
 the per-minute cron in `apps/main/src/lib/cf-scheduler-jobs.ts`; the self-host
@@ -1517,7 +1620,7 @@ it's unit-testable without a Durable Object) and never throws back into the
 session loop — a misconfigured target is logged and skipped, it never blocks the
 session.
 
-Four target variants:
+Target variants:
 
 ```json
 { "type": "github_comment", "credential_id": "cred_xxx", "owner": "acme", "repo": "widgets", "issue_number": 7 }
@@ -1530,6 +1633,39 @@ Four target variants:
 ```json
 { "type": "matrix_message", "credential_id": "cred_xxx", "homeserver_url": "https://matrix.example.com", "room_id": "!room:example.com" }
 ```
+
+```json
+{ "type": "telegram_message", "chat_id": -1001234567890 }
+```
+
+### `email` — transactional email (issue #317)
+
+Delivers the same status summary every other provider renders, as an email:
+
+```json
+{ "type": "email", "to": "ops@example.com", "subject_prefix": "[oma]" }
+```
+
+- **`to`** is zod-validated as an email address; **`subject_prefix`** is
+  optional and prepended to the generated subject
+  (`<prefix> Agent "<name>" session <id>: <status>`). The body carries the
+  shared summary line, the final agent message when present, and the session
+  deep link.
+- **No vault credential.** Unlike `github_comment` / `slack_message` /
+  `matrix_message`, email auth is the *deployment's* email transport — the same
+  `packages/email` seam the auth magic-links and tenant invites use:
+  **Cloudflare** = the `SEND_EMAIL` Email Workers binding (declared on both the
+  `main` and `agent` workers); **self-host Node** = SMTP via nodemailer
+  (`SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM`).
+- **Fail-open.** With no transport configured (binding unbound, or `SMTP_HOST`
+  unset) the delivery is skipped and a warning is logged through the same
+  `onError` sink as any other target failure — it never throws into the session
+  loop or a scheduler tick.
+- **Runtime coverage.** Fires from the session-status fan-out (Cloudflare
+  `SessionDO`) and from per-schedule run alerts on **both** runtimes. Node has
+  no session-status notify fan-out at all yet (not email-specific — no target
+  type fires there), so on self-host today `email` reaches you via schedule
+  alerts.
 
 ### `webhook` — generic outbound webhook
 

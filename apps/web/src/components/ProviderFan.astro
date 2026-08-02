@@ -1,0 +1,383 @@
+---
+// "Any model, any sandbox" — OMA's core pitch drawn as a fan schematic in the
+// AnyRouter / Cloudflare "gateway" visual language: LLM providers fan in on the
+// left, the control plane sits in the middle, sandbox providers fan out on the
+// right. The hub is not a black box — it shows the durable spine the platform
+// owns across every model/sandbox swap: context (window packing), state (the
+// append-only event log), and memory (mounted stores). Edges carry an animated
+// dashed flow + a traveling packet dot; all motion is CSS and reduced-motion
+// gated (the dot rests at the source node).
+
+// Hub geometry — a tall rounded plate centered on the diagram's mid-line so the
+// fan edges enter/exit at a single vertical point.
+const HUB = { x: 300, w: 160, cy: 180 };
+const HUB_RIGHT = HUB.x + HUB.w; // 460
+
+// Brand marks — same single-path catalog as @duyet/oma-fit-diagram's
+// ProviderMark (Simple Icons CC0 wordmarks + lucide ISC glyphs), inlined here
+// so the Astro SVG can drop each into a node without a React island. `mode`
+// picks fill (wordmarks) vs stroke (line glyphs); `color` tints legibly on
+// both themes (omit → inherits the node's text tone via currentColor).
+const MARK: Record<string, { mode: "fill" | "stroke"; path: string; color?: string }> = {
+  anthropic: {
+    mode: "fill",
+    path: "M17.3041 3.541h-3.6718l6.696 16.918H24Zm-10.6082 0L0 20.459h3.7442l1.3693-3.5527h7.0052l1.3693 3.5528h3.7442L10.5363 3.541Zm-.3712 10.2632 2.2914-5.9456 2.2914 5.9456Z",
+  },
+  openai: {
+    mode: "fill",
+    path: "M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7473-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.1419.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z",
+  },
+  anyrouter: {
+    mode: "stroke",
+    path: "M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22M2 6h1.9c1.5 0 2.9.9 3.6 2.2M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8M18 2l4 4-4 4M18 14l4 4-4 4",
+  },
+  cloudflare: {
+    mode: "fill",
+    color: "#F38020",
+    path: "M16.5088 16.8447c.1475-.5068.0908-.9707-.1553-1.3154-.2246-.3164-.6045-.499-1.0615-.5205l-8.6592-.1123a.1559.1559 0 0 1-.1333-.0713c-.0283-.042-.0351-.0986-.021-.1553.0278-.084.1123-.1484.2036-.1562l8.7359-.1123c1.0351-.0489 2.1601-.8868 2.5537-1.9136l.499-1.3013c.0215-.0561.0293-.1128.0147-.168-.5625-2.5463-2.835-4.4453-5.5499-4.4453-2.5039 0-4.6284 1.6177-5.3876 3.8614-.4927-.3658-1.1187-.5625-1.794-.499-1.2026.119-2.1665 1.083-2.2861 2.2856-.0283.31-.0069.6128.0635.894C1.5683 13.171 0 14.7754 0 16.752c0 .1748.0142.3515.0352.5273.0141.083.0844.1475.1689.1475h15.9814c.0909 0 .1758-.0645.2032-.1553l.12-.4268zm2.7568-5.5634c-.0771 0-.1611 0-.2383.0112-.0566 0-.1054.0415-.127.0976l-.3378 1.1744c-.1475.5068-.0918.9707.1543 1.3164.2256.3164.6055.498 1.0625.5195l1.8437.1133c.0557 0 .1055.0263.1329.0703.0283.043.0351.1074.0214.1562-.0283.084-.1132.1485-.204.1553l-1.921.1123c-1.041.0488-2.1582.8867-2.5527 1.914l-.1406.3585c-.0283.0713.0215.1416.0986.1416h6.5977c.0771 0 .1474-.0489.169-.126.1122-.4082.1757-.837.1757-1.2803 0-2.6025-2.125-4.727-4.7344-4.727",
+  },
+  kubernetes: {
+    mode: "fill",
+    color: "#326CE5",
+    path: "M10.204 14.35l.007.01-.999 2.413a5.171 5.171 0 0 1-2.075-2.597l2.578-.437.004.005a.44.44 0 0 1 .484.606zm-.833-2.129a.44.44 0 0 0 .173-.756l.002-.011L7.585 9.7a5.143 5.143 0 0 0-.73 3.255l2.514-.725.002-.009zm1.145-1.98a.44.44 0 0 0 .699-.337l.01-.005.15-2.62a5.144 5.144 0 0 0-3.01 1.442l2.147 1.523.004-.002zm.76 2.75l.723.349.722-.347.18-.78-.5-.623h-.804l-.5.623.179.779zm1.5-3.095a.44.44 0 0 0 .7.336l.008.003 2.134-1.513a5.188 5.188 0 0 0-2.992-1.442l.148 2.615.002.001zm10.876 5.97l-5.773 7.181a1.6 1.6 0 0 1-1.248.594l-9.261.003a1.6 1.6 0 0 1-1.247-.596l-5.776-7.18a1.583 1.583 0 0 1-.307-1.34L2.1 5.573c.108-.47.425-.864.863-1.073L11.305.513a1.606 1.606 0 0 1 1.385 0l8.345 3.985c.438.209.755.604.863 1.073l2.062 8.955c.108.47-.005.963-.308 1.34zm-3.289-2.057c-.042-.01-.103-.026-.145-.034-.174-.033-.315-.025-.479-.038-.35-.037-.638-.067-.895-.148-.105-.04-.18-.165-.216-.216l-.201-.059a6.45 6.45 0 0 0-.105-2.332 6.465 6.465 0 0 0-.936-2.163c.052-.047.15-.133.177-.159.008-.09.001-.183.094-.282.197-.185.444-.338.743-.522.142-.084.273-.137.415-.242.032-.024.076-.062.11-.089.24-.191.295-.52.123-.736-.172-.216-.506-.236-.745-.045-.034.027-.08.062-.111.088-.134.116-.217.23-.33.35-.246.25-.45.458-.673.609-.097.056-.239.037-.303.033l-.19.135a6.545 6.545 0 0 0-4.146-2.003l-.012-.223c-.065-.062-.143-.115-.163-.25-.022-.268.015-.557.057-.905.023-.163.061-.298.068-.475.001-.04-.001-.099-.001-.142 0-.306-.224-.555-.5-.555-.275 0-.499.249-.499.555l.001.014c0 .041-.002.092 0 .128.006.177.044.312.067.475.042.348.078.637.056.906a.545.545 0 0 1-.162.258l-.012.211a6.424 6.424 0 0 0-4.166 2.003 8.373 8.373 0 0 1-.18-.128c-.09.012-.18.04-.297-.029-.223-.15-.427-.358-.673-.608-.113-.12-.195-.234-.329-.349-.03-.026-.077-.062-.111-.088a.594.594 0 0 0-.348-.132.481.481 0 0 0-.398.176c-.172.216-.117.546.123.737l.007.005.104.083c.142.105.272.159.414.242.299.185.546.338.743.522.076.082.09.226.1.288l.16.143a6.462 6.462 0 0 0-1.02 4.506l-.208.06c-.055.072-.133.184-.215.217-.257.081-.546.11-.895.147-.164.014-.305.006-.48.039-.037.007-.09.02-.133.03l-.004.002-.007.002c-.295.071-.484.342-.423.608.061.267.349.429.645.365l.007-.001.01-.003.129-.029c.17-.046.294-.113.448-.172.33-.118.604-.217.87-.256.112-.009.23.069.288.101l.217-.037a6.5 6.5 0 0 0 2.88 3.596l-.09.218c.033.084.069.199.044.282-.097.252-.263.517-.452.813-.091.136-.185.242-.268.399-.02.037-.045.095-.064.134-.128.275-.034.591.213.71.248.12.556-.007.69-.282v-.002c.02-.039.046-.09.062-.127.07-.162.094-.301.144-.458.132-.332.205-.68.387-.897.05-.06.13-.082.215-.105l.113-.205a6.453 6.453 0 0 0 4.609.012l.106.192c.086.028.18.042.256.155.136.232.229.507.342.84.05.156.074.295.145.457.016.037.043.09.062.129.133.276.442.402.69.282.247-.118.341-.435.213-.71-.02-.039-.045-.096-.065-.134-.083-.156-.177-.261-.268-.398-.19-.296-.346-.541-.443-.793-.04-.13.007-.21.038-.294-.018-.022-.059-.144-.083-.202a6.499 6.499 0 0 0 2.88-3.622c.064.01.176.03.213.038.075-.05.144-.114.28-.104.266.039.54.138.87.256.154.06.277.128.448.173.036.01.088.019.13.028l.009.003.007.001c.297.064.584-.098.645-.365.06-.266-.128-.537-.423-.608zM16.4 9.701l-1.95 1.746v.005a.44.44 0 0 0 .173.757l.003.01 2.526.728a5.199 5.199 0 0 0-.108-1.674A5.208 5.208 0 0 0 16.4 9.7zm-4.013 5.325a.437.437 0 0 0-.404-.232.44.44 0 0 0-.372.233h-.002l-1.268 2.292a5.164 5.164 0 0 0 3.326.003l-1.27-2.296h-.01zm1.888-1.293a.44.44 0 0 0-.27.036.44.44 0 0 0-.214.572l-.003.004 1.01 2.438a5.15 5.15 0 0 0 2.081-2.615l-2.6-.44-.004.005z",
+  },
+  openshell: {
+    mode: "fill",
+    color: "#76B900",
+    path: "M8.948 8.798v-1.43a6.7 6.7 0 0 1 .424-.018c3.922-.124 6.493 3.374 6.493 3.374s-2.774 3.851-5.75 3.851c-.398 0-.787-.062-1.158-.185v-4.346c1.528.185 1.837.857 2.747 2.385l2.04-1.714s-1.492-1.952-4-1.952a6.016 6.016 0 0 0-.796.035m0-4.735v2.138l.424-.027c5.45-.185 9.01 4.47 9.01 4.47s-4.08 4.964-8.33 4.964c-.37 0-.733-.035-1.095-.097v1.325c.3.035.61.062.91.062 3.957 0 6.82-2.023 9.593-4.408.459.371 2.34 1.263 2.73 1.652-2.633 2.208-8.772 3.984-12.253 3.984-.335 0-.653-.018-.971-.053v1.864H24V4.063zm0 10.326v1.131c-3.657-.654-4.673-4.46-4.673-4.46s1.758-1.944 4.673-2.262v1.237H8.94c-1.528-.186-2.73 1.245-2.73 1.245s.68 2.412 2.739 3.11M2.456 10.9s2.164-3.197 6.5-3.533V6.201C4.153 6.59 0 10.653 0 10.653s2.35 6.802 8.948 7.42v-1.237c-4.84-.6-6.492-5.936-6.492-5.936z",
+  },
+  "browser-vm": {
+    mode: "stroke",
+    path: "M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2ZM2 9h20M6 6.5h.01M9 6.5h.01",
+  },
+  cli: { mode: "stroke", path: "m4 17 6-6-6-6M12 19h8" },
+  e2b: { mode: "stroke", color: "#F97316", path: "M9 4H5v16h4M15 4h4v16h-4" },
+};
+
+// LLM providers fan in on the left (right edge of a node = x=165).
+const LEFT = [
+  { y: 88, name: "Anthropic", sub: "claude-*", mark: "anthropic" },
+  { y: 180, name: "OpenAI-compatible", sub: "/chat/completions", mark: "openai" },
+  { y: 272, name: "AnyRouter · BYOK", sub: "provider/model", mark: "anyrouter" },
+];
+
+// Sandbox providers fan out on the right (left edge of a node = x=595). The
+// full matrix OMA resolves per-environment — Cloudflare's default plus every
+// relay/bridge path.
+// Ordered so the two families stay contiguous for the group frames below:
+// cloud-provisioned infra on top, user-hardware relays at the bottom.
+const RIGHT = [
+  { y: 50, name: "Cloudflare", sub: "Containers", mark: "cloudflare" },
+  { y: 102, name: "Kubernetes", sub: "pod-per-session", mark: "kubernetes" },
+  { y: 154, name: "OpenShell", sub: "gRPC bridge", mark: "openshell" },
+  { y: 206, name: "E2B · Daytona", sub: "micro-VMs", mark: "e2b" },
+  // extra gap here separates the two family frames
+  { y: 288, name: "Browser VM", sub: "WASM tab", mark: "browser-vm" },
+  { y: 340, name: "CLI · subprocess", sub: "your machine", mark: "cli" },
+];
+
+// Two families of sandbox host, framed as labeled groups on the right. `from`
+// /`to` are node indices into RIGHT (inclusive); the box spans their rows.
+const NODE_H = 44;
+const RIGHT_GROUPS = [
+  { label: "Cloud · provisioned", from: 0, to: 3 },
+  { label: "Your hardware · relay", from: 4, to: 5 },
+];
+
+// What the control plane owns regardless of model or sandbox — rendered as
+// stacked pills inside the hub.
+const SPINE = [
+  { label: "context", sub: "packing" },
+  { label: "state", sub: "event log" },
+  { label: "memory", sub: "/mnt stores" },
+];
+
+// Node anchor rails — where left/right nodes meet the hub's fan edges. These
+// stay fixed regardless of node width: LEFT nodes grow away from the hub
+// (their right edge stays pinned to LEFT_EDGE_X), RIGHT nodes grow away from
+// the hub too (their left edge stays pinned to RIGHT_EDGE_X) — so widening a
+// box to fit its label never has to touch the hub or edge geometry.
+const LEFT_EDGE_X = 165;
+const RIGHT_EDGE_X = 595;
+
+// The hub rect (x:300..460, y:104..256). Every edge now terminates at a
+// distinct point along the hub's left/right edge instead of all piling onto
+// the vertical center — that single change is what makes the fan read as a
+// real fan-in / fan-out rather than three lines stacked on one pixel.
+const HUB_TOP = 104;
+const HUB_BOT = 256; // HUB_TOP + 152
+const hubExitY = (i: number, n: number) => {
+  const pad = 16; // keep the connection point off the hub's rounded caps
+  const span = HUB_BOT - HUB_TOP - pad * 2;
+  return HUB_TOP + pad + (n > 1 ? (i / (n - 1)) * span : span / 2);
+};
+
+// Cubic edge from a left node's right edge into the hub's left edge, landing
+// at a spread hub-edge point (hy) rather than the center.
+const leftEdge = (y: number, hy: number) =>
+  `M${LEFT_EDGE_X} ${y} C220 ${y} 280 ${hy} ${HUB.x} ${hy}`;
+// Cubic edge from the hub's right edge out to a right node's left edge.
+const rightEdge = (hy: number, y: number) =>
+  `M${HUB_RIGHT} ${hy} C520 ${hy} 560 ${y} ${RIGHT_EDGE_X} ${y}`;
+
+// Node box sizing. Widened from the original 150 (which let "OpenAI-compatible"
+// spill past its card) and paired with tighter internal insets so every
+// current label clears the right edge with margin — not a one-off fix for
+// that string: the same box/inset/font applies to every node on both sides.
+const NODE_W = 156;
+const LEFT_X = LEFT_EDGE_X - NODE_W;
+const LOGO_INSET = 10;
+const TEXT_INSET = 32;
+const GROUP_PAD = 12;
+
+// Hub pill geometry.
+const PILL_X = HUB.x + 12;
+const PILL_W = HUB.w - 24;
+const PILL_H = 26;
+const PILL_TOP = 144; // first pill's top
+const PILL_GAP = 6;
+---
+
+<figure class="pf">
+  <svg viewBox="0 0 772 384" class="pf-diagram" role="img" aria-label="Any LLM provider routes through the OMA control plane — which owns context, state, and memory — out to any sandbox provider">
+    <!-- Edges: one quiet track + one staggered traveler per edge. The triple
+         (rail + animated dash overlay + packet) became a clean single line so
+         the fan reads as a flow, not a tangle. Delays stagger the dots so the
+         inbound/outbound traffic feels like real concurrent requests. -->
+    {LEFT.map((n, i) => {
+      const hy = hubExitY(i, LEFT.length);
+      const d = leftEdge(n.y, hy);
+      return (
+        <g>
+          <path class="pf-edge" d={d} />
+          <circle class="pf-packet" r="2.4" style={`offset-path:path('${d}'); animation-delay: ${i * 260}ms`} />
+        </g>
+      );
+    })}
+    {RIGHT.map((n, i) => {
+      const hy = hubExitY(i, RIGHT.length);
+      const d = rightEdge(hy, n.y);
+      return (
+        <g>
+          <path class="pf-edge" d={d} />
+          <circle class="pf-packet" r="2.4" style={`offset-path:path('${d}'); animation-delay: ${i * 260}ms`} />
+        </g>
+      );
+    })}
+
+    <!-- Left column: LLM providers (logo coin + left-aligned label) -->
+    {LEFT.map((n) => {
+      const m = MARK[n.mark];
+      return (
+        <g class="pf-node">
+          <rect x={LEFT_X} y={n.y - NODE_H / 2} width={NODE_W} height={NODE_H} rx="9" />
+          <svg class="pf-logo" x={LEFT_X + LOGO_INSET} y={n.y - 9} width="18" height="18" viewBox="0 0 24 24" style={m.color ? `color:${m.color}` : undefined}>
+            <path
+              d={m.path}
+              fill={m.mode === "fill" ? "currentColor" : "none"}
+              stroke={m.mode === "stroke" ? "currentColor" : "none"}
+              stroke-width={m.mode === "stroke" ? 2 : undefined}
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <text class="pf-name" x={LEFT_X + TEXT_INSET} y={n.y - 3}>{n.name}</text>
+          <text class="pf-sub" x={LEFT_X + TEXT_INSET} y={n.y + 12}>{n.sub}</text>
+        </g>
+      );
+    })}
+
+    <!-- Hub: the control plane + the durable spine it owns -->
+    <g class="pf-hub">
+      <rect x={HUB.x} y="104" width={HUB.w} height="152" rx="14" />
+      <text class="pf-hub-name" x={HUB.x + HUB.w / 2} y="128" text-anchor="middle">control plane</text>
+      {SPINE.map((s, i) => {
+        const top = PILL_TOP + i * (PILL_H + PILL_GAP);
+        return (
+          <g class="pf-pill">
+            <rect x={PILL_X} y={top} width={PILL_W} height={PILL_H} rx="7" />
+            <text class="pf-pill-name" x={PILL_X + 10} y={top + PILL_H / 2 + 3.5}>{s.label}</text>
+            <text class="pf-pill-sub" x={PILL_X + PILL_W - 10} y={top + PILL_H / 2 + 3.5} text-anchor="end">{s.sub}</text>
+          </g>
+        );
+      })}
+    </g>
+
+    <!-- Right column: sandbox families framed as labeled groups -->
+    {RIGHT_GROUPS.map((grp) => {
+      const top = RIGHT[grp.from].y - NODE_H / 2 - 22;
+      const bottom = RIGHT[grp.to].y + NODE_H / 2 + 8;
+      return (
+        <g class="pf-group">
+          <rect x={RIGHT_EDGE_X - GROUP_PAD} y={top} width={NODE_W + GROUP_PAD * 2} height={bottom - top} rx="12" />
+          <text class="pf-group-label" x={RIGHT_EDGE_X} y={top + 14}>{grp.label}</text>
+        </g>
+      );
+    })}
+
+    <!-- Right column: sandbox providers (logo coin + left-aligned label) -->
+    {RIGHT.map((n) => {
+      const m = MARK[n.mark];
+      return (
+        <g class="pf-node">
+          <rect x={RIGHT_EDGE_X} y={n.y - NODE_H / 2} width={NODE_W} height={NODE_H} rx="9" />
+          <svg class="pf-logo" x={RIGHT_EDGE_X + LOGO_INSET} y={n.y - 9} width="18" height="18" viewBox="0 0 24 24" style={m.color ? `color:${m.color}` : undefined}>
+            <path
+              d={m.path}
+              fill={m.mode === "fill" ? "currentColor" : "none"}
+              stroke={m.mode === "stroke" ? "currentColor" : "none"}
+              stroke-width={m.mode === "stroke" ? 2 : undefined}
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <text class="pf-name" x={RIGHT_EDGE_X + TEXT_INSET} y={n.y - 3}>{n.name}</text>
+          <text class="pf-sub" x={RIGHT_EDGE_X + TEXT_INSET} y={n.y + 12}>{n.sub}</text>
+        </g>
+      );
+    })}
+  </svg>
+  <figcaption>
+    <span>any LLM provider</span>
+    <span aria-hidden="true">→</span>
+    <span>OMA · context · state · memory</span>
+    <span aria-hidden="true">→</span>
+    <span>any sandbox platform</span>
+  </figcaption>
+</figure>
+
+<style>
+  /* The diagram breathes bare — no plate border, no scrollbox around it. The
+     SVG is full-width and scales with the column; on narrow screens it simply
+     shrinks (its blueprint-grid background lives in global.css via .pf-plate,
+     applied only where a frame is wanted, not here). */
+  .pf {
+    margin: 0;
+    width: 100%;
+  }
+  .pf-diagram {
+    width: 100%;
+    max-width: 772px;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+    overflow: visible;
+  }
+
+  /* Edges — one quiet track + one traveling packet per edge. */
+  .pf-edge {
+    fill: none;
+    stroke: color-mix(in srgb, var(--color-brand) 22%, var(--color-border));
+    stroke-width: 1.5;
+  }
+  .pf-packet {
+    fill: var(--color-brand);
+    offset-distance: 0%;
+    filter: drop-shadow(0 0 3px color-mix(in srgb, var(--color-brand) 60%, transparent));
+  }
+  @keyframes pf-move {
+    from { offset-distance: 0%; }
+    to { offset-distance: 100%; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .pf-packet {
+      animation: pf-move 2.6s linear infinite;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pf-packet { animation: none; }
+  }
+
+  /* Nodes */
+  .pf-node rect {
+    fill: var(--color-card);
+    stroke: var(--color-border);
+    stroke-width: 1;
+    transition: stroke 150ms ease;
+  }
+  .pf-node:hover rect {
+    stroke: color-mix(in srgb, var(--color-brand) 45%, var(--color-border));
+  }
+  .pf-name {
+    fill: var(--color-fg);
+    font-family: var(--font-sans);
+    font-size: 10.5px;
+    font-weight: 600;
+  }
+  .pf-sub {
+    fill: var(--color-fg-subtle);
+    font-family: var(--font-mono);
+    font-size: 9px;
+  }
+  /* Brand logo coin — tinted per node via inline color; opacity keeps
+     currentColor glyphs (Anthropic/OpenAI/lucide) from shouting. */
+  .pf-logo {
+    overflow: visible;
+    opacity: 0.92;
+  }
+
+  /* Sandbox family frames — a hairline group box (no fill) + a small caption
+     label that names which nodes are cloud-provisioned vs relayed to your
+     hardware. */
+  .pf-group rect {
+    fill: none;
+    stroke: var(--color-border);
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+  }
+  .pf-group-label {
+    fill: var(--color-fg-subtle);
+    font-family: var(--font-sans);
+    font-size: 9px;
+    font-weight: 600;
+  }
+
+  /* Hub */
+  .pf-hub rect {
+    fill: color-mix(in srgb, var(--color-brand) 8%, var(--color-card));
+    stroke: color-mix(in srgb, var(--color-brand) 45%, transparent);
+    stroke-width: 1.5;
+  }
+  .pf-hub-name {
+    fill: var(--color-brand);
+    font-family: var(--font-sans);
+    font-size: 12.5px;
+    font-weight: 700;
+  }
+
+  /* Spine pills inside the hub — what the platform owns across swaps */
+  .pf-pill rect {
+    fill: var(--color-card);
+    stroke: color-mix(in srgb, var(--color-brand) 22%, var(--color-border));
+    stroke-width: 1;
+  }
+  .pf-pill-name {
+    fill: var(--color-fg);
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .pf-pill-sub {
+    fill: var(--color-fg-subtle);
+    font-family: var(--font-mono);
+    font-size: 9px;
+  }
+
+  .pf figcaption {
+    margin-top: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-fg-subtle);
+  }
+  .pf figcaption span:nth-child(3) {
+    color: var(--color-brand);
+    font-weight: 600;
+  }
+</style>

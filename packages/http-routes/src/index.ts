@@ -157,7 +157,7 @@ export type { OmaMcpRoutesDeps } from "./mcp";
 export { buildTelegramWebhookRoute } from "./telegram";
 export type { TelegramWebhookRouteDeps } from "./telegram";
 
-export { buildScheduleRoutes } from "./schedules";
+export { buildScheduleRoutes, buildTenantScheduleRoutes } from "./schedules";
 export type { ScheduleRoutesDeps, ScheduleDbArg } from "./schedules";
 
 export { checkInternalSecret } from "./internal-auth";

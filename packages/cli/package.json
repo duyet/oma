@@ -14,7 +14,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --external:@duyet/oma-sandbox --external:@duyet/oma-sandbox/* --outfile=dist/index.js --banner:js=\"#!/usr/bin/env node\nimport { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);\"",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --banner:js=\"#!/usr/bin/env node\nimport { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);\"",
     "dev": "tsx src/index.ts",
     "test": "vitest run --config vitest.config.ts",
     "prepublishOnly": "npm run build"
@@ -42,12 +42,13 @@
   },
   "devDependencies": {
     "@agentclientprotocol/sdk": "^0.20.0",
+    "@grpc/grpc-js": "^1.12.0",
+    "@grpc/proto-loader": "^0.7.13",
     "@inquirer/checkbox": "^5.1.4",
     "@inquirer/input": "^4.1.4",
     "@inquirer/select": "^4.1.4",
     "@duyet/oma-acp-runtime": "workspace:*",
     "@duyet/oma-api-types": "workspace:*",
-    "@duyet/oma-sandbox": "workspace:*",
     "@types/node": "^22.0.0",
     "@types/ws": "^8.5.0",
     "esbuild": "^0.25.0",

@@ -27,6 +27,9 @@ import { K8sBridgeSandbox } from "@duyet/oma-sandbox/adapters/k8s-bridge";
 // eval) so the SandboxProviderUnavailableError circular reference below is
 // safe. See bridge-relay.ts.
 import { BridgeRelaySandbox } from "./bridge-relay";
+// Browser-tab (WASM VM) relay — the browser-vm twin of BridgeRelaySandbox.
+// Same RuntimeRoom-DO relay, different peer (a browser tab, not a daemon).
+import { BrowserVmRelaySandbox } from "./browser-vm-relay";
 // Pure mapping module (no gRPC / Node builtins) — bundles cleanly into the
 // Worker. Turns OMA's environment networking/packages config into an OpenShell
 // egress SandboxPolicy carried through to the bridge's OpenShell backend.
@@ -880,11 +883,16 @@ export function resolveCfSandbox(
 
   if (resolution.kind === "cloudflare") return new CloudflareSandbox(env, sessionId);
   if (resolution.kind === "remote") return createRemoteSandbox(resolution.type, env, sessionId, envConfig);
-  // Local (subprocess) environment → relay to a paired bridge runtime. The
-  // executor connects lazily on first op; if no runtime is online it throws
-  // SandboxProviderUnavailableError with a "run bridge setup" message, which
-  // surfaces as a session.error via the normal turn-processing error path.
-  if (resolution.kind === "bridge") return new BridgeRelaySandbox(env, sessionId, tenantId);
+  // Relay environments connect lazily on first op; if no runtime is online
+  // they throw SandboxProviderUnavailableError, which surfaces as a
+  // session.error via the normal turn-processing error path.
+  //  - `browser-vm` → relay to a browser tab hosting a WASM VM.
+  //  - `subprocess` / `local` → relay to a paired `oma bridge daemon` machine.
+  if (resolution.kind === "bridge") {
+    return resolution.type === "browser-vm"
+      ? new BrowserVmRelaySandbox(env, sessionId, tenantId)
+      : new BridgeRelaySandbox(env, sessionId, tenantId);
+  }
 
   throw new SandboxProviderUnavailableError(
     `provider "${resolution.type}" is not available on the Cloudflare deployment; ` +

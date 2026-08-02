@@ -290,7 +290,7 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
                signed-out ones to /login. -->
           <a
             href="https://app.oma.duyet.net/"
-            class="ml-2 px-3.5 py-2 rounded-md bg-[var(--color-brand)] text-[var(--color-brand-fg)] font-medium hover:bg-[var(--color-brand-hover)] transition-colors"
+            class="ml-2 inline-flex items-center justify-center rounded-2xl border border-transparent text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px disabled:pointer-events-none disabled:opacity-50 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 bg-primary text-primary-foreground hover:bg-primary/80 h-8 gap-1.5 px-3"
             >Dashboard →</a
           >
         </nav>
@@ -351,7 +351,7 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
               >
               <a
                 href="https://app.oma.duyet.net/"
-                class="block mx-2 mt-1 px-3 py-3 rounded-md text-center bg-[var(--color-brand)] text-[var(--color-brand-fg)] font-medium"
+                class="w-full mx-2 mt-1 inline-flex items-center justify-center rounded-2xl border border-transparent text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px disabled:pointer-events-none disabled:opacity-50 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 bg-primary text-primary-foreground hover:bg-primary/80 h-9 gap-1.5 px-4"
                 >Dashboard →</a
               >
             </nav>
@@ -439,30 +439,6 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
       } else {
         // No-motion / no-IO fallback: show everything immediately.
         for (const el of revealTargets) el.classList.add('is-visible');
-      }
-
-      // Typewriter rotate: cycle the .tw-rot verb through data-rotate JSON on
-      // any element. Char-by-char type + delete; skip entirely under
-      // reduced-motion (the first verb stays put).
-      if (!reduceMotion) {
-        for (const el of document.querySelectorAll('[data-rotate]')) {
-          const words = (() => { try { return JSON.parse(el.getAttribute('data-rotate') || '[]'); } catch { return []; } })();
-          const out = el.querySelector('.tw-rot');
-          if (!out || !words.length) continue;
-          // If the first word is server-rendered (headline), start from the
-          // full-word hold instead of retyping it on load.
-          let w = 0, i = out.textContent === words[0] ? words[0].length : 0, deleting = false;
-          const tick = () => {
-            const word = words[w];
-            out.textContent = word.slice(0, i);
-            if (!deleting && i < word.length) i++;
-            else if (!deleting && i === word.length) { deleting = true; setTimeout(tick, 1400); return; }
-            else if (deleting && i > 0) i--;
-            else { deleting = false; w = (w + 1) % words.length; }
-            setTimeout(tick, deleting ? 45 : 95);
-          };
-          tick();
-        }
       }
     </script>
   </body>

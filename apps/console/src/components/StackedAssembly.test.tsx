@@ -209,8 +209,11 @@ describe("<StackedAssembly />", () => {
     await waitFor(() =>
       // Provider names moved out of the copy into the avatar-group of
       // marks; the description stays generic and a coin renders per
-      // provider id (title attribute carries the id).
-      expect(screen.getByTitle("cloud")).toBeInTheDocument(),
+      // provider id. The title carries the id plus a liveness suffix —
+      // `cloud` when the provider reports healthy, `cloud (idle)` when it
+      // doesn't — so match the id and stay agnostic about health, which
+      // isn't what this test is about.
+      expect(screen.getByTitle(/^cloud( \(idle\))?$/)).toBeInTheDocument(),
     );
   });
 });

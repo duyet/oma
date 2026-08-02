@@ -72,13 +72,17 @@ interface PendingCall {
 }
 
 /**
- * Pick the tenant's most-recently-heartbeated online runtime id, or null when
- * none is online. Exported for unit testing the selection query independent of
+ * Pick the tenant's most-recently-heartbeated online runtime id of a given
+ * `kind`, or null when none is online. `kind` filters by `runtimes.kind`
+ * (`"daemon"` for a paired local machine, `"browser-vm"` for a browser tab
+ * hosting a WASM VM) so a browser-vm session never relays to a daemon and
+ * vice versa. Exported for unit testing the selection query independent of
  * the WebSocket machinery.
  */
 export async function pickOnlineRuntimeId(
   db: Env["MAIN_DB"],
   tenantId: string,
+  kind: string = "daemon",
 ): Promise<string | null> {
   const { results } = await db
     .prepare(
@@ -88,12 +92,13 @@ export async function pickOnlineRuntimeId(
        WHERE rt.tenant_id = ?
          AND rt.revoked_at IS NULL
          AND r.status = 'online'
+         AND r.kind = ?
          AND r.last_heartbeat IS NOT NULL
          AND r.last_heartbeat > (unixepoch() - ?)
        ORDER BY r.last_heartbeat DESC
        LIMIT 1`,
     )
-    .bind(tenantId, RUNTIME_ONLINE_WINDOW_SEC)
+    .bind(tenantId, kind, RUNTIME_ONLINE_WINDOW_SEC)
     .all<{ id: string }>();
   return results?.[0]?.id ?? null;
 }

@@ -71,7 +71,11 @@
     "production": {
   "name": "oma-managed-agents-integrations",
       "vars": {
-        "GATEWAY_ORIGIN": "https://integrations.oma.duyet.net"
+        "GATEWAY_ORIGIN": "https://integrations.oma.duyet.net",
+        // Console origin — where install callbacks send the browser back to
+        // when the state JWT carried no returnUrl (expired, or the install
+        // was started from the App's own github.com page).
+        "CONSOLE_ORIGIN": "https://app.oma.duyet.net"
       },
       "workers_dev": true,
       "routes": [
@@ -100,7 +104,8 @@
     "staging": {
       "name": "oma-managed-agents-integrations-staging",
       "vars": {
-        "GATEWAY_ORIGIN": "https://integrations.staging.oma.duyet.net"
+        "GATEWAY_ORIGIN": "https://integrations.staging.oma.duyet.net",
+        "CONSOLE_ORIGIN": "https://app.staging.oma.duyet.net"
       },
       "routes": [
         { "pattern": "integrations.staging.oma.duyet.net", "custom_domain": true }

@@ -34,6 +34,7 @@ Environments — the reusable configurations defining package managers, system p
 | `litebox` | BoxLite Local | Local Firecracker micro-VM for local hardware isolation. |
 | `boxrun` | BoxLite Remote | Remote BoxLite HTTP control plane for micro-VM orchestration. |
 | `openshell` | NVIDIA OpenShell | Policy-enforced, isolated agent sandboxes driven by an OpenShell gateway (gRPC). Requires `OPENSHELL_GATEWAY_ENDPOINT`. Self-host Node speaks gRPC directly; the Cloudflare deployment reaches it over `fetch` via the k8s-bridge OpenShell backend (`OPENSHELL_BRIDGE_URL`). |
+| `browser-vm` | Browser VM (WASM) | Relays sandbox ops to a WASM VM (v86 by default) running in a user's own browser tab — zero server-side sandbox compute. Open via Console → Runtimes → "Open sandbox tab". **Cloudflare only**; self-host Node lists the provider but reports `not_configured`. See [Browser-VM Sandbox](browser-vm-sandbox.md). |
 
 ### API Endpoints
 * **List hosting types**: `GET /v1/hosting_types` returns all registered local and BYOK providers. Each provider's `health` now carries an optional `capacity` (`cpu` / `memory` / `pods` used-vs-total) surfaced best-effort from the adapter — the console Runtimes page renders these as live gauges with 30s auto-refresh.
@@ -133,6 +134,11 @@ Agents can post status transitions (e.g. session done, error, blocked) to extern
       "credential_id": "cred_matrix",
       "homeserver_url": "https://matrix.org",
       "room_id": "!abc:matrix.org"
+    },
+    {
+      "type": "email",
+      "to": "ops@example.com",
+      "subject_prefix": "[oma]"
     }
   ]
 }
@@ -142,3 +148,4 @@ Agents can post status transitions (e.g. session done, error, blocked) to extern
 * **GitHub**: Posted as markdown comments with a status indicator dot (🔴 Error, ⚪ Blocked, 🟢 Success).
 * **Slack**: Formatted using Slack mrkdwn and emoji blocks.
 * **Matrix**: Sent via Matrix Client-Server API room messages.
+* **Email**: Subject = optional `subject_prefix` + agent/session/status; body = the same status summary line, the final agent message, and the session link. Delivered through the deployment's email sender (Cloudflare `SEND_EMAIL` binding, or `SMTP_HOST` + friends on self-host Node) — with no sender configured the target is skipped with a logged warning.

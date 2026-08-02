@@ -76,6 +76,12 @@ const MACHINE: Mark = {
   path: "M3 5a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1ZM8 21h8M12 17v4",
 };
 const TERMINAL: Mark = { mode: "stroke", path: "m4 17 6-6-6-6M12 19h8" };
+// Remote micro-VM control planes (BoxRun) — a rack/server glyph (lucide.dev,
+// ISC), so they read as "off-host" next to LiteBox's local chip.
+const SERVER: Mark = {
+  mode: "stroke",
+  path: "M4 4h16a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1ZM4 15h16a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1ZM6 6.5h.01M6 17.5h.01",
+};
 // Daytona — no Simple Icons entry; the wordmark's rounded-square glyph
 // (lucide.dev, ISC), matching the landing page's fleet band.
 const DAYTONA: Mark = { mode: "stroke", path: "M17.5 19a4.5 4.5 0 1 0-.42-8.98A6 6 0 1 0 6 19h11.5" };
@@ -84,16 +90,27 @@ const BOX: Mark = {
   path: "M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z",
 };
 
+// Browser-vm — an app-window glyph (lucide.dev, ISC): the sandbox host is a
+// tab in the user's own browser, so it reads as "a window" next to the
+// terminal/server/chip hosts.
+const BROWSER: Mark = {
+  mode: "stroke",
+  path: "M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2ZM2 9h20M6 6.5h.01M9 6.5h.01",
+};
+
 const MARKS: Record<string, Mark> = {
   cloud: CLOUDFLARE,
   cloudflare: CLOUDFLARE,
+  "dynamic-workers": CLOUDFLARE,
   "docker-compose": DOCKER,
+  docker: DOCKER,
   k8s: KUBERNETES,
   "k8s-bridge": KUBERNETES,
   "k8s-remote": KUBERNETES,
   kubernetes: KUBERNETES,
   e2b: E2B,
   subprocess: TERMINAL,
+  local: TERMINAL,
   openshell: NVIDIA,
   github: GITHUB,
   "github-actions": GITHUB,
@@ -102,9 +119,10 @@ const MARKS: Record<string, Mark> = {
   linear: LINEAR,
   firecrawl: FIRECRAWL,
   litebox: CHIP,
-  boxrun: CHIP,
+  boxrun: SERVER,
   "remote-agent": MACHINE,
   daytona: DAYTONA,
+  "browser-vm": BROWSER,
 };
 
 /** Official brand colors (simple-icons values), used when `colored` is set.
