@@ -21,9 +21,25 @@ export interface SessionRecord {
    *  not reported usage yet. */
   input_tokens?: number | null;
   output_tokens?: number | null;
+  /** Run-summary rollup kept on the session row itself and refreshed on
+   *  every turn transition — so a list page reads them in the same single
+   *  query as the rest of the row, never by replaying event logs.
+   *  `message_count` counts `agent.message` events (agent replies), NOT
+   *  user turns; `tool_call_count` counts built-in + MCP + custom tool
+   *  calls. Both are 0 until the session's first turn completes. */
+  message_count?: number | null;
+  tool_call_count?: number | null;
+  /** "end_turn" | "destroyed" | "terminated", or null before the first
+   *  turn completes. */
+  stop_reason?: string | null;
+  /** Last turn transition (ISO). The clock a non-running session's
+   *  duration stops at. */
+  updated_at?: string | null;
   metadata?: Record<string, unknown>;
-  /** Server-computed wall-clock duration (seconds) since creation.
-   *  Present on list/SDK responses; absent on create response. */
+  /** Server-computed wall-clock duration in seconds: created_at → the
+   *  session's end reference (terminated_at, else `now` while running,
+   *  else updated_at for an idle session). Present on list/SDK responses;
+   *  absent on create response. */
   stats?: {
     duration_seconds?: number;
   };

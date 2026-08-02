@@ -73,6 +73,12 @@
   // INTEGRATIONS and oma-managed-agents (MAIN_MCP) workers actually exist.
   "services": [],
 
+  // Cloudflare Email Service — powers the `email` notification target
+  // (issue #317). Unbound deploys skip email targets with a warning.
+  "send_email": [
+    { "name": "SEND_EMAIL" }
+  ],
+
   // Workers AI for generating embeddings
   "ai": { "binding": "AI" },
 
@@ -166,6 +172,9 @@
         { "binding": "INTEGRATIONS", "service": "oma-managed-agents-integrations" },
         { "binding": "MAIN_MCP", "service": "oma-managed-agents", "entrypoint": "McpProxyRpc" }
       ],
+      "send_email": [
+        { "name": "SEND_EMAIL" }
+      ],
       "ai": { "binding": "AI" },
       "worker_loaders": [
         { "binding": "LOADER" }
@@ -222,6 +231,9 @@
         { "binding": "AUTH_DB_01", "database_name": "oma-auth-shard-01-staging", "database_id": "fe6a34d1-cd8a-48a1-bff1-29032026d006" },
         { "binding": "AUTH_DB_02", "database_name": "oma-auth-shard-02-staging", "database_id": "8636a018-8ac6-48c2-ae95-2f70919c8aab" },
         { "binding": "AUTH_DB_03", "database_name": "oma-auth-shard-03-staging", "database_id": "8ce8f17d-7527-4a5a-b097-ce73251be55a" }
+      ],
+      "send_email": [
+        { "name": "SEND_EMAIL" }
       ],
       "ai": { "binding": "AI" },
       "worker_loaders": [

@@ -85,13 +85,13 @@ const schemas = [
       <div class="mt-8 flex flex-wrap gap-3">
         <a
           href="https://docs.oma.duyet.net/console/integrations/"
-          class="px-5 py-3 rounded-md bg-[var(--color-fg)] text-[var(--color-bg)] font-medium"
+          class="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-2xl border border-transparent text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px bg-primary text-primary-foreground hover:bg-primary/80 [&_svg:not([class*=size-])]:size-4"
         >
           Read integration docs
         </a>
         <a
           href="/claude-tag-open-source/"
-          class="px-5 py-3 rounded-md border border-[var(--color-border)] font-medium"
+          class="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-2xl border border-border bg-background text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px hover:bg-muted hover:text-foreground dark:bg-transparent dark:hover:bg-input/30 [&_svg:not([class*=size-])]:size-4"
         >
           Open-source Claude Tag
         </a>
@@ -119,7 +119,7 @@ const schemas = [
       <h2 class="font-display text-3xl font-bold mb-8">Setup path</h2>
       <ol class="grid md:grid-cols-5 gap-4">
         {setupSteps.map((step, index) => (
-          <li class="border border-[var(--color-border)] rounded-lg bg-[var(--color-bg)] p-4">
+          <li class="rounded-xl border border-[var(--color-border)] bg-card p-4">
             <div class="font-mono text-xs text-[var(--color-fg-subtle)] mb-3">Step {index + 1}</div>
             <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed">{step}</p>
           </li>

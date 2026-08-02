@@ -4,6 +4,7 @@ import {
   formatDuration,
   formatRelative,
   formatSandboxTime,
+  formatSessionDuration,
   formatUsd,
   pickTickStep,
   shortenId,
@@ -110,5 +111,34 @@ describe("pickTickStep", () => {
   });
   it("falls back to the largest candidate when nothing fits", () => {
     expect(pickTickStep(Number.MAX_SAFE_INTEGER)).toBe(600_000);
+  });
+});
+
+describe("formatSessionDuration", () => {
+  it("renders sub-minute spans in seconds", () => {
+    expect(formatSessionDuration(8)).toBe("8s");
+    expect(formatSessionDuration(59)).toBe("59s");
+  });
+  it("renders minutes with a seconds remainder, dropping a zero remainder", () => {
+    expect(formatSessionDuration(134)).toBe("2m 14s");
+    expect(formatSessionDuration(120)).toBe("2m");
+  });
+  it("switches to hours past an hour rather than piling up minutes", () => {
+    // The reason this exists alongside formatDuration, which would render
+    // this as "72m0s" — unreadable in a table of long-running sessions.
+    expect(formatSessionDuration(4320)).toBe("1h 12m");
+    expect(formatSessionDuration(3600)).toBe("1h");
+  });
+  it("switches to days past 24h", () => {
+    expect(formatSessionDuration(273_600)).toBe("3d 4h");
+    expect(formatSessionDuration(259_200)).toBe("3d");
+  });
+  it("renders an em-dash for unknown durations, but 0s for a real fast run", () => {
+    // "no data" and "finished in under a second" are different facts.
+    expect(formatSessionDuration(undefined)).toBe("—");
+    expect(formatSessionDuration(null)).toBe("—");
+    expect(formatSessionDuration(-5)).toBe("—");
+    expect(formatSessionDuration(NaN)).toBe("—");
+    expect(formatSessionDuration(0)).toBe("0s");
   });
 });

@@ -75,10 +75,10 @@ export class RuntimeAdapterImpl implements RuntimeAdapter {
     // logs per row. stop_reason is derived from `status` alone (not
     // from the event log) so it's deterministic regardless of whether
     // the harness's session.status_idle append has landed yet on every
-    // platform. See tryComputeRunCounts for why counts degrade
+    // platform. See tryComputeRunSummary for why counts degrade
     // gracefully instead of blocking the status flip.
     const stopReason = status === "idle" ? "end_turn" : "destroyed";
-    const counts = await this.tryComputeRunCounts();
+    const counts = await this.tryComputeRunSummary();
     // Filter by turn_id so a stale endTurn (e.g. from a recovery that
     // raced with a new beginTurn) doesn't clobber a fresh run.
     if (counts) {
@@ -86,10 +86,20 @@ export class RuntimeAdapterImpl implements RuntimeAdapter {
         .prepare(
           `UPDATE sessions
               SET status=?, turn_id=NULL, turn_started_at=NULL, updated_at=?,
-                  stop_reason=?, tool_call_count=?, message_count=?
+                  stop_reason=?, tool_call_count=?, message_count=?,
+                  title=CASE WHEN title IS NULL OR title='' THEN ? ELSE title END
             WHERE id=? AND turn_id=?`,
         )
-        .bind(status, now, stopReason, counts.toolCallCount, counts.messageCount, sessionId, turnId)
+        .bind(
+          status,
+          now,
+          stopReason,
+          counts.toolCallCount,
+          counts.messageCount,
+          counts.summary,
+          sessionId,
+          turnId,
+        )
         .run();
     } else {
       await this.sql
@@ -106,7 +116,7 @@ export class RuntimeAdapterImpl implements RuntimeAdapter {
 
   async terminate(sessionId: string, _reason: string): Promise<void> {
     const now = Date.now();
-    const counts = await this.tryComputeRunCounts();
+    const counts = await this.tryComputeRunSummary();
     // Idempotent: second call is a no-op because the WHERE filter only
     // matches rows that aren't already terminated. Also clears any
     // in-flight turn marker so listOrphanTurns doesn't see a ghost row.
@@ -116,10 +126,11 @@ export class RuntimeAdapterImpl implements RuntimeAdapter {
           `UPDATE sessions
               SET status='terminated', terminated_at=?, turn_id=NULL,
                   turn_started_at=NULL, updated_at=?, stop_reason='terminated',
-                  tool_call_count=?, message_count=?
+                  tool_call_count=?, message_count=?,
+                  title=CASE WHEN title IS NULL OR title='' THEN ? ELSE title END
             WHERE id=? AND terminated_at IS NULL`,
         )
-        .bind(now, now, counts.toolCallCount, counts.messageCount, sessionId)
+        .bind(now, now, counts.toolCallCount, counts.messageCount, counts.summary, sessionId)
         .run();
     } else {
       await this.sql
@@ -135,27 +146,35 @@ export class RuntimeAdapterImpl implements RuntimeAdapter {
   }
 
   /**
-   * Run-history summary counts (issue #21) — cumulative tool-call and
-   * message totals for the whole session, recomputed from scratch on
-   * every idle/destroyed/terminated transition (cheap: bounded by a
-   * session's event count, and this only runs once per turn — not on
-   * the GET /v1/agents/:id/runs read path, which stays a plain indexed
-   * row scan). Recomputing from scratch (rather than incrementing a
-   * stored counter) means a failed read here just leaves the previous
-   * values in place next time; no drift accumulates.
+   * Run-history summary (issue #21) — cumulative tool-call and message
+   * totals for the whole session, plus a one-line `summary` lifted from
+   * the session's first `user.message`. Recomputed from scratch on every
+   * idle/destroyed/terminated transition (cheap: bounded by a session's
+   * event count, and this only runs once per turn — not on the
+   * GET /v1/agents/:id/runs or GET /v1/sessions read paths, which stay
+   * plain indexed row scans). Recomputing from scratch (rather than
+   * incrementing a stored counter) means a failed read here just leaves
+   * the previous values in place next time; no drift accumulates.
+   *
+   * `summary` rides the SAME single event scan the counts already do, so
+   * giving the sessions list a human-readable label costs no extra query
+   * and — deliberately — no model call. Callers write it only into an
+   * empty `title` (SQL `CASE WHEN title IS NULL OR title=''`), so a
+   * caller-supplied title always wins and is never clobbered.
    *
    * Returns null — deliberately NOT {toolCallCount: 0, messageCount: 0} —
    * when the event log can't be read, so callers skip the summary
    * columns for this call instead of clobbering good data with zeros.
    * The core status-flip UPDATE must never be blocked by this.
    */
-  private async tryComputeRunCounts(): Promise<
-    { toolCallCount: number; messageCount: number } | null
+  private async tryComputeRunSummary(): Promise<
+    { toolCallCount: number; messageCount: number; summary: string } | null
   > {
     try {
       const events = await this.freshEvents();
       let toolCallCount = 0;
       let messageCount = 0;
+      let summary = "";
       for (const e of events) {
         switch (e.type) {
           case "agent.tool_use":
@@ -166,9 +185,12 @@ export class RuntimeAdapterImpl implements RuntimeAdapter {
           case "agent.message":
             messageCount++;
             break;
+          case "user.message":
+            if (summary === "") summary = firstUserText(e);
+            break;
         }
       }
-      return { toolCallCount, messageCount };
+      return { toolCallCount, messageCount, summary };
     } catch {
       return null;
     }
@@ -217,4 +239,34 @@ export class RuntimeAdapterImpl implements RuntimeAdapter {
   hintTurnEnded(sessionId: string, turnId: TurnId): void {
     this.onTurnEnded?.(sessionId, turnId);
   }
+}
+
+/** Max stored summary length. Long enough that the sessions list can show a
+ *  meaningful clause and the session detail page a full sentence; short
+ *  enough that it never bloats a list-page payload. */
+const SUMMARY_MAX = 200;
+
+/**
+ * One-line label lifted from a `user.message` event: the text blocks joined,
+ * whitespace collapsed, truncated to SUMMARY_MAX with an ellipsis. Non-text
+ * blocks (images, documents) are skipped — an image-only opening message
+ * yields "" and simply leaves the title empty rather than inventing a label.
+ */
+function firstUserText(e: SessionEvent): string {
+  const content = (e as { content?: unknown }).content;
+  if (!Array.isArray(content)) return "";
+  const text = content
+    .filter(
+      (b): b is { type: "text"; text: string } =>
+        typeof b === "object" &&
+        b !== null &&
+        (b as { type?: unknown }).type === "text" &&
+        typeof (b as { text?: unknown }).text === "string",
+    )
+    .map((b) => b.text)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (text.length <= SUMMARY_MAX) return text;
+  return `${text.slice(0, SUMMARY_MAX - 1).trimEnd()}…`;
 }

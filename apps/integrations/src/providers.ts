@@ -72,6 +72,8 @@ export function buildProviders(env: Env, linearContainer?: LinearContainer): Pro
             botLogin: env.GITHUB_MANAGED_BOT_LOGIN,
             privateKey: env.GITHUB_MANAGED_PRIVATE_KEY,
             webhookSecret: env.GITHUB_MANAGED_WEBHOOK_SECRET,
+            clientId: env.GITHUB_MANAGED_CLIENT_ID ?? null,
+            clientSecret: env.GITHUB_MANAGED_CLIENT_SECRET ?? null,
           }
         : null,
   });

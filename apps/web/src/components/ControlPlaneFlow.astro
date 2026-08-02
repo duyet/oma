@@ -1,0 +1,120 @@
+---
+// "Where it runs" — the three routing layers, as a compact linear pipeline:
+//   control plane  →  sandbox platform  →  AnyRouter models
+// Desktop: horizontal row joined by arrows. Mobile: stacks vertically with the
+// arrow rotating to point down. No border/box around it (matches the bare-viz
+// directive) — just the nodes and their connecting line.
+const STAGES = [
+  {
+    name: "Control plane",
+    sub: "context · state · memory · event log",
+  },
+  {
+    name: "SANDBOX PLATFORM",
+    sub: "Cloudflare · Kubernetes · OpenShell · browser VM · your machine",
+  },
+  {
+    name: "AnyRouter models",
+    sub: "provider/model routing · model cards · BYOK gateway",
+  },
+] as const;
+---
+
+<figure class="cpf" aria-label="OMa routing layers: control plane to sandbox platform to AnyRouter models">
+  <ol class="cpf-pipeline">
+    {
+      STAGES.map((s, i) => (
+        <li class="cpf-stage">
+          <div class="cpf-node">
+            <span class="cpf-name">{s.name}</span>
+            <span class="cpf-sub">{s.sub}</span>
+          </div>
+          {i < STAGES.length - 1 && (
+            <span class="cpf-arrow" aria-hidden="true" data-line>→</span>
+          )}
+        </li>
+      ))
+    }
+  </ol>
+  <figcaption>
+    <span>the control plane owns the durable spine, the sandbox platform runs tools, AnyRouter routes models</span>
+  </figcaption>
+</figure>
+
+<style>
+  /* Three stage nodes joined by a single connecting line. The active layer
+     (middle = sandbox platform) gets the brand tint so the eye lands there. */
+  .cpf { width: 100%; }
+  .cpf-pipeline {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem 1rem;
+    flex-wrap: wrap;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .cpf-stage { display: flex; align-items: center; gap: 0.6rem; }
+  .cpf-arrow {
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: 1.1rem;
+    color: var(--color-fg-subtle);
+  }
+  .cpf-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    min-width: 9rem;
+    padding: 0.65rem 0.9rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.6rem;
+    background: var(--color-bg);
+    transition: border-color 140ms ease, box-shadow 140ms ease;
+  }
+  .cpf-node:hover {
+    border-color: var(--color-border-strong);
+    box-shadow: 0 1px 2px rgba(24, 24, 27, 0.04), 0 2px 8px -4px rgba(24, 24, 27, 0.08);
+  }
+  .cpf-name {
+    font-family: var(--font-mono);
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-fg);
+  }
+  .cpf-sub {
+    margin-top: 0.25rem;
+    font-size: 0.72rem;
+    leading: 1.4;
+    color: var(--color-fg-muted);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .cpf-stage { opacity: 0; transform: translateY(4px); transition: opacity 420ms ease, transform 420ms ease; }
+    .cpf-stage.is-in { opacity: 1; transform: none; }
+  }
+
+  /* Mobile: stack vertically, rotate the arrow downward. */
+  @media (max-width: 640px) {
+    .cpf-pipeline { flex-direction: column; gap: 0.4rem 0; }
+    .cpf-arrow[data-line] { transform: rotate(90deg); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cpf-stage { opacity: 1; transform: none; }
+  }
+
+  .cpf figcaption {
+    margin-top: 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-fg-subtle);
+  }
+</style>
+</figure>

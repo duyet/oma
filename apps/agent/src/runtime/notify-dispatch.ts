@@ -8,6 +8,8 @@
 // module must never throw back into the caller.
 
 import type { HttpClient, SessionNotifyEvent, WebhookEnvelope } from "@duyet/oma-integrations-core";
+import { summarizeSessionNotifyEvent } from "@duyet/oma-integrations-core";
+import type { EmailMessage, EmailSender } from "@duyet/oma-email";
 import type { NotificationTarget } from "@duyet/oma-api-types";
 import { GitHubApiClient, postSessionStatusComment } from "@duyet/oma-github";
 import { SlackApiClient, postSessionStatusMessage as postSlackStatusMessage } from "@duyet/oma-slack";
@@ -43,6 +45,52 @@ export interface NotifyDispatchDeps {
    *  credential, so telegram_message targets resolve auth here, not via
    *  resolveCredentialToken. */
   resolveTelegramBotToken?: () => string | null | Promise<string | null>;
+  /**
+   * Resolve the deployment's email sender for `email` targets (issue #317).
+   * Email has no per-target vault credential — delivery rides the same
+   * `packages/email` seam the auth magic-links / tenant invites use (the CF
+   * `SEND_EMAIL` binding, or SMTP/nodemailer on self-host Node). Returning
+   * `null` (or leaving this unset) means "no email transport on this
+   * deployment": the target is skipped with a logged warning via
+   * `onError`, exactly like an unresolvable credential — never a throw.
+   */
+  resolveEmailSender?: () => EmailSender | null | Promise<EmailSender | null>;
+}
+
+/**
+ * Render a session-status notification as an email. Subject is the optional
+ * `subject_prefix` plus the same status label every other provider renders
+ * (via `summarizeSessionNotifyEvent`'s vocabulary); the body carries the
+ * summary line, the final agent message when present, and the session link.
+ */
+export function buildSessionStatusEmail(
+  event: SessionNotifyEvent,
+  target: Extract<NotificationTarget, { type: "email" }>,
+): EmailMessage {
+  const summary = summarizeSessionNotifyEvent(event);
+  const who = event.agentName ? `Agent "${event.agentName}"` : "Agent";
+  const subject = `${target.subject_prefix ? `${target.subject_prefix} ` : ""}${who} session ${event.sessionId}: ${event.status}`;
+
+  const lines = [summary];
+  if (event.finalMessage) lines.push("", event.finalMessage);
+  if (event.sessionUrl) lines.push("", `Session: ${event.sessionUrl}`);
+  const text = lines.join("\n");
+
+  const html = lines
+    .filter((l) => l !== "")
+    .map((l) => `<p>${escapeHtml(l)}</p>`)
+    .join("\n");
+
+  return { to: target.to, subject, text, html };
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 /**
@@ -117,6 +165,20 @@ async function dispatchOne(
         await postTelegramMessage(client, { chatId: target.chat_id }, event);
         return;
       }
+      case "email": {
+        const sender = await deps.resolveEmailSender?.();
+        if (!sender) {
+          deps.onError?.(
+            target,
+            new Error(
+              "no email sender configured on this deployment — email notification target skipped",
+            ),
+          );
+          return;
+        }
+        await sender.send(buildSessionStatusEmail(event, target));
+        return;
+      }
       case "webhook": {
         await dispatchWebhook(event, target, deps);
         return;
@@ -125,6 +187,10 @@ async function dispatchOne(
   } catch (err) {
     deps.onError?.(target, err);
   }
+}
+
+function isScheduleStatus(status: SessionNotifyEvent["status"]): boolean {
+  return status === "schedule_ok" || status === "schedule_error" || status === "schedule_skipped";
 }
 
 /**
@@ -142,6 +208,10 @@ export function buildWebhookEnvelope(event: SessionNotifyEvent, target: Extract<
     ...(event.detail ? { stop_reason: event.detail } : {}),
     ...(event.finalMessage ? { message: event.finalMessage } : {}),
     ...(event.sessionUrl ? { session_url: event.sessionUrl } : {}),
+    // Appended last (issue #313) so the historical field order — and every
+    // existing receiver's reproduced signing bytes — is untouched for
+    // non-schedule deliveries.
+    ...(event.scheduleId ? { schedule_id: event.scheduleId } : {}),
   };
   return envelope;
 }
@@ -166,7 +236,10 @@ async function dispatchWebhook(
   deps: NotifyDispatchDeps,
 ): Promise<void> {
   // Honor the events filter: when set, only deliver for listed statuses.
-  if (target.events && !target.events.includes(event.status)) {
+  // Schedule alerts (`schedule_*`, issue #313) bypass it — their own
+  // outcome filter is the schedule's `notify.on`, applied before dispatch,
+  // and the `events` enum deliberately stays session-only.
+  if (!isScheduleStatus(event.status) && target.events && !target.events.includes(event.status as "idle" | "error" | "terminated")) {
     return;
   }
 
