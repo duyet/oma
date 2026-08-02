@@ -225,7 +225,11 @@ agent's outbound HTTP from the local box is **not** vault-injected; and
 memory-store / session-outputs mounts aren't wired. Standard file tools,
 `bash`, git, etc. all work against the per-session workdir. Because the box
 runs on your own hardware with zero isolation, only pair machines you trust
-the agent to run on.
+the agent to run on. **In particular:** `gh`/git calls silently use
+**your machine's own** `gh auth login` / git credentials instead of an
+OMA-managed, session-scoped vault credential — there is no per-session
+credential swap on this path, so every session on a paired machine
+authenticates as you.
 
 ## Cross-sandbox sub-agents
 
