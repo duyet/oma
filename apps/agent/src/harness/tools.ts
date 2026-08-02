@@ -12,6 +12,7 @@ import { assertPublicUrl, SsrfBlockedError } from "./ssrf";
 // Concrete adapters (CF / Node / CDP / Disabled) live in the package and
 // dynamic-import their workerd / Node peers only at first launch().
 import type { BrowserHarness, BrowserBillingHook } from "@duyet/oma-browser-harness";
+import { wrapToolsWithHooks, type HookDispatchDeps } from "./hooks";
 
 // Source of truth for which tool names are part of the agent_toolset_20260401
 // built-in suite. Used by buildTools() below to decide which tool entries to
@@ -543,6 +544,11 @@ export async function buildTools(
       prompt: string;
       kind: "one_shot" | "cron";
     }>;
+    /** Agent-hook dispatch deps (issue #76 Part B). When present AND the agent
+     *  declares `pre_tool` / `post_tool` hooks, every tool's `execute` is
+     *  wrapped so a pre hook can gate/modify the call and a post hook can
+     *  redact the result. Absent ⇒ hooks are a no-op (tools unwrapped). */
+    hookDeps?: HookDispatchDeps;
   }
 ): Promise<Record<string, any>> {
   const enabled = getEnabledTools(agentConfig.tools);
@@ -1526,13 +1532,21 @@ export async function buildTools(
   }
 
   // call_agents_parallel — fan out to N callable sub-agents concurrently
-  // and aggregate their responses. Generated under the same condition as
-  // the single-call `call_agent_*` tools above (callable_agents configured
-  // + a key to run sub-agent turns with). Partial failures don't fail the
-  // whole tool call: each entry in `results` carries its own success/error
-  // status, so the model can act on whichever children succeeded.
-  if (localCallableAgents.length && env?.ANTHROPIC_API_KEY) {
+  // and aggregate their responses. Generated when the roster has any
+  // callable entry — local (`type: "agent"`) or remote (`type:
+  // "remote_agent"`, federation, issue #132) — plus a key to run sub-agent
+  // turns with. A call targets a remote agent by also passing `instance_id`;
+  // otherwise it's a local sub-agent. Partial failures don't fail the whole
+  // tool call: each entry in `results` carries its own success/error status,
+  // so the model can act on whichever children succeeded.
+  if ((localCallableAgents.length || remoteCallableAgents.length) && env?.ANTHROPIC_API_KEY) {
     const callableIds = new Set(localCallableAgents.map((ca) => ca.id));
+    // Remote roster keyed by (instance_id, remote_agent_id) so a parallel
+    // call can resolve the same target the single-call `call_remote_agent_*`
+    // tool would, and reject unknown pairs per-entry.
+    const remoteTargets = new Map(
+      remoteCallableAgents.map((ra) => [`${ra.instance_id} ${ra.remote_agent_id}`, ra] as const),
+    );
     // Effective concurrency: agent config can lower the default but never
     // exceed the hard cap, regardless of what the model requests in a
     // single call — this is the resource/quota guard, not a model-facing
@@ -1548,27 +1562,72 @@ export async function buildTools(
       description:
         `Delegate tasks to multiple sub-agents at once and run them concurrently ` +
         `(up to ${concurrencyLimit} at a time). Use this instead of calling ` +
-        `call_agent_* one-by-one when the tasks are independent — e.g. fanning out ` +
-        `research across topics, or running the same analysis over several inputs. ` +
-        `Returns one result per call, each with its own success/failure status, so ` +
-        `one sub-agent failing doesn't lose the others' results.`,
+        `call_agent_* / call_remote_agent_* one-by-one when the tasks are ` +
+        `independent — e.g. fanning out research across topics, or running the ` +
+        `same analysis over several inputs. Local and remote (federated) ` +
+        `sub-agents can be mixed in one batch; pass instance_id to target a ` +
+        `remote agent. Returns one result per call, each with its own ` +
+        `success/failure status, so one sub-agent failing doesn't lose the ` +
+        `others' results.`,
       inputSchema: z.object({
         calls: z.array(z.object({
-          agent_id: z.string().describe("ID of the callable sub-agent to invoke (must be one of this agent's callable_agents)"),
+          agent_id: z.string().describe("ID of the sub-agent to invoke. Local: one of this agent's callable_agents ids. Remote (federated): the remote agent id — also set instance_id."),
+          instance_id: z.string().optional().describe("Set to target a remote (federated) sub-agent: the federation instance id (fed_*) from this agent's remote callable_agents roster. Omit for a local sub-agent."),
           message: z.string().describe("The task to delegate to this sub-agent"),
         })).min(1).max(MAX_PARALLEL_SUBAGENTS_HARD_CAP)
           .describe(`1-${MAX_PARALLEL_SUBAGENTS_HARD_CAP} delegate calls to run concurrently`),
       }),
       execute: safe(async ({ calls }) => {
-        if (!env?.delegateToAgent && !env?.delegateToAgentDetailed) {
-          return "Multi-agent delegation not available: no thread executor configured";
-        }
         const results = await runWithConcurrencyLimit(calls, concurrencyLimit, async (call) => {
+          // Remote (federation) target — resolved by (instance_id, agent_id).
+          if (call.instance_id) {
+            const ra = remoteTargets.get(`${call.instance_id} ${call.agent_id}`);
+            if (!ra) {
+              return {
+                agent_id: call.agent_id,
+                instance_id: call.instance_id,
+                success: false,
+                error: `"${call.agent_id}" on instance "${call.instance_id}" is not in this agent's callable_agents roster`,
+              };
+            }
+            if (!env.delegateToRemoteAgent) {
+              return {
+                agent_id: call.agent_id,
+                instance_id: call.instance_id,
+                success: false,
+                error: "Federation delegation not available: no remote executor configured",
+              };
+            }
+            try {
+              const text = await env.delegateToRemoteAgent(
+                ra.instance_id,
+                ra.remote_agent_id,
+                call.message,
+                ra.remote_environment_id,
+              );
+              return { agent_id: call.agent_id, instance_id: call.instance_id, success: true, response: text };
+            } catch (e) {
+              return {
+                agent_id: call.agent_id,
+                instance_id: call.instance_id,
+                success: false,
+                error: e instanceof Error ? e.message : String(e),
+              };
+            }
+          }
+          // Local sub-agent target.
           if (!callableIds.has(call.agent_id)) {
             return {
               agent_id: call.agent_id,
               success: false,
               error: `"${call.agent_id}" is not in this agent's callable_agents roster`,
+            };
+          }
+          if (!env.delegateToAgent && !env.delegateToAgentDetailed) {
+            return {
+              agent_id: call.agent_id,
+              success: false,
+              error: "Multi-agent delegation not available: no thread executor configured",
             };
           }
           try {
@@ -1626,6 +1685,15 @@ export async function buildTools(
         }
       }),
     });
+  }
+
+  // Agent hooks (issue #76 Part B): wrap each tool's execute with pre/post-tool
+  // hook dispatch. Wrapping only replaces `execute` — names/descriptions/schemas
+  // are untouched, so the prompt-cache prefix is identical with or without
+  // hooks. Runs BEFORE the always_ask strip below so confirmed re-runs (which
+  // rebuild + call execute directly) still fire hooks. No-op when unconfigured.
+  if (env?.hookDeps && agentConfig.hooks && agentConfig.hooks.length > 0) {
+    Object.assign(tools, wrapToolsWithHooks(tools, agentConfig.hooks, env.hookDeps));
   }
 
   // Strip execute from always_ask tools so AI SDK returns them as pending calls

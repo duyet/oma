@@ -9,3 +9,4 @@
 export * from "./types";
 export * from "./notify-schema";
 export * from "./mcp-servers-schema";
+export * from "./hooks-schema";

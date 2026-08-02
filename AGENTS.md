@@ -140,6 +140,7 @@ A **vault** is a secure credential store. Credentials in vaults are **never expo
 | `appendable_prompts` | string[] | No | Opt-in registry of prompt IDs to inject as additional system prompt segments at session/turn start. Empty/missing = no extra segments |
 | `enable_general_subagent` | boolean | No | Opt-in built-in delegation tool. When true, the harness exposes a `general_subagent(task)` tool that spawns a generic sub-agent thread inheriting this agent's model + sandbox — bypasses the `callable_agents` roster |
 | `notify` | array | No | Notification targets to post session-status updates to (issue/PR comments, chat messages) — see [Notify Targets](#notify-targets) |
+| `hooks` | array | No | Declarative pre/post-tool + lifecycle hooks that gate/redact tool calls via a signed outbound webhook — see [Agent Hooks](#agent-hooks) |
 
 See [`examples/`](examples/) for copy-paste-ready agent and environment
 configs (coding assistant, data analyst, research agent, plus full harness
@@ -185,7 +186,9 @@ runtime-specific path:
 
 > **Note:** This is Phase 1 of [issue #139](https://github.com/duyet/oma/issues/139).
 > The companion `dynamic-workers` **sandbox provider** (a specialized JS-eval
-> executor selectable per-environment) is a documented follow-up.
+> executor selectable per-environment via `config.sandbox_provider:
+> "dynamic-workers"`) shipped in Phase 2 — see the Cloudflare sandbox-provider
+> table under [Sandbox Provider on the Cloudflare Deployment](#sandbox-provider-on-the-cloudflare-deployment).
 
 ### Tool Configuration
 
@@ -477,6 +480,7 @@ because a Worker is a single-file V8 isolate with no filesystem, no
 | `"openshell"` | Works — the OpenShell gateway is gRPC-only (a Worker can't speak gRPC), so CF talks to a **k8s-bridge running its OpenShell backend** (`BRIDGE_BACKEND=openshell`) over plain `fetch`, reusing the same `K8sBridgeSandbox` client as `k8s-bridge`. Requires `OPENSHELL_BRIDGE_URL` (`wrangler secret put`; optional `OPENSHELL_BRIDGE_TOKEN`); missing it fails clearly with a `session.error` (parity with boxrun's missing-`BOXRUN_URL`). The self-host Node path keeps speaking gRPC to the gateway directly. **Limitation:** memory-store / session-outputs mounts aren't available over the HTTP API — like boxrun and k8s-remote. |
 | `"daytona"` / `"e2b"` | Outbound-HTTP-only in principle (no Node builtins), but **not yet wired on Cloudflare** — their driver SDKs (`@daytonaio/sdk`, `e2b`) aren't bundled into the Worker. Selecting either fails clearly with a `session.error`; both already work on the self-host Node runtime. |
 | `"subprocess"` (alias `"local"`) | Works **via the bridge relay** when the tenant has a paired machine online. A Worker can't spawn `child_process`, so each sandbox op (exec, read/write files, setEnvVars, destroy) is relayed to the tenant's most-recently-heartbeated `oma bridge daemon` over the RuntimeRoom DO WebSocket, executed on that machine, and streamed back — the sandbox sibling of the ACP agent relay. Enable it by running `npx @getoma/cli bridge setup` on the machine; no `wrangler secret`. When no runtime is online, the first sandbox op fails clearly with a `session.error` ("no bridge runtime connected — run `bridge setup`…"). **Limitations:** no outbound vault-credential MITM proxy on the user's machine (outbound HTTP is un-injected), and memory-store / session-outputs mounts aren't wired. See `BridgeRelaySandbox` (`apps/agent/src/runtime/bridge-relay.ts`) and `BridgeSandboxManager` (`packages/cli/src/bridge/lib/bridge-sandbox.ts`). |
+| `"dynamic-workers"` | Works — a **JS/Wasm eval isolate** per exec via the **Worker Loader** binding (`env.LOADER`), not a Linux box: `exec` runs the command as a JS module in a fresh ephemeral V8 isolate (millisecond cold start, egress blocked by default via `globalOutbound: null`); `readFile`/`writeFile`/`startProcess`/`gitCheckout` fail clearly with a "not supported by dynamic-workers" error (no shell, no filesystem, no package installs, nothing persists between calls). Availability is a **binding**, not a secret: `worker_loaders` must be declared in the agent worker's `wrangler.jsonc` (`"worker_loaders": [{ "binding": "LOADER" }]`); absent binding fails clearly with a `session.error`. **Cloudflare-only** — the self-host Node runtime rejects it up front (`nodeCompatible: false`). Best for pure code-eval / Code-Mode agents, untrusted-snippet execution, and per-call compute-only sub-agents. See `DynamicWorkerSandbox` (`packages/sandbox/src/adapters/dynamic-workers.ts`). |
 | `"browser-vm"` | Works **via the RuntimeRoom relay** to a browser tab hosting a WASM VM — the tab twin of the `subprocess` bridge daemon. The user opens `GET /sandbox-tab` (Console → Runtimes → "Open sandbox tab"), which pairs as a runtime with `kind: "browser-vm"` and services sandbox ops against an in-tab engine (v86 by default; WebContainers/CheerpX are BYO-license). No online tab ⇒ the first op fails clearly with a `session.error`. **Limitations:** no vault outbound MITM from the tab, no memory-store / session-outputs mounts, networking is engine-proxied (no raw TCP). See `docs/browser-vm-sandbox.md` and `BrowserVmRelaySandbox` (`apps/agent/src/runtime/browser-vm-relay.ts`). |
 | `"litebox"` / `"k8s"` / `"docker-compose"` | Node-only (a native micro-VM binding, local kubeconfig/filesystem access, or a Docker socket) — cannot run in a Worker at all, and no relay path. Selecting one fails clearly with a `session.error` explaining to use the self-host runtime instead. |
 
@@ -832,6 +836,35 @@ child doesn't lose the others' results:
 - A call targeting an `agent_id` not in the agent's `callable_agents` roster
   fails just that entry (`success: false`) without aborting the batch.
 
+**Remote (federated) fan-out** (issue #132): a call may also target a
+`remote_agent` roster entry by passing its federation `instance_id` alongside
+the remote `agent_id`. Remote and local calls mix freely in one batch, run
+under the **same** `max_parallel_subagents` cap, and each runs
+`delegateToRemoteAgent` with the same per-call success/error isolation. Remote
+results echo back `instance_id` (and carry no `thread_id`, since the turn runs
+on the remote instance's own event log):
+
+```json
+{
+  "calls": [
+    { "agent_id": "agent_local_researcher", "message": "Summarize the local docs" },
+    { "agent_id": "agent_remote_specialist", "instance_id": "fed_xxx", "message": "Cross-check against the EU dataset" }
+  ]
+}
+```
+
+```json
+{
+  "results": [
+    { "agent_id": "agent_local_researcher", "success": true, "response": "...", "thread_id": "sthr_..." },
+    { "agent_id": "agent_remote_specialist", "instance_id": "fed_xxx", "success": true, "response": "..." }
+  ]
+}
+```
+
+An `(instance_id, agent_id)` pair not in the agent's `callable_agents` roster
+fails just that entry (`success: false`), like an unknown local `agent_id`.
+
 ---
 
 ## Cross-Instance Federation
@@ -932,9 +965,12 @@ The delivered slice is a one-shot request/response delegate. Not yet built:
 event-log **streaming/mirroring** of the remote turn into the caller's log
 (only the final text returns today), remote **identity mapping** beyond the
 shared tenant key, a Console UI for the registry + `remote_agent` roster
-entries (API-only for now), federated **parallel fan-out** (remote entries are
-excluded from `call_agents_parallel`), and inbound-federation trust controls
-distinct from the tenant API key.
+entries (API-only for now), and inbound-federation trust controls distinct
+from the tenant API key.
+
+Federated **parallel fan-out** is now supported: `call_agents_parallel`
+accepts remote (`remote_agent`) targets alongside local ones — see
+[Parallel Delegation](#parallel-delegation).
 
 ---
 
@@ -1706,6 +1742,84 @@ The `notify` array is zod-validated at agent create/update in
 `packages/http-routes/src/agents/index.ts` via `notificationTargetsSchema`
 (`packages/api-types/src/notify-schema.ts`). An invalid target (e.g. a
 non-URL `webhook.url`, or an unknown `events` value) is rejected with HTTP 422.
+
+---
+
+## Agent Hooks
+
+`agent.hooks` is Claude-Code-style hook system (issue #76 Part B): declarative
+callbacks fired around the harness tool loop that let a creator **gate** a tool
+call, **redact** its output, or trigger a **side effect** — without running any
+custom code inside the Worker/DO. Each hook dispatches to a **signed outbound
+webhook** (same transport + HMAC-SHA256 signing as the `webhook` notify
+target), and the platform reads a small JSON decision back.
+
+Hooks are attached at the agent level and inherited by every session via its
+`agent_snapshot` — same scope model as `mcp_servers` / `notify`.
+
+```json
+{
+  "hooks": [
+    {
+      "event": "pre_tool",
+      "matcher": "bash",
+      "target": { "type": "webhook", "url": "https://hooks.example.com/gate", "secret_ref": "cred_hook_secret" },
+      "timeout_ms": 3000,
+      "on_error": "closed"
+    },
+    {
+      "event": "post_tool",
+      "matcher": "*",
+      "target": { "type": "webhook", "url": "https://hooks.example.com/redact", "secret_ref": "cred_hook_secret" }
+    }
+  ]
+}
+```
+
+| Field | Required | Notes |
+|---|---|---|
+| `event` | Yes | `pre_tool` \| `post_tool` \| `session_start` \| `session_idle`. Only `pre_tool`/`post_tool` wrap the tool loop today. |
+| `matcher` | No | Tool-name filter for pre/post-tool (`"*"` or unset = every tool). |
+| `target` | Yes | `{ "type": "webhook", "url", "secret_ref?" }`. `secret_ref` is a vault credential id — the HMAC secret is resolved at dispatch time, **never inlined**. (An `mcp_tool` target variant is reserved but not yet dispatched.) |
+| `timeout_ms` | No | Outbound call timeout (default 5000). |
+| `on_error` | No | Fail policy on timeout/error/malformed response: `"open"` (default) proceeds, `"closed"` denies the tool call. |
+
+### Semantics
+
+- **`pre_tool`** fires before a tool runs. The platform POSTs
+  `{ event: "pre_tool", tool_name, tool_input, session_id }` and reads back
+  `{ decision: "allow" | "deny" | "modify", tool_input?, reason? }`:
+  - `deny` — the tool never executes; the model sees `Tool call blocked by
+    hook: <reason>`.
+  - `modify` — `tool_input` replaces the arguments passed to the tool.
+  - `allow` (or any other response) — the call proceeds unchanged.
+- **`post_tool`** fires after a tool returns. The platform POSTs
+  `{ event: "post_tool", tool_name, tool_input, tool_result, session_id }` and
+  reads back `{ decision: "allow" | "modify", tool_result?, reason? }`; a
+  `modify` replaces the observed result (e.g. redacting secrets before the
+  model sees them).
+- **Signing** — the request body is HMAC-SHA256-signed with the vault-resolved
+  secret in `X-OMA-Signature: sha256=<hex>` (Web Crypto, identical on
+  Cloudflare and Node). `X-OMA-Hook` carries the event name. When no
+  `secret_ref` is set the delivery is unsigned.
+- **Timeout + fail policy** — every hook is time-bounded (`timeout_ms`). On
+  timeout, transport error, or a malformed response the `on_error` policy
+  applies: **fail-open** (default) so a dead hook endpoint never bricks a
+  session, or **fail-closed** to deny the tool call when the hook can't be
+  reached.
+- **Rate limiting** — outbound hook volume is capped **per tenant**
+  (`hook:<tenantId>` bucket, `packages/rate-limit`). On exhaustion the hook is
+  skipped and the fail policy applies (fail-open by default).
+- **Prompt-cache safety** — hooks only wrap a tool's `execute`; tool names,
+  descriptions, and input schemas are untouched, so Anthropic's cached prefix
+  is byte-identical whether or not hooks are configured.
+
+The dispatch wrapper is `wrapToolsWithHooks` / `runPreToolHooks` /
+`runPostToolHooks` (`apps/agent/src/harness/hooks.ts`), wired into `buildTools`
+(`apps/agent/src/harness/tools.ts`) via `env.hookDeps` from `SessionDO`. The
+`hooks` array is zod-validated at agent create/update via `agentHooksSchema`
+(`packages/api-types/src/hooks-schema.ts`); an invalid hook (non-URL webhook,
+unknown event/policy) is rejected with HTTP 422.
 
 ---
 

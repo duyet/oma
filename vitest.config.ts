@@ -141,6 +141,7 @@ export default defineConfig({
       { find: "@duyet/oma-sandbox/adapters/daytona", replacement: "./packages/sandbox/src/adapters/daytona.ts" },
       { find: "@duyet/oma-sandbox/adapters/e2b", replacement: "./packages/sandbox/src/adapters/e2b.ts" },
       { find: "@duyet/oma-sandbox/adapters/boxrun", replacement: "./packages/sandbox/src/adapters/boxrun.ts" },
+      { find: "@duyet/oma-sandbox/adapters/dynamic-workers", replacement: "./packages/sandbox/src/adapters/dynamic-workers.ts" },
       { find: "@duyet/oma-sandbox/adapters/kubernetes", replacement: "./packages/sandbox/src/adapters/kubernetes.ts" },
       { find: "@duyet/oma-sandbox/adapters/k8s-bridge", replacement: "./packages/sandbox/src/adapters/k8s-bridge.ts" },
       { find: "@duyet/oma-sandbox/adapters/browser-vm", replacement: "./packages/sandbox/src/adapters/browser-vm.ts" },

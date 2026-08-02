@@ -3953,6 +3953,33 @@ export class SessionDO extends DurableObject<Env> {
   }
 
   /**
+   * Dispatch deps for agent hooks (issue #76 Part B). Reuses the same vault
+   * secret resolution and per-tenant rate-limit plumbing as the `webhook`
+   * notify target. Passed to buildTools; wrapping is a no-op unless the agent
+   * declares pre_tool/post_tool hooks.
+   */
+  private hookDispatchDeps() {
+    return {
+      httpClient: new WorkerHttpClient(),
+      resolveSecret: (ref?: string) => this.resolveWebhookSecret(ref),
+      sessionId: this.state.session_id,
+      tenantId: this.state.tenant_id,
+      rateLimitGate: this.webhookRateLimitGate(),
+      onError: (hook: { event: string }, err: unknown) => {
+        logWarn(
+          {
+            op: "session_do.hook_dispatch",
+            session_id: this.state.session_id,
+            hook_event: hook.event,
+            err,
+          },
+          "agent hook dispatch failed",
+        );
+      },
+    };
+  }
+
+  /**
    * Last `agent.message` text from the event log, for the webhook envelope's
    * `message` field. Best-effort — returns undefined when the log is empty
    * or the last agent message has no plain-text content.
@@ -4458,6 +4485,7 @@ export class SessionDO extends DurableObject<Env> {
           scheduleWakeup: (a) => this.scheduleWakeup(a),
           cancelWakeup: (id) => this.cancelWakeup(id),
           listWakeups: () => this.listWakeups(),
+          hookDeps: this.hookDispatchDeps(),
         });
 
         // Find the original tool definition (before always_ask stripping)
@@ -5374,6 +5402,7 @@ export class SessionDO extends DurableObject<Env> {
       scheduleWakeup: (a) => this.scheduleWakeup(a),
       cancelWakeup: (id) => this.cancelWakeup(id),
       listWakeups: () => this.listWakeups(),
+      hookDeps: this.hookDispatchDeps(),
       delegateToAgent: async (agentId: string, message: string) => {
         // turnThreadId is captured from the enclosing processUserMessage
         // scope (declared at the top of the function) — closure evals

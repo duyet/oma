@@ -21,6 +21,11 @@ import { BoxRunSandbox } from "@duyet/oma-sandbox/adapters/boxrun";
 // lazy `import(factoryPath)` can't bundle here (see the comment above).
 import { KubernetesRemoteSandbox } from "@duyet/oma-sandbox/adapters/kubernetes-remote";
 import { K8sBridgeSandbox } from "@duyet/oma-sandbox/adapters/k8s-bridge";
+// JS-eval-only executor backed by Cloudflare Dynamic Workers (Worker Loader
+// binding). Pure — takes the WorkerLoader interface from @duyet/oma-shared,
+// no Node builtins — so esbuild bundles it into the single-file Worker like
+// BoxRunSandbox. Availability is the env.LOADER *binding*, gated below.
+import { DynamicWorkerSandbox } from "@duyet/oma-sandbox/adapters/dynamic-workers";
 // Relay-backed executor for local (subprocess) environments on the CF
 // deployment — forwards sandbox ops to a user-paired `oma bridge daemon`
 // over the RuntimeRoom DO. Imported lazily-at-construction (not at module
@@ -523,8 +528,42 @@ export class CloudflareSandbox implements SandboxExecutor {
   async destroy(): Promise<void> {
     try {
       const sandbox = await this.getSandbox();
-      if (typeof sandbox.destroy === "function") await sandbox.destroy();
-    } catch {}
+      if (typeof sandbox.destroy === "function") {
+        // Bound the wait. The @cloudflare/sandbox SDK explicitly warns that
+        // its `destroy()` can hang indefinitely when the Containers control
+        // plane is unresponsive ("Callers that need bounded waits must apply
+        // their own timeout around destroy()" — see doc comment in the SDK's
+        // sandbox class). Without this race, a hung control plane wedges the
+        // SessionDO's /pause and /destroy request handlers forever: the
+        // caller's HTTP request never returns, the Console stop/pause button
+        // spins indefinitely, and the sandbox looks impossible to stop. Time
+        // out, log, and move on — we still invalidate the local stub below so
+        // the session no longer points at the dead container, and the
+        // underlying container is reaped by sleepAfter SIGTERM even if this
+        // particular teardown RPC never completed.
+        const timeoutMs = 30000;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timeoutPromise = new Promise<void>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(`sandbox.destroy() timed out after ${timeoutMs / 1000}s`)),
+            timeoutMs,
+          );
+        });
+        try {
+          await Promise.race([Promise.resolve(sandbox.destroy()), timeoutPromise]);
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+      }
+    } catch (err) {
+      // Format defensively: a non-Error rejection (null/undefined included)
+      // must not throw here, or it would escape this catch and skip the
+      // stale-stub invalidation below — reintroducing the very wedge this
+      // bounded destroy exists to prevent.
+      console.error(
+        `[sandbox] destroy failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
     // Invalidate the cached stub. Next `getSandbox()` call will rebuild via
     // `cfGetSandbox(env.SANDBOX, sessionId)`, which returns the same logical
     // Sandbox DO (sessionId-keyed) but with a fresh RPC connection. Without
@@ -848,6 +887,22 @@ function createRemoteSandbox(
         image: e.SANDBOX_IMAGE,
         policy,
       });
+    }
+    case "dynamic-workers": {
+      // Cloudflare Dynamic Workers — a JS-eval isolate, gated by the LOADER
+      // *binding* (declared via `worker_loaders` in wrangler.jsonc), not an
+      // env var/secret. Absent binding ⇒ fail clearly, same discipline as
+      // boxrun's missing-BOXRUN_URL path (a Node self-host deployment never
+      // reaches here — it fails in resolveEnvProvider's nodeCompatible guard).
+      const loader = (env as unknown as { LOADER?: import("@duyet/oma-shared").WorkerLoader }).LOADER;
+      if (!loader) {
+        throw new SandboxProviderUnavailableError(
+          `provider "dynamic-workers" requires the Worker Loader binding (LOADER) to be declared ` +
+            `in the agent worker's wrangler.jsonc ("worker_loaders": [{ "binding": "LOADER" }]) — ` +
+            `it is absent on this Cloudflare deployment. Dynamic Workers is Cloudflare-only.`,
+        );
+      }
+      return new DynamicWorkerSandbox({ loader, sessionId });
     }
     default:
       // daytona / e2b — cfCompatible in provider-config.ts's classification
