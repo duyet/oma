@@ -13,6 +13,20 @@ function makeManager(overrides: Partial<K8sManager> = {}): K8sManager {
 }
 
 const sampleCapacity: ClusterCapacity = {
+  available: true,
+  allocatableCpuMillicores: 7600,
+  requestedCpuMillicores: 1500,
+  allocatableMemoryMib: 15360,
+  requestedMemoryMib: 1536,
+  sandboxPods: {
+    total: 2,
+    running: 2,
+    pending: 0,
+    terminating: 0,
+    succeeded: 0,
+    failed: 0,
+    unknown: 0,
+  },
   totalCpu: "8.00",
   totalMemory: "16.00",
   allocatableCpu: "7.60",

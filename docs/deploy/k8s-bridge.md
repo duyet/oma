@@ -282,20 +282,44 @@ curl -H "Authorization: Bearer $K8S_BRIDGE_TOKEN" \
 
 ```json
 {
+  "available": true,
   "totalCpu": "4",
   "totalMemory": "16384Mi",
   "allocatableCpu": "3.5",
   "allocatableMemory": "15500Mi",
   "requestedCpu": "2",
   "requestedMemory": "6144Mi",
+  "allocatableCpuMillicores": 3500,
+  "requestedCpuMillicores": 2000,
+  "allocatableMemoryMib": 15500,
+  "requestedMemoryMib": 6144,
   "runningPods": 12,
   "maxPods": 105,
-  "estimatedAdditionalSandboxes": 3
+  "estimatedAdditionalSandboxes": 3,
+  "sandboxPods": {
+    "total": 5, "running": 3, "pending": 1, "terminating": 1,
+    "succeeded": 0, "failed": 0, "unknown": 0
+  }
 }
 ```
 
 `estimatedAdditionalSandboxes = max(0, min(remainingCpu/defaultCpu,
 remainingMem/defaultMem, remainingPodSlots))`.
+
+The `*Millicores` / `*Mib` fields are the numeric companions to the formatted
+strings above, so a client doesn't have to re-parse `"3.5"` / `"500m"` /
+`"15500Mi"` to do arithmetic. `runningPods` counts Running pods **cluster-wide**
+(the denominator for `maxPods`), while `sandboxPods` is the lifecycle breakdown
+of the pods in the bridge's **own namespace** — a pod with a `deletionTimestamp`
+counts as `terminating` and not as `running`, so a draining cluster doesn't read
+as fully occupied.
+
+**Degraded on the OpenShell backend.** With `BRIDGE_BACKEND=openshell` the
+bridge fronts a gRPC gateway and owns no cluster, so it answers `200` with
+`available: false`, a human-readable `reason`, and `sandboxPods: null` rather
+than zeros that would read as a real (full) cluster. The platform client
+(`K8sBridgeSandbox.getCapacity()`) maps that to `null` — "unknown" — instead of
+a zeroed reading.
 
 ### GET /api/v1/sandboxes
 

@@ -121,8 +121,24 @@ export class OpenShellManager implements BridgeBackend {
     return [];
   }
 
+  /**
+   * No cluster is owned here, so there is nothing truthful to report. The
+   * numbers are zeroed but flagged `available: false` with a reason, so a
+   * consumer renders "capacity unavailable" instead of "0 cores free" —
+   * and `sandboxPods` is null rather than a fabricated phase breakdown
+   * (the gateway exposes no pod phases). `runningPods` stays the one thing
+   * this backend does know: the boxes it currently holds.
+   */
   async getClusterCapacity(): Promise<ClusterCapacity> {
     return {
+      available: false,
+      reason:
+        "BRIDGE_BACKEND=openshell — this bridge fronts an OpenShell gateway and owns no Kubernetes cluster; capacity figures are unavailable",
+      allocatableCpuMillicores: 0,
+      requestedCpuMillicores: 0,
+      allocatableMemoryMib: 0,
+      requestedMemoryMib: 0,
+      sandboxPods: null,
       totalCpu: "0m",
       totalMemory: "0Mi",
       allocatableCpu: "0m",
