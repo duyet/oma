@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gt, lt, or, type SQL } from "drizzle-orm";
 import {
   asBuilder,
   getAll,
@@ -13,6 +13,7 @@ import type {
   FileRepo,
   NewFileInput,
 } from "../ports";
+import type { PageCursor } from "@duyet/oma-shared";
 import type { FileRow, FileScope } from "../types";
 
 
@@ -69,19 +70,19 @@ export class SqlFileRepo implements FileRepo {
     if (opts.sessionId !== undefined) {
       conds.push(eq(files.session_id, opts.sessionId));
     }
-    if (opts.beforeId) {
-      conds.push(lt(files.id, opts.beforeId));
-    }
-    if (opts.afterId) {
-      conds.push(gt(files.id, opts.afterId));
-    }
-    const order = opts.order === "asc" ? asc(files.created_at) : desc(files.created_at);
+    const ascending = opts.order === "asc";
+    // A seek cursor walks forward in the requested order, so "after" means
+    // greater-than when ascending and less-than when descending; "before" is
+    // its mirror. `id` is the tie-break within one created_at millisecond.
+    if (opts.after) conds.push(seek(opts.after, ascending));
+    if (opts.before) conds.push(seek(opts.before, !ascending));
+    const dir = ascending ? asc : desc;
     const rows = await getAll<typeof files.$inferSelect>(
       this.db
         .select()
         .from(files)
         .where(and(...conds))
-        .orderBy(order)
+        .orderBy(dir(files.created_at), dir(files.id))
         .limit(opts.limit),
     );
     return rows.map(toRow);
@@ -110,6 +111,18 @@ export class SqlFileRepo implements FileRepo {
     await runOnce(this.db.delete(files).where(eq(files.session_id, sessionId)));
     return rows.map(toRow);
   }
+}
+
+/**
+ * `(created_at, id)` seek predicate. `forward === true` yields the rows
+ * strictly greater than the cursor, `false` the rows strictly less.
+ */
+function seek(cursor: PageCursor, forward: boolean): SQL {
+  const cmp = forward ? gt : lt;
+  return or(
+    cmp(files.created_at, cursor.createdAt),
+    and(eq(files.created_at, cursor.createdAt), cmp(files.id, cursor.id)),
+  )!;
 }
 
 function toRow(r: typeof files.$inferSelect): FileRow {

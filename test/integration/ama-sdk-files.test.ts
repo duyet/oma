@@ -101,6 +101,69 @@ describe("AMA SDK ↔ /v1/files wire compatibility", () => {
     expect(json.scope).not.toBeUndefined(); // object form, not missing
   });
 
+  it("next_page is a real continuation token that walks every page and ends", async () => {
+    // Fixture: enough files that limit=2 forces >1 page.
+    const seeded: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const up = await client.beta.files.upload({
+        file: new File([`p${i}`], `page-${i}.txt`, { type: "text/plain" }),
+      });
+      seeded.push(up.id);
+    }
+
+    // Walk purely by `next_page` — the token the SDK's TokenPage/PageCursor
+    // families replay. A hardcoded `next_page: null` stops this loop after
+    // page 1, so `pages` would be 1 and the seeded ids would not all appear.
+    const seen: string[] = [];
+    let token: string | null = null;
+    let pages = 0;
+    do {
+      const qs = new URLSearchParams({ beta: "true", limit: "2" });
+      if (token) qs.set("page_token", token);
+      const res = await exports.default.fetch(
+        new Request(`http://localhost/v1/files?${qs}`, {
+          headers: { "x-api-key": TEST_KEY },
+        }),
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        data: Array<{ id: string }>;
+        has_more: boolean;
+        next_page: string | null;
+      };
+      pages++;
+      expect(body.data.length).toBeLessThanOrEqual(2);
+      seen.push(...body.data.map((f) => f.id));
+      // `next_page` and `has_more` must agree — both derive from the same
+      // over-fetch, and the SDK gates on `has_more` before reading the token.
+      expect(body.has_more).toBe(body.next_page !== null);
+      token = body.next_page;
+      expect(pages).toBeLessThan(50); // termination guard
+    } while (token);
+
+    expect(pages).toBeGreaterThan(1); // fails if next_page is hardcoded null
+    expect(new Set(seen).size).toBe(seen.length); // no row served twice
+    for (const id of seeded) expect(seen).toContain(id);
+  });
+
+  it("SDK auto-pagination traverses more than one page and terminates", async () => {
+    for (let i = 0; i < 4; i++) {
+      await client.beta.files.upload({
+        file: new File([`s${i}`], `sdk-${i}.txt`, { type: "text/plain" }),
+      });
+    }
+    // The beta files pager is id-based (`last_id` → `after_id`); this pins
+    // that the route honors that walk too, over the same seek position the
+    // `next_page` token encodes.
+    const ids: string[] = [];
+    for await (const meta of client.beta.files.list({ limit: 2 })) {
+      ids.push(meta.id);
+      if (ids.length > 200) break; // guard against a non-terminating pager
+    }
+    expect(ids.length).toBeGreaterThan(2);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
   it("download returns the original bytes of an uploaded artifact", async () => {
     const uploaded = await client.beta.files.upload({
       file: new File(["artifact-bytes"], "a.bin", { type: "application/octet-stream" }),

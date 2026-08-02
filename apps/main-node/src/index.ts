@@ -1944,18 +1944,30 @@ v1.get("/files", async (c) => {
   let requested = limitParam ? parseInt(limitParam, 10) : 100;
   if (isNaN(requested) || requested < 1) requested = 100;
   if (requested > 1000) requested = 1000;
-  const rows = await filesService.list({
+  const beforeId = c.req.query("before_id");
+  const afterId = c.req.query("after_id");
+  const order = c.req.query("order") === "asc" ? "asc" : "desc";
+  const pageToken = c.req.query("page_token") ?? c.req.query("page") ?? undefined;
+  const page = await filesService.listPage({
     tenantId: t,
     sessionId: scopeId,
+    cursor: pageToken,
+    beforeId,
+    afterId,
+    order,
     limit: requested,
   });
+  const data = page.items.map(toFileRecord);
   return c.json({
-    data: rows.map(toFileRecord),
-    has_more: false,
-    // Anthropic SDK Family B list schema: `next_page` is `string | null`.
-    // Node's read-only files route isn't cursor-paginated (always one page),
-    // so emit null to satisfy strict AMA spec validators.
-    next_page: null,
+    data,
+    has_more: page.nextCursor !== undefined,
+    first_id: data[0]?.id,
+    last_id: data[data.length - 1]?.id,
+    // Anthropic SDK Family B list schema: `next_page` is `string | null` — the
+    // shared (created_at, id) cursor, replayed as `?page_token=` / `?page=`.
+    // Same contract as the Cloudflare route (apps/main/src/routes/files.ts);
+    // Node has no session-outputs R2 prefix to fold in.
+    next_page: page.nextCursor ?? null,
   });
 });
 v1.get("/files/:id/content", async (c) => {
