@@ -122,11 +122,11 @@ Pull `main`, install, redeploy:
 ```bash
 git pull
 pnpm install
-npx wrangler d1 migrations apply oma-auth         --remote --config apps/main/wrangler.jsonc
-npx wrangler d1 migrations apply oma-integrations --remote --config apps/main/wrangler.jsonc
-npx wrangler deploy --config apps/main/wrangler.jsonc
-npx wrangler deploy --config apps/agent/wrangler.jsonc
-npx wrangler deploy --config apps/integrations/wrangler.jsonc
+npx wrangler d1 migrations apply oma-auth         --remote --config apps/main/wrangler.local.jsonc
+npx wrangler d1 migrations apply oma-integrations --remote --config apps/main/wrangler.local.jsonc
+npx wrangler deploy --config apps/main/wrangler.local.jsonc
+npx wrangler deploy --config apps/agent/wrangler.local.jsonc
+npx wrangler deploy --config apps/integrations/wrangler.local.jsonc
 ```
 
 Migrations are forward-only and additive by convention; rollbacks are not supported. Test against staging first if you have one.
@@ -181,7 +181,7 @@ You probably set the redirect URL on the third-party to a host that doesn't matc
 
 Your `LINEAR_WEBHOOK_SECRET` / `GITHUB_WEBHOOK_SECRET` / `SLACK_SIGNING_SECRET` is wrong, or wasn't set on the integrations Worker. Verify with:
 ```bash
-npx wrangler secret list -c apps/integrations/wrangler.jsonc
+npx wrangler secret list -c apps/integrations/wrangler.local.jsonc
 ```
 
 ## Known long-tail items

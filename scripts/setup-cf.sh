@@ -11,7 +11,9 @@
 #      - 2 D1 DBs (oma-auth, oma-integrations)
 #      - 1 KV namespace (CONFIG_KV)
 #      - 4 R2 buckets (files, workspace, memory, backups)
-#   3. Patch top-level wrangler.jsonc files with the captured IDs
+#   3. Generate apps/<app>/wrangler.local.jsonc (gitignored copies of the
+#      tracked wrangler.jsonc) with the captured IDs spliced in. The tracked
+#      files keep their `<set-by-setup-cf-sh>` placeholders and stay clean.
 #   4. Set required secrets (auto-generated where possible)
 #   5. Apply migrations (one consolidated file per D1)
 #   6. Wire R2 → memory-events queue notification
@@ -176,8 +178,35 @@ ACCOUNT_ID=$(npx wrangler whoami 2>&1 | grep -oE '\b[a-f0-9]{32}\b' | head -1)
 [ -n "$ACCOUNT_ID" ] || die "couldn't extract Cloudflare account id from `wrangler whoami`"
 ok "Cloudflare account → $ACCOUNT_ID"
 
-# ── 2. patch wrangler.jsonc files ───────────────────────────────────────
-say "2. Patch wrangler.jsonc files with resource IDs"
+# ── 2. generate wrangler.local.jsonc files ──────────────────────────────
+say "2. Generate wrangler.local.jsonc files with resource IDs"
+
+# The tracked apps/<app>/wrangler.jsonc files are the pristine source of
+# truth and keep their `<set-by-setup-cf-sh>` placeholders. We copy each one
+# to a sibling wrangler.local.jsonc (gitignored) and splice the real ids into
+# the copy, so a configured checkout has no permanently-dirty tracked files.
+# The copy lives in the same directory, so every relative path inside the
+# config (main entry, assets directory, migrations_dir) still resolves.
+MAIN_CFG="apps/main/wrangler.local.jsonc"
+AGENT_CFG="apps/agent/wrangler.local.jsonc"
+INTEGRATIONS_CFG="apps/integrations/wrangler.local.jsonc"
+
+# Seed the copy from the tracked file only when it doesn't exist yet, so a
+# re-run never clobbers hand edits (custom domain, extra bindings) the
+# operator made in their local config. The ids below are re-patched either way.
+gen_local_cfg() {
+  local src="$1" dst="$2"
+  if [ -f "$dst" ]; then
+    ok "$dst (exists — reusing, ids re-patched below)"
+  else
+    cp "$src" "$dst"
+    ok "$dst (generated from $src)"
+  fi
+}
+
+gen_local_cfg apps/main/wrangler.jsonc         "$MAIN_CFG"
+gen_local_cfg apps/agent/wrangler.jsonc        "$AGENT_CFG"
+gen_local_cfg apps/integrations/wrangler.jsonc "$INTEGRATIONS_CFG"
 
 # Find array index of a binding entry under top-level d1_databases or kv_namespaces.
 # Returns the index, or -1 if not found.
@@ -219,23 +248,23 @@ patch_var() {
 }
 
 # apps/main: AUTH_DB + INTEGRATIONS_DB + CONFIG_KV + INTEGRATIONS_ORIGIN
-patch_d1 apps/main/wrangler.jsonc AUTH_DB         "$AUTH_DB_ID"
-patch_d1 apps/main/wrangler.jsonc INTEGRATIONS_DB "$INTEGRATIONS_DB_ID"
-patch_kv apps/main/wrangler.jsonc CONFIG_KV       "$CONFIG_KV_ID"
+patch_d1 "$MAIN_CFG" AUTH_DB         "$AUTH_DB_ID"
+patch_d1 "$MAIN_CFG" INTEGRATIONS_DB "$INTEGRATIONS_DB_ID"
+patch_kv "$MAIN_CFG" CONFIG_KV       "$CONFIG_KV_ID"
 # Default INTEGRATIONS_ORIGIN to the integrations workers.dev URL — user
 # can override later if they bring a custom domain.
-patch_var apps/main/wrangler.jsonc INTEGRATIONS_ORIGIN \
+patch_var "$MAIN_CFG" INTEGRATIONS_ORIGIN \
   "https://managed-agents-integrations.${ACCOUNT_ID:0:8}.workers.dev"
 
 # apps/agent: AUTH_DB + CONFIG_KV + CLOUDFLARE_ACCOUNT_ID
-patch_d1 apps/agent/wrangler.jsonc AUTH_DB   "$AUTH_DB_ID"
-patch_kv apps/agent/wrangler.jsonc CONFIG_KV "$CONFIG_KV_ID"
-patch_var apps/agent/wrangler.jsonc CLOUDFLARE_ACCOUNT_ID "$ACCOUNT_ID"
+patch_d1 "$AGENT_CFG" AUTH_DB   "$AUTH_DB_ID"
+patch_kv "$AGENT_CFG" CONFIG_KV "$CONFIG_KV_ID"
+patch_var "$AGENT_CFG" CLOUDFLARE_ACCOUNT_ID "$ACCOUNT_ID"
 
 # apps/integrations: AUTH_DB + INTEGRATIONS_DB + GATEWAY_ORIGIN
-patch_d1 apps/integrations/wrangler.jsonc AUTH_DB         "$AUTH_DB_ID"
-patch_d1 apps/integrations/wrangler.jsonc INTEGRATIONS_DB "$INTEGRATIONS_DB_ID"
-patch_var apps/integrations/wrangler.jsonc GATEWAY_ORIGIN \
+patch_d1 "$INTEGRATIONS_CFG" AUTH_DB         "$AUTH_DB_ID"
+patch_d1 "$INTEGRATIONS_CFG" INTEGRATIONS_DB "$INTEGRATIONS_DB_ID"
+patch_var "$INTEGRATIONS_CFG" GATEWAY_ORIGIN \
   "https://managed-agents-integrations.${ACCOUNT_ID:0:8}.workers.dev"
 
 # ── 3. apply migrations ─────────────────────────────────────────────────
@@ -250,7 +279,7 @@ apply_migrations() {
   # Capture the real exit status before piping through grep, so a failed
   # migration aborts the script instead of silently continuing to deploy.
   local out status
-  out=$(npx wrangler d1 migrations apply "$db_name" --remote --config apps/main/wrangler.jsonc 2>&1)
+  out=$(npx wrangler d1 migrations apply "$db_name" --remote --config "$MAIN_CFG" 2>&1)
   status=$?
   echo "$out" | grep -E '(Applied|No migrations)' || true
   [ "$status" -eq 0 ] || die "migrations apply failed for $db_name (from $dir):"$'\n'"$out"
@@ -290,15 +319,15 @@ if [ "$SKIP_SECRETS" = "0" ]; then
   BETTER_AUTH_SECRET=$(openssl rand -hex 32)
   API_KEY=$(openssl rand -hex 16)
 
-  for cfg in apps/main/wrangler.jsonc apps/agent/wrangler.jsonc apps/integrations/wrangler.jsonc; do
+  for cfg in "$MAIN_CFG" "$AGENT_CFG" "$INTEGRATIONS_CFG"; do
     set_secret PLATFORM_ROOT_SECRET         "$PLATFORM_ROOT_SECRET"         "$cfg"
     set_secret INTEGRATIONS_INTERNAL_SECRET "$INTEGRATIONS_INTERNAL_SECRET" "$cfg"
     set_secret ANTHROPIC_API_KEY            "$ANTHROPIC_API_KEY"            "$cfg"
   done
 
   # main-only
-  set_secret BETTER_AUTH_SECRET "$BETTER_AUTH_SECRET" apps/main/wrangler.jsonc
-  set_secret API_KEY            "$API_KEY"            apps/main/wrangler.jsonc
+  set_secret BETTER_AUTH_SECRET "$BETTER_AUTH_SECRET" "$MAIN_CFG"
+  set_secret API_KEY            "$API_KEY"            "$MAIN_CFG"
 fi
 
 # ── 5. R2 → queue notification ──────────────────────────────────────────
@@ -320,13 +349,13 @@ if [ "$DO_DEPLOY" = "1" ]; then
   say "6. Deploy workers (main, agent, integrations)"
 
   echo "  → integrations (depended on by main + agent)"
-  npx wrangler deploy --config apps/integrations/wrangler.jsonc 2>&1 | tail -3
+  npx wrangler deploy --config "$INTEGRATIONS_CFG" 2>&1 | tail -3
 
   echo "  → agent (sandbox)"
-  npx wrangler deploy --config apps/agent/wrangler.jsonc 2>&1 | tail -3
+  npx wrangler deploy --config "$AGENT_CFG" 2>&1 | tail -3
 
   echo "  → main"
-  npx wrangler deploy --config apps/main/wrangler.jsonc 2>&1 | tail -3
+  npx wrangler deploy --config "$MAIN_CFG" 2>&1 | tail -3
 
   # Now that the queue consumer exists, wire the R2 → queue subscription
   say "5b. Wire R2 → queue (post-deploy)"
@@ -340,16 +369,20 @@ say "Done."
 
 cat <<EOF
 
+Your deploy config lives in apps/{main,agent,integrations}/wrangler.local.jsonc
+(gitignored). The tracked wrangler.jsonc files keep their placeholders — pass
+--config <app>/wrangler.local.jsonc to every wrangler command below.
+
 Next steps:
   - Open the main worker URL (printed above) in your browser
   - Sign up an account; the first user becomes their tenant's owner
   - To enable Slack/GitHub/Linear OAuth, set those secrets:
-      npx wrangler secret put LINEAR_CLIENT_ID --config apps/integrations/wrangler.jsonc
-      npx wrangler secret put GITHUB_APP_ID    --config apps/integrations/wrangler.jsonc
-      npx wrangler secret put SLACK_CLIENT_ID  --config apps/integrations/wrangler.jsonc
+      npx wrangler secret put LINEAR_CLIENT_ID --config apps/integrations/wrangler.local.jsonc
+      npx wrangler secret put GITHUB_APP_ID    --config apps/integrations/wrangler.local.jsonc
+      npx wrangler secret put SLACK_CLIENT_ID  --config apps/integrations/wrangler.local.jsonc
     See apps/docs/src/content/docs/self-host/oauth-apps.mdx
   - To redeploy after code changes:
-      npx wrangler deploy --config apps/main/wrangler.jsonc
+      npx wrangler deploy --config apps/main/wrangler.local.jsonc
   - To scale to multi-shard in the future: see operations.mdx (env.production).
 
 EOF
