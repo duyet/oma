@@ -528,8 +528,42 @@ export class CloudflareSandbox implements SandboxExecutor {
   async destroy(): Promise<void> {
     try {
       const sandbox = await this.getSandbox();
-      if (typeof sandbox.destroy === "function") await sandbox.destroy();
-    } catch {}
+      if (typeof sandbox.destroy === "function") {
+        // Bound the wait. The @cloudflare/sandbox SDK explicitly warns that
+        // its `destroy()` can hang indefinitely when the Containers control
+        // plane is unresponsive ("Callers that need bounded waits must apply
+        // their own timeout around destroy()" — see doc comment in the SDK's
+        // sandbox class). Without this race, a hung control plane wedges the
+        // SessionDO's /pause and /destroy request handlers forever: the
+        // caller's HTTP request never returns, the Console stop/pause button
+        // spins indefinitely, and the sandbox looks impossible to stop. Time
+        // out, log, and move on — we still invalidate the local stub below so
+        // the session no longer points at the dead container, and the
+        // underlying container is reaped by sleepAfter SIGTERM even if this
+        // particular teardown RPC never completed.
+        const timeoutMs = 30000;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timeoutPromise = new Promise<void>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(`sandbox.destroy() timed out after ${timeoutMs / 1000}s`)),
+            timeoutMs,
+          );
+        });
+        try {
+          await Promise.race([Promise.resolve(sandbox.destroy()), timeoutPromise]);
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+      }
+    } catch (err) {
+      // Format defensively: a non-Error rejection (null/undefined included)
+      // must not throw here, or it would escape this catch and skip the
+      // stale-stub invalidation below — reintroducing the very wedge this
+      // bounded destroy exists to prevent.
+      console.error(
+        `[sandbox] destroy failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
     // Invalidate the cached stub. Next `getSandbox()` call will rebuild via
     // `cfGetSandbox(env.SANDBOX, sessionId)`, which returns the same logical
     // Sandbox DO (sessionId-keyed) but with a fresh RPC connection. Without

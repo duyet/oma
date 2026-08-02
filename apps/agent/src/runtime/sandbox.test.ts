@@ -6,7 +6,7 @@
 // and daytona/e2b which are cf-compatible in principle but not bundled here
 // yet).
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import type { Env } from "@duyet/oma-shared";
 import { BoxRunSandbox } from "@duyet/oma-sandbox/adapters/boxrun";
 import { KubernetesRemoteSandbox } from "@duyet/oma-sandbox/adapters/kubernetes-remote";
@@ -170,5 +170,92 @@ describe("createSandbox", () => {
   it("defaults to CloudflareSandbox when envConfig is omitted (back-compat call shape)", () => {
     const sandbox = createSandbox(baseEnv, "sess_1");
     expect(sandbox).toBeInstanceOf(CloudflareSandbox);
+  });
+});
+
+describe("CloudflareSandbox.destroy", () => {
+  // Regression: the @cloudflare/sandbox SDK's destroy() can hang forever when
+  // the Containers control plane is unresponsive. Before the bounded-timeout
+  // fix, that hang propagated straight through SessionDO's /pause and /destroy
+  // handlers, so the caller's HTTP request never returned and the sandbox
+  // appeared impossible to stop. destroy() must resolve within the timeout and
+  // still rebuild the stub even when the underlying teardown never settles.
+  it("resolves within the timeout when the underlying destroy() hangs", async () => {
+    vi.useFakeTimers();
+    try {
+      const sandbox = new CloudflareSandbox(baseEnv, "sess_hang");
+      const hangingDestroy = vi.fn(() => new Promise<void>(() => {}));
+      (sandbox as unknown as { sandboxPromise: Promise<unknown> }).sandboxPromise =
+        Promise.resolve({ destroy: hangingDestroy });
+
+      const destroyPromise = sandbox.destroy();
+      // Let the awaited getSandbox() microtask settle before advancing timers.
+      await vi.advanceTimersByTimeAsync(30000);
+      await expect(destroyPromise).resolves.toBeUndefined();
+      expect(hangingDestroy).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The bounded wait is only half the fix: if destroy() times out but leaves
+  // the cached stub in place, the next getSandbox() hands the caller an RPC
+  // handle pointing at the container we just tore down — the stale-stub reuse
+  // that preceded the observed 53-min wedge. Assert the cache is actually
+  // rebuilt, not merely that destroy() returned.
+  it("invalidates the cached stub after the underlying destroy() times out", async () => {
+    vi.useFakeTimers();
+    try {
+      const sandbox = new CloudflareSandbox(baseEnv, "sess_hang_cache");
+      const hangingStub = { destroy: vi.fn(() => new Promise<void>(() => {})) };
+      const internals = sandbox as unknown as {
+        sandboxPromise: Promise<unknown>;
+        mounted: boolean;
+      };
+      internals.sandboxPromise = Promise.resolve(hangingStub);
+      internals.mounted = true;
+
+      const destroyPromise = sandbox.destroy();
+      await vi.advanceTimersByTimeAsync(30000);
+      await destroyPromise;
+
+      await expect(internals.sandboxPromise).resolves.not.toBe(hangingStub);
+      expect(internals.mounted).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // A non-Error rejection must not throw while being formatted for the log —
+  // that would escape the catch and skip the stale-stub invalidation above,
+  // reintroducing the wedge through a different door.
+  it.each([null, undefined, "plain string"])(
+    "still invalidates the cached stub when destroy() rejects with %s",
+    async (rejection) => {
+      const sandbox = new CloudflareSandbox(baseEnv, "sess_reject");
+      const rejectingStub = {
+        destroy: vi.fn(() => Promise.reject(rejection)),
+      };
+      const internals = sandbox as unknown as {
+        sandboxPromise: Promise<unknown>;
+        mounted: boolean;
+      };
+      internals.sandboxPromise = Promise.resolve(rejectingStub);
+      internals.mounted = true;
+
+      await expect(sandbox.destroy()).resolves.toBeUndefined();
+      await expect(internals.sandboxPromise).resolves.not.toBe(rejectingStub);
+      expect(internals.mounted).toBe(false);
+    },
+  );
+
+  it("awaits a fast destroy() without waiting for the timeout", async () => {
+    const sandbox = new CloudflareSandbox(baseEnv, "sess_fast");
+    const fastDestroy = vi.fn(async () => {});
+    (sandbox as unknown as { sandboxPromise: Promise<unknown> }).sandboxPromise =
+      Promise.resolve({ destroy: fastDestroy });
+
+    await expect(sandbox.destroy()).resolves.toBeUndefined();
+    expect(fastDestroy).toHaveBeenCalledOnce();
   });
 });
