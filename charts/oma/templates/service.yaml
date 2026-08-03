@@ -1,0 +1,20 @@
+{{/* Cluster Service for the OMA API + Console, plus the oma-vault proxy port
+     so separate sandbox pods (not just main-node on localhost) can reach it.
+     Mirrors infra/homelab/oma/service.yaml. */}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "oma.fullname" . }}
+  labels:
+    {{- include "oma.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "oma.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+    - name: vault
+      port: {{ .Values.service.vaultPort }}
+      targetPort: vault

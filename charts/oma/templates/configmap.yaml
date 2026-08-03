@@ -1,0 +1,40 @@
+{{/* Non-secret runtime env for OMA. Mirrors infra/homelab/oma/configmap.yaml.
+     Secret values (ANTHROPIC_API_KEY, BETTER_AUTH_SECRET, PLATFORM_ROOT_SECRET)
+     come from the Secret resolved by `oma.secretName`. */}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "oma.fullname" . }}
+  labels:
+    {{- include "oma.labels" . | nindent 4 }}
+data:
+  ANTHROPIC_BASE_URL: {{ .Values.config.anthropicBaseUrl | quote }}
+  PUBLIC_BASE_URL: {{ .Values.config.publicBaseUrl | quote }}
+  # Storage paths (absolute — both containers share /app/data).
+  DATABASE_PATH: {{ .Values.config.databasePath | quote }}
+  AUTH_DATABASE_PATH: {{ .Values.config.authDatabasePath | quote }}
+  SANDBOX_WORKDIR: {{ .Values.config.sandboxWorkdir | quote }}
+  MEMORY_BLOB_DIR: {{ .Values.config.memoryBlobDir | quote }}
+  FILES_BLOB_DIR: {{ .Values.config.filesBlobDir | quote }}
+  SESSION_OUTPUTS_DIR: {{ .Values.config.sessionOutputsDir | quote }}
+  # oma-vault sidecar must be reachable from sandbox pods (separate from
+  # main-node's own pod), so route via the in-cluster Service. Empty default
+  # computed below.
+  OMA_VAULT_PROXY_URL: {{ .Values.config.vaultProxyUrl | default (printf "http://%s.%s.svc.cluster.local:%d" (include "oma.fullname" .) .Release.Namespace (int .Values.vault.port)) | quote }}
+  OMA_VAULT_CA_CERT: {{ .Values.config.vaultCaCert | quote }}
+  # Cap harness output tokens. Default 4096 matches the model max.
+  OMA_MAX_OUTPUT_TOKENS: {{ .Values.config.maxOutputTokens | quote }}
+  {{- /* Force wire format when set (default "" = Anthropic /messages). */}}
+  {{- if .Values.config.apiCompat }}
+  OMA_API_COMPAT: {{ .Values.config.apiCompat | quote }}
+  {{- end }}
+  # Sandbox executor: create a Sandbox CR (agents.x-k8s.io) per session and
+  # exec tool commands into the adopted pod. Requires the RBAC in
+  # templates/rbac.yaml and serviceAccountName on the deployment. In-cluster
+  # auth is picked up automatically (KUBERNETES_SERVICE_HOST).
+  SANDBOX_PROVIDER: {{ .Values.config.sandboxProvider | quote }}
+  OMA_K8S_NAMESPACE: {{ .Values.config.k8s.namespace | default .Release.Namespace | quote }}
+  SANDBOX_IMAGE: {{ .Values.config.k8s.image | quote }}
+  OMA_K8S_CPU: {{ .Values.config.k8s.cpu | quote }}
+  OMA_K8S_MEMORY: {{ .Values.config.k8s.memory | quote }}
+  OMA_K8S_SERVICE_ACCOUNT: {{ .Values.config.k8s.serviceAccount | default (include "oma.serviceAccountName" .) | quote }}

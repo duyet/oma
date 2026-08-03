@@ -1,0 +1,47 @@
+{{/* RBAC for the k8s sandbox executor (SANDBOX_PROVIDER=k8s). main-node
+     creates one Sandbox CR (agents.x-k8s.io) per session, then execs tool
+     commands into the adopted pod (pods/exec) and tears the Sandbox down.
+     Mirrors infra/homelab/oma/rbac.yaml.
+
+     A namespaced Role/RoleBinding is sufficient: sandboxes are created in
+     this same namespace (OMA_K8S_NAMESPACE defaults to .Release.Namespace).
+     Keep this in sync with config.k8s.namespace — if you point sandboxes at
+     a different namespace, move this Role there (or widen to a ClusterRole).
+
+     This is the OMA RUNTIME's own permission to drive sandboxes. It is
+     orthogonal to the agent-sandbox CONTROLLER install
+     (templates/agent-sandbox/) which installs the CRD + controller —
+     separate concerns, do not merge them. */}}
+{{- if .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "oma.fullname" . }}-sandbox
+  labels:
+    {{- include "oma.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["agents.x-k8s.io"]
+    resources: ["sandboxes"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create", "get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "oma.fullname" . }}-sandbox
+  labels:
+    {{- include "oma.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "oma.fullname" . }}-sandbox
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "oma.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

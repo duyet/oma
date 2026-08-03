@@ -1,0 +1,23 @@
+{{/* Persistent state for OMA — sqlite dbs (oma.db, auth.db), per-session
+     sandbox workdirs, memory blobs, session outputs, and the oma-vault CA
+     cert. Shared by both containers in the pod at /app/data, exactly like
+     the ./data bind-mount in docker-compose.yml. RWO is fine: both
+     containers are co-scheduled in the same pod on the same node.
+     Mirrors infra/homelab/oma/pvc.yaml. */}}
+{{- if .Values.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "oma.fullname" . }}-data
+  labels:
+    {{- include "oma.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    {{- toYaml .Values.persistence.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size }}
+  {{- if .Values.persistence.storageClass }}
+  storageClassName: {{ .Values.persistence.storageClass | quote }}
+  {{- end }}
+{{- end }}

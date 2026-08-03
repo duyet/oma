@@ -1,0 +1,6 @@
+apiVersion: v2
+name: oma
+description: Self-hosted OMA control plane (main-node + oma-vault)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

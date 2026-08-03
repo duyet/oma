@@ -113,6 +113,34 @@ ANTHROPIC_API_KEY=sk-... BETTER_AUTH_SECRET=$(openssl rand -hex 32) \
 # Same curl flow as above against localhost:8787.
 ```
 
+### Helm (Kubernetes)
+
+For in-cluster deployment, the `charts/oma` chart packages main-node +
+oma-vault as a single-pod Deployment with a shared RWO PVC, `strategy:
+Recreate` (sqlite single-writer), the k8s sandbox provider's RBAC, and an
+optional Helm hook that auto-installs the
+[agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox)
+controller + CRDs. It mirrors the production raw manifests at
+`infra/homelab/oma/`.
+
+```bash
+kubectl create namespace oma
+kubectl -n oma create secret generic oma \
+  --from-literal=PLATFORM_ROOT_SECRET="$(openssl rand -base64 32)" \
+  --from-literal=BETTER_AUTH_SECRET="$(openssl rand -hex 32)" \
+  --from-literal=ANTHROPIC_API_KEY="sk-ant-..."
+
+helm install oma ./charts/oma --namespace oma \
+  --set secret.existingSecret=oma \
+  --set config.publicBaseUrl=https://app.oma.duyet.net \
+  --set ingress.enabled=true --set ingress.host=app.oma.duyet.net \
+  --set agentSandbox.enabled=true
+```
+
+See [`charts/oma/README.md`](../charts/oma/README.md) for the full values
+reference, secret patterns (bring-your-own vs auto-generate), and RBAC
+notes.
+
 ### Hard limits
 
 - SQLite mode: single process, single writer. To horizontally scale,
