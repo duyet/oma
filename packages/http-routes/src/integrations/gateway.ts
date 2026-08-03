@@ -299,6 +299,11 @@ export function buildIntegrationsGatewayRoutes(deps: IntegrationsGatewayDeps) {
     const code = url.searchParams.get("code");
     const state = url.searchParams.get("state");
     const error = url.searchParams.get("error");
+    // Present when the App has "Request user authorization (OAuth) during
+    // installation" enabled: GitHub sends the *install* here (Callback URL)
+    // rather than to the Setup URL. Recording it directly is what makes an
+    // install stick on deployments whose App has no Setup URL configured.
+    const installationId = url.searchParams.get("installation_id");
     const consoleOrigin = deps.consoleOrigin;
 
     let returnUrl: string | null = null;
@@ -310,16 +315,16 @@ export function buildIntegrationsGatewayRoutes(deps: IntegrationsGatewayDeps) {
         returnUrl = null;
       }
     }
-    if (error || !code || !state) {
+    if (error || !state || (!code && !installationId)) {
       return redirectManagedInstall(c, returnUrl, "error", null, consoleOrigin);
     }
 
     try {
       const result = await deps.installBridge.continueInstall({
         provider: "github",
-        code,
+        code: code ?? undefined,
         state,
-        extra: { linkExisting: true },
+        extra: { linkExisting: true, installationId },
       });
       const linked = result.linked ?? 0;
       return redirectToConsole(

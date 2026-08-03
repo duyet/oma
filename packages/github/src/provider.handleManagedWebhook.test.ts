@@ -129,4 +129,66 @@ describe("GitHubProvider.handleManagedWebhook", () => {
     );
     expect(outcome).toEqual({ handled: false, reason: "unknown_installation" });
   });
+
+  // `installation` lifecycle events are the fallback that keeps our rows
+  // honest when the user acts on github.com and no browser redirect ever
+  // reaches us.
+  it("revokes the installation row on installation.deleted", async () => {
+    const container = buildFakeGitHubContainer();
+    const provider = new GitHubProvider(container, {
+      gatewayOrigin: "https://gw.example.com",
+      defaultCapabilities: ["issue.read"],
+      mcpServerUrl: "https://api.githubcopilot.com/mcp/",
+      managedApp: MANAGED_APP,
+    });
+
+    await container.installations.insert({
+      tenantId: "tenant_1",
+      userId: "user_1",
+      providerId: "github",
+      workspaceId: "555000",
+      workspaceName: "acme",
+      installKind: "dedicated",
+      appId: null,
+      accessToken: "ghs_token",
+      refreshToken: null,
+      scopes: ["contents"],
+      botUserId: MANAGED_APP.botLogin,
+    });
+
+    const body = JSON.stringify({ action: "deleted", installation: { id: 555000 } });
+    const outcome = await provider.handleManagedWebhook({
+      ...signedRequest(body, MANAGED_APP.webhookSecret),
+      headers: {
+        "x-hub-signature-256": `sha256=expected:${MANAGED_APP.webhookSecret}:${body}`,
+        "x-github-event": "installation",
+      },
+    });
+
+    expect(outcome).toEqual({ handled: true });
+    const rows = await container.installations.listByUser("user_1", "github");
+    expect(rows).toEqual([]);
+  });
+
+  it("ignores installation.created — the payload names no OMA user", async () => {
+    const container = buildFakeGitHubContainer();
+    const provider = new GitHubProvider(container, {
+      gatewayOrigin: "https://gw.example.com",
+      defaultCapabilities: ["issue.read"],
+      mcpServerUrl: "https://api.githubcopilot.com/mcp/",
+      managedApp: MANAGED_APP,
+    });
+
+    const body = JSON.stringify({ action: "created", installation: { id: 555000 } });
+    const outcome = await provider.handleManagedWebhook({
+      ...signedRequest(body, MANAGED_APP.webhookSecret),
+      headers: {
+        "x-hub-signature-256": `sha256=expected:${MANAGED_APP.webhookSecret}:${body}`,
+        "x-github-event": "installation",
+      },
+    });
+
+    expect(outcome).toEqual({ handled: false, reason: "installation_created_ignored" });
+    expect(await container.installations.listByUser("user_1", "github")).toEqual([]);
+  });
 });

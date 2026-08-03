@@ -99,6 +99,30 @@ describe("GET /github/managed/link/callback", () => {
     expect(calls[0].extra?.workspaceManaged).toBeUndefined();
   });
 
+  // With "Request user authorization (OAuth) during installation" enabled,
+  // GitHub sends the INSTALL to this Callback URL rather than the Setup URL —
+  // there is an installation_id and (for a plain install redirect) no code.
+  // Rejecting it here is what used to lose the installation entirely.
+  it("accepts an install redirect carrying installation_id and no code", async () => {
+    const { bridge, calls } = stubBridge(async () => ({
+      publicationId: "",
+      returnUrl: RETURN_URL,
+      login: "acme",
+      linked: 1,
+    }));
+    const state = stateFor({ kind: "github.install.workspace", returnUrl: RETURN_URL });
+
+    const res = await buildGateway(bridge).request(
+      `/github/managed/link/callback?installation_id=555000&setup_action=install&state=${encodeURIComponent(state)}`,
+    );
+
+    expect(res.status).toBe(302);
+    const location = new URL(res.headers.get("location")!);
+    expect(location.searchParams.get("managed_install")).toBe("linked");
+    expect(calls).toHaveLength(1);
+    expect(calls[0].extra).toMatchObject({ linkExisting: true, installationId: "555000" });
+  });
+
   it("reports `ok` (not `linked`) when everything was already recorded", async () => {
     const { bridge } = stubBridge(async () => ({
       publicationId: "",

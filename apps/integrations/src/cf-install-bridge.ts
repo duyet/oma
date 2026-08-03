@@ -82,7 +82,10 @@ export class CfInstallBridge implements InstallBridge {
       // callback. Links every managed-App installation the connecting user
       // administers that has no row yet.
       const r = await providers.github.completeManagedInstallLink({
-        code: args.code ?? "",
+        code: args.code ?? undefined,
+        installationId: args.extra?.installationId
+          ? String(args.extra.installationId)
+          : null,
         state: args.state ?? "",
       });
       return {

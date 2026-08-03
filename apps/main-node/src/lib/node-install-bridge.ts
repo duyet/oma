@@ -189,7 +189,10 @@ export class NodeInstallBridge implements InstallBridge {
       if (args.extra?.linkExisting) {
         // Reconcile callback — user-auth code, links pre-existing installs.
         const r = await provider.completeManagedInstallLink({
-          code: args.code ?? "",
+          code: args.code ?? undefined,
+          installationId: args.extra?.installationId
+            ? String(args.extra.installationId)
+            : null,
           state: stateRaw,
         });
         return {
