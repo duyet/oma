@@ -114,6 +114,26 @@ function threadSentEventId(toolCallId: string): string {
 }
 
 /**
+ * The model the provider says actually served a step, when that differs from
+ * the handle we asked for.
+ *
+ * A gateway alias resolves late: `anyrouter/free` (or any router "auto" tier)
+ * is only a concrete `provider/model` in the response body, which the AI SDK
+ * surfaces as `step.response.modelId`. Returns undefined when the provider
+ * reports nothing, reports a blank id, or echoes the configured handle back —
+ * `span.model_request_end.model` already covers that case, and emitting a
+ * duplicate would make every consumer re-derive "did it actually differ".
+ */
+export function resolvedModelOf(
+  response: { modelId?: string } | undefined,
+  configuredModelId: string,
+): string | undefined {
+  const reported = response?.modelId?.trim();
+  if (!reported || reported === configuredModelId) return undefined;
+  return reported;
+}
+
+/**
  * Map a tool-result (or tool-error) ContentPart to a wire event,
  * normalizing the AI SDK's ToolResultOutput union into the wire's
  * `string | ContentBlock[]` representation. Also emits
@@ -626,6 +646,10 @@ export class DefaultHarness implements HarnessInterface {
           .map((p) => p.text ?? "")
           .join("");
         const providerResponseId = (step.response as { id?: string } | undefined)?.id;
+        const resolvedModel = resolvedModelOf(
+          step.response as { modelId?: string } | undefined,
+          modelId,
+        );
         // body_r2_key: pointer to the R2-persisted full request/response
         // for this provider call. Computable from session_id + event_id
         // at read time; we surface it on the event so consumers don't
@@ -638,6 +662,7 @@ export class DefaultHarness implements HarnessInterface {
           model: modelId,
           model_request_start_id: stepStartId ?? undefined,
           provider_response_id: providerResponseId,
+          ...(resolvedModel ? { resolved_model: resolvedModel } : {}),
           model_usage: step.usage ? {
             input_tokens: step.usage.inputTokens ?? 0,
             output_tokens: step.usage.outputTokens ?? 0,

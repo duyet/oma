@@ -57,6 +57,11 @@ export interface SessionAnalytics {
    *  the agent snapshot's configured model, which can lag a model-card
    *  change mid-session. */
   latestModel?: string;
+  /** Model the provider reported for the latest call when it differs from
+   *  the handle we asked for — a gateway alias (`anyrouter/free`) resolves
+   *  to a concrete `provider/model` only in the response. Undefined when the
+   *  configured handle IS what ran. */
+  latestResolvedModel?: string;
   /** Distinct model ids seen across the session, in first-seen order.
    *  More than one means an aux model or a mid-session switch was used. */
   modelsUsed: string[];
@@ -190,6 +195,7 @@ function tsOf(e: Event): number | undefined {
  *  the session page. */
 function span(e: Event): {
   model?: string;
+  resolved_model?: string;
   model_usage?: ModelUsage;
   model_request_start_id?: string;
   is_error?: boolean;
@@ -201,6 +207,7 @@ function span(e: Event): {
   const d = (raw.data ?? {}) as Record<string, unknown>;
   return {
     model: (d.model ?? raw.model) as string | undefined,
+    resolved_model: (d.resolved_model ?? raw.resolved_model) as string | undefined,
     model_usage: (d.model_usage ?? raw.model_usage) as ModelUsage | undefined,
     model_request_start_id: (d.model_request_start_id ??
       raw.model_request_start_id) as string | undefined,
@@ -226,6 +233,7 @@ export function computeSessionAnalytics(events: Event[]): SessionAnalytics {
   let erroredModelCalls = 0;
   let latest: ModelCallSample | undefined;
   let latestModel: string | undefined;
+  let latestResolvedModel: string | undefined;
   let firstTs = Infinity;
   let lastTs = -Infinity;
   let subAgentThreads = 0;
@@ -282,6 +290,9 @@ export function computeSessionAnalytics(events: Event[]): SessionAnalytics {
         totals.reasoning += usage.reasoning;
         modelCalls += 1;
         if (s.is_error) erroredModelCalls += 1;
+        // Older events carry no resolved_model at all, so clear it per call
+        // rather than letting one aliased call stick to every later one.
+        latestResolvedModel = s.resolved_model;
         if (s.model) {
           latestModel = s.model;
           if (!modelsUsed.includes(s.model)) modelsUsed.push(s.model);
@@ -361,6 +372,7 @@ export function computeSessionAnalytics(events: Event[]): SessionAnalytics {
 
   return {
     latestModel,
+    latestResolvedModel,
     modelsUsed,
     totals,
     totalTokens:

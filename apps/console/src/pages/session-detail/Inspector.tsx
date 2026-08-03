@@ -4,6 +4,8 @@ import { Link } from "react-router";
 import { useApi } from "../../lib/api";
 import { formatDuration, formatRelative, shortenId } from "../../lib/format";
 import type { Event } from "../../lib/events";
+import { RuntimeKindBadge, agentRuntimeKind } from "../../lib/runtime-kind";
+import { ModelName } from "../../lib/model-provider";
 import {
   estimateCostUsd,
   formatEstCostUsd,
@@ -234,13 +236,30 @@ function OverviewTab({
                 : "none"
           }
         />
+        <Row
+          label="Runtime"
+          value={<RuntimeKindBadge kind={agentRuntimeKind(agent ?? meta.agentSnapshot)} />}
+        />
         {agent?.description && (
           <p className="text-xs text-fg-subtle pt-1 line-clamp-3">{agent.description}</p>
         )}
       </Section>
 
       <Section title="Model">
-        <Row label="Running" value={model ?? "—"} mono title={model} />
+        <Row
+          label="Running"
+          value={model ? <ModelName model={model} className="justify-end" /> : "—"}
+          title={model}
+        />
+        {/* A gateway alias (anyrouter/free, a router "auto" tier) only names
+            a concrete model in the response — surface what actually ran. */}
+        {analytics.latestResolvedModel && (
+          <Row
+            label="Resolved to"
+            value={<ModelName model={analytics.latestResolvedModel} className="justify-end" />}
+            title={analytics.latestResolvedModel}
+          />
+        )}
         {configuredModel && configuredModel !== model && (
           <Row label="Configured" value={configuredModel} mono />
         )}

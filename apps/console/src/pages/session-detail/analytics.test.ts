@@ -44,6 +44,37 @@ function modelCall(opts: {
   ];
 }
 
+describe("computeSessionAnalytics — resolved model", () => {
+  function aliasCall(resolved?: string): Event[] {
+    return [
+      {
+        type: "span.model_request_end",
+        ts: "2026-01-01T00:00:01.000Z",
+        data: {
+          model: "anyrouter/free",
+          ...(resolved ? { resolved_model: resolved } : {}),
+          model_usage: { input_tokens: 1, output_tokens: 1 },
+        },
+      } as unknown as Event,
+    ];
+  }
+
+  it("surfaces the concrete model a gateway alias resolved to", () => {
+    const a = computeSessionAnalytics(aliasCall("anthropic/claude-sonnet-4-6"));
+    expect(a.latestModel).toBe("anyrouter/free");
+    expect(a.latestResolvedModel).toBe("anthropic/claude-sonnet-4-6");
+  });
+
+  it("leaves it unset for events written before the field existed", () => {
+    expect(computeSessionAnalytics(aliasCall()).latestResolvedModel).toBeUndefined();
+  });
+
+  it("does not carry one aliased call's resolution onto a later plain call", () => {
+    const a = computeSessionAnalytics([...aliasCall("openai/gpt-5"), ...aliasCall()]);
+    expect(a.latestResolvedModel).toBeUndefined();
+  });
+});
+
 describe("computeSessionAnalytics", () => {
   it("sums the 5-way token split across every model call", () => {
     const a = computeSessionAnalytics([

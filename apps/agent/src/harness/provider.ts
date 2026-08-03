@@ -2,6 +2,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
 import { ANYROUTER_API_BASE, ANYROUTER_API_COMPAT } from "@duyet/oma-anyrouter";
+import { attributionHeadersFor } from "./attribution";
 
 /**
  * API compatibility types:
@@ -169,11 +170,17 @@ export function resolveModel(
 
   const effectiveCompat = compat || "ant";
 
+  // Identify OMA to a gateway's dashboard (AnyRouter / OpenRouter) instead of
+  // landing in its raw user-agent bucket. Caller-supplied headers still win,
+  // so a deployment can re-attribute its own traffic.
+  const attribution = attributionHeadersFor(baseURL);
+
   if (useOpenAI(effectiveCompat)) {
+    const openaiHeaders = attribution ? { ...attribution, ...customHeaders } : customHeaders;
     const openai = createOpenAI({
       apiKey,
       baseURL: baseURL || undefined,
-      headers: customHeaders,
+      headers: openaiHeaders,
       fetch: observingFetch,
     });
     // Use chat/completions endpoint, not Responses API.
@@ -196,6 +203,7 @@ export function resolveModel(
 
   const headers: Record<string, string> = {};
   if (baseURL) headers["X-Sub-Module"] = "managed-agents";
+  if (attribution) Object.assign(headers, attribution);
   if (customHeaders) Object.assign(headers, customHeaders);
 
   // @ai-sdk/anthropic appends `/messages` directly to baseURL — no `/v1`

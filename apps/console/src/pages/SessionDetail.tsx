@@ -4,6 +4,7 @@ import { useApi, ApiError } from "../lib/api";
 import { toast } from "sonner";
 import { Markdown } from "../components/Markdown";
 import { formatDuration, formatRelative, shortenId } from "../lib/format";
+import { ModelName } from "../lib/model-provider";
 import { Badge, StatusPill } from "../components/Badge";
 import { Modal } from "../components/Modal";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,11 @@ import { TimelineView } from "../components/timeline/TimelineView";
 import type { Event } from "../lib/events";
 import type { Trajectory, TrajectoryOutcome } from "../lib/trajectory";
 import { rewardHeadline, outcomeToStatusTone } from "../lib/trajectory";
+import {
+  ensureSandboxTabForEnvironment,
+  isNoSandboxTabError,
+  openSandboxTab,
+} from "../lib/sandboxTab";
 // ai-elements primitives — used to render the chat surface (messages,
 // reasoning blocks, tool calls, prompt input). The components/ai-elements/
 // directory is shadcn-style copy-paste so we own + customize them locally.
@@ -104,6 +110,10 @@ export function SessionDetail() {
   // (we never let two POSTs be in flight at once — Send is disabled
   // while `sending`). Set to null when SSE confirms or POST settles.
   const [localPending, setLocalPending] = useState<string | null>(null);
+  // Set when a turn failed because this session's browser-vm environment has
+  // no sandbox tab paired — renders the inline open-tab-and-retry prompt.
+  const [needsSandboxTab, setNeedsSandboxTab] = useState(false);
+  const lastSentTextRef = useRef("");
   const [agentId, setAgentId] = useState("");
   const [sessionMeta, setSessionMeta] = useState<{
     environmentId?: string;
@@ -359,6 +369,18 @@ export function SessionDetail() {
         next.delete(tid);
         return next;
       });
+    }
+
+    // A browser-vm turn that found no paired sandbox tab surfaces as the
+    // warmup-failure agent.message (SessionDO) or a session.error carrying
+    // the same relay message. Either way, offer the open-tab-and-retry
+    // prompt instead of leaving the operator with a dead-end error.
+    if (ev.type === "agent.message" || ev.type === "session.error") {
+      const text = [
+        ...((ev as { content?: Array<{ text?: string }> }).content ?? []).map((c) => c.text ?? ""),
+        (ev as { message?: string }).message ?? "",
+      ].join(" ");
+      if (isNoSandboxTabError(text)) setNeedsSandboxTab(true);
     }
 
     const key = eventKey(ev);
@@ -733,6 +755,12 @@ export function SessionDetail() {
     setInput("");
     setLocalPending(text || (files?.length ? (files.length === 1 ? "🖼️ Image" : `🖼️ ${files.length} images`) : ""));
     setSending(true);
+    lastSentTextRef.current = text;
+    setNeedsSandboxTab(false);
+    // browser-vm environments execute in a paired browser tab. Open it from
+    // inside this submit handler (user gesture ⇒ the popup blocker allows
+    // it) when none is online; the backend waits ~45s for it to pair.
+    await ensureSandboxTabForEnvironment(api, sessionMeta.environmentId);
     try {
       // Upload attachments first so the user.message can reference them
       // by file_id. Each file is scoped to this session via scope_id so
@@ -1378,6 +1406,29 @@ export function SessionDetail() {
               conversation above on a `bg-bg` (white) surface — no
               line, no top padding, just `pb-4` for breathing room
               below. */}
+          {needsSandboxTab && (
+            <div className="mx-3 mb-2 rounded-lg border border-border bg-bg-surface px-4 py-3 text-sm text-fg-muted flex items-center gap-3 shrink-0">
+              <span className="flex-1">
+                This session's environment runs its sandbox in a browser tab, and none is
+                connected yet.
+              </span>
+              <Button
+                size="sm"
+                onClick={async () => {
+                  const opened = await openSandboxTab(api);
+                  if (!opened) return;
+                  setNeedsSandboxTab(false);
+                  const retry = lastSentTextRef.current;
+                  if (!retry) return;
+                  // Give the tab a moment to pair + boot its VM before the
+                  // retry; the backend then waits for it to come online.
+                  setTimeout(() => { void send(retry); }, 2000);
+                }}
+              >
+                Open sandbox tab & retry
+              </Button>
+            </div>
+          )}
           <div className="pl-3 pr-4 pb-4 bg-bg shrink-0">
             <PromptInput
               accept="image/*"
@@ -1808,9 +1859,11 @@ function ContextInfoStrip({
           aria-expanded={expanded}
           className="w-full flex items-center gap-2 px-3 py-2 text-left rounded-lg hover:bg-bg-surface/60 transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
         >
-          <span className="font-mono text-xs text-fg-muted truncate" title="Model">
-            {model}
-          </span>
+          <ModelName
+            model={model}
+            resolved={agg.latestResolvedModel}
+            className="font-mono text-xs text-fg-muted"
+          />
           {reasoningEffort && (
             <span
               className="shrink-0 text-[11px] px-1.5 py-0.5 rounded-full bg-bg-surface text-fg-muted font-medium"
@@ -2221,11 +2274,19 @@ function EventRender({
       // observational — render nothing unless it actually carries token
       // numbers (e.g. the onError/onAbort emits never include model_usage).
       const raw = event as {
-        data?: { model?: string; model_usage?: Record<string, number> };
+        data?: {
+          model?: string;
+          resolved_model?: string;
+          model_usage?: Record<string, number>;
+        };
         model?: string;
+        resolved_model?: string;
         model_usage?: Record<string, number>;
       };
       const model = raw.data?.model ?? raw.model;
+      // Only present when a gateway alias (e.g. anyrouter/free) resolved to
+      // a different concrete model than the one we asked for.
+      const resolvedModel = raw.data?.resolved_model ?? raw.resolved_model;
       const usage = raw.data?.model_usage ?? raw.model_usage;
       const inputTokens = usage?.input_tokens;
       const outputTokens = usage?.output_tokens;
@@ -2237,7 +2298,13 @@ function EventRender({
           <span>
             {inputTokens ?? 0} in · {outputTokens ?? 0} out · {total} total
           </span>
-          {model && <span className="opacity-70">({model})</span>}
+          {model && (
+            <ModelName
+              model={model}
+              resolved={resolvedModel}
+              className="opacity-70"
+            />
+          )}
         </div>
       );
     }

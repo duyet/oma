@@ -1076,6 +1076,12 @@ export interface SpanModelRequestEndEvent extends EventBase {
    *  `chatcmpl-...`, etc.). Useful for tracing back to provider dashboards
    *  / logs when investigating a specific call. */
   provider_response_id?: string;
+  /** Model the provider says actually served the request, when it differs
+   *  from the configured handle. A gateway alias/preset (`anyrouter/free`,
+   *  a router's "auto" tier) resolves to a concrete `provider/model` only in
+   *  the response, so `model` alone can't tell you what ran. Omitted when
+   *  the provider reports nothing or reports the same id we asked for. */
+  resolved_model?: string;
   model_usage?: {
     input_tokens: number;
     output_tokens: number;
