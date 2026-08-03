@@ -1,0 +1,252 @@
+---
+// Meta-harness flow, drawn as one self-contained inline SVG: a user message
+// walks Client → API → SessionDO (append-only event log) → harness → model,
+// with tool calls fanning into the sandbox and outbound traffic passing the
+// vault proxy. Colours come from theme tokens so it reads in light and dark.
+const toolChips = ["bash", "read", "write", "edit", "glob", "grep"];
+---
+
+<figure class="mh-figure">
+  <svg
+    class="mh-svg"
+    viewBox="0 0 900 452"
+    role="img"
+    aria-labelledby="mh-title mh-desc"
+    preserveAspectRatio="xMidYMid meet"
+  >
+    <title id="mh-title">Meta-harness request flow</title>
+    <desc id="mh-desc">
+      A user message goes from the client to the HTTP API, is appended to the
+      SessionDO event log, wakes the harness, which calls the model provider and
+      dispatches tool calls into the sandbox. Outbound sandbox traffic passes an
+      outbound proxy that injects vault credentials. Events stream back to the
+      client over SSE.
+    </desc>
+
+    <defs>
+      <marker id="mh-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" class="mh-arrowhead" />
+      </marker>
+      <marker id="mh-arrow-dash" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" class="mh-arrowhead mh-arrowhead-brand" />
+      </marker>
+    </defs>
+
+    <!-- Row 1: client → API → SessionDO → harness -->
+    <g>
+      <rect x="16" y="40" width="150" height="76" rx="10" class="mh-box" />
+      <text x="91" y="70" class="mh-box-title">Client</text>
+      <text x="91" y="90" class="mh-box-sub">Console · CLI · API</text>
+      <text x="91" y="106" class="mh-box-sub">x-api-key</text>
+
+      <rect x="206" y="40" width="150" height="76" rx="10" class="mh-box" />
+      <text x="281" y="70" class="mh-box-title">HTTP API</text>
+      <text x="281" y="90" class="mh-box-sub">/v1/sessions</text>
+      <text x="281" y="106" class="mh-box-sub">/events</text>
+
+      <rect x="396" y="28" width="216" height="100" rx="10" class="mh-box mh-box-state" />
+      <text x="504" y="54" class="mh-box-title">SessionDO</text>
+      <text x="504" y="72" class="mh-box-sub">append-only SQLite event log</text>
+      <g class="mh-log">
+        <rect x="418" y="84" width="172" height="9" rx="2" />
+        <rect x="418" y="98" width="140" height="9" rx="2" />
+        <rect x="418" y="112" width="104" height="9" rx="2" class="mh-log-head" />
+      </g>
+
+      <rect x="652" y="40" width="150" height="76" rx="10" class="mh-box mh-box-policy" />
+      <text x="727" y="70" class="mh-box-title">Harness</text>
+      <text x="727" y="90" class="mh-box-sub">context · tool steps</text>
+      <text x="727" y="106" class="mh-box-sub">swappable by name</text>
+    </g>
+
+    <!-- Row 1 connectors -->
+    <g class="mh-wire">
+      <path d="M166 78 H200" marker-end="url(#mh-arrow)" />
+      <path d="M356 78 H390" marker-end="url(#mh-arrow)" />
+      <path d="M612 78 H646" marker-end="url(#mh-arrow)" />
+    </g>
+    <text x="183" y="66" class="mh-edge">POST</text>
+    <text x="373" y="66" class="mh-edge">append</text>
+    <text x="629" y="66" class="mh-edge">wake</text>
+
+    <!-- SSE feedback loop back to the client -->
+    <path
+      d="M504 128 V166 H91 V122"
+      class="mh-wire mh-wire-feedback"
+      marker-end="url(#mh-arrow-dash)"
+    />
+    <text x="300" y="182" class="mh-edge mh-edge-brand">SSE · agent.* + session.* events, persisted then broadcast</text>
+
+    <!-- Row 2: model provider + sandbox -->
+    <g>
+      <rect x="652" y="216" width="150" height="76" rx="10" class="mh-box" />
+      <text x="727" y="246" class="mh-box-title">Model provider</text>
+      <text x="727" y="266" class="mh-box-sub">Anthropic · OpenAI-compat</text>
+      <text x="727" y="282" class="mh-box-sub">model cards</text>
+
+      <rect x="286" y="216" width="326" height="96" rx="10" class="mh-box mh-box-boundary" />
+      <text x="449" y="243" class="mh-box-title">Sandbox</text>
+      <text x="449" y="261" class="mh-box-sub">isolated exec — no credentials inside</text>
+      {
+        toolChips.map((chip, i) => (
+          <g>
+            <rect x={306 + i * 48} y={274} width="42" height="22" rx="6" class="mh-chip" />
+            <text x={327 + i * 48} y={289} class="mh-chip-text">
+              {chip}
+            </text>
+          </g>
+        ))
+      }
+    </g>
+
+    <g class="mh-wire">
+      <path d="M727 122 V210" marker-end="url(#mh-arrow)" />
+      <path d="M710 210 V190 H500 V210" marker-end="url(#mh-arrow)" />
+    </g>
+    <text x="737" y="170" class="mh-edge mh-edge-left">model call</text>
+    <text x="600" y="182" class="mh-edge">tool call</text>
+
+    <!-- Row 3: vault proxy boundary -->
+    <g>
+      <rect x="286" y="352" width="326" height="72" rx="10" class="mh-box mh-box-vault" />
+      <text x="449" y="380" class="mh-box-title">Outbound proxy · vault</text>
+      <text x="449" y="400" class="mh-box-sub">matches the host, injects Authorization</text>
+      <text x="449" y="416" class="mh-box-sub">tokens never enter the sandbox</text>
+
+      <rect x="652" y="352" width="150" height="72" rx="10" class="mh-box" />
+      <text x="727" y="384" class="mh-box-title">Internet</text>
+      <text x="727" y="404" class="mh-box-sub">APIs · MCP · git</text>
+    </g>
+
+    <g class="mh-wire">
+      <path d="M449 312 V346" marker-end="url(#mh-arrow)" />
+      <path d="M612 388 H646" marker-end="url(#mh-arrow)" />
+    </g>
+    <text x="459" y="334" class="mh-edge mh-edge-left">egress</text>
+
+    <!-- Ownership legend rails -->
+    <text x="16" y="20" class="mh-legend">platform owns what the agent has</text>
+    <text x="884" y="20" class="mh-legend mh-legend-end">harness owns how the loop runs</text>
+  </svg>
+</figure>
+
+<style>
+  .mh-figure {
+    margin: 0;
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+  }
+  .mh-svg {
+    display: block;
+    width: 100%;
+    min-width: 46rem;
+    height: auto;
+  }
+
+  .mh-box {
+    fill: var(--color-card);
+    stroke: var(--color-border);
+    stroke-width: 1.25;
+  }
+  .mh-box-state {
+    stroke: color-mix(in srgb, var(--color-blue) 55%, var(--color-border));
+    fill: color-mix(in srgb, var(--color-blue) 7%, var(--color-card));
+  }
+  .mh-box-policy {
+    stroke: color-mix(in srgb, var(--color-green) 55%, var(--color-border));
+    fill: color-mix(in srgb, var(--color-green) 7%, var(--color-card));
+  }
+  .mh-box-boundary {
+    stroke: color-mix(in srgb, var(--color-brand) 50%, var(--color-border));
+    fill: color-mix(in srgb, var(--color-brand) 5%, var(--color-card));
+  }
+  .mh-box-vault {
+    stroke: color-mix(in srgb, var(--color-brand) 60%, var(--color-border));
+    fill: color-mix(in srgb, var(--color-brand) 8%, var(--color-card));
+    stroke-dasharray: 5 4;
+  }
+
+  .mh-box-title {
+    fill: var(--color-fg);
+    font-family: var(--font-display, inherit);
+    font-size: 15px;
+    font-weight: 600;
+    text-anchor: middle;
+  }
+  .mh-box-sub {
+    fill: var(--color-fg-muted);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    text-anchor: middle;
+  }
+
+  .mh-log rect {
+    fill: color-mix(in srgb, var(--color-blue) 30%, transparent);
+  }
+  .mh-log .mh-log-head {
+    fill: var(--color-blue);
+  }
+
+  .mh-chip {
+    fill: color-mix(in srgb, var(--color-brand) 10%, var(--color-card));
+    stroke: color-mix(in srgb, var(--color-brand) 35%, var(--color-border));
+    stroke-width: 1;
+  }
+  .mh-chip-text {
+    fill: var(--color-fg-muted);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    text-anchor: middle;
+  }
+
+  .mh-wire {
+    fill: none;
+    stroke: var(--color-border-strong);
+    stroke-width: 1.5;
+  }
+  .mh-wire-feedback {
+    stroke: color-mix(in srgb, var(--color-brand) 60%, transparent);
+    stroke-dasharray: 6 5;
+  }
+  .mh-arrowhead {
+    fill: var(--color-border-strong);
+    stroke: none;
+  }
+  .mh-arrowhead-brand {
+    fill: color-mix(in srgb, var(--color-brand) 75%, transparent);
+  }
+
+  .mh-edge {
+    fill: var(--color-fg-subtle);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-anchor: middle;
+  }
+  .mh-edge-left {
+    text-anchor: start;
+  }
+  .mh-edge-brand {
+    fill: color-mix(in srgb, var(--color-brand) 85%, var(--color-fg-subtle));
+  }
+  .mh-legend {
+    fill: var(--color-fg-subtle);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .mh-legend-end {
+    text-anchor: end;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .mh-wire-feedback {
+      animation: mh-dash 1.4s linear infinite;
+    }
+  }
+  @keyframes mh-dash {
+    to {
+      stroke-dashoffset: -22;
+    }
+  }
+</style>
