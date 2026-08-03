@@ -124,14 +124,14 @@ interface IntegrationStatusMap {
  * Every page gets its own item, filed under a labeled group, so the whole
  * surface is legible at rest rather than hidden one tab-click deep behind
  * a hub. The groups deliberately mirror the hub boundaries defined in
- * `main.tsx` (SESSIONS_HUB / RESOURCES_HUB / PUBLISHING_HUB /
- * SETTINGS_HUB) — an item deep-links straight to a tab, and the hub page
- * still renders its own tab strip, so the two navigations agree instead
- * of describing different structures. The Integrations hub (which also
- * serves the PUBLISHING_HUB tab strip in main.tsx) is filed under
- * Resources here with an aggregate count badge rather than a per-provider
- * sub-menu, collapsing three provider rows into one. Agents keeps a
- * chevron sub-item (New Agent) for its fast-path create flow. */
+ * `main.tsx` (SESSIONS_HUB / RESOURCES_HUB / SETTINGS_HUB) — an item
+ * deep-links straight to a tab, and the hub page still renders its own
+ * tab strip, so the two navigations agree instead of describing different
+ * structures. The Integrations hub (My Bots + Linear/GitHub/Slack, which
+ * has no tab strip of its own) is filed under Resources here with an
+ * aggregate count badge rather than a per-provider sub-menu, collapsing
+ * three provider rows into one. Agents keeps a chevron sub-item (New
+ * Agent) for its fast-path create flow. */
 const navGroups: NavGroup[] = [
   {
     label: "Workspace",

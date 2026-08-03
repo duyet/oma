@@ -94,7 +94,7 @@ import { consolePlugins } from "./plugins/registry";
  */
 
 /**
- * Hub configs — the tab strips for the four tabbed hub pages. Tabs are
+ * Hub configs — the tab strips for the three tabbed hub pages. Tabs are
  * absolute paths so each hub's `<HubLayout>` works regardless of the base
  * path its children mount under (the layout routes below are pathless).
  */
@@ -128,15 +128,6 @@ const RESOURCES_HUB: HubConfig = {
     { label: "Skills", path: "/skills", description: "Reusable prompt fragments and files attached to agents." },
     { label: "Files", path: "/files", description: "Uploaded files agents can mount into a session's sandbox." },
     { label: "Model Cards", path: "/model-cards", description: "Model + provider + credential bindings agents reference by handle." },
-  ],
-};
-
-const PUBLISHING_HUB: HubConfig = {
-  title: "Publishing",
-  description: "Publish agents as bots and connect them to your tools.",
-  tabs: [
-    { label: "My Bots", path: "/my-bots" },
-    { label: "Integrations", path: "/integrations" },
   ],
 };
 
@@ -311,78 +302,75 @@ const protectedRoutes: RouteObject[] = [
     ],
   },
 
-  // ── Publishing hub ── My Bots + Linear / GitHub / Slack integrations.
+  // ── My Bots + Linear / GitHub / Slack integrations. No shared hub tab
+  // strip — the Integrations sidebar item (Resources group) is the nav
+  // for this whole subtree, and each page renders its own header.
+  { path: "my-bots", element: <MyBots />, handle: { crumb: "My Bots" } },
   {
-    element: <HubLayout {...PUBLISHING_HUB} />,
+    path: "integrations",
+    handle: { crumb: "Integrations" },
     children: [
-      { path: "my-bots", element: <MyBots />, handle: { crumb: "My Bots" } },
+      { index: true, element: <IntegrationsHub /> },
       {
-        path: "integrations",
-        handle: { crumb: "Integrations" },
+        path: "linear",
+        handle: { crumb: "Linear" },
         children: [
-          { index: true, element: <IntegrationsHub /> },
+          { index: true, element: <IntegrationsLinearList /> },
           {
-            path: "linear",
-            handle: { crumb: "Linear" },
-            children: [
-              { index: true, element: <IntegrationsLinearList /> },
-              {
-                path: "publish",
-                element: <IntegrationsLinearPublishPage />,
-                handle: { crumb: "Publish" },
-              },
-              {
-                path: "install-pat",
-                element: <IntegrationsLinearPatInstallPage />,
-                handle: { crumb: "Install PAT" },
-              },
-              {
-                path: "installations/:id",
-                element: <IntegrationsLinearWorkspace />,
-                handle: { crumb: "Workspace" },
-              },
-            ],
+            path: "publish",
+            element: <IntegrationsLinearPublishPage />,
+            handle: { crumb: "Publish" },
           },
           {
-            path: "github",
-            handle: { crumb: "GitHub" },
-            children: [
-              { index: true, element: <IntegrationsGitHubList /> },
-              {
-                path: "bind",
-                element: <IntegrationsGitHubBindPage />,
-                handle: { crumb: "Bind" },
-              },
-              {
-                path: "installations/:id",
-                element: <IntegrationsGitHubWorkspace />,
-                handle: { crumb: "Workspace" },
-              },
-            ],
+            path: "install-pat",
+            element: <IntegrationsLinearPatInstallPage />,
+            handle: { crumb: "Install PAT" },
           },
           {
-            path: "slack",
-            handle: { crumb: "Slack" },
-            children: [
-              { index: true, element: <IntegrationsSlackList /> },
-              {
-                path: "publish",
-                element: <IntegrationsSlackPublishPage />,
-                handle: { crumb: "Publish" },
-              },
-              {
-                path: "installations/:id",
-                element: <IntegrationsSlackWorkspace />,
-                handle: { crumb: "Workspace" },
-              },
-            ],
-          },
-          {
-            path: "telegram",
-            handle: { crumb: "Telegram" },
-            children: [{ index: true, element: <IntegrationsTelegramSetup /> }],
+            path: "installations/:id",
+            element: <IntegrationsLinearWorkspace />,
+            handle: { crumb: "Workspace" },
           },
         ],
+      },
+      {
+        path: "github",
+        handle: { crumb: "GitHub" },
+        children: [
+          { index: true, element: <IntegrationsGitHubList /> },
+          {
+            path: "bind",
+            element: <IntegrationsGitHubBindPage />,
+            handle: { crumb: "Bind" },
+          },
+          {
+            path: "installations/:id",
+            element: <IntegrationsGitHubWorkspace />,
+            handle: { crumb: "Workspace" },
+          },
+        ],
+      },
+      {
+        path: "slack",
+        handle: { crumb: "Slack" },
+        children: [
+          { index: true, element: <IntegrationsSlackList /> },
+          {
+            path: "publish",
+            element: <IntegrationsSlackPublishPage />,
+            handle: { crumb: "Publish" },
+          },
+          {
+            path: "installations/:id",
+            element: <IntegrationsSlackWorkspace />,
+            handle: { crumb: "Workspace" },
+          },
+        ],
+      },
+      {
+        path: "telegram",
+        handle: { crumb: "Telegram" },
+        children: [{ index: true, element: <IntegrationsTelegramSetup /> }],
       },
     ],
   },
