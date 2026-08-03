@@ -370,15 +370,15 @@ input:focus-visible,
   color: var(--color-fg);
 }
 .arch-layer + .arch-layer {
-  margin-top: 1.25rem;
+  margin-top: 2rem;
 }
 .arch-layer::before {
   content: "";
   position: absolute;
   left: 1.5rem;
-  top: -1.25rem;
+  top: -2rem;
   width: 2px;
-  height: 1.25rem;
+  height: 2rem;
   background: var(--color-border-strong);
 }
 .arch-layer:first-child::before {
@@ -442,7 +442,7 @@ input:focus-visible,
 .lifecycle-track {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 @media (min-width: 640px) {
   .lifecycle-track {
@@ -519,7 +519,7 @@ input:focus-visible,
 }
 .meta-harness-split {
   display: grid;
-  gap: 1rem;
+  gap: 1.5rem;
 }
 @media (min-width: 768px) {
   .meta-harness-split {
@@ -1154,7 +1154,7 @@ input:focus-visible,
 .topology-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1.5rem;
+  gap: 2rem;
 }
 @media (min-width: 768px) {
   .topology-grid {
