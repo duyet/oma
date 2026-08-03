@@ -77,6 +77,38 @@ How it works:
 
 The GitHub integration ships in `packages/github/` with thin CF wrappers in `apps/integrations/src/routes/github/`.
 
+### Managed App — how an install gets recorded
+
+A tenant can connect **several** GitHub accounts/orgs: each install is its own
+`github_installations` row, and Console → **Integrations → GitHub** lists them
+all (account login + avatar, installation id, repo scope, permissions, install
+date, **Disconnect**), with **Add another account** to run the flow again.
+
+An install becomes a row through any of three paths — the extras exist because
+GitHub only redirects back when the App is configured to:
+
+1. **Setup URL** — `<gateway-origin>/github/managed/callback`. GitHub sends
+   `?installation_id=…&setup_action=install&state=…` here after the user picks
+   an org. **This URL must be set by hand** on github.com (App settings →
+   *Post installation → Setup URL*, "Redirect on update" on); it is not
+   derivable from the manifest of an already-registered App.
+2. **OAuth Callback URL** — `<gateway-origin>/github/managed/link/callback`.
+   With *Request user authorization (OAuth) during installation* enabled,
+   GitHub redirects the install **here** instead, carrying `installation_id`
+   plus our own state; the callback records that installation directly. This is
+   what keeps installs from being lost when no Setup URL is configured.
+3. **Sync installations** — the same callback without an `installation_id`:
+   the user authorizes, we read `GET /user/installations` and write a row for
+   every install of our App they administer that has none. Attribution is the
+   user's own token, so a tenant can never claim an org it doesn't administer.
+
+Uninstalls flow the other way: the managed App's `installation` webhook
+(`deleted` / `suspend`) revokes the matching row, so an account removed on
+github.com stops being listed even though no browser redirect happened.
+`installation.created` is deliberately **not** recorded from the webhook — the
+payload names a GitHub sender, not an OMA user, and guessing the owner would
+attach an org to the wrong workspace.
+
 ## Slack
 
 Publish an agent into a Slack workspace as a dedicated bot — `@mention`able in channels, replies in threads, joins DMs, hosts the AI assistant pane. Per-channel sessions: one running session per `(publication, channel)`, with all events in that channel converging on the same session id.

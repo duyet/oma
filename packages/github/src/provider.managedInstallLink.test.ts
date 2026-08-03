@@ -170,6 +170,57 @@ describe("GitHubProvider.beginManagedInstallLink", () => {
 });
 
 describe("GitHubProvider.completeManagedInstallLink", () => {
+  // The App can be configured with "Request user authorization (OAuth) during
+  // installation", in which case GitHub sends the install to the OAuth
+  // Callback URL — this route — instead of the Setup URL, and carries
+  // `installation_id` + the connect flow's own state. Without this the
+  // install completes on github.com and is never recorded.
+  it("records an install redirected here with installation_id and no code", async () => {
+    const container = buildFakeGitHubContainer();
+    const provider = await providerWithKey(container);
+    const { url } = await provider.beginManagedWorkspaceInstall({
+      userId: "user_1",
+      returnUrl: RETURN_URL,
+    });
+    const state = new URL(url).searchParams.get("state")!;
+
+    // Only the record pair — no user-token exchange, no /user/installations.
+    container.http.respondWith(...recordInstallationPair("acme"));
+
+    const result = await provider.completeManagedInstallLink({
+      state,
+      installationId: "555000",
+    });
+
+    expect(result.linked).toBe(1);
+    expect(result.logins).toEqual(["acme"]);
+    expect(result.returnUrl).toBe(RETURN_URL);
+    const installs = await container.installations.listByUser("user_1", "github");
+    expect(installs.map((i) => i.workspaceId)).toEqual(["555000"]);
+  });
+
+  it("counts an installation_id already recorded as existing", async () => {
+    const container = buildFakeGitHubContainer();
+    const provider = await providerWithKey(container);
+    const { url } = await provider.beginManagedWorkspaceInstall({
+      userId: "user_1",
+      returnUrl: RETURN_URL,
+    });
+    const state = new URL(url).searchParams.get("state")!;
+
+    container.http.respondWith(...recordInstallationPair("acme"));
+    await provider.completeManagedInstallLink({ state, installationId: "555000" });
+
+    // No responses queued: a second record attempt would throw.
+    const again = await provider.completeManagedInstallLink({
+      state,
+      installationId: "555000",
+    });
+    expect(again.linked).toBe(0);
+    expect(again.existing).toBe(1);
+    expect(container.vaults.created.length).toBe(1);
+  });
+
   it("links the user's un-recorded installation of our App", async () => {
     const container = buildFakeGitHubContainer();
     const provider = await providerWithKey(container);
