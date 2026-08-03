@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
@@ -126,16 +126,24 @@ describe("<CreateScheduleDialog />", () => {
     );
     const { onCreated } = renderDialog(existingSchedule);
 
-    // Prefilled from the schedule prop.
-    expect(screen.getByDisplayValue("0 8 * * *")).toBeInTheDocument();
+    // Prefilled from the schedule prop — "0 8 * * *" reopens as the Daily
+    // preset at 08:00 rather than as raw cron text.
+    expect(screen.getByRole("combobox", { name: "Select cadence" })).toHaveTextContent(
+      "Daily",
+    );
+    expect(screen.getByLabelText("Time")).toHaveValue("08:00");
     expect(screen.getByDisplayValue("America/New_York")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Post the daily digest")).toBeInTheDocument();
     expect(screen.getByDisplayValue("3")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument();
 
-    const cronInput = screen.getByDisplayValue("0 8 * * *");
-    await user.clear(cronInput);
-    await user.type(cronInput, "0 9 * * 1");
+    // Retarget it to Mondays at 9 AM through the presets.
+    fireEvent.change(screen.getByLabelText("Time"), { target: { value: "09:00" } });
+    await user.click(screen.getByRole("combobox", { name: "Select cadence" }));
+    await user.click(await screen.findByRole("option", { name: /Weekly/ }));
+    expect(screen.getByRole("combobox", { name: "Select day of week" })).toHaveTextContent(
+      "Monday",
+    );
 
     await user.click(screen.getByRole("button", { name: "Save changes" }));
 

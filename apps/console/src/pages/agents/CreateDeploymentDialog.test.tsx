@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
@@ -96,10 +96,10 @@ describe("<CreateDeploymentDialog />", () => {
     // Switch the Trigger select to Schedule.
     await user.click(screen.getByRole("combobox", { name: /Select trigger/ }));
     await user.click(await screen.findByRole("option", { name: /Schedule/ }));
-    // Cron input revealed — override the default.
-    const cron = screen.getByPlaceholderText("0 9 * * 1");
-    await user.clear(cron);
-    await user.type(cron, "0 6 * * *");
+    // Cadence picker revealed — retarget it to every day at 6 AM.
+    await user.click(screen.getByRole("combobox", { name: "Select cadence" }));
+    await user.click(await screen.findByRole("option", { name: /Daily/ }));
+    fireEvent.change(screen.getByLabelText("Time"), { target: { value: "06:00" } });
 
     await user.click(screen.getByRole("button", { name: "Create deployment" }));
 

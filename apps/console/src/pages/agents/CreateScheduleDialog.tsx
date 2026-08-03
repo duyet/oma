@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { EnvironmentPicker } from "../../components/ResourcePicker";
 import type { AgentRecord as Agent } from "../../types/agent";
 import type { AgentSchedule } from "./schedule-types";
+import { CronPresetPicker } from "./CronPresetPicker";
+import { DEFAULT_CRON_VALUE, buildCron, matchCron, type CronPresetValue } from "./cron-presets";
 
 interface Props {
   open: boolean;
@@ -36,7 +38,7 @@ export function CreateScheduleDialog({ open, onClose, agent, schedule, onCreated
   const { api } = useApi();
   const isEdit = !!schedule;
 
-  const [cron, setCron] = useState("0 9 * * 1");
+  const [cron, setCron] = useState<CronPresetValue>(DEFAULT_CRON_VALUE);
   const [timezone, setTimezone] = useState("UTC");
   const [environmentId, setEnvironmentId] = useState("");
   const [input, setInput] = useState("");
@@ -46,13 +48,15 @@ export function CreateScheduleDialog({ open, onClose, agent, schedule, onCreated
   useEffect(() => {
     if (!open) return;
     if (schedule) {
-      setCron(schedule.cron_expression);
+      // Reopen on the preset it was created from; anything hand-written
+      // falls back to Custom with the expression intact.
+      setCron(matchCron(schedule.cron_expression));
       setTimezone(schedule.timezone || "UTC");
       setEnvironmentId(schedule.environment_id);
       setInput(schedule.input);
       setMaxSessions(String(schedule.max_sessions ?? 1));
     } else {
-      setCron("0 9 * * 1");
+      setCron(DEFAULT_CRON_VALUE);
       setTimezone("UTC");
       setEnvironmentId("");
       setInput("");
@@ -61,15 +65,18 @@ export function CreateScheduleDialog({ open, onClose, agent, schedule, onCreated
     setSubmitting(false);
   }, [open, schedule]);
 
+  const cronExpression = buildCron(cron);
   const canSubmit =
-    cron.trim().length > 0 && environmentId.length > 0 && input.trim().length > 0;
+    cronExpression.trim().length > 0 &&
+    environmentId.length > 0 &&
+    input.trim().length > 0;
 
   const submit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
     try {
       const body: Record<string, unknown> = {
-        cron_expression: cron.trim(),
+        cron_expression: cronExpression.trim(),
         timezone: timezone.trim() || "UTC",
         environment_id: environmentId,
         input: input.trim(),
@@ -118,19 +125,13 @@ export function CreateScheduleDialog({ open, onClose, agent, schedule, onCreated
       }
     >
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label htmlFor="sch-cron" className="text-sm text-fg-muted block mb-1">
-              Cron expression
-            </label>
-            <input
-              id="sch-cron"
-              value={cron}
-              onChange={(e) => setCron(e.target.value)}
-              className={`${inputCls} font-mono`}
-              placeholder="0 9 * * 1"
-            />
-          </div>
+        <div className="grid grid-cols-2 gap-2 items-start">
+          <CronPresetPicker
+            value={cron}
+            onChange={setCron}
+            timezone={timezone.trim() || "UTC"}
+            idPrefix="sch"
+          />
           <div>
             <label htmlFor="sch-tz" className="text-sm text-fg-muted block mb-1">
               Timezone

@@ -12,6 +12,8 @@ import {
 } from "../../components/ResourcePicker";
 import type { AgentRecord as Agent } from "../../types/agent";
 import type { Deployment, TriggerType } from "./deployment-types";
+import { CronPresetPicker } from "./CronPresetPicker";
+import { DEFAULT_CRON_VALUE, buildCron, type CronPresetValue } from "./cron-presets";
 
 interface Props {
   open: boolean;
@@ -41,7 +43,7 @@ export function CreateDeploymentDialog({ open, onClose, agent, versions, onCreat
   const [vaultIds, setVaultIds] = useState<string[]>([]);
   const [memoryStoreIds, setMemoryStoreIds] = useState<string[]>([]);
   const [trigger, setTrigger] = useState<TriggerType>("manual");
-  const [cron, setCron] = useState("0 9 * * 1");
+  const [cron, setCron] = useState<CronPresetValue>(DEFAULT_CRON_VALUE);
   const [timezone, setTimezone] = useState("UTC");
   const [submitting, setSubmitting] = useState(false);
   // Set on a successful webhook-trigger create so we can show the URL.
@@ -57,7 +59,7 @@ export function CreateDeploymentDialog({ open, onClose, agent, versions, onCreat
     setVaultIds([]);
     setMemoryStoreIds([]);
     setTrigger("manual");
-    setCron("0 9 * * 1");
+    setCron(DEFAULT_CRON_VALUE);
     setTimezone("UTC");
     setSubmitting(false);
     setCreatedWebhookUrl(null);
@@ -65,11 +67,13 @@ export function CreateDeploymentDialog({ open, onClose, agent, versions, onCreat
 
   const orderedVersions = [...versions].sort((a, b) => b.version - a.version);
 
+  const cronExpression = buildCron(cron);
+
   const canSubmit =
     name.trim().length > 0 &&
     message.trim().length > 0 &&
     environmentId.length > 0 &&
-    (trigger !== "schedule" || cron.trim().length > 0);
+    (trigger !== "schedule" || cronExpression.trim().length > 0);
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -77,7 +81,11 @@ export function CreateDeploymentDialog({ open, onClose, agent, versions, onCreat
     try {
       const triggerBody =
         trigger === "schedule"
-          ? { type: "schedule", cron_expression: cron.trim(), timezone: timezone.trim() || "UTC" }
+          ? {
+              type: "schedule",
+              cron_expression: cronExpression.trim(),
+              timezone: timezone.trim() || "UTC",
+            }
           : { type: trigger };
       const body: Record<string, unknown> = {
         name: name.trim(),
@@ -250,19 +258,14 @@ export function CreateDeploymentDialog({ open, onClose, agent, versions, onCreat
           )}
 
           {trigger === "schedule" && (
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <div>
-                <label htmlFor="dep-cron" className="text-xs text-fg-muted block mb-0.5">
-                  Cron expression
-                </label>
-                <input
-                  id="dep-cron"
-                  value={cron}
-                  onChange={(e) => setCron(e.target.value)}
-                  className={`${inputCls} font-mono`}
-                  placeholder="0 9 * * 1"
-                />
-              </div>
+            <div className="mt-2 grid grid-cols-2 gap-2 items-start">
+              <CronPresetPicker
+                value={cron}
+                onChange={setCron}
+                timezone={timezone.trim() || "UTC"}
+                idPrefix="dep"
+                compact
+              />
               <div>
                 <label htmlFor="dep-tz" className="text-xs text-fg-muted block mb-0.5">
                   Timezone
