@@ -33,14 +33,60 @@ export class RecordingSandbox implements SandboxExecutor {
   /** Ordered, append-only recording log. Publicly readable for assertions. */
   readonly recordings: SandboxRecording[] = [];
 
-  constructor(public readonly inner: SandboxExecutor) {}
+  // ── required methods (always present on inner, no guard needed) ───────
+
+  exec!: (command: string, timeout?: number) => Promise<string>;
+  readFile!: (path: string) => Promise<string>;
+  writeFile!: (path: string, content: string) => Promise<string>;
+
+  // ── optional methods ──────────────────────────────────────────────────
+  //
+  // Declared as optional instance properties (not prototype methods) so that
+  // `typeof wrapped.startProcess === "function"` is false when the inner
+  // executor doesn't implement it. Presence-of-method capability probes that
+  // callers use to decide whether to invoke an optional method will correctly
+  // see `undefined` on the wrapper — mirroring the inner's surface exactly.
+  startProcess?: (command: string) => Promise<ProcessHandle | null>;
+  setEnvVars?: (envVars: Record<string, string>) => Promise<void>;
+  gitCheckout?: (
+    repoUrl: string,
+    options: { branch?: string; targetDir?: string },
+  ) => Promise<unknown>;
+  registerCommandSecrets?: (commandPrefix: string, secrets: Record<string, string>) => void;
+  setOutboundContext?: (opts: { tenantId: string; sessionId: string }) => Promise<void>;
+  setBackupContext?: (opts: {
+    tenantId: string;
+    environmentId: string;
+    sessionId: string;
+  }) => Promise<void>;
+  snapshotWorkspaceNow?: () => Promise<void>;
+  readFileBytes?: (path: string) => Promise<Uint8Array>;
+  writeFileBytes?: (path: string, bytes: Uint8Array) => Promise<string>;
+  mountMemoryStore?: (opts: {
+    storeName: string;
+    storeId: string;
+    readOnly: boolean;
+  }) => Promise<void>;
+  mountSessionOutputs?: (opts: { tenantId: string; sessionId: string }) => Promise<void>;
+  createWorkspaceBackup?: (opts: {
+    name?: string;
+    ttlSec: number;
+  }) => Promise<{ id: string; dir: string; localBucket?: boolean } | null>;
+  restoreWorkspaceBackup?: (handle: {
+    id: string;
+    dir: string;
+    localBucket?: boolean;
+  }) => Promise<{ ok: boolean; error?: string }>;
+  destroy?: () => Promise<void>;
+  renewActivityTimeout?: () => Promise<void>;
+  ping?: () => Promise<{ status: "ok" | "error"; latencyMs: number; details?: string }>;
+  getCapacity?: () => Promise<SandboxCapacity | null>;
+
+  constructor(public readonly inner: SandboxExecutor) {
+    this.install();
+  }
 
   // ── recording mechanics ───────────────────────────────────────────────
-  //
-  // Every async method funnels through `record`: push a fresh recording,
-  // run the inner call, then mutate that recording in place with either
-  // `result` or `error`. Re-throws on failure so the wrapper is invisible
-  // to the caller — only observability changes, never control flow.
 
   private async record<T>(op: string, args: unknown[], fn: () => Promise<T>): Promise<T> {
     const r: SandboxRecording = { op, args, ts: Date.now() };
@@ -59,6 +105,107 @@ export class RecordingSandbox implements SandboxExecutor {
    *  whose declared return type is nullable (void / unknown / T | null). */
   private notImplemented(op: string, args: unknown[]): void {
     this.recordings.push({ op, args, error: "not implemented", ts: Date.now() });
+  }
+
+  /** Wire up required methods (always present on the interface) and attach
+   *  wrapped versions of each optional method that the inner executor
+   *  actually defines. Methods absent on the inner stay `undefined` so that
+   *  `typeof wrapped.<method>` probes reflect the inner's real capability. */
+  private install(): void {
+    // Required methods — always bound and recording.
+    this.exec = (command, timeout) =>
+      this.record("exec", [command, timeout], () => this.inner.exec(command, timeout));
+    this.readFile = (path) =>
+      this.record("readFile", [path], () => this.inner.readFile(path));
+    this.writeFile = (path, content) =>
+      this.record("writeFile", [path, content], () => this.inner.writeFile(path, content));
+
+    // Optional methods — only attached when the inner provides them.
+    this.installOptional("startProcess", async (command: string) => {
+      return this.record("startProcess", [command], () =>
+        this.inner.startProcess!.call(this.inner, command));
+    });
+    this.installOptional("setEnvVars", async (envVars: Record<string, string>) => {
+      await this.record("setEnvVars", [envVars], () =>
+        this.inner.setEnvVars!.call(this.inner, envVars));
+    });
+    this.installOptional("gitCheckout", async (repoUrl: string, options: { branch?: string; targetDir?: string }) => {
+      return this.record("gitCheckout", [repoUrl, options], () =>
+        this.inner.gitCheckout!.call(this.inner, repoUrl, options));
+    });
+    this.installOptional("snapshotWorkspaceNow", async () => {
+      await this.record("snapshotWorkspaceNow", [], () => this.inner.snapshotWorkspaceNow!.call(this.inner));
+    });
+    this.installOptional("readFileBytes", async (path: string) => {
+      return this.record("readFileBytes", [path], () => this.inner.readFileBytes!.call(this.inner, path));
+    });
+    this.installOptional("writeFileBytes", async (path: string, bytes: Uint8Array) => {
+      return this.record("writeFileBytes", [path, bytes], () => this.inner.writeFileBytes!.call(this.inner, path, bytes));
+    });
+    this.installOptional("mountMemoryStore", async (opts: { storeName: string; storeId: string; readOnly: boolean }) => {
+      await this.record("mountMemoryStore", [opts], () => this.inner.mountMemoryStore!.call(this.inner, opts));
+    });
+    this.installOptional("mountSessionOutputs", async (opts: { tenantId: string; sessionId: string }) => {
+      await this.record("mountSessionOutputs", [opts], () => this.inner.mountSessionOutputs!.call(this.inner, opts));
+    });
+    this.installOptional("createWorkspaceBackup", async (opts: { name?: string; ttlSec: number }) => {
+      return this.record("createWorkspaceBackup", [opts], () => this.inner.createWorkspaceBackup!.call(this.inner, opts));
+    });
+    this.installOptional("restoreWorkspaceBackup", async (handle: { id: string; dir: string; localBucket?: boolean }) => {
+      return this.record("restoreWorkspaceBackup", [handle], () => this.inner.restoreWorkspaceBackup!.call(this.inner, handle));
+    });
+    this.installOptional("destroy", async () => {
+      await this.record("destroy", [], () => this.inner.destroy!.call(this.inner));
+    });
+    this.installOptional("renewActivityTimeout", async () => {
+      await this.record("renewActivityTimeout", [], () => this.inner.renewActivityTimeout!.call(this.inner));
+    });
+    this.installOptional("ping", async () => {
+      return this.record("ping", [], () => this.inner.ping!.call(this.inner));
+    });
+    this.installOptional("getCapacity", async () => {
+      return this.record("getCapacity", [], () => this.inner.getCapacity!.call(this.inner));
+    });
+
+    // Sync optional method — handled separately because it can't go through
+    // the async `record` helper. Conditionally attached same as above.
+    if (typeof this.inner.registerCommandSecrets === "function") {
+      this.registerCommandSecrets = (commandPrefix: string, secrets: Record<string, string>) => {
+        const r: SandboxRecording = {
+          op: "registerCommandSecrets",
+          args: [commandPrefix, secrets],
+          ts: Date.now(),
+        };
+        this.recordings.push(r);
+        try {
+          this.inner.registerCommandSecrets!.call(this.inner, commandPrefix, secrets);
+          r.result = undefined;
+        } catch (e) {
+          r.error = e instanceof Error ? e.message : String(e);
+          throw e;
+        }
+      };
+    }
+
+    // setOutboundContext and setBackupContext — always attach if present on inner.
+    this.installOptional("setOutboundContext", async (opts: { tenantId: string; sessionId: string }) => {
+      await this.record("setOutboundContext", [opts], () => this.inner.setOutboundContext!.call(this.inner, opts));
+    });
+    this.installOptional("setBackupContext", async (opts: { tenantId: string; environmentId: string; sessionId: string }) => {
+      await this.record("setBackupContext", [opts], () => this.inner.setBackupContext!.call(this.inner, opts));
+    });
+  }
+
+  /** Attach a wrapped optional method only when the inner implements it.
+   *  When the inner lacks the method, the property stays `undefined` —
+   *  preserving `typeof` probe honesty. */
+  private installOptional<K extends keyof SandboxExecutor>(
+    key: K,
+    wrapper: (...args: unknown[]) => Promise<unknown>,
+  ): void {
+    if (typeof this.inner[key] === "function") {
+      (this as Record<string, unknown>)[key as string] = wrapper;
+    }
   }
 
   // ── assertions ────────────────────────────────────────────────────────
@@ -106,219 +253,6 @@ export class RecordingSandbox implements SandboxExecutor {
    *  after diff without the live log mutating under them. */
   snapshot(): SandboxRecording[] {
     return JSON.parse(JSON.stringify(this.recordings)) as SandboxRecording[];
-  }
-
-  // ── required methods (always present on inner, no guard needed) ───────
-
-  exec(command: string, timeout?: number): Promise<string> {
-    return this.record("exec", [command, timeout], () => this.inner.exec(command, timeout));
-  }
-
-  readFile(path: string): Promise<string> {
-    return this.record("readFile", [path], () => this.inner.readFile(path));
-  }
-
-  writeFile(path: string, content: string): Promise<string> {
-    return this.record("writeFile", [path, content], () => this.inner.writeFile(path, content));
-  }
-
-  // ── optional methods ──────────────────────────────────────────────────
-  //
-  // Each optional method first binds the inner impl to a local. Methods
-  // are stored as instance properties on `this.inner`, so extracting
-  // `this.inner.foo` detaches `this` — we restore it with `.call`. When
-  // the inner doesn't implement the method, we record "not implemented"
-  // and either return a type-correct null/undefined or throw for
-  // non-nullable return types (can't fabricate a Uint8Array honestly).
-
-  async startProcess(command: string): Promise<ProcessHandle | null> {
-    const fn = this.inner.startProcess;
-    if (!fn) {
-      this.notImplemented("startProcess", [command]);
-      return null;
-    }
-    return this.record("startProcess", [command], () => fn.call(this.inner, command));
-  }
-
-  async setEnvVars(envVars: Record<string, string>): Promise<void> {
-    const fn = this.inner.setEnvVars;
-    if (!fn) {
-      this.notImplemented("setEnvVars", [envVars]);
-      return;
-    }
-    return this.record("setEnvVars", [envVars], () => fn.call(this.inner, envVars));
-  }
-
-  async gitCheckout(
-    repoUrl: string,
-    options: { branch?: string; targetDir?: string },
-  ): Promise<unknown> {
-    const fn = this.inner.gitCheckout;
-    if (!fn) {
-      this.notImplemented("gitCheckout", [repoUrl, options]);
-      return undefined;
-    }
-    return this.record("gitCheckout", [repoUrl, options], () =>
-      fn.call(this.inner, repoUrl, options),
-    );
-  }
-
-  registerCommandSecrets(commandPrefix: string, secrets: Record<string, string>): void {
-    // Sync method — inline the recording instead of going through the
-    // async `record` helper; result is always undefined for a void call.
-    const fn = this.inner.registerCommandSecrets;
-    const r: SandboxRecording = {
-      op: "registerCommandSecrets",
-      args: [commandPrefix, secrets],
-      ts: Date.now(),
-    };
-    this.recordings.push(r);
-    if (!fn) {
-      r.error = "not implemented";
-      return;
-    }
-    try {
-      fn.call(this.inner, commandPrefix, secrets);
-      r.result = undefined;
-    } catch (e) {
-      r.error = e instanceof Error ? e.message : String(e);
-      throw e;
-    }
-  }
-
-  async setOutboundContext(opts: { tenantId: string; sessionId: string }): Promise<void> {
-    const fn = this.inner.setOutboundContext;
-    if (!fn) {
-      this.notImplemented("setOutboundContext", [opts]);
-      return;
-    }
-    return this.record("setOutboundContext", [opts], () => fn.call(this.inner, opts));
-  }
-
-  async setBackupContext(opts: {
-    tenantId: string;
-    environmentId: string;
-    sessionId: string;
-  }): Promise<void> {
-    const fn = this.inner.setBackupContext;
-    if (!fn) {
-      this.notImplemented("setBackupContext", [opts]);
-      return;
-    }
-    return this.record("setBackupContext", [opts], () => fn.call(this.inner, opts));
-  }
-
-  async snapshotWorkspaceNow(): Promise<void> {
-    const fn = this.inner.snapshotWorkspaceNow;
-    if (!fn) {
-      this.notImplemented("snapshotWorkspaceNow", []);
-      return;
-    }
-    return this.record("snapshotWorkspaceNow", [], () => fn.call(this.inner));
-  }
-
-  async readFileBytes(path: string): Promise<Uint8Array> {
-    const fn = this.inner.readFileBytes;
-    if (!fn) {
-      // Non-nullable return type — can't fabricate bytes, throw honestly.
-      this.notImplemented("readFileBytes", [path]);
-      throw new Error("readFileBytes not implemented by inner sandbox");
-    }
-    return this.record("readFileBytes", [path], () => fn.call(this.inner, path));
-  }
-
-  async writeFileBytes(path: string, bytes: Uint8Array): Promise<string> {
-    const fn = this.inner.writeFileBytes;
-    if (!fn) {
-      this.notImplemented("writeFileBytes", [path, bytes]);
-      throw new Error("writeFileBytes not implemented by inner sandbox");
-    }
-    return this.record("writeFileBytes", [path, bytes], () => fn.call(this.inner, path, bytes));
-  }
-
-  async mountMemoryStore(opts: {
-    storeName: string;
-    storeId: string;
-    readOnly: boolean;
-  }): Promise<void> {
-    const fn = this.inner.mountMemoryStore;
-    if (!fn) {
-      this.notImplemented("mountMemoryStore", [opts]);
-      return;
-    }
-    return this.record("mountMemoryStore", [opts], () => fn.call(this.inner, opts));
-  }
-
-  async mountSessionOutputs(opts: { tenantId: string; sessionId: string }): Promise<void> {
-    const fn = this.inner.mountSessionOutputs;
-    if (!fn) {
-      this.notImplemented("mountSessionOutputs", [opts]);
-      return;
-    }
-    return this.record("mountSessionOutputs", [opts], () => fn.call(this.inner, opts));
-  }
-
-  async createWorkspaceBackup(opts: {
-    name?: string;
-    ttlSec: number;
-  }): Promise<{ id: string; dir: string; localBucket?: boolean } | null> {
-    const fn = this.inner.createWorkspaceBackup;
-    if (!fn) {
-      this.notImplemented("createWorkspaceBackup", [opts]);
-      return null;
-    }
-    return this.record("createWorkspaceBackup", [opts], () => fn.call(this.inner, opts));
-  }
-
-  async restoreWorkspaceBackup(handle: {
-    id: string;
-    dir: string;
-    localBucket?: boolean;
-  }): Promise<{ ok: boolean; error?: string }> {
-    const fn = this.inner.restoreWorkspaceBackup;
-    if (!fn) {
-      this.notImplemented("restoreWorkspaceBackup", [handle]);
-      throw new Error("restoreWorkspaceBackup not implemented by inner sandbox");
-    }
-    return this.record("restoreWorkspaceBackup", [handle], () => fn.call(this.inner, handle));
-  }
-
-  async destroy(): Promise<void> {
-    const fn = this.inner.destroy;
-    if (!fn) {
-      this.notImplemented("destroy", []);
-      return;
-    }
-    return this.record("destroy", [], () => fn.call(this.inner));
-  }
-
-  async renewActivityTimeout(): Promise<void> {
-    const fn = this.inner.renewActivityTimeout;
-    if (!fn) {
-      this.notImplemented("renewActivityTimeout", []);
-      return;
-    }
-    return this.record("renewActivityTimeout", [], () => fn.call(this.inner));
-  }
-
-  async ping(): Promise<{ status: "ok" | "error"; latencyMs: number; details?: string }> {
-    const fn = this.inner.ping;
-    if (!fn) {
-      this.notImplemented("ping", []);
-      // ping's contract is "does not throw" — return a healthy default
-      // rather than fabricating an error when the inner skips it.
-      return { status: "ok", latencyMs: 0 };
-    }
-    return this.record("ping", [], () => fn.call(this.inner));
-  }
-
-  async getCapacity(): Promise<SandboxCapacity | null> {
-    const fn = this.inner.getCapacity;
-    if (!fn) {
-      this.notImplemented("getCapacity", []);
-      return null;
-    }
-    return this.record("getCapacity", [], () => fn.call(this.inner));
   }
 }
 

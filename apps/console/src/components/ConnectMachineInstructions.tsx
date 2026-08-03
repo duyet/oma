@@ -42,8 +42,8 @@ export function ConnectMachineInstructions({
   copied: string | null;
   onCopy: (text: string, key: string) => void;
 }) {
-  const copy = (text: string, key: string) => {
-    navigator.clipboard.writeText(text);
+  const copy = async (text: string, key: string) => {
+    await navigator.clipboard.writeText(text);
     onCopy(text, key);
     toast.success("Copied");
   };
@@ -71,7 +71,7 @@ export function ConnectMachineInstructions({
             <li key={a.name}>
               <span className="text-fg">{a.name}</span> —{" "}
               <button
-                onClick={() => copy(a.cmd, `agent-${a.name}`)}
+                onClick={() => void copy(a.cmd, `agent-${a.name}`)}
                 className="inline-flex items-center gap-1 font-mono text-fg-muted hover:text-brand transition-colors"
               >
                 {a.cmd}

@@ -17,8 +17,11 @@
 import type { SandboxExecutor, ProcessHandle, SandboxCapacity } from "../src/ports";
 
 export class FakeSandbox implements SandboxExecutor {
-  /** In-memory file map: absolute path → string contents. */
-  files = new Map<string, string>();
+  /** In-memory file map: absolute path → string contents.
+   *  Text files are stored as strings; binary files are stored as
+   *  { __bytes: Uint8Array } so readFileBytes returns them round-trip without
+   *  TextEncoder/TextDecoder UTF-8 corruption. */
+  files = new Map<string, string | { __bytes: Uint8Array }>();
   /** Every command passed to exec() and startProcess(), in call order. */
   commands: string[] = [];
   /** Merged env vars from setEnvVars(); readable for assertions. */
@@ -156,7 +159,11 @@ export class FakeSandbox implements SandboxExecutor {
     if (v === undefined) {
       throw new Error(`FakeSandbox.readFileBytes: no file at "${path}"`);
     }
-    return new TextEncoder().encode(v);
+    if (typeof v === "string") {
+      return new TextEncoder().encode(v);
+    }
+    // Stored as raw bytes — return a copy so callers can't mutate our cache.
+    return new Uint8Array(v.__bytes);
   }
 
   async writeFile(path: string, content: string): Promise<string> {
@@ -166,7 +173,9 @@ export class FakeSandbox implements SandboxExecutor {
   }
 
   async writeFileBytes(path: string, bytes: Uint8Array): Promise<string> {
-    this.files.set(path, new TextDecoder().decode(bytes));
+    // Store raw bytes directly — no TextDecoder round-trip that would
+    // corrupt non-UTF-8 data (images, archives, binaries).
+    this.files.set(path, { __bytes: new Uint8Array(bytes) });
     return path;
   }
 

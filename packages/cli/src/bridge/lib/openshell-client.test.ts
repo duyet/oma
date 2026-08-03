@@ -11,7 +11,7 @@ import { dirname, join } from "node:path";
 import { OPENSHELL_PROTO } from "./openshell-client.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const adapterPath = join(here, "../../../../sandbox/src/adapters/openshell.ts");
+const adapterPath = join(here, "../../../../sandbox-sdk/src/adapters/openshell.ts");
 
 function extractAdapterProto(): string {
   const src = readFileSync(adapterPath, "utf-8");

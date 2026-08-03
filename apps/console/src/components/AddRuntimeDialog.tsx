@@ -2,7 +2,7 @@
 // (BYOK sandbox backends) and "Connect local machine" (bridge daemon).
 // Both options share the same visual weight; icon and text are
 // baseline-aligned by the Tabs primitive (items-center + gap-1.5).
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SettingsIcon, TerminalIcon } from "lucide-react";
 
 import { Modal } from "./Modal";
@@ -27,6 +27,12 @@ export function AddRuntimeDialog({
   onCopy: (text: string, key: string) => void;
 }) {
   const [mode, setMode] = useState<"config" | "connect">(defaultMode);
+
+  // Sync internal mode when defaultMode changes (e.g. parent switches tab
+  // while dialog stays mounted), so reopening on a different tab lands there.
+  useEffect(() => {
+    setMode(defaultMode);
+  }, [defaultMode]);
 
   return (
     <Modal
