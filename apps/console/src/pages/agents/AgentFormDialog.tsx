@@ -39,6 +39,15 @@ import {
 import type { AgentRecord as Agent } from "../../types/agent";
 import { HarnessPicker } from "./HarnessPicker";
 import { harnessOption } from "./harness-options";
+import {
+  DEFAULT_ENV_METADATA_KEY,
+  browserVmEnvironments,
+  newBrowserEnvironmentBody,
+  type EnvironmentLite,
+} from "./browser-env";
+import { useApiQuery } from "../../lib/useApiQuery";
+import { RUNTIME_KINDS, RUNTIME_KIND_METADATA_KEY } from "../../lib/runtime-kind";
+import { ModelProviderMark } from "../../lib/model-provider";
 
 // ─── Template card presentation ───────────────────────────────────────────
 // Maps a template's `icon` key (data/templates.ts) to its lucide glyph. The
@@ -267,6 +276,18 @@ export function formToConfig(form: FormState) {
   } else if (form.harness !== "default") {
     config._oma = { harness: form.harness };
   }
+  // Browser runtime: not a harness, a sandbox provider. The agent records
+  // which browser-vm environment its sessions should start on; the harness
+  // above is untouched.
+  if (form.browserEnvId) {
+    config.metadata = {
+      [DEFAULT_ENV_METADATA_KEY]: form.browserEnvId,
+      // Explicit marker: which sandbox provider an environment uses isn't
+      // knowable from an agent row alone, so every surface that renders the
+      // runtime kind would otherwise need the environment list.
+      [RUNTIME_KIND_METADATA_KEY]: "browser",
+    };
+  }
   return config;
 }
 
@@ -334,12 +355,15 @@ export function configToForm(parsed: Record<string, unknown>): FormState {
       : [],
     runtimeId: rb?.runtime_id ?? "",
     acpAgentId: rb?.acp_agent_id ?? "claude-agent-acp",
-    harness:
-      oma?.harness === "claude-agent-sdk" ||
-      oma?.harness === "long-running" ||
-      oma?.harness === "poolside"
-        ? oma.harness
-        : "default",
+    browserEnvId: (() => {
+      const meta = parsed.metadata as Record<string, unknown> | undefined;
+      const id = meta?.[DEFAULT_ENV_METADATA_KEY];
+      return typeof id === "string" ? id : "";
+    })(),
+    // Preserve whatever the agent already declares, including harnesses the
+    // picker no longer offers — editing an agent must never rewrite it. A
+    // config with no `_oma.harness` really is the server default.
+    harness: oma?.harness && oma.harness !== "acp-proxy" ? oma.harness : "default",
     localSkillBlocklist: Array.isArray(rb?.local_skill_blocklist)
       ? rb.local_skill_blocklist
       : [],
@@ -371,9 +395,13 @@ export const INITIAL_FORM = {
   // default cloud agent.
   runtimeId: "",
   acpAgentId: "claude-agent-acp",
+  // When set, the agent runs in Browser mode: its sessions default to this
+  // browser-vm environment. Mutually exclusive with runtimeId in the UI.
+  browserEnvId: "",
   // Cloud harness — ignored (implicitly "acp-proxy") whenever runtimeId is
-  // set. "default" emits no _oma.harness at all (server default).
-  harness: "default" as "default" | "claude-agent-sdk" | "long-running" | "poolside",
+  // set. "default" emits no _oma.harness at all (server default); it is only
+  // ever reached by hydrating an older agent, not by the picker.
+  harness: "claude-agent-sdk" as string,
   /** Local skill ids to HIDE from this agent's ACP child. Empty = all
    *  detected local skills are visible (the daemon's default). */
   localSkillBlocklist: [] as string[],
@@ -606,6 +634,12 @@ export function AgentCreateForm({
         };
       } else if (form.harness !== "default") {
         payload._oma = { harness: form.harness };
+      }
+      if (form.browserEnvId) {
+        payload.metadata = {
+          [DEFAULT_ENV_METADATA_KEY]: form.browserEnvId,
+          [RUNTIME_KIND_METADATA_KEY]: "browser",
+        };
       }
 
       const agent = await api<Agent>("/v1/agents", {
@@ -1149,6 +1183,66 @@ interface BasicTabProps {
   selectedCardId: string;
 }
 
+/**
+ * Browser-mode panel: choose which `browser-vm` environment this agent's
+ * sessions start on, or create one when the tenant has none. The harness is
+ * unchanged — only the sandbox moves into the user's browser tab.
+ */
+export function BrowserRuntimePanel({
+  value,
+  environments,
+  onChange,
+}: {
+  value: string;
+  environments: EnvironmentLite[];
+  onChange: (id: string) => void;
+}) {
+  const { api } = useApi();
+  const [creating, setCreating] = useState(false);
+
+  const createEnvironment = async () => {
+    setCreating(true);
+    try {
+      const env = await api<{ id: string }>("/v1/environments", {
+        method: "POST",
+        body: JSON.stringify(newBrowserEnvironmentBody()),
+      });
+      onChange(env.id);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 space-y-2">
+      <p className="text-xs text-fg-subtle bg-bg-surface px-3 py-2 rounded-lg">
+        Sessions run their sandbox inside a browser tab you open from the session page — no
+        container, no machine to pair. The model and harness below still apply.
+      </p>
+      {environments.length === 0 ? (
+        <Button variant="secondary" onClick={createEnvironment} disabled={creating}>
+          {creating ? "Creating…" : "Create a browser environment"}
+        </Button>
+      ) : (
+        <div>
+          <label className="text-sm text-fg-muted block mb-1">Browser environment</label>
+          <Select
+            value={value}
+            onValueChange={onChange}
+            placeholder="Select a browser environment..."
+          >
+            {environments.map((e) => (
+              <SelectOption key={e.id} value={e.id}>
+                {e.name}
+              </SelectOption>
+            ))}
+          </Select>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function BasicTab({
   form,
   setForm,
@@ -1162,18 +1256,25 @@ export function BasicTab({
   // (a bound runtime implies harness "acp-proxy"); but the toggle needs its
   // own intent so that picking "Local" with no runtimes registered still
   // reveals the connect-a-machine empty-state instead of silently no-oping.
-  const [runtimeMode, setRuntimeMode] = useState<"cloud" | "local">(
-    form.runtimeId ? "local" : "cloud",
+  const [runtimeMode, setRuntimeMode] = useState<"cloud" | "local" | "browser">(
+    form.runtimeId ? "local" : form.browserEnvId ? "browser" : "cloud",
   );
   const isLocal = runtimeMode === "local";
+  const isBrowser = runtimeMode === "browser";
   const onlineRuntimes = runtimes.filter((r) => r.status === "online");
+
+  // Browser mode picks a browser-vm environment, so the form needs the
+  // tenant's environment list. Cheap + cached; the query is shared with the
+  // session-create flows that use the same endpoint.
+  const { data: envData } = useApiQuery<{ data: EnvironmentLite[] }>("/v1/environments");
+  const browserEnvs = browserVmEnvironments(envData?.data ?? []);
 
   const selectCloud = () => {
     setRuntimeMode("cloud");
     // Clearing the runtime binding drops back to the cloud loop. The acp*
     // overrides stay in state harmlessly — they're only serialized by
     // formToConfig when a runtime is bound.
-    setForm({ ...form, runtimeId: "" });
+    setForm({ ...form, runtimeId: "", browserEnvId: "" });
   };
   const selectLocal = () => {
     setRuntimeMode("local");
@@ -1181,9 +1282,17 @@ export function BasicTab({
     // the common case is one click. If none are registered, still flip to
     // Local and show the connect-a-machine empty-state below.
     const rt = onlineRuntimes[0] ?? runtimes[0];
-    if (rt) {
-      setForm({ ...form, runtimeId: rt.id, acpAgentId: rt.agents?.[0]?.id ?? form.acpAgentId });
-    }
+    setForm({
+      ...form,
+      browserEnvId: "",
+      ...(rt ? { runtimeId: rt.id, acpAgentId: rt.agents?.[0]?.id ?? form.acpAgentId } : {}),
+    });
+  };
+  const selectBrowser = () => {
+    setRuntimeMode("browser");
+    // Auto-pick an existing browser-vm environment; with none, flip anyway
+    // and show the create-one state below rather than silently no-oping.
+    setForm({ ...form, runtimeId: "", browserEnvId: browserEnvs[0]?.id ?? "" });
   };
 
   // Per-harness model guidance: a suggested default that stays editable, and
@@ -1258,27 +1367,39 @@ export function BasicTab({
           Local delegates each turn to a coding agent on a machine you've paired.
         </p>
         <div className="flex gap-2" role="radiogroup" aria-label="Agent runtime">
-          <button
-            type="button"
-            role="radio"
-            aria-checked={!isLocal}
-            onClick={selectCloud}
-            className={segCls(!isLocal)}
-          >
-            <span className="font-medium">☁ Cloud</span>
-            <span className="text-xs text-fg-subtle">Runs on OMA with a model card</span>
-          </button>
-          <button
-            type="button"
-            role="radio"
-            aria-checked={isLocal}
-            onClick={selectLocal}
-            className={segCls(isLocal)}
-          >
-            <span className="font-medium">💻 Local</span>
-            <span className="text-xs text-fg-subtle">Coding agent on your machine</span>
-          </button>
+          {(["cloud", "local", "browser"] as const).map((kind) => {
+            const info = RUNTIME_KINDS[kind];
+            const onSelect =
+              kind === "cloud" ? selectCloud : kind === "local" ? selectLocal : selectBrowser;
+            return (
+              <button
+                key={kind}
+                type="button"
+                role="radio"
+                aria-checked={runtimeMode === kind}
+                aria-label={info.label}
+                onClick={onSelect}
+                className={segCls(runtimeMode === kind)}
+              >
+                <span className="font-medium inline-flex items-center gap-1.5">
+                  <info.Icon className="size-4 shrink-0" aria-hidden="true" />
+                  {info.label}
+                </span>
+                <span className="text-xs text-fg-subtle">{info.description}</span>
+              </button>
+            );
+          })}
         </div>
+
+        {/* Browser: a sandbox provider, not a harness — pick the browser-vm
+            environment this agent's sessions should start on. */}
+        {isBrowser && (
+          <BrowserRuntimePanel
+            value={form.browserEnvId}
+            environments={browserEnvs}
+            onChange={(id) => setForm({ ...form, browserEnvId: id })}
+          />
+        )}
 
         {/* Cloud: harness template first, then the model it should use. */}
         {!isLocal && (
@@ -1313,7 +1434,8 @@ export function BasicTab({
                   endpoint="/v1/model_cards"
                   getValue={(mc) => mc.id}
                   getLabel={(mc) => (
-                    <span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <ModelProviderMark modelId={mc.model ?? mc.model_id} />
                       {mc.is_default ? "★ " : ""}
                       {mc.model_id}
                       {mc.model !== mc.model_id && (

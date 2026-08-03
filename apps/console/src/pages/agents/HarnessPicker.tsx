@@ -6,12 +6,13 @@
 import {
   CLOUD_HARNESS_OPTIONS,
   LOCAL_HARNESS_OPTIONS,
+  legacyHarnessOption,
   type CloudHarnessId,
   type HarnessOption,
 } from "./harness-options";
 
 interface HarnessPickerProps {
-  value: CloudHarnessId;
+  value: string;
   onChange: (id: CloudHarnessId) => void;
   /** Invoked when the user picks a local/CLI runtime card. */
   onSelectLocal: () => void;
@@ -33,7 +34,8 @@ function HarnessCard({
       aria-checked={selected}
       aria-label={option.name}
       onClick={onClick}
-      className={`text-left flex flex-col gap-1 rounded-md border px-3 py-2 transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)] ${
+      disabled={option.legacy}
+      className={`text-left disabled:cursor-default flex flex-col gap-1 rounded-md border px-3 py-2 transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)] ${
         selected
           ? "border-brand bg-brand/5 text-fg"
           : "border-border text-fg-muted hover:border-border-strong"
@@ -41,6 +43,11 @@ function HarnessCard({
     >
       <span className="flex items-center gap-2 flex-wrap">
         <span className="text-sm font-medium text-fg">{option.name}</span>
+        {option.legacy && (
+          <span className="text-[10px] uppercase tracking-wide rounded px-1 py-0.5 border border-border-strong text-fg-subtle">
+            Legacy
+          </span>
+        )}
         {option.recommended && (
           <span className="text-[10px] uppercase tracking-wide rounded px-1 py-0.5 border border-brand/40 text-brand">
             Recommended
@@ -57,6 +64,11 @@ function HarnessCard({
 }
 
 export function HarnessPicker({ value, onChange, onSelectLocal }: HarnessPickerProps) {
+  // An agent created before the picker was narrowed keeps its harness; it is
+  // shown as a read-only card so saving the form can't silently rewrite it.
+  const legacy = CLOUD_HARNESS_OPTIONS.some((o) => o.id === value)
+    ? undefined
+    : legacyHarnessOption(value);
   return (
     <div>
       <label className="text-sm font-medium text-fg block mb-1">Harness</label>
@@ -73,6 +85,7 @@ export function HarnessPicker({ value, onChange, onSelectLocal }: HarnessPickerP
             onClick={() => onChange(o.id as CloudHarnessId)}
           />
         ))}
+        {legacy && <HarnessCard option={legacy} selected onClick={() => {}} />}
       </div>
       <div className="mt-3">
         <p className="text-xs font-medium text-fg-muted mb-1">On your own machine</p>
