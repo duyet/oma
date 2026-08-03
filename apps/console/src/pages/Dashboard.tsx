@@ -7,6 +7,7 @@ import { StatusPill } from "../components/Badge";
 import { EmptyState } from "../components/EmptyState";
 import { Skeleton } from "../components/Skeleton";
 import { StackedAssembly } from "../components/StackedAssembly";
+import { GettingStartedGuide } from "../components/GettingStartedGuide";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import { formatCompact, formatSandboxTime, formatSessionDuration } from "../lib/format";
@@ -166,6 +167,11 @@ export function Dashboard() {
             .
           </p>
         </header>
+
+        {/* Onboarding checklist — dismissible, ticks itself off from the
+            counts already fetched below. Sits above the metrics because a
+            first-run tenant has nothing to read in them yet. */}
+        <GettingStartedGuide />
 
         {/* Headline metrics — prominent, number-forward cards leading the
             page (Claude Console home pattern). All values come from the
