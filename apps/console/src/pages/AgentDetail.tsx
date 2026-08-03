@@ -223,6 +223,7 @@ export function AgentDetail() {
         onClose={() => setNewSessionOpen(false)}
         agentId={id!}
         isLocalRuntime={isLocalRuntime}
+        agentMetadata={agent?.metadata}
         onCreated={(sessionId) => {
           setNewSessionOpen(false);
           nav(`/sessions/${sessionId}`);

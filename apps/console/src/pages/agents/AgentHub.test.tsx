@@ -174,4 +174,24 @@ describe("<AgentOverviewTab /> version picker", () => {
       expect(screen.queryByText(/Viewing v1/)).not.toBeInTheDocument(),
     );
   });
+
+  it("still lists the current version when the versions endpoint returns none", async () => {
+    // An agent that has never been updated can come back with an empty
+    // versions list; the menu used to open onto just its header, which
+    // reads as broken.
+    server.use(
+      http.get("/v1/agents/agent_1", () => HttpResponse.json({ ...agentV2, version: 1 })),
+      http.get("/v1/agents/agent_1/versions", () => HttpResponse.json({ data: [] })),
+    );
+    renderHub();
+    await screen.findByRole("heading", { name: "My Agent" });
+
+    await userEvent.click(screen.getByRole("button", { name: /Version:/ }));
+    const items = await screen.findAllByRole("menuitemcheckbox");
+    expect(items).toHaveLength(1);
+    expect(items[0]).toHaveTextContent("v1");
+    expect(items[0]).toHaveTextContent("latest");
+    // The active version is check-marked, not just listed.
+    expect(items[0]).toHaveAttribute("aria-checked", "true");
+  });
 });

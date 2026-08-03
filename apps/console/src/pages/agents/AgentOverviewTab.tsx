@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
-import { ChevronDownIcon } from "lucide-react";
+import { BookOpenIcon, ChevronDownIcon, PlugZapIcon, UsersIcon, WrenchIcon } from "lucide-react";
 
 import { useApiQuery } from "../../lib/useApiQuery";
+import { RuntimeKindBadge, agentRuntimeKind } from "../../lib/runtime-kind";
+import { ModelName } from "../../lib/model-provider";
 import { GitHubIcon, LinearIcon, SlackIcon } from "../../components/icons";
 import {
   DropdownMenu,
@@ -106,13 +108,23 @@ export function AgentOverviewTab() {
           </>
         )}
         <span className="text-fg-muted">Model</span>
-        <span>{modelStr(displayAgent.model)}</span>
+        <ModelName model={modelStr(displayAgent.model)} />
         {displayAgent._oma?.aux_model && (
           <>
             <span className="text-fg-muted">Aux Model</span>
-            <span>{modelStr(displayAgent._oma.aux_model)}</span>
+            <ModelName model={modelStr(displayAgent._oma.aux_model)} />
           </>
         )}
+        <span className="text-fg-muted">Runtime</span>
+        <RuntimeKindBadge
+          kind={agentRuntimeKind(displayAgent)}
+          className="text-sm text-fg"
+          detail={
+            displayAgent._oma?.runtime_binding
+              ? `machine ${displayAgent._oma.runtime_binding.runtime_id} · ACP agent ${displayAgent._oma.runtime_binding.acp_agent_id}`
+              : undefined
+          }
+        />
         <span className="text-fg-muted">Harness</span>
         <span>{displayAgent._oma?.harness || "default"}</span>
         {displayAgent._oma?.runtime_binding && (
@@ -129,7 +141,10 @@ export function AgentOverviewTab() {
         )}
         <span className="text-fg-muted">Version</span>
         <span>v{displayAgent.version}</span>
-        <span className="text-fg-muted">Tools</span>
+        <span className="text-fg-muted inline-flex items-center gap-1.5">
+          <WrenchIcon className="size-3.5 text-fg-subtle" aria-hidden="true" />
+          Tools
+        </span>
         <span>
           {(displayAgent.tools || [])
             .map((t) => {
@@ -140,7 +155,10 @@ export function AgentOverviewTab() {
         </span>
         {(displayAgent.skills?.length ?? 0) > 0 && (
           <>
-            <span className="text-fg-muted">Skills</span>
+            <span className="text-fg-muted inline-flex items-center gap-1.5">
+              <BookOpenIcon className="size-3.5 text-fg-subtle" aria-hidden="true" />
+              Skills
+            </span>
             <span>
               {(displayAgent.skills as Array<{ skill_id: string }>)
                 .map((s) => s.skill_id)
@@ -150,7 +168,10 @@ export function AgentOverviewTab() {
         )}
         {(displayAgent.mcp_servers?.length ?? 0) > 0 && (
           <>
-            <span className="text-fg-muted">MCP Servers</span>
+            <span className="text-fg-muted inline-flex items-center gap-1.5">
+              <PlugZapIcon className="size-3.5 text-fg-subtle" aria-hidden="true" />
+              MCP Servers
+            </span>
             <span>
               {(displayAgent.mcp_servers as Array<{ name: string }>)
                 .map((m) => m.name)
@@ -160,7 +181,10 @@ export function AgentOverviewTab() {
         )}
         {(displayAgent.multiagent?.agents?.length ?? 0) > 0 && (
           <>
-            <span className="text-fg-muted">Callable Agents</span>
+            <span className="text-fg-muted inline-flex items-center gap-1.5">
+              <UsersIcon className="size-3.5 text-fg-subtle" aria-hidden="true" />
+              Callable Agents
+            </span>
             <span className="font-mono text-xs">
               {displayAgent.multiagent!.agents.map((a) => a.id).join(", ")}
             </span>
@@ -289,11 +313,16 @@ function VersionPicker({
   value: number;
   onChange: (v: number) => void;
 }) {
-  // Descending so the newest is at the top.
-  const ordered = useMemo(
-    () => [...versions].sort((a, b) => b.version - a.version),
-    [versions],
-  );
+  // Descending so the newest is at the top. The live agent's own version is
+  // folded in: `/v1/agents/:id/versions` can come back empty (or still be
+  // loading) for an agent that has never been updated, and a dropdown that
+  // opens onto nothing but its header reads as broken — there is always at
+  // least one version to show.
+  const ordered = useMemo(() => {
+    const seen = new Set<number>([latest, value]);
+    for (const v of versions) seen.add(v.version);
+    return [...seen].sort((a, b) => b - a);
+  }, [versions, latest, value]);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="inline-flex items-center gap-1.5 border border-border rounded-md bg-bg-surface px-3 py-1.5 text-sm hover:bg-bg-surface/70">
@@ -307,14 +336,14 @@ function VersionPicker({
           View version
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {ordered.map((v) => (
+        {ordered.map((version) => (
           <DropdownMenuCheckboxItem
-            key={v.version}
-            checked={v.version === value}
-            onCheckedChange={() => onChange(v.version)}
+            key={version}
+            checked={version === value}
+            onCheckedChange={() => onChange(version)}
           >
-            v{v.version}
-            {v.version === latest && <span className="ml-1.5 text-[10px] text-success">latest</span>}
+            v{version}
+            {version === latest && <span className="ml-1.5 text-[10px] text-success">latest</span>}
           </DropdownMenuCheckboxItem>
         ))}
       </DropdownMenuContent>

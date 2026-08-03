@@ -4,9 +4,9 @@ import { toast } from "sonner";
 import {
   ArchiveIcon,
   BookOpenIcon,
+  CoinsIcon,
   CopyIcon,
   MessageSquareIcon,
-  MonitorIcon,
   PencilIcon,
   PlugZapIcon,
   RocketIcon,
@@ -23,7 +23,10 @@ import { RowActionsMenu } from "../components/RowActionsMenu";
 import { Badge } from "../components/Badge";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/useConfirm";
-import { formatRelative } from "../lib/format";
+import { formatCompact, formatRelative } from "../lib/format";
+import { RuntimeKindBadge, agentRuntimeKind } from "../lib/runtime-kind";
+import { ModelName } from "../lib/model-provider";
+import { useAgentQuickStats } from "../lib/useAgentQuickStats";
 import type { ModelCard } from "@duyet/oma-api-types";
 import type { AgentRecord as Agent } from "../types/agent";
 import { AgentFormDialog } from "./agents/AgentFormDialog";
@@ -158,6 +161,9 @@ export function AgentsList() {
 
   const modelStr = (m: Agent["model"]) => (typeof m === "string" ? m : m?.id || "");
 
+  // One aggregate call for the whole page — see useAgentQuickStats.
+  const quickStats = useAgentQuickStats();
+
   const duplicateAgent = async (a: Agent) => {
     try {
       const created = await api<Agent>("/v1/agents", {
@@ -209,7 +215,7 @@ export function AgentsList() {
         accessorFn: (a) => modelStr(a.model),
         header: "Model",
         cell: ({ row }) => (
-          <span className="text-fg-muted">{modelStr(row.original.model)}</span>
+          <ModelName model={modelStr(row.original.model)} className="text-fg-muted" />
         ),
       },
       {
@@ -220,18 +226,53 @@ export function AgentsList() {
       },
       {
         id: "runtime",
-        accessorFn: (a) => (a.runtime_binding ? "local" : "cloud"),
+        accessorFn: (a) => agentRuntimeKind(a),
         header: "Runtime",
         cell: ({ row }) => {
           const rb = row.original.runtime_binding;
-          return rb ? (
-            <Badge
-              icon={<MonitorIcon className="size-3" />}
-              label="Local"
-              title={`Local runtime ${rb.runtime_id} · ACP agent ${rb.acp_agent_id}`}
+          return (
+            <RuntimeKindBadge
+              kind={agentRuntimeKind(row.original)}
+              detail={
+                rb ? `machine ${rb.runtime_id} · ACP agent ${rb.acp_agent_id}` : undefined
+              }
             />
-          ) : (
-            <span className="text-fg-subtle">Cloud</span>
+          );
+        },
+      },
+      {
+        id: "activity",
+        accessorFn: (a) => quickStats.statsFor(a.id)?.sessions ?? 0,
+        header: "Activity",
+        cell: ({ row }) => {
+          const s = quickStats.statsFor(row.original.id);
+          if (!s) {
+            return <span className="inline-block h-3 w-16 rounded bg-bg-surface animate-pulse" />;
+          }
+          return (
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  nav(`/agents/${row.original.id}/sessions`);
+                }}
+                className="rounded hover:text-fg transition-colors duration-[var(--dur-quick)]"
+              >
+                <Badge
+                  icon={<MessageSquareIcon className="size-3" />}
+                  label={s.sessions}
+                  title={`${s.sessions} session${s.sessions === 1 ? "" : "s"} in the last 30 days — view them`}
+                />
+              </button>
+              {s.tokens > 0 && (
+                <Badge
+                  icon={<CoinsIcon className="size-3" />}
+                  label={formatCompact(s.tokens)}
+                  title={`${s.tokens.toLocaleString()} tokens in the last 30 days`}
+                />
+              )}
+            </div>
           );
         },
       },
@@ -404,7 +445,7 @@ export function AgentsList() {
         size: 56,
       },
     ],
-    [api, refreshAgents, confirm, nav, duplicateAgent],
+    [api, refreshAgents, confirm, nav, duplicateAgent, quickStats],
   );
 
   const filters = (
