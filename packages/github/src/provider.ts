@@ -513,16 +513,28 @@ export class GitHubProvider implements IntegrationProvider {
    * `GET /user/installations` under the connecting user's own token, so a
    * tenant can never claim an org they don't administer. Installs of other
    * GitHub Apps the user can see are filtered out by `app_id`.
+   *
+   * This is also the landing point for a **Connect** install when the App has
+   * "Request user authorization (OAuth) during installation" enabled: GitHub
+   * then redirects to the App's OAuth *Callback URL* (this route) carrying
+   * `installation_id` + `setup_action=install` + our own state, INSTEAD of
+   * the Setup URL. So we accept the connect flow's `github.install.workspace`
+   * state here too, and record an explicitly-named `installationId` directly
+   * — otherwise a deployment whose App has no Setup URL configured would
+   * complete the install on GitHub and never record a row.
    */
   async completeManagedInstallLink(input: {
-    code: string;
+    code?: string;
     state: string;
+    installationId?: string | null;
   }): Promise<{ returnUrl: string; linked: number; existing: number; logins: string[] }> {
     const managedApp = this.config.managedApp;
-    if (!managedApp?.clientId || !managedApp.clientSecret) {
-      throw new Error("GitHub install link callback: managed App OAuth not configured");
+    if (!managedApp) {
+      throw new Error("GitHub install link callback: no managed App configured");
     }
-    if (!input.code) throw new Error("GitHub install link callback: missing code");
+    if (!input.code && !input.installationId) {
+      throw new Error("GitHub install link callback: missing code");
+    }
     if (!input.state) throw new Error("GitHub install link callback: missing state");
 
     const state = await this.container.jwt.verify<{
@@ -531,8 +543,50 @@ export class GitHubProvider implements IntegrationProvider {
       tenantId: string;
       returnUrl: string;
     }>(input.state);
-    if (state.kind !== "github.link.workspace") {
+    if (
+      state.kind !== "github.link.workspace" &&
+      state.kind !== "github.install.workspace"
+    ) {
       throw new Error("GitHub install link callback: invalid state kind");
+    }
+
+    const appJwtForDirect = await mintAppJwt(managedApp.privateKey, {
+      appId: managedApp.appId,
+    });
+    const logins: string[] = [];
+    let linked = 0;
+    let existing = 0;
+
+    // Direct path: GitHub named the installation on the redirect, so we can
+    // record it without a user token at all.
+    if (input.installationId) {
+      const already = await this.container.installations.findByWorkspace(
+        PROVIDER_ID,
+        input.installationId,
+        "dedicated",
+        null,
+      );
+      if (already) {
+        existing += 1;
+      } else {
+        const login = await this.recordManagedInstallation({
+          tenantId: state.tenantId,
+          userId: state.userId,
+          installationId: input.installationId,
+          appJwt: appJwtForDirect,
+        });
+        logins.push(login);
+        linked += 1;
+      }
+    }
+
+    // No user-auth code (install redirect without OAuth) — nothing left to
+    // enumerate; the direct path above is the whole result.
+    if (!input.code) {
+      return { returnUrl: state.returnUrl, linked, existing, logins };
+    }
+    if (!managedApp.clientId || !managedApp.clientSecret) {
+      throw new Error("GitHub install link callback: managed App OAuth not configured");
     }
 
     const tokReq = buildUserTokenRequest({
@@ -555,10 +609,7 @@ export class GitHubProvider implements IntegrationProvider {
     const visible = await this.api.listUserInstallations(userToken);
     const ours = visible.filter((i) => String(i.appId) === String(managedApp.appId));
 
-    const appJwt = await mintAppJwt(managedApp.privateKey, { appId: managedApp.appId });
-    const logins: string[] = [];
-    let linked = 0;
-    let existing = 0;
+    const appJwt = appJwtForDirect;
     for (const install of ours) {
       const installationId = String(install.id);
       const already = await this.container.installations.findByWorkspace(
@@ -1444,14 +1495,29 @@ export class GitHubProvider implements IntegrationProvider {
     if (!ok) return { handled: false, reason: "invalid_signature" };
 
     let installationId: string | null = null;
+    let action: string | null = null;
     try {
-      const raw = JSON.parse(req.rawBody) as { installation?: { id?: number | string } };
+      const raw = JSON.parse(req.rawBody) as {
+        action?: string;
+        installation?: { id?: number | string };
+      };
       installationId = raw.installation?.id != null ? String(raw.installation.id) : null;
+      action = raw.action ?? null;
     } catch {
       return { handled: false, reason: "invalid_json" };
     }
     if (!installationId) {
       return { handled: false, reason: "missing_installation_id" };
+    }
+
+    // App-lifecycle events (`installation` / `installation_target`) are about
+    // the install itself, not about work in a repo — they never route to a
+    // publication. They're the fallback that keeps our rows in sync when the
+    // browser redirect never happens (uninstall/suspend done on github.com).
+    const eventName =
+      req.headers["x-github-event"] ?? req.headers["X-GitHub-Event"] ?? "";
+    if (eventName === "installation") {
+      return this.handleInstallationLifecycle(installationId, action);
     }
 
     const publication = await this.container.publications.findByInstallationId(installationId);
@@ -1468,6 +1534,37 @@ export class GitHubProvider implements IntegrationProvider {
       managedApp.webhookSecret,
       publication.tenantId,
     );
+  }
+
+  /**
+   * `installation` webhook events for the managed App.
+   *
+   * `deleted` / `suspend` are the important half: the user can uninstall (or
+   * suspend) the App on github.com without ever touching the Console, and
+   * without this the workspace keeps listing an installation whose tokens no
+   * longer mint. We revoke the row so it drops out of GET /installations.
+   *
+   * `created` can NOT be recorded here: the payload identifies a GitHub
+   * sender, not an OMA user, and guessing an owner would attach an org to the
+   * wrong workspace. Attribution comes from the install redirect (state JWT)
+   * or the user-authorized "Sync installations" flow instead.
+   */
+  private async handleInstallationLifecycle(
+    installationId: string,
+    action: string | null,
+  ): Promise<WebhookOutcome> {
+    if (action !== "deleted" && action !== "suspend") {
+      return { handled: false, reason: `installation_${action ?? "unknown"}_ignored` };
+    }
+    const row = await this.container.installations.findByWorkspace(
+      PROVIDER_ID,
+      installationId,
+      "dedicated",
+      null,
+    );
+    if (!row) return { handled: false, reason: "unknown_installation" };
+    await this.container.installations.markRevoked(row.id, Date.now());
+    return { handled: true };
   }
 
   /**
