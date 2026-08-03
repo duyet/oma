@@ -123,6 +123,24 @@ export class TelegramClient {
     return parsed.result as T;
   }
 
+  /** Identity of the bot behind this token. Doubles as the token-validity
+   *  probe used when a tenant pastes their own bot token. */
+  async getMe(): Promise<TelegramUser> {
+    return this.request<TelegramUser>("getMe");
+  }
+
+  /** Long-poll pending updates. Telegram refuses this (409) while a webhook
+   *  is registered for the same bot — callers must surface that rather than
+   *  treating it as "no updates". */
+  async getUpdates(params?: {
+    offset?: number;
+    limit?: number;
+    timeout?: number;
+    allowed_updates?: string[];
+  }): Promise<TelegramUpdate[]> {
+    return this.request<TelegramUpdate[]>("getUpdates", params ?? {});
+  }
+
   async sendMessage(params: SendMessageParams): Promise<TelegramMessage> {
     return this.request<TelegramMessage>("sendMessage", params as unknown as Record<string, unknown>);
   }

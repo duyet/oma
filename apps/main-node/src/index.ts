@@ -88,6 +88,7 @@ import {
   buildVaultRoutes,
   buildMcpServerRoutes,
   buildFederationRoutes,
+  buildTelegramConnectionRoutes,
   buildOmaMcpRoutes,
   buildAnalyticsRoutes,
   buildTelemetryRoutes,
@@ -154,6 +155,7 @@ import {
   buildCredentialCrypto,
   buildLabeledCrypto,
   FEDERATION_CRYPTO_LABEL,
+  TELEGRAM_CRYPTO_LABEL,
   resolveFederationInstance,
   delegateToRemoteAgent as remoteAgentDelegate,
 } from "@duyet/oma-shared";
@@ -1397,6 +1399,20 @@ v1.route(
   buildFederationRoutes({
     services,
     crypto: federationCrypto,
+  }),
+);
+// Per-tenant Telegram connection (Console → Integrations → Telegram).
+// Mounted ahead of the generic /integrations bundle so the more specific
+// path wins. Shared-bot token from the deployment env; an own-bot token is
+// encrypted at rest under TELEGRAM_CRYPTO_LABEL.
+v1.route(
+  "/integrations/telegram",
+  buildTelegramConnectionRoutes({
+    services,
+    crypto: platformRootSecret
+      ? buildLabeledCrypto(platformRootSecret, TELEGRAM_CRYPTO_LABEL)
+      : undefined,
+    sharedBotToken: process.env.TELEGRAM_SHARED_BOT_TOKEN,
   }),
 );
 v1.route("/analytics", buildAnalyticsRoutes({ services }));

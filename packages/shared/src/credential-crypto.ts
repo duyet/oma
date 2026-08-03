@@ -37,6 +37,11 @@ export const CREDENTIALS_CRYPTO_LABEL = "credentials.auth";
  *  vice-versa. */
 export const FEDERATION_CRYPTO_LABEL = "federation.api_key";
 
+/** Derivation label for a tenant's own Telegram bot token stored by the
+ *  Telegram integration (`mode: "own_bot"`). Distinct from every other label
+ *  so a bot-token ciphertext can only ever be read with the Telegram key. */
+export const TELEGRAM_CRYPTO_LABEL = "telegram.bot_token";
+
 export interface CredentialBlobCrypto {
   encrypt(plaintext: string): Promise<string>;
   decrypt(stored: string): Promise<string>;
