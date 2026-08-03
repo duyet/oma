@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { WorkerEntrypoint } from "cloudflare:workers";
+import { invokePackage } from "./lib/invoke-package";
 import type { Env } from "@duyet/oma-shared";
 import { servicesMiddleware, tenantDbMiddleware, getCfServicesForTenant, buildCfTenantDbProvider, type Services } from "@duyet/oma-services";
 import {
@@ -814,64 +815,6 @@ const sessionsRoutes = new Hono<{
   return invokePackage(c, app);
 });
 
-/**
- * Forward the outer Hono request into a freshly-built package app while
- * preserving (a) auth/tenant vars set by middleware (passed via per-call
- * middleware injected on the inner app), and (b) the relative URL the
- * package routes expect (`/`, `/:id`, etc.) — Hono's `app.route` only
- * strips the prefix when matching, not from `req.url`.
- */
-function invokePackage(
-  c: import("hono").Context,
-  packageApp: { fetch: (req: Request, env?: unknown, ctx?: ExecutionContext) => Response | Promise<Response> },
-): Promise<Response> | Response {
-  const url = new URL(c.req.url);
-  // Strip the outer mount prefix so e.g. `/v1/agents/abc` becomes `/abc`
-  // before the package's `app.get("/:id")` sees it.
-  const knownPrefixes = ["/v1/oma/", "/v1/"];
-  let stripped = url.pathname;
-  for (const p of knownPrefixes) {
-    if (stripped.startsWith(p)) {
-      // Drop the next path segment (resource name like "agents", "sessions").
-      const rest = stripped.slice(p.length);
-      const slashIdx = rest.indexOf("/");
-      stripped = slashIdx === -1 ? "/" : rest.slice(slashIdx);
-      break;
-    }
-  }
-  url.pathname = stripped || "/";
-
-  // Carry the outer auth vars (tenant_id, user_id) over the request via
-  // headers so the inner app's middleware can re-hydrate them. Header
-  // names are namespaced so they can't collide with user-controlled
-  // headers; a stray client-supplied `x-oma-tenant-id` is overwritten.
-  const headers = new Headers(c.req.raw.headers);
-  const tenantId = (c.var as { tenant_id?: string }).tenant_id;
-  const userId = (c.var as { user_id?: string }).user_id;
-  if (tenantId) headers.set("x-oma-internal-tenant-id", tenantId);
-  if (userId) headers.set("x-oma-internal-user-id", userId);
-
-  // One-shot middleware: re-hydrate vars on the inner context.
-  const wrapped = new Hono();
-  wrapped.use("*", async (innerC, next) => {
-    const t = headers.get("x-oma-internal-tenant-id");
-    const u = headers.get("x-oma-internal-user-id");
-    if (t) innerC.set("tenant_id" as never, t as never);
-    if (u) innerC.set("user_id" as never, u as never);
-    await next();
-  });
-  wrapped.route("/", packageApp as Parameters<typeof wrapped.route>[1]);
-
-  return wrapped.fetch(
-    new Request(url, {
-      method: c.req.method,
-      headers,
-      body: ["GET", "HEAD"].includes(c.req.method) ? null : c.req.raw.body,
-    }),
-    c.env,
-    c.executionCtx,
-  );
-}
 // OMA's own MCP server (issue #199) — /v1/mcp. Bypasses authMiddleware
 // (Bearer-token auth, see auth.ts); tool calls re-enter the platform API via
 // an in-process app.fetch dispatch that forwards the tenant key.
@@ -899,7 +842,10 @@ const agentPublicationsRoutes = new Hono<{
     { services: () => cfRouteServicesFromCtx(ctx) },
     "id",
   );
-  return invokePackage(c, app);
+  // Nested mount: the package reads `:id` off the mount pattern, so hand
+  // invokePackage the pattern instead of letting it strip "agents" (which
+  // would leave the package matching `/agent_x/publications` → 404).
+  return invokePackage(c, app, "/agents/:id/publications");
 });
 app.route("/v1/agents/:id/publications", agentPublicationsRoutes);
 
