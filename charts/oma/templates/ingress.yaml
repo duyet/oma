@@ -1,8 +1,13 @@
 {{/* Public ingress for the OMA Console + API. Mirrors
      infra/homelab/oma/ingress.yaml (Traefik + cert-manager). No forward-auth
      middleware: OMA ships its own better-auth, so the app gates its own
-     access. */}}
+     access.
+
+     Supports one or more hostnames: set `ingress.hosts` (a list) to serve
+     multiple hosts (one TLS cert covering all of them); or leave it unset and
+     set `ingress.host` for a single host. */}}
 {{- if .Values.ingress.enabled }}
+{{- $hosts := (.Values.ingress.hosts | default (list .Values.ingress.host)) }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -18,18 +23,22 @@ spec:
   {{- if .Values.ingress.tls.enabled }}
   tls:
     - hosts:
-        - {{ .Values.ingress.host | quote }}
+{{- range $hosts }}
+        - {{ . | quote }}
+{{- end }}
       secretName: {{ .Values.ingress.tls.secretName }}
   {{- end }}
   rules:
-    - host: {{ .Values.ingress.host | quote }}
+{{- range $hosts }}
+    - host: {{ . | quote }}
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: {{ include "oma.fullname" . }}
+                name: {{ include "oma.fullname" $ }}
                 port:
-                  number: {{ .Values.service.port }}
+                  number: {{ $.Values.service.port }}
+{{- end }}
 {{- end }}

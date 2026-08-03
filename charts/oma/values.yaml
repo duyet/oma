@@ -149,8 +149,12 @@ service:
 ingress:
   enabled: false
   className: traefik
-  # Example host — override per-deploy (e.g. app.oma.duyet.net).
+  # Single hostname (used when `hosts` below is empty). Ignored if `hosts` is set.
   host: app.oma.duyet.net
+  # Multiple hostnames — when non-empty, takes precedence over `host`. All hosts
+  # are covered by a single TLS cert (ingress.tls.secretName). Use this to serve
+  # the app at more than one URL (e.g. a primary host plus a legacy/wildcard one).
+  hosts: []
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
   tls:
