@@ -25,6 +25,7 @@ import type {
   LinearPublicationRepo,
   GitHubAppCredentials,
   GitHubAppRepo,
+  GitHubBoardCacheRepo,
   HmacVerifier,
   HttpClient,
   HttpRequest,
@@ -1031,3 +1032,34 @@ export class InMemoryDispatchRuleRepo implements DispatchRuleRepo {
 // Removed InMemoryPendingEventRepo — the merged `linear_events` table folds
 // the queue role into LinearEventStore, so InMemoryWebhookEventStore now
 // implements the queue methods directly (markActionable/listUnprocessed/etc).
+
+/**
+ * In-memory `github_board_cache`. Keyed exactly like the SQL repo, so a
+ * route test can drive the TTL / stale / refresh paths without a database.
+ */
+export class InMemoryGitHubBoardCacheRepo implements GitHubBoardCacheRepo {
+  readonly rows = new Map<string, { payloadJson: string; fetchedAt: number }>();
+  /** Set to make every `put` throw — exercises the never-fail-on-write rule. */
+  failWrites = false;
+
+  private key(installationId: string, cacheKey: string): string {
+    return `${installationId}\u0000${cacheKey}`;
+  }
+
+  async get(
+    installationId: string,
+    cacheKey: string,
+  ): Promise<{ payloadJson: string; fetchedAt: number } | null> {
+    return this.rows.get(this.key(installationId, cacheKey)) ?? null;
+  }
+
+  async put(
+    installationId: string,
+    cacheKey: string,
+    payloadJson: string,
+    fetchedAt: number,
+  ): Promise<void> {
+    if (this.failWrites) throw new Error("board cache write failed");
+    this.rows.set(this.key(installationId, cacheKey), { payloadJson, fetchedAt });
+  }
+}

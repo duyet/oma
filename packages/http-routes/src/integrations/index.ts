@@ -21,6 +21,7 @@ import type {
   SessionGranularity,
   AppRepo,
   GitHubAppRepo,
+  GitHubBoardCacheRepo,
   InstallationRepo,
   PublicationRepo,
   DispatchRuleRepo,
@@ -40,6 +41,12 @@ export interface IntegrationsRepoBag {
   apps?: AppRepo | null;
   githubApps?: GitHubAppRepo | null;
   dispatchRules?: DispatchRuleRepo | null;
+  /**
+   * Read-through cache for the Console GitHub board's repo + assignee
+   * lookups. Optional: a host that doesn't set it (and every existing test)
+   * behaves exactly as before — every request forwards to the gateway.
+   */
+  boardCache?: GitHubBoardCacheRepo | null;
 }
 
 /**
@@ -656,11 +663,47 @@ export function buildIntegrationsRoutes(deps: IntegrationsRoutesDeps) {
       // token never leaves the gateway, mirroring how session-create's
       // refresh-by-vault works. No writes, no webhooks: config + list only.
 
-      // GET /github/installations/:id/repos — repo picker options.
+      // GET /github/installations/:id/repos?refresh=1 — repo picker options.
+      // Served from `github_board_cache` while the row is inside the TTL;
+      // an installation's repo list changes rarely and refetching it on every
+      // dropdown open is pure latency.
       sub.get("/installations/:id/repos", async (c) => {
-        const forwarded = await forwardGithubBoard(c, deps, "list-repos", (page) => ({
-          page,
-        }));
+        // The gateway now walks every page, so `page` is only an explicit
+        // start offset; keep it out of the default cache key but distinct
+        // when a caller does ask for a later page.
+        const pageRaw = Number.parseInt(c.req.query("page") ?? "1", 10);
+        const startPage = Number.isFinite(pageRaw) && pageRaw > 1 ? pageRaw : 1;
+        const forwarded = await forwardGithubBoard(
+          c,
+          deps,
+          "list-repos",
+          (page) => ({ page }),
+          { cacheKey: startPage > 1 ? `repos:p${startPage}` : "repos" },
+        );
+        return forwarded;
+      });
+
+      // GET /github/installations/:id/assignees?repo=<owner>/<name>&refresh=1
+      // Assignable users for one repo, backing the board's Assignee combobox.
+      // Cached per repo under `assignees:<owner>/<repo>`.
+      sub.get("/installations/:id/assignees", async (c) => {
+        const slug = (c.req.query("repo") ?? "").trim();
+        const slash = slug.indexOf("/");
+        const owner = slash > 0 ? slug.slice(0, slash) : "";
+        const repo = slash > 0 ? slug.slice(slash + 1) : "";
+        if (!owner || !repo) {
+          return c.json(
+            { error: "repo query param is required as <owner>/<name>" },
+            400,
+          );
+        }
+        const forwarded = await forwardGithubBoard(
+          c,
+          deps,
+          "list-assignees",
+          () => ({ owner, repo }),
+          { cacheKey: `assignees:${owner}/${repo}` },
+        );
         return forwarded;
       });
 
@@ -709,8 +752,9 @@ export function buildIntegrationsRoutes(deps: IntegrationsRoutesDeps) {
 async function forwardGithubBoard(
   c: import("hono").Context<Vars>,
   deps: IntegrationsRoutesDeps,
-  endpoint: "list-repos" | "list-issues",
+  endpoint: "list-repos" | "list-issues" | "list-assignees",
   extra: (page: number) => Record<string, unknown>,
+  cache?: { cacheKey: string },
 ): Promise<Response> {
   const userId = c.get("user_id")!;
   const bag = deps.bags(c).github;
@@ -735,11 +779,87 @@ async function forwardGithubBoard(
   }
   const pageRaw = Number.parseInt(c.req.query("page") ?? "1", 10);
   const page = Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1;
-  return proxy.forward({
-    subpath: `github/internal/${endpoint}`,
-    body: { userId, vaultId: installation.vaultId, ...extra(page) },
-    needsInternalSecret: true,
-  });
+  const doForward = () =>
+    proxy.forward({
+      subpath: `github/internal/${endpoint}`,
+      body: { userId, vaultId: installation.vaultId, ...extra(page) },
+      needsInternalSecret: true,
+    });
+
+  // Uncached endpoints (issues — they carry live filters) forward verbatim.
+  const store = cache ? bag.boardCache : null;
+  if (!cache || !store) return doForward();
+
+  const refreshRaw = (c.req.query("refresh") ?? "").toLowerCase();
+  const bypass = refreshRaw === "1" || refreshRaw === "true";
+  let existing: { payloadJson: string; fetchedAt: number } | null = null;
+  try {
+    existing = await store.get(installationId, cache.cacheKey);
+  } catch {
+    existing = null; // A dead cache degrades to "always forward", never a 500.
+  }
+  if (!bypass && existing && Date.now() - existing.fetchedAt < BOARD_CACHE_TTL_MS) {
+    return cachedBoardResponse(c, existing, false);
+  }
+
+  let res: Response;
+  try {
+    res = await doForward();
+  } catch (err) {
+    // Upstream blew up. A stale row beats a 5xx for a picker list.
+    if (existing) return cachedBoardResponse(c, existing, true);
+    throw err;
+  }
+  if (!res.ok) {
+    if (existing) return cachedBoardResponse(c, existing, true);
+    return res; // Never cache a 4xx/5xx body.
+  }
+
+  // Persist the fresh payload, then hand the caller an equivalent response —
+  // the forwarded body was consumed to read it.
+  let parsed: { data?: unknown } & Record<string, unknown>;
+  try {
+    parsed = (await res.clone().json()) as typeof parsed;
+  } catch {
+    return res;
+  }
+  if (Array.isArray(parsed.data)) {
+    try {
+      await store.put(
+        installationId,
+        cache.cacheKey,
+        JSON.stringify(parsed.data),
+        Date.now(),
+      );
+    } catch {
+      // A cache write must never fail the request.
+    }
+  }
+  return res;
+}
+
+/** How long a cached repo/assignee list stays authoritative. */
+const BOARD_CACHE_TTL_MS = 10 * 60_000;
+
+/**
+ * Serve a `github_board_cache` row in the same envelope the gateway returns.
+ * `cached_at` is the row's `fetched_at`; `stale` is set only when the row is
+ * standing in for a failed upstream fetch.
+ */
+function cachedBoardResponse(
+  c: import("hono").Context<Vars>,
+  row: { payloadJson: string; fetchedAt: number },
+  stale: boolean,
+): Response {
+  let data: unknown;
+  try {
+    data = JSON.parse(row.payloadJson);
+  } catch {
+    data = [];
+  }
+  const body: Record<string, unknown> = { data, cached_at: row.fetchedAt };
+  if (stale) body.stale = true;
+  return c.json(body);
 }
 
 /**

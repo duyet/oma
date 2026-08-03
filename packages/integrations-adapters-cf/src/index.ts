@@ -24,6 +24,8 @@ export { SqlGitHubWebhookEventStore } from "./d1/github/webhook-event-store";
 export { SqlLinearEventStore } from "./d1/linear-event-store";
 export { SqlLinearIssueSessionRepo } from "./d1/linear/issue-session-repo";
 export { SqlGitHubIssueSessionRepo } from "./d1/github/issue-session-repo";
+// Console GitHub Kanban board read-through cache (repo + assignee lists).
+export { SqlGitHubBoardCacheRepo } from "./d1/github/board-cache-repo";
 export { SqlLinearSetupLinkRepo } from "./d1/setup-link-repo";
 export { SqlLinearDispatchRuleRepo } from "./d1/dispatch-rule-repo";
 export { D1TenantResolver } from "./d1/tenant-resolver";

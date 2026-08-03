@@ -1971,6 +1971,7 @@ if (platformRootSecret) {
             installations: repos.githubInstallations,
             publications: repos.githubPublications,
             githubApps: repos.githubApps,
+            boardCache: repos.githubBoardCache,
           },
           slack: {
             installations: new SqlSlackInstallationRepo(drizzleDb, slackCrypto, slackIds),
@@ -2336,6 +2337,7 @@ if (platformRootSecret) {
             installations: repos.githubInstallations,
             publications: repos.githubPublications,
             githubApps: repos.githubApps,
+            boardCache: repos.githubBoardCache,
           },
           slack: {
             installations: new SqlSlackInstallationRepo(drizzleDb, slackCrypto, slackIds),

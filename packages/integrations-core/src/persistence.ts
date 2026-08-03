@@ -514,3 +514,28 @@ export interface DispatchRuleRepo {
  * markActionable / listUnprocessed / markProcessed / markFailed /
  * listByPublication — moved there verbatim.
  */
+
+/**
+ * Read-through cache for the Console's GitHub Kanban board lookups (repo
+ * picker, assignee combobox). One row per (installationId, cacheKey), where
+ * `cacheKey` is `"repos"` or `"assignees:<owner>/<repo>"`. `payloadJson` is
+ * the serialized `data` array the public route serves back verbatim; the
+ * caller owns TTL policy from `fetchedAt`.
+ *
+ * Deliberately opaque about the payload shape — one table + one code path
+ * serves every board lookup, and the route layer is the only thing that
+ * knows what a given key's payload means. Never holds tokens.
+ */
+export interface GitHubBoardCacheRepo {
+  get(
+    installationId: string,
+    cacheKey: string,
+  ): Promise<{ payloadJson: string; fetchedAt: number } | null>;
+  /** Upsert. Overwrites any existing row for the same (installation, key). */
+  put(
+    installationId: string,
+    cacheKey: string,
+    payloadJson: string,
+    fetchedAt: number,
+  ): Promise<void>;
+}

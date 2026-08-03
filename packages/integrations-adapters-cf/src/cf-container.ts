@@ -35,6 +35,7 @@ import { SqlLinearAppRepo } from "./d1/app-repo";
 import { SqlLinearDispatchRuleRepo } from "./d1/dispatch-rule-repo";
 import { SqlGitHubAppRepo } from "./d1/github-app-repo";
 import { SqlGitHubInstallationRepo } from "./d1/github/installation-repo";
+import { SqlGitHubBoardCacheRepo } from "./d1/github/board-cache-repo";
 import { SqlGitHubIssueSessionRepo } from "./d1/github/issue-session-repo";
 import { SqlGitHubPublicationRepo } from "./d1/github/publication-repo";
 import { SqlGitHubWebhookEventStore } from "./d1/github/webhook-event-store";
@@ -113,6 +114,7 @@ export function buildCfRepos(env: CfReposEnv) {
   // separate tables.
   const linearIssueSessions = new SqlLinearIssueSessionRepo(drizzleIdb);
   const githubIssueSessions = new SqlGitHubIssueSessionRepo(drizzleIdb);
+  const githubBoardCache = new SqlGitHubBoardCacheRepo(drizzleIdb);
   const setupLinks = new SqlLinearSetupLinkRepo(drizzleIdb, ids);
   const dispatchRules = new SqlLinearDispatchRuleRepo(drizzleIdb, ids);
   // Slack-specific repo also satisfies the Container's `sessionScopes` slot —
@@ -139,6 +141,7 @@ export function buildCfRepos(env: CfReposEnv) {
     githubWebhookEvents,
     linearIssueSessions,
     githubIssueSessions,
+    githubBoardCache,
     sessionScopes,
     setupLinks,
     dispatchRules,

@@ -33,6 +33,7 @@ import { CryptoIdGenerator } from "./ids";
 import { WebCryptoJwtSigner } from "./jwt";
 import {
   SqlGitHubAppRepo,
+  SqlGitHubBoardCacheRepo,
   SqlGitHubInstallationRepo,
   SqlGitHubIssueSessionRepo,
   SqlGitHubPublicationRepo,
@@ -87,6 +88,7 @@ export function buildNodeRepos(env: NodeReposEnv) {
   const githubWebhookEvents = new SqlGitHubWebhookEventStore(env.db);
   const linearIssueSessions = new SqlLinearIssueSessionRepo(env.db);
   const githubIssueSessions = new SqlGitHubIssueSessionRepo(env.db);
+  const githubBoardCache = new SqlGitHubBoardCacheRepo(env.db);
   const setupLinks = new SqlLinearSetupLinkRepo(env.db, ids);
   const dispatchRules = new SqlLinearDispatchRuleRepo(env.db, ids);
   const sessionScopes = new SqlSlackSessionScopeRepo(env.db);
@@ -109,6 +111,7 @@ export function buildNodeRepos(env: NodeReposEnv) {
     githubWebhookEvents,
     linearIssueSessions,
     githubIssueSessions,
+    githubBoardCache,
     sessionScopes,
     setupLinks,
     dispatchRules,

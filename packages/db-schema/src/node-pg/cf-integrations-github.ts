@@ -137,6 +137,22 @@ export const github_webhook_events = pgTable(
   ],
 );
 
+// Read-through cache for the Console GitHub Kanban board lookups. Mirror of
+// cf-integrations/github.ts `github_board_cache`.
+export const github_board_cache = pgTable(
+  "github_board_cache",
+  {
+    installation_id: text("installation_id").notNull(),
+    cache_key: text("cache_key").notNull(),
+    payload_json: text("payload_json").notNull(),
+    fetched_at: bigint("fetched_at", { mode: "number" }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.installation_id, t.cache_key] }),
+    index("idx_github_board_cache_installation").on(t.installation_id),
+  ],
+);
+
 export const github_issue_sessions = pgTable(
   "github_issue_sessions",
   {

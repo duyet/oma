@@ -158,6 +158,27 @@ export const github_webhook_events = sqliteTable(
   ],
 );
 
+// ─── github_board_cache ───────────────────────────────────────────────────
+// Read-through cache for the Console's GitHub Kanban board lookups (repo
+// picker, assignee combobox). One generic row per (installation, cache_key):
+// `repos` for the installation's repo list, `assignees:<owner>/<repo>` for a
+// repo's assignable users. payload_json is the exact `data` array the public
+// route serves back; fetched_at drives the TTL and the stale-on-failure path.
+// Never holds tokens.
+export const github_board_cache = sqliteTable(
+  "github_board_cache",
+  {
+    installation_id: text("installation_id").notNull(),
+    cache_key: text("cache_key").notNull(),
+    payload_json: text("payload_json").notNull(),
+    fetched_at: integer("fetched_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.installation_id, t.cache_key] }),
+    index("idx_github_board_cache_installation").on(t.installation_id),
+  ],
+);
+
 // ─── github_issue_sessions ────────────────────────────────────────────────
 // Per-issue session bookkeeping (split out of linear_issue_sessions in 0005).
 // issue_id format is "<owner/repo>#<number>". Composite PK.

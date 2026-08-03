@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 
@@ -16,6 +16,72 @@ import { AssignIssueDialog } from "./AssignIssueDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+/** One issue card. Memoized so typing in the config panel above (which is
+ *  draft state on the parent) doesn't re-render every card in the grid. */
+const IssueCard = memo(function IssueCard({
+  issue,
+  onAssign,
+}: {
+  issue: GitHubIssue;
+  onAssign: (issue: GitHubIssue) => void;
+}) {
+  return (
+    <div
+      className="flex flex-col gap-2 border border-border rounded-lg bg-bg-surface/40 px-3 py-2.5"
+      data-testid="github-issue-card"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <a
+          href={issue.html_url}
+          target="_blank"
+          rel="noreferrer"
+          className="text-sm font-medium text-fg hover:text-brand line-clamp-2"
+        >
+          {issue.title}
+        </a>
+        <span className="shrink-0 text-[11px] text-fg-subtle font-mono">#{issue.number}</span>
+      </div>
+
+      {issue.labels.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {issue.labels.slice(0, 6).map((l) => (
+            <span
+              key={l.name}
+              className="inline-flex items-center rounded-full border border-border px-2 py-0.5 text-[10px] text-fg-muted"
+              style={l.color ? { borderColor: `#${l.color}` } : undefined}
+            >
+              {l.name}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between gap-2 text-[11px] text-fg-subtle">
+        <span className="truncate">
+          {issue.assignee?.login ? `@${issue.assignee.login}` : "Unassigned"}
+        </span>
+        <span className="shrink-0">
+          {issue.updated_at
+            ? formatRelative(Date.now() - new Date(issue.updated_at).getTime())
+            : ""}
+        </span>
+      </div>
+
+      <Button
+        variant="secondary"
+        size="sm"
+        className="mt-1 self-start"
+        onClick={() => onAssign(issue)}
+      >
+        Assign to agent
+      </Button>
+    </div>
+  );
+});
+
+/** `<datalist>` id wiring the Assignee input to its fetched options. */
+const ASSIGNEE_LIST_ID = "gh-board-assignees";
+
 /** Whether the applied config is complete enough to fetch issues. */
 function canFetchIssues(c: GitHubBoardConfig): boolean {
   return !!c.installationId && c.repo.includes("/");
@@ -31,9 +97,15 @@ export function GitHubIssuesBoard() {
   const [draft, setDraft] = useState<GitHubBoardConfig>(config);
   const [assignIssue, setAssignIssue] = useState<GitHubIssue | null>(null);
 
+  // Every one of these three calls costs a GitHub installation-token mint on
+  // the gateway before it even reaches GitHub, so they're cached well past
+  // the console-wide 30s default — installations and repos change on the
+  // scale of an admin action, not a tab switch.
   const installationsQuery = useQuery({
     queryKey: ["gh-board", "installations"],
     queryFn: () => api.github.listInstallations(),
+    staleTime: 10 * 60_000,
+    gcTime: 30 * 60_000,
   });
   const installations = installationsQuery.data ?? [];
 
@@ -50,8 +122,32 @@ export function GitHubIssuesBoard() {
     queryKey: ["gh-board", "repos", draft.installationId],
     queryFn: () => api.github.listRepos(draft.installationId),
     enabled: !!draft.installationId,
+    staleTime: 10 * 60_000,
+    gcTime: 30 * 60_000,
   });
-  const repos = reposQuery.data ?? [];
+  const repos = useMemo(() => reposQuery.data ?? [], [reposQuery.data]);
+
+  // A repo list that failed or came back empty used to leave the picker as a
+  // dropdown with nothing in it — a control that visibly does nothing. In
+  // that case the field falls back to typing an `owner/repo` slug, which the
+  // issues query accepts identically.
+  const repoListUnusable =
+    !!draft.installationId && !reposQuery.isLoading && (reposQuery.isError || repos.length === 0);
+  // The picker only lists the first page of an installation's repos, so an
+  // org with more than that needs a way to name one directly.
+  const [manualRepo, setManualRepo] = useState(false);
+  const typingRepo = repoListUnusable || manualRepo;
+
+  // Assignable users for the repo being edited. Also a cached, proxied read —
+  // the browser never talks to GitHub directly.
+  const assigneesQuery = useQuery({
+    queryKey: ["gh-board", "assignees", draft.installationId, draft.repo],
+    queryFn: () => api.github.listAssignees(draft.installationId, draft.repo),
+    enabled: !!draft.installationId && draft.repo.includes("/"),
+    staleTime: 10 * 60_000,
+    gcTime: 30 * 60_000,
+  });
+  const assignees = assigneesQuery.data ?? [];
 
   const issuesQuery = useQuery({
     queryKey: [
@@ -73,6 +169,11 @@ export function GitHubIssuesBoard() {
         q: config.q,
       }),
     enabled: canFetchIssues(config),
+    staleTime: 60_000,
+    gcTime: 30 * 60_000,
+    // Keep the previous repo's cards on screen while a re-Apply resolves,
+    // instead of flashing the skeleton grid.
+    placeholderData: (prev) => prev,
   });
 
   if (installationsQuery.isLoading) {
@@ -138,19 +239,59 @@ export function GitHubIssuesBoard() {
           )}
 
           <label className="block">
-            <span className="text-xs text-fg-muted block mb-1">Repository</span>
-            <Select
-              value={draft.repo}
-              onValueChange={(v) => setDraft({ ...draft, repo: v })}
-              placeholder={reposQuery.isLoading ? "Loading repos…" : "Select repository…"}
-              disabled={!draft.installationId || reposQuery.isLoading}
-            >
-              {repos.map((r) => (
-                <SelectOption key={r.full_name} value={r.full_name}>
-                  {r.full_name}
-                </SelectOption>
-              ))}
-            </Select>
+            <span className="text-xs text-fg-muted flex items-center justify-between gap-2 mb-1">
+              Repository
+              {!repoListUnusable && (
+                <button
+                  type="button"
+                  className="text-[11px] text-fg-subtle underline hover:text-brand"
+                  onClick={() => setManualRepo((v) => !v)}
+                >
+                  {manualRepo ? "Pick from list" : "Enter manually"}
+                </button>
+              )}
+            </span>
+            {typingRepo ? (
+              <Input
+                value={draft.repo}
+                onChange={(e) => setDraft({ ...draft, repo: e.target.value })}
+                placeholder="owner/repo"
+                data-testid="gh-board-repo-input"
+              />
+            ) : (
+              <Select
+                value={draft.repo}
+                onValueChange={(v) => setDraft({ ...draft, repo: v })}
+                placeholder={reposQuery.isLoading ? "Loading repos…" : "Select repository…"}
+                disabled={!draft.installationId || reposQuery.isLoading}
+              >
+                {repos.map((r) => (
+                  <SelectOption key={r.full_name} value={r.full_name}>
+                    {r.full_name}
+                  </SelectOption>
+                ))}
+              </Select>
+            )}
+            {repoListUnusable && (
+              <span className="mt-1 flex items-center gap-2 text-[11px] text-fg-subtle">
+                <span>
+                  {reposQuery.isError
+                    ? `Couldn't load repositories: ${
+                        reposQuery.error instanceof Error
+                          ? reposQuery.error.message
+                          : "the GitHub request failed"
+                      }`
+                    : "This installation exposes no repositories — type a slug instead."}
+                </span>
+                <button
+                  type="button"
+                  className="shrink-0 underline hover:text-brand"
+                  onClick={() => void reposQuery.refetch()}
+                >
+                  Retry
+                </button>
+              </span>
+            )}
           </label>
 
           <label className="block">
@@ -175,11 +316,25 @@ export function GitHubIssuesBoard() {
 
           <label className="block">
             <span className="text-xs text-fg-muted block mb-1">Assignee</span>
+            {/* Combobox, not a select: the fetched list is a convenience, but
+                a login that isn't assignable (or a repo whose assignee list
+                failed to load) must still be filterable — the browser filters
+                the datalist as you type and accepts anything you type. */}
             <Input
               value={draft.assignee}
               onChange={(e) => setDraft({ ...draft, assignee: e.target.value })}
               placeholder="login or 'none'"
+              list={assignees.length > 0 ? ASSIGNEE_LIST_ID : undefined}
+              data-testid="gh-board-assignee-input"
             />
+            {assignees.length > 0 && (
+              <datalist id={ASSIGNEE_LIST_ID} data-testid="gh-board-assignee-options">
+                {assignees.map((a) => (
+                  <option key={a.login} value={a.login} />
+                ))}
+                <option value="none" />
+              </datalist>
+            )}
           </label>
 
           <label className="block sm:col-span-2 lg:col-span-1">
@@ -245,59 +400,7 @@ export function GitHubIssuesBoard() {
             data-testid="github-issues-board"
           >
             {issues.map((issue) => (
-              <div
-                key={issue.number}
-                className="flex flex-col gap-2 border border-border rounded-lg bg-bg-surface/40 px-3 py-2.5"
-                data-testid="github-issue-card"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <a
-                    href={issue.html_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-sm font-medium text-fg hover:text-brand line-clamp-2"
-                  >
-                    {issue.title}
-                  </a>
-                  <span className="shrink-0 text-[11px] text-fg-subtle font-mono">
-                    #{issue.number}
-                  </span>
-                </div>
-
-                {issue.labels.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {issue.labels.slice(0, 6).map((l) => (
-                      <span
-                        key={l.name}
-                        className="inline-flex items-center rounded-full border border-border px-2 py-0.5 text-[10px] text-fg-muted"
-                        style={l.color ? { borderColor: `#${l.color}` } : undefined}
-                      >
-                        {l.name}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between gap-2 text-[11px] text-fg-subtle">
-                  <span className="truncate">
-                    {issue.assignee?.login ? `@${issue.assignee.login}` : "Unassigned"}
-                  </span>
-                  <span className="shrink-0">
-                    {issue.updated_at
-                      ? formatRelative(Date.now() - new Date(issue.updated_at).getTime())
-                      : ""}
-                  </span>
-                </div>
-
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="mt-1 self-start"
-                  onClick={() => setAssignIssue(issue)}
-                >
-                  Assign to agent
-                </Button>
-              </div>
+              <IssueCard key={issue.number} issue={issue} onAssign={setAssignIssue} />
             ))}
           </div>
         </div>

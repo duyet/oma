@@ -33,7 +33,8 @@ import { AgentSchedulesTab } from "./pages/agents/AgentSchedulesTab";
 import { AgentObservabilityTab } from "./pages/agents/AgentObservabilityTab";
 import { AgentPublishingTab } from "./pages/agents/AgentPublishingTab";
 import { SessionsList } from "./pages/SessionsList";
-import { KanbanBoard } from "./pages/KanbanBoard";
+import { AgentSessionBoard, KanbanBoard } from "./pages/KanbanBoard";
+import { GitHubIssuesBoard } from "./components/GitHubIssuesBoard";
 import { Usage } from "./pages/Usage";
 import { FilesList } from "./pages/FilesList";
 import { EnvironmentsList } from "./pages/EnvironmentsList";
@@ -201,7 +202,18 @@ const protectedRoutes: RouteObject[] = [
     element: <HubLayout {...SESSIONS_HUB} />,
     children: [
       { path: "sessions", element: <SessionsList />, handle: { crumb: "Sessions" } },
-      { path: "kanban", element: <KanbanBoard />, handle: { crumb: "Kanban Board" } },
+      // Kanban — a shell route holding the tab strip; each board is its own
+      // child route so it deep-links and only fetches while it is active.
+      {
+        path: "kanban",
+        element: <KanbanBoard />,
+        handle: { crumb: "Kanban Board" },
+        children: [
+          { index: true, element: <Navigate to="/kanban/agent" replace /> },
+          { path: "agent", element: <AgentSessionBoard />, handle: { crumb: "Agent Sessions" } },
+          { path: "github", element: <GitHubIssuesBoard />, handle: { crumb: "GitHub Issues" } },
+        ],
+      },
     ],
   },
   // Usage — standalone. It renders its own "Usage & cost" page header, so it

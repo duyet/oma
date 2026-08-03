@@ -11,6 +11,7 @@ import {
   buildCfRepos,
   CryptoIdGenerator,
   SqlGitHubAppRepo,
+  SqlGitHubBoardCacheRepo,
   SqlGitHubInstallationRepo,
   SqlGitHubPublicationRepo,
   SqlSlackAppRepo,
@@ -57,6 +58,7 @@ function bagsFor(c: import("hono").Context<{ Bindings: Env } & Vars>): Integrati
       installations: new SqlGitHubInstallationRepo(idb, crypto, ids),
       publications: new SqlGitHubPublicationRepo(idb, ids, crypto),
       githubApps: new SqlGitHubAppRepo(idb, crypto, ids),
+      boardCache: new SqlGitHubBoardCacheRepo(idb),
     },
     slack: {
       installations: new SqlSlackInstallationRepo(idb, crypto, ids),

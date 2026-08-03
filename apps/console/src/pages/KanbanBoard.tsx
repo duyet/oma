@@ -1,12 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { RepeatIcon, ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import { useApi } from "../lib/api";
 import { useApiQuery, useApiMutation, buildUrl } from "../lib/useApiQuery";
 import { EmptyState } from "../components/EmptyState";
 import { Skeleton } from "../components/Skeleton";
-import { GitHubIssuesBoard } from "../components/GitHubIssuesBoard";
 import { FilterBar, FacetChip } from "../components/FilterBar";
 import { Select, SelectOption } from "../components/Select";
 import { formatRelative, shortenId } from "../lib/format";
@@ -37,8 +36,6 @@ import {
   type ScheduleRecord,
 } from "../lib/kanban";
 import type { SessionRecord } from "../types/session";
-
-type KanbanTab = "sessions" | "github";
 
 // No board-wide SSE endpoint exists — SessionDetail's live stream
 // (lib/sse.ts streamSse / useApi().streamEvents) is scoped to a single
@@ -79,41 +76,32 @@ interface EnvironmentLite {
   config?: { sandbox_provider?: string; type?: string };
 }
 
+/**
+ * Kanban shell — the tab strip plus the active board, which is a nested
+ * route (`/kanban/agent`, `/kanban/github`) rather than local state, so each
+ * board deep-links, survives a reload, and works with back/forward. It also
+ * means the GitHub board's queries only mount once its own route is active.
+ */
 export function KanbanBoard() {
-  const [tab, setTab] = useState<KanbanTab>("sessions");
-
   return (
     <div className="space-y-6">
       <div className="flex gap-1 border-b border-border" role="tablist" aria-label="Kanban views">
-        <BoardTab
-          label="Agent Session Board"
-          active={tab === "sessions"}
-          onClick={() => setTab("sessions")}
-        />
-        <BoardTab
-          label="GitHub Issues"
-          active={tab === "github"}
-          onClick={() => setTab("github")}
-        />
+        <BoardTab label="Agent Session Board" to="/kanban/agent" />
+        <BoardTab label="GitHub Issues" to="/kanban/github" />
       </div>
 
-      {tab === "sessions" ? <AgentSessionBoard /> : <GitHubIssuesBoard />}
+      <Outlet />
     </div>
   );
 }
 
-function BoardTab({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
+function BoardTab({ label, to }: { label: string; to: string }) {
+  const { pathname } = useLocation();
+  const active = pathname === to || pathname.startsWith(`${to}/`);
+
   return (
-    <button
-      onClick={onClick}
+    <NavLink
+      to={to}
       role="tab"
       aria-selected={active}
       tabIndex={active ? 0 : -1}
@@ -124,7 +112,7 @@ function BoardTab({
       }`}
     >
       {label}
-    </button>
+    </NavLink>
   );
 }
 
@@ -141,7 +129,7 @@ function useNow(active: boolean): number {
   return now;
 }
 
-function AgentSessionBoard() {
+export function AgentSessionBoard() {
   const nav = useNavigate();
   const { api } = useApi();
   const queryClient = useQueryClient();
@@ -280,6 +268,21 @@ function AgentSessionBoard() {
 
   const hasSchedules = schedules.length > 0;
   const now = useNow(hasSchedules);
+
+  // Stable handlers so the memoized cards below only re-render when their
+  // own item (or, for schedules, the ticking clock) changes.
+  const openItem = useCallback(
+    (item: KanbanItem) => {
+      if (item.kind === "session") nav(`/sessions/${item.id}`);
+      else nav(`/agents/${item.agentId}`);
+    },
+    [nav],
+  );
+  const startDrag = useCallback((item: KanbanItem) => setDragItem(item), []);
+  const endDrag = useCallback(() => {
+    setDragItem(null);
+    setDragOver(null);
+  }, []);
 
   if (isLoading) {
     return (
@@ -433,16 +436,12 @@ function AgentSessionBoard() {
                         <BoardCard
                           key={item.id}
                           item={item}
-                          now={now}
-                          onOpen={() => {
-                            if (item.kind === "session") nav(`/sessions/${item.id}`);
-                            else nav(`/agents/${item.agentId}`);
-                          }}
-                          onDragStart={() => setDragItem(item)}
-                          onDragEnd={() => {
-                            setDragItem(null);
-                            setDragOver(null);
-                          }}
+                          // Session cards don't render a countdown, so they
+                          // stay out of the 1s clock's re-render path.
+                          now={item.kind === "schedule" ? now : 0}
+                          onOpen={openItem}
+                          onDragStart={startDrag}
+                          onDragEnd={endDrag}
                         />
                       ))}
                       {hiddenCount > 0 && (
@@ -468,7 +467,7 @@ function AgentSessionBoard() {
   );
 }
 
-function BoardCard({
+const BoardCard = memo(function BoardCard({
   item,
   now,
   onOpen,
@@ -477,8 +476,8 @@ function BoardCard({
 }: {
   item: KanbanItem;
   now: number;
-  onOpen: () => void;
-  onDragStart: () => void;
+  onOpen: (item: KanbanItem) => void;
+  onDragStart: (item: KanbanItem) => void;
   onDragEnd: () => void;
 }) {
   const draggable = isDraggable(item);
@@ -490,15 +489,15 @@ function BoardCard({
     <div
       draggable={draggable}
       title={title}
-      onDragStart={onDragStart}
+      onDragStart={() => onDragStart(item)}
       onDragEnd={onDragEnd}
-      onClick={onOpen}
+      onClick={() => onOpen(item)}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          onOpen();
+          onOpen(item);
         }
       }}
       data-testid={item.kind === "schedule" ? "kanban-schedule-card" : "kanban-session-card"}
@@ -525,7 +524,7 @@ function BoardCard({
       )}
     </div>
   );
-}
+});
 
 function ScheduleMeta({ item, now }: { item: KanbanScheduleItem; now: number }) {
   const sch = item.schedule;

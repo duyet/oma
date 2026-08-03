@@ -1,22 +1,41 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { render, screen, within, waitFor, fireEvent } from "@testing-library/react";
-import { MemoryRouter } from "react-router";
+import { Navigate, RouterProvider, createMemoryRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../mocks/server";
-import { KanbanBoard } from "./KanbanBoard";
+import { AgentSessionBoard, KanbanBoard } from "./KanbanBoard";
+import { GitHubIssuesBoard } from "../components/GitHubIssuesBoard";
 
-function renderBoard() {
+/** Same shape as the real route tree in main.tsx: a shell holding the tab
+ *  strip, with one child route per board and /kanban redirecting to the
+ *  agent board. */
+function renderBoard(initialPath = "/kanban") {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
-        <KanbanBoard />
-      </MemoryRouter>
-    </QueryClientProvider>,
+  const router = createMemoryRouter(
+    [
+      {
+        path: "/kanban",
+        element: <KanbanBoard />,
+        children: [
+          { index: true, element: <Navigate to="/kanban/agent" replace /> },
+          { path: "agent", element: <AgentSessionBoard /> },
+          { path: "github", element: <GitHubIssuesBoard /> },
+        ],
+      },
+    ],
+    { initialEntries: [initialPath] },
   );
+  return {
+    router,
+    ...render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    ),
+  };
 }
 
 function session(overrides: Partial<{
@@ -112,9 +131,9 @@ describe("<KanbanBoard />", () => {
     expect(within(screen.getByTestId("kanban-column-done")).getByText("2")).toBeInTheDocument();
   });
 
-  it("renders both board tabs with the session board as the default", async () => {
+  it("redirects /kanban to the agent board and marks its tab selected", async () => {
     server.use(http.get("/v1/sessions", () => HttpResponse.json({ data: [] })));
-    renderBoard();
+    const { router } = renderBoard("/kanban");
 
     expect(
       await screen.findByRole("tab", { name: "Agent Session Board" }),
@@ -123,7 +142,47 @@ describe("<KanbanBoard />", () => {
       "aria-selected",
       "false",
     );
-    // Default tab is the session board.
+    expect(router.state.location.pathname).toBe("/kanban/agent");
+    expect(await screen.findByText("No sessions yet")).toBeInTheDocument();
+  });
+
+  it("deep-links straight to the GitHub board without mounting the session board", async () => {
+    let sessionCalls = 0;
+    server.use(
+      http.get("/v1/sessions", () => {
+        sessionCalls += 1;
+        return HttpResponse.json({ data: [] });
+      }),
+      http.get("/v1/integrations/github/installations", () =>
+        HttpResponse.json({ data: [] }),
+      ),
+    );
+    renderBoard("/kanban/github");
+
+    expect(await screen.findByText("Connect GitHub to build an issues board")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "GitHub Issues" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    // The agent board is a sibling route, so its polling queries never ran.
+    expect(sessionCalls).toBe(0);
+  });
+
+  it("switching tabs pushes a URL that back navigation can undo", async () => {
+    server.use(
+      http.get("/v1/sessions", () => HttpResponse.json({ data: [] })),
+      http.get("/v1/integrations/github/installations", () =>
+        HttpResponse.json({ data: [] }),
+      ),
+    );
+    const { router } = renderBoard("/kanban/agent");
+
+    fireEvent.click(await screen.findByRole("tab", { name: "GitHub Issues" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/kanban/github"));
+    expect(await screen.findByText("Connect GitHub")).toBeInTheDocument();
+
+    await router.navigate(-1);
+    await waitFor(() => expect(router.state.location.pathname).toBe("/kanban/agent"));
     expect(await screen.findByText("No sessions yet")).toBeInTheDocument();
   });
 
@@ -245,9 +304,7 @@ describe("<KanbanBoard />", () => {
         HttpResponse.json({ data: [] }),
       ),
     );
-    renderBoard();
-
-    fireEvent.click(await screen.findByRole("tab", { name: "GitHub Issues" }));
+    renderBoard("/kanban/github");
 
     expect(await screen.findByText("Connect GitHub")).toBeInTheDocument();
     expect(
