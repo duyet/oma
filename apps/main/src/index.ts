@@ -17,6 +17,7 @@ import {
   buildDeviceRoutes,
   buildMcpServerRoutes,
   buildFederationRoutes,
+  buildTelegramConnectionRoutes,
   buildOmaMcpRoutes,
   buildAnalyticsRoutes,
   buildTelemetryRoutes,
@@ -42,6 +43,7 @@ import {
 import {
   buildLabeledCrypto,
   FEDERATION_CRYPTO_LABEL,
+  TELEGRAM_CRYPTO_LABEL,
   resolveFederationInstance,
 } from "@duyet/oma-shared";
 import { toEnvironmentConfig } from "@duyet/oma-environments-store";
@@ -480,6 +482,21 @@ function cfFederationCrypto(env: unknown) {
   const secret = (env as { PLATFORM_ROOT_SECRET?: string }).PLATFORM_ROOT_SECRET;
   return secret ? buildLabeledCrypto(secret, FEDERATION_CRYPTO_LABEL) : undefined;
 }
+
+// Per-tenant Telegram connection (Console → Integrations → Telegram). The
+// shared-bot token comes from the deployment env; a tenant's own bot token is
+// encrypted at rest under TELEGRAM_CRYPTO_LABEL off PLATFORM_ROOT_SECRET.
+const telegramConnectionRoutes = new Hono<{ Bindings: Env; Variables: { tenant_id: string } }>().all("*", (c) => {
+  const ctx = c as unknown as AppCtx;
+  const secret = (c.env as unknown as { PLATFORM_ROOT_SECRET?: string }).PLATFORM_ROOT_SECRET;
+  const app = buildTelegramConnectionRoutes({
+    services: () => cfRouteServicesFromCtx(ctx),
+    crypto: secret ? buildLabeledCrypto(secret, TELEGRAM_CRYPTO_LABEL) : undefined,
+    sharedBotToken: (c.env as unknown as { TELEGRAM_SHARED_BOT_TOKEN?: string })
+      .TELEGRAM_SHARED_BOT_TOKEN,
+  });
+  return invokePackage(c, app);
+});
 
 // Cross-instance federation registry (issue #132). The remote API key is
 // encrypted at rest under FEDERATION_CRYPTO_LABEL off PLATFORM_ROOT_SECRET.
@@ -954,6 +971,8 @@ app.route("/v1/tenant", tenantMemberRoutes);
 app.route("/v1/invites", inviteAcceptRoutes);
 app.route("/v1/evals", evalsRoutes);
 app.route("/v1/cost_report", costReportRoutes);
+// More specific than /v1/integrations — must be registered first.
+app.route("/v1/integrations/telegram", telegramConnectionRoutes);
 app.route("/v1/integrations", integrationsRoutes);
 app.route("/v1/runtimes", runtimesRoutes);
 app.route("/v1/sandbox_providers", sandboxProvidersRoutes);

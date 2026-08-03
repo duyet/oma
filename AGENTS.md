@@ -1843,6 +1843,12 @@ Target variants:
 { "type": "telegram_message", "chat_id": -1001234567890 }
 ```
 
+To find a `chat_id` without hunting for it, connect Telegram in the Console
+(**Integrations → Telegram**) and link the chat via the deep-link handshake —
+either the deployment's shared bot (`TELEGRAM_SHARED_BOT_TOKEN`) or your own
+BotFather token, stored encrypted at rest. See
+[`docs/integrations.md`](docs/integrations.md#telegram).
+
 ### `email` — transactional email (issue #317)
 
 Delivers the same status summary every other provider renders, as an email:

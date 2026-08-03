@@ -170,6 +170,16 @@ export type { OmaMcpRoutesDeps } from "./mcp";
 
 export { buildTelegramWebhookRoute } from "./telegram";
 export type { TelegramWebhookRouteDeps } from "./telegram";
+export {
+  buildTelegramConnectionRoutes,
+  telegramConnectionKvKey,
+} from "./telegram/connection";
+export type {
+  TelegramConnectionRoutesDeps,
+  TelegramConnectionRow,
+  TelegramConnectionMode,
+  TelegramLinkedChat,
+} from "./telegram/connection";
 
 export { buildScheduleRoutes, buildTenantScheduleRoutes } from "./schedules";
 export type { ScheduleRoutesDeps, ScheduleDbArg } from "./schedules";

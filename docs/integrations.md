@@ -147,11 +147,71 @@ The Slack integration ships in `packages/slack/` with thin CF wrappers in `apps/
 
 ## Telegram
 
-Run a Telegram bot backed by an OMA agent. Unlike the OAuth integrations above,
-this is a single deployment-level bot wired entirely through env vars on the
-integrations gateway — set `TELEGRAM_BOT_TOKEN` (BotFather) plus `TELEGRAM_AGENT_ID`
-(and optionally `TELEGRAM_VAULT_IDS` / `TELEGRAM_ENVIRONMENT_ID`), then point
-BotFather's webhook at `/telegram/webhook`. One session per chat.
+Two halves that can be adopted independently: a **per-tenant connection**
+(Console → Integrations → Telegram) that links chats to your workspace, and the
+**deployment-level inbound bot** that turns chat messages into sessions.
+
+### Per-tenant connection (Console)
+
+`/integrations/telegram` connects the workspace to a bot in one of two modes,
+mirroring GitHub's managed-App vs own-App duality:
+
+| Mode | Bot | Token storage |
+|---|---|---|
+| `shared_bot` | the deployment's own bot (e.g. **@omatherobot**) | the operator's `TELEGRAM_SHARED_BOT_TOKEN` env secret — never written to a tenant row, never returned by the API |
+| `own_bot` | a bot the tenant created with [@BotFather](https://t.me/BotFather) | validated with `getMe`, then AES-256-GCM encrypted at rest under a `telegram.bot_token` key derived from `PLATFORM_ROOT_SECRET` (the same machinery vault credentials and federation API keys use). Reads surface `has_token` + the bot username only |
+
+**Chat capture — the deep-link handshake.** A bot cannot discover which chats
+want it; the chat has to speak first, and Telegram's standard answer is the
+`start` deep-link parameter. The backend mints a short-lived per-tenant nonce
+and the Console renders `https://t.me/<bot>?start=<nonce>` (plus
+`?startgroup=<nonce>` to add the bot to a group). Tapping it makes Telegram
+deliver `/start <nonce>` — `/start@<bot> <nonce>` in groups — from that chat,
+and `POST /link/poll` reads it back with `getUpdates`, matches the nonce, and
+records `message.chat.id`. That is how the `chat_id` is learned without asking
+a user to hunt for their numeric id.
+
+Two consequences worth knowing:
+
+- **Nonce, not identity.** The nonce is single-purpose and expires (15 min);
+  minting a new link invalidates the old one. Anyone holding a live link can
+  bind *their* chat to the workspace, so treat it like an invite link.
+- **A webhook claims the update stream.** Telegram refuses `getUpdates` (409)
+  for a bot that has a webhook registered — including the shared bot on a
+  deployment that wired the inbound bot below. The 409 is surfaced verbatim
+  rather than reported as "no updates", and the Console's manual `chat_id`
+  field is the documented fallback. Webhook-side capture of the same `/start`
+  payload is the follow-up that removes this seam.
+
+Routes (tenant-scoped, mounted on **both** runtimes at `/v1/integrations/telegram`;
+storage is one KV row per tenant — no migration):
+
+```http
+GET    /v1/integrations/telegram              # status (unconnected is 200, not 404)
+POST   /v1/integrations/telegram/connect      # { mode: "shared_bot" } | { mode: "own_bot", bot_token }
+POST   /v1/integrations/telegram/link         # mint a fresh deep-link nonce
+POST   /v1/integrations/telegram/link/poll    # capture chats that sent /start <nonce>
+POST   /v1/integrations/telegram/chats        # manual chat_id entry (webhook fallback)
+DELETE /v1/integrations/telegram/chats/:chatId
+DELETE /v1/integrations/telegram              # disconnect (drops the stored token)
+```
+
+A linked `chat_id` is what a
+[`telegram_message` notify target](../AGENTS.md#notify-targets) needs, so the
+page doubles as the discovery step for agent/schedule notifications.
+
+**Follow-ups (deliberately out of scope):** capturing `/start` from the webhook
+route so a webhook-bound bot needs no manual entry; using the stored `own_bot`
+token as the send-side credential for `telegram_message` (today the notify
+dispatcher resolves its own); and per-chat agent binding from the Console.
+
+### Deployment-level inbound bot
+
+Turning chat messages into sessions is still wired entirely through env vars on
+the integrations gateway — set `TELEGRAM_BOT_TOKEN` (BotFather) plus
+`TELEGRAM_AGENT_ID` (and optionally `TELEGRAM_VAULT_IDS` /
+`TELEGRAM_ENVIRONMENT_ID`), then point BotFather's webhook at
+`/telegram/webhook`. One session per chat.
 
 - **Attachments** — inbound photos and documents are downloaded and forwarded to
   the agent as image / document content blocks (caption becomes the text); an

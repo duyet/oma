@@ -34,6 +34,8 @@ import type {
   SlackInstallation,
   SlackPublication,
   SlackSubmitCredentialsInput,
+  TelegramConnection,
+  TelegramConnectInput,
 } from "./types";
 
 export interface IntegrationsApiOptions {
@@ -586,6 +588,68 @@ class SlackClient {
   }
 }
 
+// ─── Telegram sub-client ───────────────────────────────────────────────
+//
+// Telegram has no OAuth install flow: a tenant either links to the
+// deployment's shared bot or pastes its own BotFather token. Chats are
+// captured via the deep-link handshake (`/link` mints a nonce, `/link/poll`
+// reads back the `/start <nonce>` the user sent from the chat).
+
+class TelegramClient {
+  constructor(private readonly basePath: string) {}
+
+  status(): Promise<TelegramConnection> {
+    return request<TelegramConnection>(this.basePath, "/v1/integrations/telegram");
+  }
+
+  connect(input: TelegramConnectInput): Promise<TelegramConnection> {
+    return request<TelegramConnection>(this.basePath, "/v1/integrations/telegram/connect", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  /** Mint a fresh deep link — the previous one stops working. */
+  newLink(): Promise<TelegramConnection> {
+    return request<TelegramConnection>(this.basePath, "/v1/integrations/telegram/link", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  }
+
+  /** Read back any chat that sent `/start <nonce>` since the last poll. */
+  pollLink(): Promise<TelegramConnection & { linked: number }> {
+    return request<TelegramConnection & { linked: number }>(
+      this.basePath,
+      "/v1/integrations/telegram/link/poll",
+      { method: "POST", body: JSON.stringify({}) },
+    );
+  }
+
+  addChat(chatId: string, title?: string): Promise<TelegramConnection> {
+    return request<TelegramConnection>(this.basePath, "/v1/integrations/telegram/chats", {
+      method: "POST",
+      body: JSON.stringify({ chat_id: chatId, title }),
+    });
+  }
+
+  removeChat(chatId: number): Promise<TelegramConnection> {
+    return request<TelegramConnection>(
+      this.basePath,
+      `/v1/integrations/telegram/chats/${encodeURIComponent(String(chatId))}`,
+      { method: "DELETE" },
+    );
+  }
+
+  async disconnect(): Promise<void> {
+    const res = await fetch(`${this.basePath}/v1/integrations/telegram`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  }
+}
+
 // ─── Public surface ────────────────────────────────────────────────────
 
 export class IntegrationsApi {
@@ -593,6 +657,7 @@ export class IntegrationsApi {
   readonly linear: LinearClient;
   readonly slack: SlackClient;
   readonly github: GitHubClient;
+  readonly telegram: TelegramClient;
 
   constructor(opts: IntegrationsApiOptions = {}) {
     const basePath = opts.basePath ?? "";
@@ -600,6 +665,7 @@ export class IntegrationsApi {
     this.linear = new LinearClient(basePath);
     this.slack = new SlackClient(basePath);
     this.github = new GitHubClient(basePath);
+    this.telegram = new TelegramClient(basePath);
   }
 
   // ─── Linear backward-compat shims ─────────────────────────────────────
