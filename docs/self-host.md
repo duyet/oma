@@ -99,6 +99,45 @@ ANTHROPIC_API_KEY=sk-... pnpm --filter @duyet/oma-main-node start
 State lives at `./data/` (sqlite db + per-session sandbox workdirs).
 Wipe + restart for a clean slate.
 
+## Quick start (Kubernetes + Helm)
+
+The `charts/oma` chart packages main-node + oma-vault as a single-pod
+Deployment with a shared PVC, RWO storage, and `strategy: Recreate` (sqlite
+single-writer). It can also auto-install the
+[agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) controller
++ CRDs via a Helm hook. See [`charts/oma/README.md`](../charts/oma/README.md)
+for the full values reference.
+
+```bash
+# 1. Create the Secret out-of-band (never pass real secrets on the Helm CLI):
+kubectl create namespace oma
+kubectl -n oma create secret generic oma \
+  --from-literal=PLATFORM_ROOT_SECRET="$(openssl rand -base64 32)" \
+  --from-literal=BETTER_AUTH_SECRET="$(openssl rand -hex 32)" \
+  --from-literal=ANTHROPIC_API_KEY="sk-ant-..."
+
+# 2. Install — bring your own Secret, enable ingress + agent-sandbox controller
+helm install oma ./charts/oma \
+  --namespace oma \
+  --set secret.existingSecret=oma \
+  --set config.publicBaseUrl=https://app.oma.duyet.net \
+  --set ingress.enabled=true \
+  --set ingress.host=app.oma.duyet.net \
+  --set agentSandbox.enabled=true
+
+# 3. Sanity check
+kubectl -n oma port-forward svc/oma 8787:8787 &
+curl localhost:8787/health
+```
+
+The `SANDBOX_PROVIDER=k8s` default creates one `Sandbox` CR
+(`agents.x-k8s.io`) per session and execs tool commands into the adopted
+pod — same model the homelab raw manifests at `infra/homelab/oma/` use.
+For local testing only, `--set secret.autoGenerate=true` generates stable
+`PLATFORM_ROOT_SECRET` / `BETTER_AUTH_SECRET` (never rotate the former —
+encrypted vault rows become unreadable; see
+[`docs/platform-root-secret-rotation.md`](platform-root-secret-rotation.md)).
+
 ## Postgres backend
 
 When to flip to Postgres: multi-instance, large tables (50M+ rows on

@@ -1445,6 +1445,19 @@ Still Cloudflare-only today: the AnyRouter connect model-card bind (above),
 deployment CRUD routes, and a handful of CF-native surfaces (files/R2, runtime
 rooms, Stripe payments webhook).
 
+### Kubernetes (Helm)
+
+The self-host Node runtime is packaged for Kubernetes by the `charts/oma`
+Helm chart — a single-pod Deployment (main-node + oma-vault sidecar) with a
+shared RWO PVC, the k8s sandbox provider's RBAC, and an optional Helm hook
+that auto-installs the [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox)
+controller + `sandboxes.agents.x-k8s.io` CRD. It mirrors the production raw
+manifests at `infra/homelab/oma/` and speaks the same `SANDBOX_PROVIDER=k8s`
+path the Node runtime resolves through the full `SandboxProviderRegistry`.
+See [`charts/oma/README.md`](charts/oma/README.md) and
+[`docs/self-host.md`](docs/self-host.md#quick-start-kubernetes--helm) for
+install + values reference.
+
 ---
 
 ## Session Resources

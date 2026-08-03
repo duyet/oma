@@ -1,0 +1,189 @@
+# Image refs — built + published by CI
+# (.github/workflows/build-node-images.yml). The two containers share the same
+# PVC (/app/data) and run co-scheduled in one pod.
+images:
+  mainNode:
+    repository: ghcr.io/duyet/oma-main-node
+    tag: latest
+    pullPolicy: Always
+  vault:
+    repository: ghcr.io/duyet/oma-vault
+    tag: latest
+    pullPolicy: Always
+
+# Single replica only: sqlite is single-writer (DATABASE_PATH /
+# AUTH_DATABASE_PATH live on the shared PVC) and the vault CA lives on RWO
+# storage. The Deployment uses strategy: Recreate so a new pod doesn't block
+# on the old one's RWO claim.
+replicaCount: 1
+
+# fsGroup 1000 — image `node` user is uid/gid 1000; this lets it write the PVC.
+# Mirrors infra/homelab/oma/deployment.yaml securityContext.fsGroup.
+podSecurityContext:
+  fsGroup: 1000
+
+# main-node container resources. The vault sidecar's resources are separate
+# under `vault.resources` below. Mirrors infra/homelab/oma/deployment.yaml.
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 1Gi
+
+serviceAccount:
+  # If create is false and name is empty, the pod uses the namespace default
+  # SA. The k8s sandbox provider (SANDBOX_PROVIDER=k8s) needs this SA bound
+  # to the Role in templates/rbac.yaml — leave create: true unless you manage
+  # RBAC out-of-band.
+  create: true
+  name: ""
+
+rbac:
+  # Role + RoleBinding granting the ServiceAccount sandbox-pod lifecycle
+  # verbs (Sandbox CR create/exec/log/delete) in this namespace. Orthogonal
+  # to the agent-sandbox controller install (agentSandbox.enabled): that
+  # installs the CRD + controller; this grants the OMA runtime permission to
+  # USE them.
+  create: true
+
+secret:
+  # Bring-your-own (recommended for production): name a pre-existing Secret
+  # holding PLATFORM_ROOT_SECRET, BETTER_AUTH_SECRET, and (optionally)
+  # ANTHROPIC_API_KEY. When set, the chart renders NO Secret and every
+  # secretRef resolves to this name. Create it out-of-band via
+  # `kubectl create secret generic`, external-secrets, sealed-secrets, ksops, ...
+  existingSecret: ""
+
+  # Opt-in auto-generate: render a Secret from the values below. For
+  # PLATFORM_ROOT_SECRET and BETTER_AUTH_SECRET NOT supplied here, a STABLE
+  # random value is generated ONCE via Helm lookup() and reused on every
+  # upgrade — never rotate PLATFORM_ROOT_SECRET: encrypted vault rows become
+  # unreadable (see docs/platform-root-secret-rotation.md).
+  autoGenerate: false
+
+  # Plaintext placeholders (NEVER commit real secrets here):
+  #   ANTHROPIC_API_KEY     — external key, never auto-generated. Supply it
+  #                          via --set or by editing the Secret after install.
+  #   BETTER_AUTH_SECRET    — signs Console sessions (openssl rand -hex 32).
+  #   PLATFORM_ROOT_SECRET  — at-rest encryption root (openssl rand -base64 32).
+  anthropicApiKey: ""
+  betterAuthSecret: ""
+  platformRootSecret: ""
+
+config:
+  # Public URL the Console/API is reachable at. Set to your ingress host.
+  publicBaseUrl: "http://localhost:8787"
+
+  # Storage paths — both containers share /app/data (the PVC). Mirrors
+  # infra/homelab/oma/configmap.yaml.
+  databasePath: "/app/data/oma.db"
+  authDatabasePath: "/app/data/auth.db"
+  sandboxWorkdir: "/app/data/sandboxes"
+  memoryBlobDir: "/app/data/memory-blobs"
+  filesBlobDir: "/app/data/files-blobs"
+  sessionOutputsDir: "/app/data/session-outputs"
+
+  # oma-vault sidecar must be reachable from sandbox pods (which run in
+  # SEPARATE pods, not just main-node's own localhost), so route via the
+  # in-cluster Service. Empty = computed in templates/configmap.yaml as
+  # http://<fullname>.<namespace>.svc.cluster.local:<vault.port>.
+  vaultProxyUrl: ""
+  vaultCaCert: "/app/data/oma-vault-ca/ca.crt"
+
+  # Anthropic API endpoint (or a compatible gateway). Override for
+  # BYOK gateways like openrouter / your own proxy.
+  anthropicBaseUrl: "https://api.anthropic.com"
+
+  # Cap harness output tokens. Default 4096 matches the model max; lower it
+  # (e.g. "3000") if an upstream gateway rejects the full 4096 budget.
+  maxOutputTokens: "4096"
+
+  # Force a wire format: "" (Anthropic /messages, default) | "oai"
+  # (OpenAI /chat/completions) | "ant" (Anthropic-compat). Set to "oai" when
+  # routing through an OpenAI-compatible gateway via config.anthropicBaseUrl.
+  apiCompat: ""
+
+  # Sandbox provider. "k8s" uses the agents.x-k8s.io Sandbox CRD (requires
+  # the controller — see agentSandbox.enabled to auto-install it, and
+  # templates/rbac.yaml for the OMA runtime's own grants). Other providers
+  # (subprocess, litebox, daytona, ...) exist in apps/main-node but "k8s" is
+  # the intended path for this chart.
+  sandboxProvider: "k8s"
+  k8s:
+    # Namespace where sandbox pods are created. Default: .Release.Namespace.
+    # Must match the namespace the Role in rbac.yaml is bound to.
+    namespace: ""
+    # Container image for sandbox pods.
+    image: "node:22-slim"
+    # CPU/memory requests applied to each sandbox pod.
+    cpu: "500m"
+    memory: "512Mi"
+    # ServiceAccount sandbox pods run as. Default: the same SA as main-node
+    # (serviceAccount.name / fullname). Override to isolate sandbox pods
+    # from the main pod's RBAC.
+    serviceAccount: ""
+
+# oma-vault sidecar (outbound credential MITM proxy). The env block is
+# hardcoded in infra/homelab/oma/deployment.yaml and made values-driven here.
+# PLATFORM_ROOT_SECRET is intentionally NOT in this block — it is injected
+# via a targeted secretKeyRef in templates/deployment.yaml (the vault
+# container exit(1)s without it).
+vault:
+  databasePath: "/app/data/oma.db"
+  caDir: "/app/data/oma-vault-ca"
+  port: 14322
+  tenant: "*"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+service:
+  type: ClusterIP
+  port: 8787        # main-node HTTP API + Console
+  vaultPort: 14322  # oma-vault proxy (exposed so sandbox pods can reach it)
+
+ingress:
+  enabled: false
+  className: traefik
+  # Example host — override per-deploy (e.g. app.oma.duyet.net).
+  host: app.oma.duyet.net
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  tls:
+    enabled: true
+    secretName: oma-tls
+
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClass: ""  # empty = cluster default provisioner
+  accessModes:
+    - ReadWriteOnce
+
+# Opt-in: auto-install the kubernetes-sigs agent-sandbox controller + CRDs
+# via a Helm hook (pre-install / pre-upgrade). The CRDs and controller are
+# NOT owned by Helm — they survive `helm uninstall`, which is correct:
+# removing OMA should not tear down the cluster's sandbox substrate.
+# Idempotent via `kubectl apply --server-side`. The OMA runtime's own RBAC
+# (templates/rbac.yaml) is separate from this controller install — they are
+# orthogonal concerns.
+agentSandbox:
+  enabled: false
+  # agent-sandbox release tag (GitHub Releases). Used to build the manifest URL.
+  version: "v0.5.4"
+  # Override the entire manifest URL if you host a fork/mirror. Empty =
+  # computed from `version` as
+  # https://github.com/kubernetes-sigs/agent-sandbox/releases/download/<version>/sandbox-with-extensions.yaml
+  manifestUrl: ""
+  hook:
+    image:
+      repository: registry.k8s.io/kubectl
+      tag: v1.31.0
+    serverSideApply: true
+
+nameOverride: ""
+fullnameOverride: ""

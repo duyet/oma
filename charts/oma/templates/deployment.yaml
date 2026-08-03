@@ -1,0 +1,94 @@
+{{/* Single-pod, two-container Deployment mirroring infra/homelab/oma/deployment.yaml.
+     main-node (HTTP API + Console, sqlite + local FS store) + oma-vault
+     (outbound-credential MITM proxy) share the oma-data PVC at /app/data.
+     strategy: Recreate (RWO PVC + sqlite single-writer). */}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "oma.fullname" . }}
+  labels:
+    {{- include "oma.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: Recreate  # RWO volume: don't let a new pod block on the old one.
+  selector:
+    matchLabels:
+      {{- include "oma.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "oma.labels" . | nindent 8 }}
+    spec:
+      # Grants RBAC for the k8s sandbox executor (templates/rbac.yaml).
+      serviceAccountName: {{ include "oma.serviceAccountName" . }}
+      securityContext:
+        fsGroup: {{ .Values.podSecurityContext.fsGroup }}
+      containers:
+        - name: main-node
+          image: "{{ .Values.images.mainNode.repository }}:{{ .Values.images.mainNode.tag }}"
+          imagePullPolicy: {{ .Values.images.mainNode.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "oma.fullname" . }}
+            - secretRef:
+                name: {{ include "oma.secretName" . }}
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+        - name: oma-vault
+          image: "{{ .Values.images.vault.repository }}:{{ .Values.images.vault.tag }}"
+          imagePullPolicy: {{ .Values.images.vault.pullPolicy }}
+          ports:
+            - name: vault
+              containerPort: {{ .Values.vault.port }}
+          env:
+            - name: DATABASE_PATH
+              value: {{ .Values.vault.databasePath | quote }}
+            - name: OMA_VAULT_CA_DIR
+              value: {{ .Values.vault.caDir | quote }}
+            - name: OMA_VAULT_PORT
+              value: {{ .Values.vault.port | quote }}
+            - name: OMA_TENANT
+              value: {{ .Values.vault.tenant | quote }}
+            # PLATFORM_ROOT_SECRET: required by oma-vault to decrypt vault
+            # credentials (encrypted at rest by main-node under the same key)
+            # for outbound header injection. main-node receives it via
+            # envFrom: secretRef above; the vault sidecar takes only this
+            # key via a targeted secretKeyRef (it does not need
+            # ANTHROPIC_API_KEY / BETTER_AUTH_SECRET). Without it vault exit(1)s.
+            - name: PLATFORM_ROOT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "oma.secretName" . }}
+                  key: PLATFORM_ROOT_SECRET
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          resources:
+            {{- toYaml .Values.vault.resources | nindent 12 }}
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "oma.fullname" . }}-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}

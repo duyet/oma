@@ -1,0 +1,65 @@
+{{- if .Values.agentSandbox.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "oma.fullname" . }}-agent-sandbox-installer
+  labels:
+    {{- include "oma.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-1"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "oma.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: oma-agent-sandbox-installer
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: installer
+          image: "{{ .Values.agentSandbox.hook.image.repository }}:{{ .Values.agentSandbox.hook.image.tag }}"
+          imagePullPolicy: IfNotPresent
+          env:
+            # kubectl caches discovery to $HOME/.kube/cache; point HOME at
+            # the writable emptyDir below so readOnlyRootFilesystem is safe.
+            - name: HOME
+              value: /tmp
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              echo "Checking for sandboxes.agents.x-k8s.io CRD..."
+              if ! kubectl get crd sandboxes.agents.x-k8s.io >/dev/null 2>&1; then
+                echo "CRD not found — applying agent-sandbox manifest (server-side)."
+                kubectl apply --server-side{{ if .Values.agentSandbox.hook.serverSideApply }} --force-conflicts{{ end }} -f {{ include "oma.agentSandbox.manifestUrl" . }}
+                echo "Waiting for CRD to establish..."
+                kubectl wait --for=condition=Established crd/sandboxes.agents.x-k8s.io --timeout=120s
+              else
+                echo "CRD already present — ensuring manifest is up to date (server-side)."
+                kubectl apply --server-side{{ if .Values.agentSandbox.hook.serverSideApply }} --force-conflicts{{ end }} -f {{ include "oma.agentSandbox.manifestUrl" . }}
+              fi
+              echo "agent-sandbox install complete."
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+      volumes:
+        - name: tmp
+          emptyDir: {}
+{{- end }}
