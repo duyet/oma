@@ -1,6 +1,7 @@
 ---
 import Base from "../layouts/Base.astro";
 import Icon from "../components/Icon.astro";
+import DeploymentDiagram from "../components/DeploymentDiagram.astro";
 import { breadcrumbSchema } from "../lib/seo";
 
 const schemas = [
@@ -105,6 +106,9 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
         parallel options. Same business logic, same API surface, pick one per
         deployment.
       </p>
+      <div class="mb-10 md:mb-12">
+        <DeploymentDiagram />
+      </div>
       <div class="topology-grid">
         <div class="topology-track">
           <div class="topology-track-head">
@@ -177,7 +181,7 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
         Concurrent sub-agent delegation, liveness heartbeats, and native webhook
         notifications to GitHub, Slack, and Matrix.
       </p>
-      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10 text-left">
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12 text-left">
         <article data-lift class="rounded-xl border border-[var(--color-border)] bg-card p-5 hover:border-[var(--color-border-strong)]">
           <span class="arch-badge arch-badge-green mb-3">any sandbox</span>
           <h3 class="font-display text-base font-semibold mb-2 tracking-tight">Run on any sandbox</h3>
@@ -251,7 +255,7 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
       One <code class="font-mono text-sm">SandboxExecutor</code> interface, a dozen adapters.
       Pick a provider per environment — agents and sessions never notice the difference.
     </p>
-    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
       {sandboxProviders.map((p) => {
         const mark = fleetLogos.find((f) => f.label === p.logo);
         return (
@@ -293,7 +297,7 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
         deployment. Agents then run on hardware you already own.
       </p>
 
-      <div class="grid lg:grid-cols-2 gap-6 items-stretch">
+      <div class="grid lg:grid-cols-2 gap-8 items-stretch">
         <!-- CLI demo -->
         <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] overflow-hidden">
           <div class="flex items-center gap-1.5 px-4 py-2.5 border-b border-[var(--color-border)]">
