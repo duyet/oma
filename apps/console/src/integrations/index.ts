@@ -46,4 +46,8 @@ export type {
   GitHubA1InstallLink,
   SessionSummary,
   GitHubSessionMetadata,
+  TelegramConnection,
+  TelegramConnectionMode,
+  TelegramConnectInput,
+  TelegramLinkedChat,
 } from "./api/types";

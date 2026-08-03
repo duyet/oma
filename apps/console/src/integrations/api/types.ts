@@ -379,3 +379,42 @@ export interface GitHubSessionMetadata {
   /** Set on per_issue sessions for resume keying. */
   issueKey?: string;
 }
+
+// ─── Telegram ──────────────────────────────────────────────────────────
+
+export type TelegramConnectionMode = "shared_bot" | "own_bot";
+
+export interface TelegramLinkedChat {
+  chat_id: number;
+  title?: string;
+  type?: string;
+  linked_at: number;
+}
+
+/**
+ * Status of the tenant's Telegram connection. Unconnected is a normal state
+ * (`connected: false`), not a 404 — the page renders the connect form from
+ * the same response. A bot token is never present in this shape: `own_bot`
+ * only reports `has_token`.
+ */
+export interface TelegramConnection {
+  connected: boolean;
+  mode: TelegramConnectionMode | null;
+  /** Whether the deployment configured TELEGRAM_SHARED_BOT_TOKEN. */
+  shared_bot_available?: boolean;
+  bot_username?: string;
+  bot_id?: number;
+  has_token?: boolean;
+  chats: TelegramLinkedChat[];
+  /** `https://t.me/<bot>?start=<nonce>` while the handshake nonce is live. */
+  start_url?: string | null;
+  /** Same nonce, but adds the bot to a group instead of a private chat. */
+  start_group_url?: string | null;
+  link_expires_at?: number | null;
+  created_at?: number;
+  updated_at?: number;
+}
+
+export type TelegramConnectInput =
+  | { mode: "shared_bot" }
+  | { mode: "own_bot"; bot_token: string };
