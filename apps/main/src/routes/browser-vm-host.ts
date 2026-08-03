@@ -16,7 +16,7 @@
  *   3. services `sandbox.op` frames (exec / readFile / writeFile /
  *      setEnvVars / destroy) against an in-tab VM engine and replies
  *      `sandbox.result` — the exact frame shapes BrowserVmSandbox
- *      (packages/sandbox/src/adapters/browser-vm.ts) awaits;
+ *      (packages/sandbox-sdk/src/adapters/browser-vm.ts) awaits;
  *   4. mirrors `/workspace` writes into OPFS so a tab reload restores state.
  *
  * Engine model: bring-your-own. v86 (BSD-2) is the open default — the page

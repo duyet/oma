@@ -1,11 +1,11 @@
 import { Hono } from "hono";
 import type { Env } from "@duyet/oma-shared";
-import type { SandboxProviderConfig } from "@duyet/oma-sandbox";
+import type { SandboxProviderConfig } from "@getoma/sandbox-sdk";
 import {
   SandboxProviderRegistry,
   SYSTEM_PROVIDERS,
-} from "@duyet/oma-sandbox";
-import type { ProviderHealth } from "@duyet/oma-sandbox/registry";
+} from "@getoma/sandbox-sdk";
+import type { ProviderHealth } from "@getoma/sandbox-sdk/registry";
 
 // In-memory registry — on the Cloudflare deployment this is a singleton
 // per worker instance; on Node it mirrors the main-node registry.

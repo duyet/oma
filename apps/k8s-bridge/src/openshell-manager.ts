@@ -3,7 +3,7 @@
 // The OpenShell gateway's only public API is gRPC (`openshell.v1.OpenShell`),
 // which a Cloudflare Worker cannot speak. This manager runs in the Node
 // bridge process, reuses the gRPC client from
-// `@duyet/oma-sandbox/adapters/openshell` (`OpenShellSandbox` — TLS/mTLS,
+// `@getoma/sandbox-sdk/adapters/openshell` (`OpenShellSandbox` — TLS/mTLS,
 // token, image, exec-over-stream, base64-through-exec file I/O), and exposes
 // each sandbox through the same boxrun-shaped HTTP router the Kubernetes
 // backend uses. The Worker then reaches it over plain fetch via the
@@ -58,7 +58,7 @@ export class OpenShellManager implements BridgeBackend {
     // Untyped dynamic import: the sandbox package ships raw .ts via
     // "exports", which this CJS tsc build can't resolve — typing comes from
     // the structural BoxExecutor interface. Mirrors K8sManager.createBox.
-    const mod = await import("@duyet/oma-sandbox/adapters/openshell" as string);
+    const mod = await import("@getoma/sandbox-sdk/adapters/openshell" as string);
     const executor: BoxExecutor = new mod.OpenShellSandbox({
       endpoint: this.endpoint,
       token: this.token,

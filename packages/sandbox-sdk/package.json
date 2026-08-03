@@ -1,5 +1,5 @@
 {
-  "name": "@duyet/oma-sandbox",
+  "name": "@getoma/sandbox-sdk",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -21,7 +21,8 @@
     "./adapters/openshell-policy": "./src/adapters/openshell-policy.ts",
     "./adapters/browser-vm": "./src/adapters/browser-vm.ts",
     "./orchestrator": "./src/orchestrator.ts",
-    "./registry": "./src/registry.ts"
+    "./registry": "./src/registry.ts",
+    "./test": "./test/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

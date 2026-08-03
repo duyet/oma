@@ -1,8 +1,8 @@
 // Drift guard for the vendored OpenShell client. The proto is the one piece
 // of the copy where divergence is silent AND corrupting (a field-number skew
 // makes the gateway mis-parse), so assert it stays byte-identical to the
-// source of truth in packages/sandbox. Read as text — the CLI must never
-// import @duyet/oma-sandbox (private package, never published).
+// source of truth in packages/sandbox-sdk. Read as text — the CLI must never
+// import @getoma/sandbox-sdk (private package, never published).
 
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -24,7 +24,7 @@ function extractAdapterProto(): string {
 }
 
 describe("vendored OpenShell proto", () => {
-  it("stays byte-identical to packages/sandbox/src/adapters/openshell.ts", () => {
+  it("stays byte-identical to packages/sandbox-sdk/src/adapters/openshell.ts", () => {
     expect(OPENSHELL_PROTO).toBe(extractAdapterProto());
   });
 });

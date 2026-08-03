@@ -29,8 +29,8 @@ import type { BlobStore } from "@duyet/oma-blob-store";
 import type {
   OrchestratorBackupHandle,
   WorkspaceBackupService,
-} from "@duyet/oma-sandbox/orchestrator";
-import type { SandboxExecutor } from "@duyet/oma-sandbox";
+} from "@getoma/sandbox-sdk/orchestrator";
+import type { SandboxExecutor } from "@getoma/sandbox-sdk";
 import { getLogger } from "@duyet/oma-observability";
 
 const moduleLogger = getLogger("node-workspace-backup");

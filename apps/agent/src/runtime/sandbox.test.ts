@@ -8,10 +8,10 @@
 
 import { describe, it, expect, vi } from "vitest";
 import type { Env } from "@duyet/oma-shared";
-import { BoxRunSandbox } from "@duyet/oma-sandbox/adapters/boxrun";
-import { KubernetesRemoteSandbox } from "@duyet/oma-sandbox/adapters/kubernetes-remote";
-import { K8sBridgeSandbox } from "@duyet/oma-sandbox/adapters/k8s-bridge";
-import { DynamicWorkerSandbox } from "@duyet/oma-sandbox/adapters/dynamic-workers";
+import { BoxRunSandbox } from "@getoma/sandbox-sdk/adapters/boxrun";
+import { KubernetesRemoteSandbox } from "@getoma/sandbox-sdk/adapters/kubernetes-remote";
+import { K8sBridgeSandbox } from "@getoma/sandbox-sdk/adapters/k8s-bridge";
+import { DynamicWorkerSandbox } from "@getoma/sandbox-sdk/adapters/dynamic-workers";
 import type { WorkerLoader } from "@duyet/oma-shared";
 import {
   CloudflareSandbox,

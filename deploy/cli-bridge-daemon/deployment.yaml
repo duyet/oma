@@ -70,7 +70,7 @@ spec:
         - name: daemon
           # Default (local relay): the published CLI on a plain Node image.
           # For the OpenShell backend, build an image that also has
-          # @duyet/oma-sandbox present (see README.md → "OpenShell image").
+          # @getoma/sandbox-sdk present (see README.md → "OpenShell image").
           image: node:22-slim
           command: ["npx", "-y", "@getoma/cli", "bridge", "daemon"]
           env:

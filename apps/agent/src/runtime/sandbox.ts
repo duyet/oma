@@ -2,7 +2,7 @@ import type { SandboxExecutor, ProcessHandle } from "../harness/interface";
 import type { Env } from "@duyet/oma-shared";
 import { getSandbox as cfGetSandbox } from "@cloudflare/sandbox";
 import { sessionOutputsPrefix } from "@duyet/oma-shared";
-import { classifyCfSandboxProvider } from "@duyet/oma-sandbox";
+import { classifyCfSandboxProvider } from "@getoma/sandbox-sdk";
 // Static import (not the registry's lazy `import(factoryPath)`) so wrangler's
 // esbuild bundles it like any other dependency — see the resolveCfSandbox
 // doc comment below for why the registry itself can't be used here. BoxRun
@@ -14,18 +14,18 @@ import { classifyCfSandboxProvider } from "@duyet/oma-sandbox";
 // single-file Worker script can't be verified without an actual
 // `wrangler deploy` — out of scope here. Selecting them on CF fails
 // clearly (see resolveCfSandbox) instead of silently guessing.
-import { BoxRunSandbox } from "@duyet/oma-sandbox/adapters/boxrun";
+import { BoxRunSandbox } from "@getoma/sandbox-sdk/adapters/boxrun";
 // Same static-import mandate as BoxRunSandbox: this is a bare `fetch`
 // client against an in-cluster k8s-sandbox-gateway, zero Node builtins,
 // so esbuild bundles it into the single-file Worker cleanly. The registry's
 // lazy `import(factoryPath)` can't bundle here (see the comment above).
-import { KubernetesRemoteSandbox } from "@duyet/oma-sandbox/adapters/kubernetes-remote";
-import { K8sBridgeSandbox } from "@duyet/oma-sandbox/adapters/k8s-bridge";
+import { KubernetesRemoteSandbox } from "@getoma/sandbox-sdk/adapters/kubernetes-remote";
+import { K8sBridgeSandbox } from "@getoma/sandbox-sdk/adapters/k8s-bridge";
 // JS-eval-only executor backed by Cloudflare Dynamic Workers (Worker Loader
 // binding). Pure — takes the WorkerLoader interface from @duyet/oma-shared,
 // no Node builtins — so esbuild bundles it into the single-file Worker like
 // BoxRunSandbox. Availability is the env.LOADER *binding*, gated below.
-import { DynamicWorkerSandbox } from "@duyet/oma-sandbox/adapters/dynamic-workers";
+import { DynamicWorkerSandbox } from "@getoma/sandbox-sdk/adapters/dynamic-workers";
 // Relay-backed executor for local (subprocess) environments on the CF
 // deployment — forwards sandbox ops to a user-paired `oma bridge daemon`
 // over the RuntimeRoom DO. Imported lazily-at-construction (not at module
@@ -41,7 +41,7 @@ import { BrowserVmRelaySandbox } from "./browser-vm-relay";
 import {
   mapEnvironmentConfigToOpenShellPolicy,
   type OpenShellPolicyInput,
-} from "@duyet/oma-sandbox/adapters/openshell-policy";
+} from "@getoma/sandbox-sdk/adapters/openshell-policy";
 // `bash-parser` is CJS; the bundler handles interop for worker builds.
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore

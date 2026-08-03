@@ -106,7 +106,7 @@ import {
   SYSTEM_PROVIDERS,
   buildUnseededHostingTypes,
   describeProviderAvailability,
-} from "@duyet/oma-sandbox";
+} from "@getoma/sandbox-sdk";
 import { logError, recordEvent, errFields } from "@duyet/oma-shared";
 import { globalErrorHandler, requestMetricsMiddleware } from "./lib/observability";
 import { errorEnvelopeMiddleware } from "./lib/error-envelope";
@@ -205,7 +205,7 @@ app.get("/v1/hosting_types", async (c) => {
     latency_ms: number;
     last_checked: string;
     reason?: string;
-    capacity?: import("@duyet/oma-sandbox").SandboxCapacity;
+    capacity?: import("@getoma/sandbox-sdk").SandboxCapacity;
   }>();
 
   for (const p of providers) {

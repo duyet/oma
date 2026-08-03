@@ -408,7 +408,7 @@ export function useSessionAnalytics(events: Event[]): SessionAnalytics {
  * Per-sandbox-provider display metadata. The provider id comes from an
  * environment's `config.sandbox_provider` (or the legacy `config.type`), and
  * the set here mirrors `classifyCfSandboxProvider` in
- * `packages/sandbox/src/provider-config.ts` — including the CF-vs-Node
+ * `packages/sandbox-sdk/src/provider-config.ts` — including the CF-vs-Node
  * availability split, which is the single most common source of a confusing
  * `session.error` ("why did my k8s environment fail on Cloudflare?").
  */

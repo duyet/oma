@@ -17,7 +17,7 @@
 //
 // Sandbox provisioning (memory mounts, /mnt/session/outputs, vault
 // outbound, optional workspace-restore) is delegated to the
-// SandboxOrchestrator from `@duyet/oma-sandbox/orchestrator`
+// SandboxOrchestrator from `@getoma/sandbox-sdk/orchestrator`
 // — same interface CF wires for the OmaSandbox path. Per-runtime
 // mounters were removed in P5.
 
@@ -29,11 +29,11 @@ import {
 } from "@duyet/oma-session-runtime";
 import type { SqlClient } from "@duyet/oma-sql-client";
 import { SqlStreamRepo, type SqlEventLog } from "@duyet/oma-event-log/sql";
-import type { SandboxExecutor } from "@duyet/oma-sandbox";
+import type { SandboxExecutor } from "@getoma/sandbox-sdk";
 import type {
   OrchestratorMemoryMount,
   SandboxOrchestrator,
-} from "@duyet/oma-sandbox/orchestrator";
+} from "@getoma/sandbox-sdk/orchestrator";
 import type { AgentService } from "@duyet/oma-agents-store";
 import type { MemoryStoreService } from "@duyet/oma-memory-store";
 import type {

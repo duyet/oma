@@ -41,7 +41,7 @@ threads. The entire design is shaped by working around those four facts.
 ## 2. Where it plugs in
 
 OMA's sandbox seam is the transport-agnostic `SandboxExecutor` port
-(`packages/sandbox/src/ports.ts`):
+(`packages/sandbox-sdk/src/ports.ts`):
 
 ```ts
 interface SandboxExecutor {
@@ -250,7 +250,7 @@ points:
 
 **Implemented (this change):**
 
-- `BrowserVmSandbox` adapter (`packages/sandbox/src/adapters/browser-vm.ts`) —
+- `BrowserVmSandbox` adapter (`packages/sandbox-sdk/src/adapters/browser-vm.ts`) —
   a `SandboxExecutor` speaking the `sandbox.op` protocol over an injectable
   transport, with a factory + registry entry (`type: "browser-vm"`,
   `cfCompatible: true`).

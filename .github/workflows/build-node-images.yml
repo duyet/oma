@@ -45,7 +45,7 @@ jobs:
             image: oma-vault
             dockerfile: apps/oma-vault/Dockerfile
           # Default sandbox toolset image (DEFAULT_SANDBOX_IMAGE in
-          # packages/sandbox) — the image-accepting adapters (k8s, boxrun,
+          # packages/sandbox-sdk) — the image-accepting adapters (k8s, boxrun,
           # daytona, litebox, docker-compose, k8s-bridge) pull this when an
           # environment doesn't pin its own `config.image` (issue #140).
           - name: oma-runtime-base

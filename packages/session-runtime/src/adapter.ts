@@ -11,7 +11,7 @@
 
 import type { SqlClient } from "@duyet/oma-sql-client";
 import type { EventLogRepo, StreamRepo } from "@duyet/oma-event-log";
-import type { SandboxExecutor } from "@duyet/oma-sandbox";
+import type { SandboxExecutor } from "@getoma/sandbox-sdk";
 import type { SessionEvent } from "@duyet/oma-shared";
 import type { OrphanTurn, RuntimeAdapter, TurnId } from "./ports";
 

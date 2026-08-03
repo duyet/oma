@@ -36,7 +36,7 @@ import type {
 import type { LanguageModel } from "ai";
 import { recoverInterruptedState } from "./recovery";
 import type { OrphanTurn, RuntimeAdapter, TurnId } from "./ports";
-import type { SandboxExecutor } from "@duyet/oma-sandbox";
+import type { SandboxExecutor } from "@getoma/sandbox-sdk";
 import { fireAgentHook, type AgentHookConfig } from "./hooks";
 import { DEFAULT_TURN_TIMEOUT_MS, runWithTurnWatchdog } from "./watchdog";
 

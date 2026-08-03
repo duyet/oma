@@ -1,6 +1,6 @@
 // Remote Sandbox Agent — lightweight HTTP server for command execution
 // and file transfer on a remote machine. Designed to be paired with
-// the RemoteAgentSandbox adapter (packages/sandbox/src/adapters/remote-agent.ts).
+// the RemoteAgentSandbox adapter (packages/sandbox-sdk/src/adapters/remote-agent.ts).
 //
 // No framework, just the built-in http module. One dependency-less
 // binary that any Node 20+ host can run.

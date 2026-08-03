@@ -3,12 +3,12 @@ import type { AgentConfig, EnvironmentConfig, SessionEvent, UserMessageEvent } f
 import type { FileResolver } from "../runtime/history";
 import type { ClaudeSdkModelBinding } from "./claude-agent-sdk/model";
 
-// SandboxExecutor + ProcessHandle live in @duyet/oma-sandbox so
+// SandboxExecutor + ProcessHandle live in @getoma/sandbox-sdk so
 // non-CF runtimes (apps/main-node, future deployments) can implement the
 // same shape without depending on apps/agent's CF-only modules. Imported
 // for local use AND re-exported so existing imports keep working unchanged.
-import type { SandboxExecutor, ProcessHandle } from "@duyet/oma-sandbox";
-export type { SandboxExecutor, ProcessHandle } from "@duyet/oma-sandbox";
+import type { SandboxExecutor, ProcessHandle } from "@getoma/sandbox-sdk";
+export type { SandboxExecutor, ProcessHandle } from "@getoma/sandbox-sdk";
 export type { FileResolver, ResolvedFile } from "../runtime/history";
 
 export interface HarnessInterface {

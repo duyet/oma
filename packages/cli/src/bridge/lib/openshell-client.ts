@@ -2,7 +2,7 @@
  * Lean OpenShell gRPC client for the bridge daemon.
  *
  * This is a deliberate VENDORED COPY of the core of
- * `packages/sandbox/src/adapters/openshell.ts` (`OpenShellSandbox` +
+ * `packages/sandbox-sdk/src/adapters/openshell.ts` (`OpenShellSandbox` +
  * `probeOpenShellGateway`). Keep the two in sync — the proto string in
  * particular is covered by an agreement test
  * (`openshell-client.test.ts`), because a field-number drift is the kind
@@ -11,7 +11,7 @@
  * Why a copy and not an import: `@getoma/cli` publishes a single
  * esbuild bundle with ZERO runtime dependencies, and the internal
  * `@duyet/oma-*` packages are private (never published), so a published
- * CLI could never resolve `@duyet/oma-sandbox` at runtime. The adapter
+ * CLI could never resolve `@getoma/sandbox-sdk` at runtime. The adapter
  * also pulls `@duyet/oma-observability` at module scope, which drags
  * hono middleware and a dynamic `import("pino")` into the bundle.
  * `@grpc/grpc-js` + `@grpc/proto-loader` are pure-JS devDependencies and
@@ -35,7 +35,7 @@ import { createHash } from "node:crypto";
 
 // Minimal proto subset (only the service + messages this client uses).
 // MUST stay byte-identical to OPENSHELL_PROTO in
-// packages/sandbox/src/adapters/openshell.ts — asserted by a test.
+// packages/sandbox-sdk/src/adapters/openshell.ts — asserted by a test.
 export const OPENSHELL_PROTO = `syntax = "proto3";
 package openshell.v1;
 

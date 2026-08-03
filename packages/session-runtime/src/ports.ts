@@ -15,7 +15,7 @@
 
 import type { SqlClient } from "@duyet/oma-sql-client";
 import type { EventLogRepo, StreamRepo } from "@duyet/oma-event-log";
-import type { SandboxExecutor } from "@duyet/oma-sandbox";
+import type { SandboxExecutor } from "@getoma/sandbox-sdk";
 
 /** Opaque per-turn id (nanoid). Stored on the sessions row while a turn is
  *  in flight so cold starts can detect orphans. */

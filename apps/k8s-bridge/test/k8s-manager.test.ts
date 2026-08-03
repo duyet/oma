@@ -1,6 +1,6 @@
 // Unit tests for K8sManager cluster info/capacity/nodes endpoints, with
 // `@kubernetes/client-node` fully mocked — no real cluster involved.
-// Mirrors the mocking style used in packages/sandbox/test/kubernetes.test.ts.
+// Mirrors the mocking style used in packages/sandbox-sdk/test/kubernetes.test.ts.
 //
 // Also covers getSandboxDetail, which stubs the private getCoreApi() helper
 // directly rather than relying on the module mock — keeping the fake surface
