@@ -2,14 +2,17 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import mdx from '@astrojs/mdx';
 
-// Brand fonts — DM Sans (body), Source Serif 4 (display headings),
-// JetBrains Mono (code). Loaded via Starlight's head[] config rather
-// than @import inside customCss so the CSS waterfall (custom.css → @import
-// fonts.googleapis.com → fonts.gstatic.com) collapses into parallel
-// requests. print-onload makes the stylesheet non-blocking; the
-// <noscript> fallback keeps it working without JS. Same pattern web uses.
+// Brand fonts — aligned to apps/web's current type stack (Inter Variable
+// for body, Instrument Serif for display accents, JetBrains Mono for
+// code); web self-hosts these via fontsource, docs pulls the same
+// families from Google Fonts instead since Starlight has no fontsource
+// wiring. Loaded via Starlight's head[] config rather than @import inside
+// customCss so the CSS waterfall (custom.css → fonts.googleapis.com →
+// fonts.gstatic.com) collapses into parallel requests. print-onload makes
+// the stylesheet non-blocking; the <noscript> fallback keeps it working
+// without JS.
 const FONT_HREF =
-  'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Source+Serif+4:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap';
+  'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap';
 
 export default defineConfig({
   site: 'https://docs.oma.duyet.net',

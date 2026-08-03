@@ -352,7 +352,7 @@ Sessions communicate through a typed event log. Events fall into four categories
 | Event | Description |
 |---|---|
 | `span.model_request_start` | Model API call started |
-| `span.model_request_end` | Model API call completed (per-call `model_usage` breakdown — input, output, cache_read, cache_creation, reasoning) |
+| `span.model_request_end` | Model API call completed (per-call `model_usage` breakdown — input, output, cache_read, cache_creation, reasoning). Carries `resolved_model` when the provider reports a different model than the configured handle — a gateway alias like `anyrouter/free` only names a concrete `provider/model` in the response; the Console shows it as `anyrouter/free → anthropic/claude-…` |
 | `span.outcome_evaluation_start` | Outcome evaluation began |
 
 **Token usage tracking.** Every model call — the primary loop, sub-agent
@@ -1346,6 +1346,21 @@ deployment falls back to static env-var secrets, in order:
    AnyRouter addresses models as `provider/model` (e.g.
    `anthropic/claude-sonnet-4-6`), so `agent.model` must be set accordingly
    to use this fallback.
+
+**Gateway app attribution.** Whenever the resolved base URL points at
+`anyrouter.dev` or `openrouter.ai` (env fallback, OAuth-connected card, or any
+model card whose `base_url` is the gateway), OMA attaches that gateway's
+app-attribution headers so requests show up as OMA in its dashboard instead of
+a raw user-agent bucket:
+
+| Gateway | Headers |
+|---|---|
+| [AnyRouter](https://docs.anyrouter.dev/features/app-attribution) | `HTTP-Referer: https://oma.duyet.net`, `X-AnyRouter-Title: OMA`, `X-AnyRouter-Source: managed-agents`, `X-AnyRouter-Categories: cloud-agent` |
+| [OpenRouter](https://openrouter.ai/docs/app-attribution) | `HTTP-Referer: https://oma.duyet.net`, `X-OpenRouter-Title: OMA`, `X-OpenRouter-Categories: cloud-agent` |
+
+Values are static constants
+(`apps/agent/src/harness/attribution.ts`), applied on both the Anthropic-compat
+and OpenAI-compat paths; a caller-supplied header of the same name still wins.
 
 An explicit Model Card always wins over both. See
 `resolveDefaultProviderCreds` in `apps/agent/src/harness/provider.ts` and

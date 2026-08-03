@@ -4,7 +4,11 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare Workers" />
+  <img src="https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white" alt="Docker" />
+  <img src="https://img.shields.io/badge/Kubernetes-ready-326CE5?logo=kubernetes&logoColor=white" alt="Kubernetes" />
+  <img src="https://img.shields.io/badge/MCP-client%20%26%20server-6E56CF" alt="Model Context Protocol" />
   <img src="https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/pnpm-monorepo-F69220?logo=pnpm&logoColor=white" alt="pnpm" />
   <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="Apache 2.0 License" />
   <img src="https://github.com/duyet/oma/actions/workflows/ci.yml/badge.svg" alt="CI" />
   <img src="https://img.shields.io/badge/API-Anthropic%20Compatible-blueviolet" alt="Anthropic Compatible" />
@@ -16,7 +20,7 @@
 
 🌐 **[oma.duyet.net](https://oma.duyet.net)** · 📖 **[docs.oma.duyet.net](https://docs.oma.duyet.net)** · 💬 **[github.com/duyet/oma](https://github.com/duyet/oma)**
 
-Write a harness. Deploy. The platform runs it — with sessions, sandboxes, tools, memory, vaults, Slack/GitHub/Linear integrations, and crash recovery out of the box. Drop-in compatible with the Claude Managed Agents API; runs on Cloudflare Workers + Durable Objects, or `docker compose up` on your own box.
+Write a harness. Deploy. The platform runs it — with sessions, sandboxes, tools, memory, vaults, integrations, and crash recovery out of the box. Drop-in compatible with the Claude Managed Agents API; runs on **Cloudflare Workers + Durable Objects**, or **`docker compose up`** on your own box.
 
 Use Open Managed Agents when you want:
 
@@ -47,19 +51,17 @@ Compare: [Open Tag](https://oma.duyet.net/open-tag/) · [Open-source Claude Tag]
 
 ## Two ways to run OMA
 
-The same harness, business logic, and event-log model run on both. Pick the
-one that matches your hosting story:
+The same harness, business logic, and event-log model run on both. Pick the one that matches your hosting story:
 
-| | **Self-host (Node)** | **Cloudflare** |
+| | ![Docker](https://img.shields.io/badge/-Self--host%20(Node)-2496ED?logo=docker&logoColor=white) | ![Cloudflare](https://img.shields.io/badge/-Cloudflare-F38020?logo=cloudflare&logoColor=white) |
 |---|---|---|
 | Where it lives | Your VPS / Mac / Docker host / fly.io / your k8s | Cloudflare Workers + DO + Containers |
 | Storage | SQLite or Postgres + local FS | D1 + KV + R2 |
-| Sandbox | Multi-provider: LocalSubprocess / LiteBox / Daytona / E2B / BoxRun / Kubernetes + BYOK | Cloudflare Sandbox (Containers) |
-| Time to running | `docker compose up` (~2 min) | wrangler deploy (~10 min once configured) |
+| Sandbox | Multi-provider — see the [sandbox roster](#sandbox-providers) | Cloudflare Sandbox (Containers) + most of the same roster |
+| Time to running | `docker compose up` (~2 min) | `wrangler deploy` (~10 min once configured) |
 | Best for | OSS users, on-prem, no CF account, data-resident deploys | Edge scale, no host management, already on CF |
 
-**Same SDK.** Same `/v1/agents` / `/v1/sessions` API. Same Console UI. Same
-crash-recovery semantics. Switch between them by changing env vars, not code.
+**Same SDK.** Same `/v1/agents` / `/v1/sessions` API. Same Console UI. Same crash-recovery semantics. Switch between them by changing env vars, not code.
 
 ---
 
@@ -217,6 +219,122 @@ The marketing site (`apps/web`) auto-deploys via CI. See [docs/website-deploy.md
 
 ---
 
+## Deploy
+
+Three ways to get OMA running, each documented end to end:
+
+| | Target | One-liner | Docs |
+|---|---|---|---|
+| ![Cloudflare](https://img.shields.io/badge/-Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white) | Cloudflare Workers + Durable Objects + Containers | Edge-hosted, no servers to run — `./scripts/setup-cf.sh` provisions D1/KV/R2 and deploys all three workers | [Quick start above](#quick-start-cloudflare-deploy) · [docs/deployment.md](docs/deployment.md) |
+| ![Docker](https://img.shields.io/badge/-Docker%20Compose-2496ED?logo=docker&logoColor=white) | Any Docker host (VPS, Mac, on-prem) | `docker compose up -d` — SQLite or Postgres, LocalSubprocess sandbox by default | [Quick start above](#quick-start-self-host-docker) · [docs/self-host.md](docs/self-host.md) |
+| ![Kubernetes](https://img.shields.io/badge/-Kubernetes%20(Helm)-326CE5?logo=kubernetes&logoColor=white) | Self-host Node **on** a k8s cluster, with k8s-backed sandboxes | `helm install oma-k8s-bridge charts/oma-k8s-bridge …` installs the in-cluster gateway that hands OMA (Cloudflare or Node) real k8s-pod or OpenShell sandboxes | [docs/deploy/k8s-bridge-quickstart.md](docs/deploy/k8s-bridge-quickstart.md) · [docs/deploy/k8s-bridge.md](docs/deploy/k8s-bridge.md) · [docs/deploy/k8s-sandbox-backends.md](docs/deploy/k8s-sandbox-backends.md) |
+
+**What "Kubernetes" means here precisely:** OMA's control plane itself still runs as either the Cloudflare Workers deployment or the self-host Node deployment (`apps/main-node`, which can itself run as a Deployment on the same cluster via `docker compose`-equivalent manifests). Kubernetes is the **sandbox backend** — the `charts/oma-k8s-bridge` Helm chart installs an in-cluster gateway (`k8s-sandbox-gateway` for raw pods, or a `k8s-bridge` running the OpenShell gRPC backend) that either runtime talks to over plain HTTP/gRPC to create, exec into, and destroy per-session sandboxes as real pods. There's a standalone CLI bridge daemon too (`deploy/cli-bridge-daemon/`) for the `subprocess` sandbox provider's relay, deployable in-cluster with no RBAC. See [AGENTS.md § Sandbox Provider on the Cloudflare Deployment](AGENTS.md#sandbox-provider-on-the-cloudflare-deployment) for the full k8s-remote vs openshell comparison.
+
+---
+
+## Feature highlights
+
+### 🧠 Bring your own model
+
+![Anthropic](https://img.shields.io/badge/Anthropic-Claude-D97757?logo=anthropic&logoColor=white) ![OpenAI](https://img.shields.io/badge/OpenAI-compatible-412991?logo=openai&logoColor=white) ![AnyRouter](https://img.shields.io/badge/AnyRouter-one--click%20OAuth-2ea043)
+
+- **Model Cards** — per-tenant LLM credentials (`ant` / `ant-compatible` / `oai` / `oai-compatible`); an agent just references `agent.model = "<model_id>"`.
+- **AnyRouter one-click connect** — OAuth into [AnyRouter](https://anyrouter.dev) from the Console, no pasted key. Auto-provisions `anyrouter-strong` / `anyrouter-fast` model cards, live credit balance, model + preset picker.
+- **Default provider fallback** — `ANTHROPIC_API_KEY` or `ANYROUTER_API_KEY` env vars when no Model Card matches, so a fresh install can run an agent immediately.
+- **Poolside** (`harness: "poolside"`) — drive [poolside.ai](https://poolside.ai) `laguna`/`malibu` agentic-coding models over the same OpenAI-compatible loop.
+
+### 🧩 Harnesses — pluggable "how"
+
+| Harness | What it does |
+|---|---|
+| `default` | Standard AI-SDK tool loop, prompt-cache-safe context engineering |
+| `claude-agent-sdk` | Runs the actual Claude Code CLI subprocess (self-host Node only) |
+| `poolside` | Same loop, swapped model resolver for poolside.ai |
+| `acp-proxy` | Delegates the whole loop to a local ACP agent (Claude Code, Codex) via `oma bridge daemon` |
+| `oma-remote` | Proxies every turn to a session on a **federated** OMA instance |
+| *custom* | Implement `HarnessInterface`, register by name — see [Write a Harness](#write-a-harness) |
+
+### 📦 Sandbox providers
+
+Every sandbox — cloud container, local process, browser tab, or another cluster entirely — sits behind one `SandboxExecutor` interface.
+
+<a name="sandbox-providers"></a>
+
+| Provider | Runs on | Notes |
+|---|---|---|
+| ![Cloudflare](https://img.shields.io/badge/-Cloudflare%20Containers-F38020?logo=cloudflare&logoColor=white) | Cloudflare | Default CF sandbox |
+| ![Docker](https://img.shields.io/badge/-docker--compose-2496ED?logo=docker&logoColor=white) | Self-host Node | Native Docker-socket driven |
+| ![Kubernetes](https://img.shields.io/badge/-k8s%20/%20k8s--remote-326CE5?logo=kubernetes&logoColor=white) | Both | Direct in-cluster pods (Node); gateway-relayed pods on CF via **k8s-sandbox-gateway** |
+| **OpenShell** | Both | Policy-enforced isolation via gRPC (Node) or a k8s-bridge relay (CF) |
+| **BoxRun** | Both | Remote `boxlite serve` control plane over plain `fetch` |
+| **LiteBox** | Self-host Node | Native micro-VM binding |
+| **Daytona** / **E2B** | Self-host Node | Driver-SDK cloud sandboxes; not yet bundled into the CF Worker |
+| **Local subprocess** (`oma bridge daemon`) | Both (CF via relay) | Runs sandbox ops on a paired local/dev machine over a WebSocket relay — with per-session outbound credential injection |
+| **Browser VM** (WASM, v86) | Both (CF via relay) | A browser tab hosts the sandbox — open **Console → Runtimes → Open sandbox tab** |
+| **Dynamic Workers** (Code Mode) | Cloudflare only | Ephemeral V8-isolate JS/Wasm eval — no filesystem, millisecond cold start |
+| **oma-remote** | Cloudflare (Node: not yet wired) | No local sandbox at all — the whole turn proxies to another OMA instance ([federation](#federation)) |
+
+Full provider-by-provider Cloudflare-availability matrix: [AGENTS.md § Sandbox Provider on the Cloudflare Deployment](AGENTS.md#sandbox-provider-on-the-cloudflare-deployment).
+
+### 💻 Local runtime — ACP bridge
+
+Run **Claude Code, Codex, or any [ACP](https://agentclientprotocol.com/)-compatible agent** as the harness, on the user's own machine, driven entirely from the OMA Console/API. `oma bridge daemon` pairs a machine as a runtime; `harness: "acp-proxy"` + `runtime_binding` targets it. Best-effort model/reasoning-effort overrides via ACP's experimental hooks.
+
+### 🌐 Browser sandbox
+
+No container at all — `sandbox_provider: "browser-vm"` runs the agent's shell inside a **WASM VM (v86) in a browser tab**. Open it from **Console → Runtimes → Open sandbox tab**; the tab pairs as a runtime and services exec/file ops in-browser. Zero-infra sandboxing for demos, workshops, and constrained environments.
+
+### 🔐 Vaults & outbound credentials
+
+**Tools never see your tokens.** Credentials live encrypted in a vault; an outbound HTTP proxy matches request hostnames and injects auth headers at the network layer — a prompt-injected agent has nothing to leak. Supports `static_bearer`, `mcp_oauth`, and `cap_cli` (gh/aws/kubectl/wrangler). Full guide: **[docs/vaults-and-credentials.md](docs/vaults-and-credentials.md)**.
+
+### 🧵 Sessions, events & crash recovery
+
+Every session is an **append-only event log** (DO-SQLite), streamable over SSE, resumable after a crash with zero data loss — the next message replays the log and rebuilds context. Sandbox **pause/resume** snapshots `/workspace` and tears down the container to stop paying for idle compute, independent of session lifecycle.
+
+### 🧠 Memory stores
+
+Persistent storage across sessions, mounted at `/mnt/memory/<store>/` and read/written with the *same* file tools the agent already has (`bash`/`read`/`write`/`edit`/`glob`/`grep`) — no bespoke memory API. Versioned, redactable, CAS-safe writes.
+
+### 🧰 Skills
+
+`SKILL.md` + reference files, mounted into the sandbox and inlined into the system prompt — format-compatible with Anthropic's [Claude Code skills](https://github.com/anthropics/skills).
+
+### ⏱️ Schedules & deployments
+
+- **Agent schedules** — cron-fire a session with no human turn, DST-correct timezones, run history, per-schedule alerts.
+- **Deployments** — reusable bundles (agent + version pin + environment + vaults + memory stores) triggered manually, on a cron, or via an unauthenticated-but-token-secured webhook.
+
+<a name="federation"></a>
+
+### 🌍 Cross-instance federation
+
+Delegate a task — or an **entire session** — from one OMA instance to another. `callable_agents` gains a `remote_agent` type for one-off delegation; `sandbox_provider: "oma-remote"` binds a whole session so every turn (and its sandbox) runs on the remote instance while the Console, API, and event log stay local. Depth-1 loop prevention, SSE mirroring, unified cross-instance listing (`?include_remotes=1`). Cloudflare only for now.
+
+### 🔌 MCP — client and server
+
+![MCP](https://img.shields.io/badge/MCP-Model%20Context%20Protocol-6E56CF)
+
+- **As a client** — register any [MCP](https://modelcontextprotocol.io) server per-agent or in a tenant-level registry; calls proxy through the main worker so credentials never touch the sandbox, on every sandbox provider identically.
+- **As a server** — OMA exposes its *own* MCP endpoint (`POST /v1/mcp`) so it can be driven from Claude Desktop, Claude Code, Cursor, or VS Code with `list_agents` / `create_agent` / `create_session` / `send_message` / `get_events`.
+
+### 🔗 Integrations
+
+![GitHub](https://img.shields.io/badge/GitHub-issues%20%26%20PRs-181717?logo=github&logoColor=white) ![Slack](https://img.shields.io/badge/Slack-4A154B?logo=slack&logoColor=white) ![Telegram](https://img.shields.io/badge/Telegram-26A5E4?logo=telegram&logoColor=white) ![Linear](https://img.shields.io/badge/Linear-5E6AD2?logo=linear&logoColor=white) ![Matrix](https://img.shields.io/badge/Matrix-000000?logo=matrix&logoColor=white) ![Email](https://img.shields.io/badge/Email-transactional-EA4335?logo=gmail&logoColor=white) ![Webhook](https://img.shields.io/badge/Webhook-HMAC--signed-blue)
+
+Publish an agent into GitHub, Slack, Linear, or Telegram and have it act as a real teammate there — assigned, mentioned, replied to like any other user. Notify targets (`agent.notify`) fan session-status and sandbox-lifecycle alerts out to GitHub comments, Slack/Matrix/Telegram messages, transactional email, or a signed generic webhook. Full guide: **[docs/integrations.md](docs/integrations.md)**.
+
+### 🪝 Agent hooks
+
+Claude-Code-style `pre_tool`/`post_tool` hooks that gate, redact, or modify a tool call via a signed outbound webhook — no custom code inside the Worker/DO. Prompt-cache-safe (only `execute` is wrapped, tool schemas untouched).
+
+### 💰 Publishing & payments
+
+Publish an agent as a consumer-facing bot — hosted chat page, embeddable widget (`<script src=".../widget.js">`), guest/magic-link auth, and optional per-message or per-1k-token metering against a Stripe-backed credit wallet. Full guide: **[docs/publishing.md](docs/publishing.md)**.
+
+---
+
 ## Examples
 
 [`examples/`](examples/) has copy-paste-ready agent configs for common
@@ -255,41 +373,7 @@ Compatible with the [Claude Managed Agents API](https://docs.anthropic.com/en/do
 
 ## Built-in Tools
 
-`agent_toolset_20260401` ships `bash`, `read`, `write`, `edit`, `glob`, `grep`, `web_fetch`, `web_search`, plus scheduling and opt-in `browser`/derived tools (`call_agent_*`, `mcp__<server>__<tool>`). Full catalog and behavior details: **[docs/tools.md](docs/tools.md)**.
-
----
-
-## MCP servers
-
-OMA registers any [Model Context Protocol](https://modelcontextprotocol.io) server attached to an agent (`mcp__<server>__<tool>`, up to 20 per agent), with a tenant-level registry and credential-resolving outbound proxy. Full guide: **[docs/mcp-servers.md](docs/mcp-servers.md)**.
-
----
-
-## Skills
-
-A skill is a `SKILL.md` plus reference files, mounted into the sandbox and inlined into the system prompt at session start. Format is compatible with Anthropic's [Claude Code skills](https://github.com/anthropics/skills). Full guide: **[docs/skills.md](docs/skills.md)**.
-
----
-
-## Vaults & outbound credentials
-
-**Tools never see your tokens.** An outbound resolver matches request hostnames against the session's vaults and injects credentials at the network layer — a prompt-injected agent has nothing to leak. Full guide: **[docs/vaults-and-credentials.md](docs/vaults-and-credentials.md)** (design deep-dive: [docs/mcp-credential-architecture.md](docs/mcp-credential-architecture.md)).
-
----
-
-## Integrations
-
-Publish an agent into Linear, GitHub, Slack, or Telegram and have it act as a real teammate there — assigned, mentioned, replied to like any other user. Full guide: **[docs/integrations.md](docs/integrations.md)** (Slack operator setup detail: [docs/slack-integration.md](docs/slack-integration.md)).
-
----
-
-## Publish an agent to consumers
-
-Publish an agent as a standalone bot end users talk to without an OMA account — hosted chat page, embeddable widget, guest auth, optional per-message billing. Full guide: **[docs/publishing.md](docs/publishing.md)**.
-
-## Schedule an agent
-
-Fire sessions on a cron cadence with no human turn — digests, polling, recurring maintenance. Full guide: **[docs/schedules.md](docs/schedules.md)**.
+`agent_toolset_20260401` ships `bash`, `read`, `write`, `edit`, `glob`, `grep`, `web_fetch`, `web_search`, plus scheduling and opt-in `browser`/`run_dynamic_worker`/derived tools (`call_agent_*`, `mcp__<server>__<tool>`). Full catalog and behavior details: **[docs/tools.md](docs/tools.md)**.
 
 ---
 
@@ -308,12 +392,6 @@ The variables that gate boot and at-rest safety (`PLATFORM_ROOT_SECRET`, `BETTER
 ## Telemetry
 
 OMA collects **anonymous, opt-out** usage telemetry (instance UUID, version, aggregate counts only — never prompts, messages, or credentials). Opt out with `OMA_TELEMETRY_DISABLED=1`. Full details: **[docs/telemetry.md](docs/telemetry.md)**.
-
----
-
-## Model Cards
-
-Per-tenant LLM credentials — an agent references one via `agent.model = "<model_id>"`; the worker signs the outbound request with its api_key/base_url/headers. Supports `ant` / `ant-compatible` / `oai` / `oai-compatible`. Full guide: **[docs/model-cards.md](docs/model-cards.md)**.
 
 ---
 
@@ -349,6 +427,8 @@ The `docs/` folder at the repo root contains **internal design RFCs** — not th
 | Integrations (Linear, GitHub, Slack, Telegram) | [docs/integrations.md](docs/integrations.md) · [docs/slack-integration.md](docs/slack-integration.md) |
 | Publishing agents to consumers | [docs/publishing.md](docs/publishing.md) |
 | Scheduling agents | [docs/schedules.md](docs/schedules.md) |
+| Browser VM sandbox | [docs/browser-vm-sandbox.md](docs/browser-vm-sandbox.md) |
+| Kubernetes sandbox backends | [docs/deploy/k8s-sandbox-backends.md](docs/deploy/k8s-sandbox-backends.md) |
 | Project structure | [docs/project-structure.md](docs/project-structure.md) |
 | Configuration / env vars | [docs/configuration.md](docs/configuration.md) |
 | Telemetry | [docs/telemetry.md](docs/telemetry.md) |

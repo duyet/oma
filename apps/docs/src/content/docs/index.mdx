@@ -82,6 +82,62 @@ Most agent frameworks tell you *how* to build an agent — the loop, the prompt 
   </Card>
 </CardGrid>
 
+## Sandbox platforms
+
+Every sandbox — cloud container, local process, or browser tab — runs behind one `SandboxExecutor` interface, selected per-environment via `sandbox_provider`. Availability differs between the Cloudflare deployment and self-host Node; see the [Kubernetes deploy guide](/deploy/kubernetes/) and [k8s-bridge reference](/deploy/k8s-bridge/) for the cluster-backed options.
+
+<CardGrid>
+  <Card title="Cloud" icon="cloudflare">
+    Cloudflare Containers (default on Cloudflare) · BoxRun · Kubernetes via k8s-remote or OpenShell (both runtimes, gateway-relayed on Cloudflare) · Daytona and E2B (self-host Node only) · Dynamic Workers — ephemeral V8-isolate JS/Wasm eval, Cloudflare only · oma-remote federation to another oma instance (Cloudflare; Node not yet wired)
+  </Card>
+  <Card title="Local" icon="seti:docker">
+    Local subprocess via `oma bridge daemon` (both runtimes — relayed to Cloudflare over WebSocket) · Docker / `docker-compose` (self-host Node) · Kubernetes pods, direct in-cluster (self-host Node) · LiteBox micro-VMs (self-host Node)
+  </Card>
+  <Card title="Browser" icon="seti:html">
+    Browser VM — a WASM VM (v86) running inside a browser tab, paired as a runtime and driven over the same relay as the local subprocess provider. Zero-infra sandboxing for demos and constrained environments.
+  </Card>
+</CardGrid>
+
+## Model providers
+
+Bring your own model or credentials — an agent references a model by id, and oma resolves credentials per tenant.
+
+<CardGrid>
+  <Card title="Anthropic" icon="approve-check">
+    Direct API access with `ANTHROPIC_API_KEY` — the default provider fallback when no Model Card matches.
+  </Card>
+  <Card title="OpenAI-compatible" icon="random">
+    Any `/chat/completions`-compatible endpoint via a Model Card (`oai` / `oai-compatible`).
+  </Card>
+  <Card title="AnyRouter" icon="puzzle">
+    One-click OAuth connect from the Console — no pasted key. Auto-provisions model cards (e.g. `anyrouter/free`, `anyrouter-strong`, `anyrouter-fast`) with a live credit balance and preset picker.
+  </Card>
+  <Card title="poolside" icon="rocket">
+    The `laguna` / `malibu` agentic-coding models, driven through the `poolside` harness over the same OpenAI-compatible loop.
+  </Card>
+  <Card title="Custom Model Cards / BYOK" icon="seti:lock">
+    Per-tenant credentials with a custom `base_url`, for any Anthropic-wire or OpenAI-wire provider you self-host or proxy.
+  </Card>
+</CardGrid>
+
+## Harnesses
+
+The harness decides *how* an agent's turn runs; the platform decides *what* it has available (tools, skills, sandbox, history). oma ships two harnesses today, with more planned:
+
+<CardGrid>
+  <Card title="OMA harness (default)" icon="document">
+    oma's own agent loop, built on the [`ai` SDK](https://sdk.vercel.ai/) — prompt-cache-safe context engineering, tool loop, and event emission. Works out of the box for any agent.
+  </Card>
+  <Card title="Claude Agent SDK" icon="seti:lock">
+    Runs the actual Claude Code CLI as a subprocess (self-host Node only), with per-agent model and credential resolution via Model Cards.
+  </Card>
+  <Card title="Local runtime (ACP bridge)" icon="seti:docker">
+    `acp-proxy` delegates the whole loop to a local [ACP](https://agentclientprotocol.com/)-compatible agent — Claude Code, Codex — running on a paired machine via `oma bridge daemon`.
+  </Card>
+</CardGrid>
+
+More harnesses are planned — see [Architecture](/architecture/) for how to implement and register your own.
+
 ## Next steps
 
 <LinkCard
