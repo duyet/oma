@@ -463,10 +463,10 @@ export function buildIntegrationsGatewayRoutes(deps: IntegrationsGatewayDeps) {
   });
 
   // POST /github/internal/list-repos — enumerate the repos an installation
-  // can see, for the Console's GitHub-issues board repo picker. Mints a
-  // fresh installation token via the same App-JWT path as refresh-by-vault
-  // (side effect: rotates the vault creds in place, keeping them warm), then
-  // calls GitHub's `GET /installation/repositories`. Internal-only: the
+  // can see, for the Console's GitHub-issues board repo picker. Resolves an
+  // installation token via the same App-JWT path as refresh-by-vault, reused
+  // from `boardInstallationToken`'s in-memory cache while it's still valid,
+  // then calls GitHub's `GET /installation/repositories`. Internal-only: the
   // public-facing route in integrations/index.ts resolves installation →
   // vaultId + ownership before forwarding here with the internal secret.
   app.post("/github/internal/list-repos", async (c) => {
@@ -482,28 +482,48 @@ export function buildIntegrationsGatewayRoutes(deps: IntegrationsGatewayDeps) {
       return c.json({ error: "userId, vaultId required" }, 400);
     }
     try {
-      const { token } = await deps.installBridge.refreshGithubVault({
-        userId: body.userId,
-        vaultId: body.vaultId,
-      });
-      const page = Number.isFinite(body.page) && body.page! > 0 ? Math.floor(body.page!) : 1;
-      const res = await githubApiGet(
-        token,
-        `/installation/repositories?per_page=100&page=${page}`,
-      );
-      if (!res.ok) return c.json({ error: "github_api_error", details: res.text.slice(0, 200) }, 502);
-      const parsed = JSON.parse(res.text) as {
-        total_count?: number;
-        repositories?: Array<{
-          name: string;
-          full_name: string;
-          private: boolean;
-          default_branch?: string;
-          html_url?: string;
-          owner?: { login?: string };
-        }>;
+      const token = await boardInstallationToken(deps, body.userId, body.vaultId);
+      const startPage = Number.isFinite(body.page) && body.page! > 0 ? Math.floor(body.page!) : 1;
+      // Follow pagination: a >100-repo org used to silently lose everything
+      // past page 1. The result is cached by the caller, so the extra round
+      // trips are paid once per TTL, and the page cap bounds a pathological
+      // org rather than looping forever.
+      type RawRepo = {
+        name: string;
+        full_name: string;
+        private: boolean;
+        default_branch?: string;
+        html_url?: string;
+        owner?: { login?: string };
       };
-      const repos = (parsed.repositories ?? []).map((r) => ({
+      const raw: RawRepo[] = [];
+      let total = 0;
+      let hasMore = false;
+      for (let i = 0; i < BOARD_REPO_MAX_PAGES; i++) {
+        const page = startPage + i;
+        const res = await githubApiGet(
+          token,
+          `/installation/repositories?per_page=100&page=${page}`,
+        );
+        if (!res.ok) {
+          return c.json({ error: "github_api_error", details: res.text.slice(0, 200) }, 502);
+        }
+        const parsed = JSON.parse(res.text) as {
+          total_count?: number;
+          repositories?: RawRepo[];
+        };
+        const batch = parsed.repositories ?? [];
+        raw.push(...batch);
+        total = parsed.total_count ?? raw.length;
+        // Fewer than a full page means GitHub has nothing left to give.
+        if (batch.length < 100) {
+          hasMore = false;
+          break;
+        }
+        hasMore = page * 100 < total;
+        if (!hasMore) break;
+      }
+      const repos = raw.map((r) => ({
         owner: r.owner?.login ?? r.full_name.split("/")[0] ?? "",
         name: r.name,
         full_name: r.full_name,
@@ -511,8 +531,42 @@ export function buildIntegrationsGatewayRoutes(deps: IntegrationsGatewayDeps) {
         default_branch: r.default_branch ?? null,
         html_url: r.html_url ?? `https://github.com/${r.full_name}`,
       }));
-      const total = parsed.total_count ?? repos.length;
-      return c.json({ data: repos, has_more: page * 100 < total });
+      return c.json({ data: repos, has_more: hasMore });
+    } catch (err) {
+      return githubMintError(c, err);
+    }
+  });
+
+  // POST /github/internal/list-assignees — users assignable to issues in one
+  // repo, backing the board's Assignee combobox. Same internal-secret gate
+  // and token mint as its siblings.
+  app.post("/github/internal/list-assignees", async (c) => {
+    const gate = checkInternalSecret(c, deps.internalSecret);
+    if (gate) return gate;
+    let body: { userId?: string; vaultId?: string; owner?: string; repo?: string };
+    try {
+      body = (await c.req.json()) as typeof body;
+    } catch {
+      return c.json({ error: "invalid json" }, 400);
+    }
+    if (!body.userId || !body.vaultId || !body.owner || !body.repo) {
+      return c.json({ error: "userId, vaultId, owner, repo required" }, 400);
+    }
+    try {
+      const token = await boardInstallationToken(deps, body.userId, body.vaultId);
+      const res = await githubApiGet(
+        token,
+        `/repos/${encodeURIComponent(body.owner)}/${encodeURIComponent(body.repo)}/assignees?per_page=100`,
+      );
+      if (!res.ok) return c.json({ error: "github_api_error", details: res.text.slice(0, 200) }, 502);
+      const parsed = JSON.parse(res.text) as Array<{
+        login?: string;
+        avatar_url?: string;
+      }>;
+      const users = (Array.isArray(parsed) ? parsed : [])
+        .filter((u) => !!u.login)
+        .map((u) => ({ login: u.login as string, avatar_url: u.avatar_url ?? null }));
+      return c.json({ data: users });
     } catch (err) {
       return githubMintError(c, err);
     }
@@ -546,10 +600,7 @@ export function buildIntegrationsGatewayRoutes(deps: IntegrationsGatewayDeps) {
       return c.json({ error: "userId, vaultId, owner, repo required" }, 400);
     }
     try {
-      const { token } = await deps.installBridge.refreshGithubVault({
-        userId: body.userId,
-        vaultId: body.vaultId,
-      });
+      const token = await boardInstallationToken(deps, body.userId, body.vaultId);
       const search = buildIssueSearchQuery(body);
       const page = Number.isFinite(body.page) && body.page! > 0 ? Math.floor(body.page!) : 1;
       const res = await githubApiGet(
@@ -1082,6 +1133,51 @@ function jsonRpcError(
 // ─── GitHub board helpers (repo picker + issues board) ────────────────
 
 const GITHUB_API_ORIGIN = "https://api.github.com";
+
+/**
+ * Short-lived installation-token cache for the read-only board endpoints.
+ *
+ * `refreshGithubVault` is expensive: it lists installations, decrypts the
+ * App private key, signs a JWT, POSTs GitHub's access-tokens endpoint, then
+ * rotates two vault credentials — five-plus round trips before the board's
+ * own GitHub call even starts. GitHub installation tokens are valid for an
+ * hour, so re-minting one per board request (and the board fires a repos +
+ * issues pair on every filter change) is pure latency.
+ *
+ * Scope is deliberately narrow: process memory only (never persisted),
+ * keyed by the exact (userId, vaultId) pair the caller already proved it
+ * owns, dropped well before the token's own expiry, and used only by the
+ * two read-only board endpoints — `refresh-by-vault` still mints fresh
+ * every time, because its callers depend on the vault rotation side effect.
+ */
+/** Page cap for list-repos' pagination follow — 10 pages × 100 = 1000 repos. */
+const BOARD_REPO_MAX_PAGES = 10;
+const BOARD_TOKEN_SAFETY_MS = 5 * 60_000;
+const BOARD_TOKEN_CACHE_MAX = 200;
+const boardTokenCache = new Map<string, { token: string; expiresAtMs: number }>();
+
+async function boardInstallationToken(
+  deps: IntegrationsGatewayDeps,
+  userId: string,
+  vaultId: string,
+): Promise<string> {
+  const key = `${userId} ${vaultId}`;
+  const hit = boardTokenCache.get(key);
+  if (hit && hit.expiresAtMs - BOARD_TOKEN_SAFETY_MS > Date.now()) return hit.token;
+
+  const { token, expiresAt } = await deps.installBridge.refreshGithubVault({ userId, vaultId });
+  const expiresAtMs = expiresAt ? Date.parse(expiresAt) : NaN;
+  if (Number.isFinite(expiresAtMs)) {
+    // Cheap bound on an unbounded-in-principle map: a full cache drops its
+    // oldest insertion rather than growing with the tenant count.
+    if (boardTokenCache.size >= BOARD_TOKEN_CACHE_MAX) {
+      const oldest = boardTokenCache.keys().next();
+      if (!oldest.done) boardTokenCache.delete(oldest.value);
+    }
+    boardTokenCache.set(key, { token, expiresAtMs });
+  }
+  return token;
+}
 
 /** Plain authenticated GET against the GitHub REST API using an installation
  *  token. Kept dependency-free (raw fetch, like linearGraphQLFetch) so

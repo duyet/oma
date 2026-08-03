@@ -70,6 +70,12 @@ export function telegramConnectionKvKey(tenantId: string): string {
 
 const NONCE_TTL_MS = 15 * 60 * 1000;
 
+/** Cache key + TTL for the shared bot's identity. The Console shows the
+ *  deployment bot's @username before anyone connects, which would otherwise
+ *  cost a `getMe` on every status poll. */
+const SHARED_BOT_CACHE_KEY = "telegram_shared_bot_identity";
+const SHARED_BOT_CACHE_TTL_S = 24 * 60 * 60;
+
 function mintNonce(): string {
   return crypto.randomUUID().replace(/-/g, "").slice(0, 24);
 }
@@ -163,20 +169,50 @@ export function buildTelegramConnectionRoutes(deps: TelegramConnectionRoutesDeps
     return keyCrypto.decrypt(row.bot_token_enc);
   };
 
+  /** The shared bot's @username, so the Console can name it before anyone
+   *  connects. Deployment-wide (not per tenant), cached in KV for a day.
+   *  Fail-open: a Telegram hiccup returns null and the page falls back to
+   *  generic copy rather than failing the whole status read. */
+  const sharedBotUsername = async (
+    c: import("hono").Context,
+    token: string,
+  ): Promise<string | null> => {
+    const kv = resolveServices(deps.services, c).kv;
+    const cached = await kv.get(SHARED_BOT_CACHE_KEY).catch(() => null);
+    if (cached) return cached;
+    try {
+      const me = await makeClient(token).getMe();
+      if (!me.username) return null;
+      await kv
+        .put(SHARED_BOT_CACHE_KEY, me.username, { expirationTtl: SHARED_BOT_CACHE_TTL_S })
+        .catch(() => undefined);
+      return me.username;
+    } catch {
+      return null;
+    }
+  };
+
   // GET / — connection status. Never 404s: an unconnected tenant is a normal
   // state the Console renders as the connect form.
   app.get("/", async (c) => {
     const row = await loadRow(c, c.get("tenant_id"));
-    const sharedAvailable = Boolean(resolveDep(deps.sharedBotToken, c));
+    const sharedToken = resolveDep(deps.sharedBotToken, c);
+    const sharedAvailable = Boolean(sharedToken);
+    const sharedUsername = sharedToken ? await sharedBotUsername(c, sharedToken) : null;
     if (!row) {
       return c.json({
         connected: false,
         mode: null,
         shared_bot_available: sharedAvailable,
+        shared_bot_username: sharedUsername,
         chats: [],
       });
     }
-    return c.json({ ...toApiShape(row), shared_bot_available: sharedAvailable });
+    return c.json({
+      ...toApiShape(row),
+      shared_bot_available: sharedAvailable,
+      shared_bot_username: sharedUsername,
+    });
   });
 
   // POST /connect — { mode: "shared_bot" } | { mode: "own_bot", bot_token }

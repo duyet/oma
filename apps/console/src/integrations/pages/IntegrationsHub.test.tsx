@@ -47,7 +47,7 @@ describe("<IntegrationsHub />", () => {
     // makes sense before the first install.
     expect(within(row("github")).getByLabelText("GitHub options")).toBeTruthy();
 
-    expect(within(row("slack")).getByText("Not connected")).toBeTruthy();
+    expect(within(row("slack")).queryByText("Not connected")).toBeNull();
     expect(within(row("slack")).getByRole("link", { name: "Connect" })).toBeTruthy();
   });
 
@@ -71,7 +71,7 @@ describe("<IntegrationsHub />", () => {
     mockInstallations();
     renderPage();
     await waitFor(() =>
-      expect(within(row("github")).getByText("Not connected")).toBeTruthy(),
+      expect(within(row("github")).getByRole("link", { name: "Connect" })).toBeTruthy(),
     );
 
     await userEvent.type(screen.getByLabelText("Search integrations"), "slack");
@@ -85,7 +85,7 @@ describe("<IntegrationsHub />", () => {
     renderPage();
 
     await waitFor(() =>
-      expect(within(row("telegram")).getByText("Not connected")).toBeTruthy(),
+      expect(within(row("telegram")).getByRole("link", { name: "Set up" })).toBeTruthy(),
     );
     const link = within(row("telegram")).getByRole("link", { name: "Set up" });
     expect(link.getAttribute("href")).toBe("/integrations/telegram");

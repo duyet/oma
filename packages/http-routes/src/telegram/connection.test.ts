@@ -85,6 +85,25 @@ describe("telegram connection routes", () => {
     expect(json.connected).toBe(false);
     expect(json.shared_bot_available).toBe(true);
     expect(json.chats).toEqual([]);
+    // Named before connecting, so the user knows which bot to message.
+    expect(json.shared_bot_username).toBe("omatherobot");
+  });
+
+  it("caches the shared bot identity instead of calling getMe on every status read", async () => {
+    await app.request("/");
+    const afterFirst = state.tokensSeen.length;
+    const res = await app.request("/");
+    expect((await res.json()).shared_bot_username).toBe("omatherobot");
+    expect(state.tokensSeen.length).toBe(afterFirst);
+  });
+
+  it("still answers status when Telegram won't name the shared bot", async () => {
+    state.getMeError = new Error("telegram down");
+    const res = await app.request("/");
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.shared_bot_available).toBe(true);
+    expect(json.shared_bot_username).toBeNull();
   });
 
   it("connects to the shared bot without ever storing or echoing its token", async () => {

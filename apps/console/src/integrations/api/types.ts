@@ -325,6 +325,12 @@ export interface GitHubIssue {
   updated_at: string;
 }
 
+/** One user the board's repo can be assigned to. */
+export interface GitHubAssignee {
+  login: string;
+  avatar_url: string | null;
+}
+
 /** Structured filters for the issues board — serialized to query params by
  *  the client. */
 export interface GitHubIssueFilters {
@@ -402,6 +408,9 @@ export interface TelegramConnection {
   mode: TelegramConnectionMode | null;
   /** Whether the deployment configured TELEGRAM_SHARED_BOT_TOKEN. */
   shared_bot_available?: boolean;
+  /** The shared bot's @username (no leading @), resolved via getMe and
+   *  cached server-side. Null when unavailable or Telegram didn't answer. */
+  shared_bot_username?: string | null;
   bot_username?: string;
   bot_id?: number;
   has_token?: boolean;

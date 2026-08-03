@@ -60,7 +60,7 @@ interface ProviderCard {
   icon: ComponentType<{ className?: string }>;
   /** Resolve current connection count. null when the provider has no list API
    *  wired yet (Telegram/Matrix) — the row still renders, just always as
-   *  "Not connected". */
+   *  with only its Set up CTA (no status badge). */
   countConnections: (() => Promise<number>) | null;
 }
 
@@ -156,11 +156,11 @@ function ProviderRow({
             <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
             Connected{count > 1 ? ` · ${count}` : ""}
           </Badge>
-        ) : (
+        ) : loading ? (
           <Badge variant="outline" className="text-fg-subtle">
-            {loading ? "Checking…" : "Not connected"}
+            Checking…
           </Badge>
-        )}
+        ) : null}
 
         {isConnected ? (
           <DropdownMenu>
@@ -303,7 +303,7 @@ export function IntegrationsHub() {
               className="h-9 pl-8"
             />
           </div>
-          <Button variant="outline" size="sm" onClick={() => setMcpOpen(true)}>
+          <Button variant="outline" className="h-9" onClick={() => setMcpOpen(true)}>
             <PlusIcon />
             Add Custom MCP
           </Button>

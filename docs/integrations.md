@@ -161,6 +161,17 @@ mirroring GitHub's managed-App vs own-App duality:
 | `shared_bot` | the deployment's own bot (e.g. **@omatherobot**) | the operator's `TELEGRAM_SHARED_BOT_TOKEN` env secret — never written to a tenant row, never returned by the API |
 | `own_bot` | a bot the tenant created with [@BotFather](https://t.me/BotFather) | validated with `getMe`, then AES-256-GCM encrypted at rest under a `telegram.bot_token` key derived from `PLATFORM_ROOT_SECRET` (the same machinery vault credentials and federation API keys use). Reads surface `has_token` + the bot username only |
 
+**Enabling the shared bot (operators only).** Set `TELEGRAM_SHARED_BOT_TOKEN`
+on the deployment (`wrangler secret put TELEGRAM_SHARED_BOT_TOKEN` on
+Cloudflare, or the env var on self-host Node) to a BotFather token the
+deployment owns. `GET /v1/integrations/telegram` then reports
+`shared_bot_available: true` plus `shared_bot_username` — the bot's `@handle`,
+resolved once via `getMe` and cached for a day so a status poll costs no
+Telegram call. **The Console never surfaces the missing-secret reason**: a
+deployment without the token simply collapses the shared-bot column and leads
+with the own-bot path, because on a hosted instance the end user cannot act on
+a server env var. This page is the only place those setup steps live.
+
 **Chat capture — the deep-link handshake.** A bot cannot discover which chats
 want it; the chat has to speak first, and Telegram's standard answer is the
 `start` deep-link parameter. The backend mints a short-lived per-tenant nonce

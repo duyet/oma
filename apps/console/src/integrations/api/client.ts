@@ -16,6 +16,7 @@ import type {
   GitHubInstallationDetail,
   GitHubIssue,
   GitHubIssueFilters,
+  GitHubAssignee,
   GitHubPublication,
   GitHubRepo,
   HandoffLink,
@@ -434,10 +435,30 @@ class GitHubClient {
   // a fresh installation token in the gateway, and calls the GitHub API —
   // the browser never sees a token.
 
-  async listRepos(installationId: string): Promise<GitHubRepo[]> {
+  /** Repo picker options. Served from the integrations DB cache unless
+   *  `refresh` forces a live GitHub read. */
+  async listRepos(installationId: string, refresh = false): Promise<GitHubRepo[]> {
     const r = await request<{ data: GitHubRepo[] }>(
       this.basePath,
-      `/v1/integrations/github/installations/${encodeURIComponent(installationId)}/repos`,
+      `/v1/integrations/github/installations/${encodeURIComponent(installationId)}/repos${
+        refresh ? "?refresh=1" : ""
+      }`,
+    );
+    return r.data;
+  }
+
+  /** Users the board's repo can be assigned to. Backs the Assignee
+   *  combobox; the field still accepts a typed login that isn't in here. */
+  async listAssignees(
+    installationId: string,
+    repo: string,
+    refresh = false,
+  ): Promise<GitHubAssignee[]> {
+    const params = new URLSearchParams({ repo });
+    if (refresh) params.set("refresh", "1");
+    const r = await request<{ data: GitHubAssignee[] }>(
+      this.basePath,
+      `/v1/integrations/github/installations/${encodeURIComponent(installationId)}/assignees?${params.toString()}`,
     );
     return r.data;
   }
