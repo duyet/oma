@@ -1,0 +1,155 @@
+---
+// Session state machine + crash replay, as one inline SVG. Pairs with the
+// lifecycle cards: idle → running → idle, and a crash falls back to idle with
+// a session.error while the durable log keeps every event that already landed.
+---
+
+<figure class="dl-figure">
+  <svg
+    class="dl-svg"
+    viewBox="0 0 900 262"
+    role="img"
+    aria-labelledby="dl-title dl-desc"
+    preserveAspectRatio="xMidYMid meet"
+  >
+    <title id="dl-title">Durable session lifecycle</title>
+    <desc id="dl-desc">
+      A session sits idle until a user message moves it to running. When the
+      harness finishes it returns to idle with a stop reason. A crash also
+      returns it to idle after a session.error event, and the next message
+      rebuilds context from the append-only event log.
+    </desc>
+
+    <defs>
+      <marker id="dl-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" class="dl-arrowhead" />
+      </marker>
+    </defs>
+
+    <!-- states -->
+    <rect x="48" y="70" width="160" height="66" rx="33" class="dl-state" />
+    <text x="128" y="100" class="dl-state-name">idle</text>
+    <text x="128" y="119" class="dl-state-sub">waiting for input</text>
+
+    <rect x="370" y="70" width="160" height="66" rx="33" class="dl-state dl-state-active" />
+    <text x="450" y="100" class="dl-state-name">running</text>
+    <text x="450" y="119" class="dl-state-sub">harness turn in flight</text>
+
+    <rect x="692" y="70" width="160" height="66" rx="33" class="dl-state" />
+    <text x="772" y="100" class="dl-state-name">idle</text>
+    <text x="772" y="119" class="dl-state-sub">stop_reason emitted</text>
+
+    <!-- forward transitions -->
+    <g class="dl-wire">
+      <path d="M208 103 H364" marker-end="url(#dl-arrow)" />
+      <path d="M530 103 H686" marker-end="url(#dl-arrow)" />
+    </g>
+    <text x="286" y="92" class="dl-edge">user.message</text>
+    <text x="608" y="92" class="dl-edge">turn complete</text>
+
+    <!-- crash branch -->
+    <path d="M450 136 V186 H772 V142" class="dl-wire dl-wire-warn" marker-end="url(#dl-arrow)" />
+    <text x="600" y="204" class="dl-edge dl-edge-warn">on crash — session.error, no lost events</text>
+
+    <!-- return path: next turn continues the same session -->
+    <path d="M772 142 V232 H128 V142" class="dl-wire dl-wire-loop" marker-end="url(#dl-arrow)" />
+    <text x="450" y="250" class="dl-edge dl-edge-brand">next turn replays the append-only log — persist, then broadcast</text>
+
+    <!-- durable log strip -->
+    <g class="dl-log">
+      <rect x="370" y="26" width="160" height="8" rx="2" />
+      <rect x="370" y="40" width="118" height="8" rx="2" />
+      <rect x="370" y="14" width="84" height="8" rx="2" class="dl-log-head" />
+    </g>
+    <text x="546" y="34" class="dl-edge dl-edge-left">DO-SQLite event log</text>
+  </svg>
+</figure>
+
+<style>
+  .dl-figure {
+    margin: 0;
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+  }
+  .dl-svg {
+    display: block;
+    width: 100%;
+    min-width: 42rem;
+    height: auto;
+  }
+
+  .dl-state {
+    fill: var(--color-card);
+    stroke: var(--color-border);
+    stroke-width: 1.25;
+  }
+  .dl-state-active {
+    stroke: color-mix(in srgb, var(--color-green) 60%, var(--color-border));
+    fill: color-mix(in srgb, var(--color-green) 8%, var(--color-card));
+  }
+  .dl-state-name {
+    fill: var(--color-fg);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 600;
+    text-anchor: middle;
+  }
+  .dl-state-sub {
+    fill: var(--color-fg-muted);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-anchor: middle;
+  }
+
+  .dl-wire {
+    fill: none;
+    stroke: var(--color-border-strong);
+    stroke-width: 1.5;
+  }
+  .dl-wire-warn {
+    stroke: color-mix(in srgb, var(--color-blue) 65%, transparent);
+    stroke-dasharray: 5 4;
+  }
+  .dl-wire-loop {
+    stroke: color-mix(in srgb, var(--color-brand) 60%, transparent);
+    stroke-dasharray: 6 5;
+  }
+  .dl-arrowhead {
+    fill: var(--color-border-strong);
+    stroke: none;
+  }
+
+  .dl-log rect {
+    fill: color-mix(in srgb, var(--color-blue) 30%, transparent);
+  }
+  .dl-log .dl-log-head {
+    fill: var(--color-blue);
+  }
+
+  .dl-edge {
+    fill: var(--color-fg-subtle);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-anchor: middle;
+  }
+  .dl-edge-left {
+    text-anchor: start;
+  }
+  .dl-edge-warn {
+    fill: color-mix(in srgb, var(--color-blue) 80%, var(--color-fg-subtle));
+  }
+  .dl-edge-brand {
+    fill: color-mix(in srgb, var(--color-brand) 85%, var(--color-fg-subtle));
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .dl-wire-loop {
+      animation: dl-dash 1.6s linear infinite;
+    }
+  }
+  @keyframes dl-dash {
+    to {
+      stroke-dashoffset: -22;
+    }
+  }
+</style>

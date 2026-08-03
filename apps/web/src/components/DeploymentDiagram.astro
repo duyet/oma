@@ -1,0 +1,199 @@
+---
+// Two deployment topologies drawn side by side from one shared core: the same
+// route implementations, harness and SandboxExecutor interface run either on
+// Cloudflare (Workers + Durable Objects + Containers) or on the self-host Node
+// runtime (docker compose). Self-contained inline SVG, theme-token coloured.
+---
+
+<figure class="dp-figure">
+  <svg
+    class="dp-svg"
+    viewBox="0 0 900 420"
+    role="img"
+    aria-labelledby="dp-title dp-desc"
+    preserveAspectRatio="xMidYMid meet"
+  >
+    <title id="dp-title">Cloudflare and self-hosted Node deployment topologies</title>
+    <desc id="dp-desc">
+      One shared codebase — HTTP routes, harness and the SandboxExecutor
+      interface — runs either on Cloudflare as Workers, Durable Objects and
+      Containers, or self-hosted on Node with docker compose backed by SQLite or
+      Postgres. Both expose the same REST and SSE API.
+    </desc>
+
+    <defs>
+      <marker id="dp-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" class="dp-arrowhead" />
+      </marker>
+    </defs>
+
+    <!-- shared core -->
+    <rect x="200" y="16" width="500" height="66" rx="10" class="dp-box dp-box-core" />
+    <text x="450" y="44" class="dp-box-title">One codebase</text>
+    <text x="450" y="64" class="dp-box-sub">packages/http-routes · harness registry · SandboxExecutor</text>
+
+    <g class="dp-wire">
+      <path d="M330 82 V104 H220 V126" marker-end="url(#dp-arrow)" />
+      <path d="M570 82 V104 H680 V126" marker-end="url(#dp-arrow)" />
+    </g>
+
+    <!-- Cloudflare column -->
+    <rect x="40" y="126" width="360" height="228" rx="12" class="dp-column dp-column-cf" />
+    <text x="64" y="152" class="dp-column-title dp-column-title-start">Cloudflare</text>
+    <text x="376" y="152" class="dp-column-tag">managed edge</text>
+
+    <rect x="64" y="166" width="312" height="52" rx="8" class="dp-box" />
+    <text x="80" y="188" class="dp-node-name">Workers</text>
+    <text x="80" y="206" class="dp-node-sub">HTTP API · MCP proxy · cron triggers</text>
+
+    <rect x="64" y="228" width="312" height="52" rx="8" class="dp-box dp-box-state" />
+    <text x="80" y="250" class="dp-node-name">Durable Objects</text>
+    <text x="80" y="268" class="dp-node-sub">SessionDO · SQLite event log · SSE</text>
+
+    <rect x="64" y="290" width="312" height="52" rx="8" class="dp-box dp-box-exec" />
+    <text x="80" y="312" class="dp-node-name">Containers</text>
+    <text x="80" y="330" class="dp-node-sub">CF Sandbox · boxrun / k8s-remote over HTTP</text>
+
+    <!-- Node column -->
+    <rect x="500" y="126" width="360" height="228" rx="12" class="dp-column dp-column-node" />
+    <text x="524" y="152" class="dp-column-title dp-column-title-start">Self-hosted Node</text>
+    <text x="836" y="152" class="dp-column-tag">docker compose</text>
+
+    <rect x="524" y="166" width="312" height="52" rx="8" class="dp-box" />
+    <text x="540" y="188" class="dp-node-name">apps/main-node</text>
+    <text x="540" y="206" class="dp-node-sub">same routes, mounted on Node</text>
+
+    <rect x="524" y="228" width="312" height="52" rx="8" class="dp-box dp-box-state" />
+    <text x="540" y="250" class="dp-node-name">SQLite / Postgres</text>
+    <text x="540" y="268" class="dp-node-sub">control plane · session runtime in-process</text>
+
+    <rect x="524" y="290" width="312" height="52" rx="8" class="dp-box dp-box-exec" />
+    <text x="540" y="312" class="dp-node-name">Sandbox registry</text>
+    <text x="540" y="330" class="dp-node-sub">docker · k8s · e2b · daytona · subprocess</text>
+
+    <!-- column internal wires -->
+    <g class="dp-wire dp-wire-thin">
+      <path d="M220 218 V228" />
+      <path d="M220 280 V290" />
+      <path d="M680 218 V228" />
+      <path d="M680 280 V290" />
+    </g>
+
+    <!-- shared surface -->
+    <g class="dp-wire">
+      <path d="M220 354 V374" marker-end="url(#dp-arrow)" />
+      <path d="M680 354 V374" marker-end="url(#dp-arrow)" />
+    </g>
+    <rect x="200" y="374" width="500" height="40" rx="8" class="dp-box dp-box-surface" />
+    <text x="450" y="399" class="dp-box-sub dp-box-sub-strong">
+      identical REST + SSE surface — /v1/agents, /v1/sessions, /v1/sessions/:id/events/stream
+    </text>
+  </svg>
+</figure>
+
+<style>
+  .dp-figure {
+    margin: 0;
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+  }
+  .dp-svg {
+    display: block;
+    width: 100%;
+    min-width: 44rem;
+    height: auto;
+  }
+
+  .dp-box {
+    fill: var(--color-card);
+    stroke: var(--color-border);
+    stroke-width: 1.25;
+  }
+  .dp-box-core {
+    stroke: color-mix(in srgb, var(--color-brand) 55%, var(--color-border));
+    fill: color-mix(in srgb, var(--color-brand) 7%, var(--color-card));
+  }
+  .dp-box-state {
+    stroke: color-mix(in srgb, var(--color-blue) 50%, var(--color-border));
+    fill: color-mix(in srgb, var(--color-blue) 6%, var(--color-card));
+  }
+  .dp-box-exec {
+    stroke: color-mix(in srgb, var(--color-green) 50%, var(--color-border));
+    fill: color-mix(in srgb, var(--color-green) 6%, var(--color-card));
+  }
+  .dp-box-surface {
+    stroke: color-mix(in srgb, var(--color-brand) 45%, var(--color-border));
+    fill: color-mix(in srgb, var(--color-brand) 5%, var(--color-card));
+    stroke-dasharray: 5 4;
+  }
+
+  .dp-column {
+    fill: transparent;
+    stroke: var(--color-border);
+    stroke-width: 1.25;
+    stroke-dasharray: 4 4;
+  }
+  .dp-column-cf,
+  .dp-column-node {
+    stroke: color-mix(in srgb, var(--color-border-strong) 80%, transparent);
+  }
+  .dp-column-title {
+    fill: var(--color-fg);
+    font-family: var(--font-display, inherit);
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .dp-column-title-start {
+    text-anchor: start;
+  }
+  .dp-column-tag {
+    fill: var(--color-fg-subtle);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-anchor: end;
+  }
+
+  .dp-box-title {
+    fill: var(--color-fg);
+    font-family: var(--font-display, inherit);
+    font-size: 15px;
+    font-weight: 600;
+    text-anchor: middle;
+  }
+  .dp-box-sub {
+    fill: var(--color-fg-muted);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    text-anchor: middle;
+  }
+  .dp-box-sub-strong {
+    fill: var(--color-fg);
+  }
+  .dp-node-name {
+    fill: var(--color-fg);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .dp-node-sub {
+    fill: var(--color-fg-muted);
+    font-family: var(--font-mono);
+    font-size: 10px;
+  }
+
+  .dp-wire {
+    fill: none;
+    stroke: var(--color-border-strong);
+    stroke-width: 1.5;
+  }
+  .dp-wire-thin {
+    stroke-width: 1.25;
+    stroke-dasharray: 3 3;
+  }
+  .dp-arrowhead {
+    fill: var(--color-border-strong);
+    stroke: none;
+  }
+</style>

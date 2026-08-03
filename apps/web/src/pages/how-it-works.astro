@@ -1,6 +1,8 @@
 ---
 import Base from "../layouts/Base.astro";
 import Icon from "../components/Icon.astro";
+import MetaHarnessDiagram from "../components/MetaHarnessDiagram.astro";
+import DurableLoopDiagram from "../components/DurableLoopDiagram.astro";
 import { breadcrumbSchema } from "../lib/seo";
 
 const schemas = [
@@ -157,6 +159,15 @@ const lifecycle = [
           </li>
         </ol>
       </div>
+
+      <div class="mt-10 md:mt-12">
+        <MetaHarnessDiagram />
+        <p class="mt-4 text-center text-xs text-[var(--color-fg-subtle)] leading-relaxed">
+          The full path of a turn: the platform persists every event before it
+          broadcasts it, and the sandbox never holds a credential — the outbound
+          proxy attaches it on the way out.
+        </p>
+      </div>
     </div>
   </section>
 
@@ -221,7 +232,7 @@ const lifecycle = [
                 <span class:list={["arch-badge", layer.badge]}>{layer.label}</span>
                 <h4 class="font-display text-base font-semibold tracking-tight">{layer.title}</h4>
               </div>
-              <ul class="grid sm:grid-cols-3 gap-2 sm:gap-3">
+              <ul class="grid sm:grid-cols-3 gap-3 sm:gap-4">
                 {layer.items.map((item) => (
                   <li class="text-xs sm:text-sm text-[var(--color-fg-muted)] leading-relaxed border border-[var(--color-border)] rounded-lg px-3 py-2 bg-[var(--color-bg-surface)]/60">
                     {item}
@@ -247,6 +258,9 @@ const lifecycle = [
       Every turn is events-first: persist, then broadcast. That ordering is why a
       crash loses no work and a new process resumes mid-run.
     </p>
+    <div class="mb-12">
+      <DurableLoopDiagram />
+    </div>
     <div class="lifecycle-track" role="list" aria-label="Durable session lifecycle steps">
       {
         lifecycle.map((step) => (
