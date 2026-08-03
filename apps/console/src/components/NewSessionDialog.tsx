@@ -5,6 +5,7 @@ import { useDefaultEnvironment } from "../lib/useDefaultEnvironment";
 import { Modal } from "./Modal";
 import { Button } from "@/components/ui/button";
 import { EnvironmentPicker } from "./ResourcePicker";
+import { preferredEnvironmentId } from "../pages/agents/browser-env";
 
 interface Props {
   open: boolean;
@@ -13,6 +14,10 @@ interface Props {
   /** Skips the environment step entirely — local-runtime agents don't run
    *  a sandbox container so there's nothing to pick. */
   isLocalRuntime: boolean;
+  /** The agent's own `metadata`. When it names a default environment (what
+   *  the form's Browser mode writes), that wins over the tenant-wide
+   *  single-environment shortcut. */
+  agentMetadata?: Record<string, unknown>;
   /** Called with the new session's id once created (+ initial message
    *  sent, if any) so the caller can navigate to it. */
   onCreated: (sessionId: string) => void;
@@ -29,7 +34,14 @@ const textareaCls =
  * environment is preselected, several show the picker below, and none
  * shows a CTA to /environments instead of letting the create call 400.
  */
-export function NewSessionDialog({ open, onClose, agentId, isLocalRuntime, onCreated }: Props) {
+export function NewSessionDialog({
+  open,
+  onClose,
+  agentId,
+  isLocalRuntime,
+  agentMetadata,
+  onCreated,
+}: Props) {
   const { api } = useApi();
   const { environments, isLoading: envsLoading, singleEnvironmentId, hasNoEnvironments } =
     useDefaultEnvironment();
@@ -41,7 +53,7 @@ export function NewSessionDialog({ open, onClose, agentId, isLocalRuntime, onCre
   // Reset + preselect the default environment every time the dialog opens.
   useEffect(() => {
     if (!open) return;
-    setEnvironmentId(singleEnvironmentId ?? "");
+    setEnvironmentId(preferredEnvironmentId(agentMetadata, singleEnvironmentId));
     setMessage("");
     setCreating(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps

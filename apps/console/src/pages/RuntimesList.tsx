@@ -22,6 +22,7 @@ import {
   runtimeLabel,
 } from "../lib/providerAvailability";
 import type { ProviderAvailability } from "../lib/providerAvailability";
+import { openSandboxTab } from "../lib/sandboxTab";
 
 interface LocalSkill {
   id: string;
@@ -1168,19 +1169,7 @@ export function RuntimesList() {
   // open the host page directly. `api()` already toasts unauthenticated /
   // network failures, so a thrown error needs no further handling here.
   const openBrowserVmTab = useCallback(async () => {
-    try {
-      const state = crypto.randomUUID().replace(/-/g, "");
-      const { code } = await api<{ code: string; expires_at: number }>(
-        "/v1/runtimes/connect-runtime",
-        { method: "POST", body: JSON.stringify({ state }) },
-      );
-      const url = new URL("/sandbox-tab", window.location.origin);
-      url.searchParams.set("code", code);
-      url.searchParams.set("state", state);
-      window.open(url.toString(), "_blank", "noopener,noreferrer");
-    } catch {
-      // Already surfaced via toast by useApi().
-    }
+    await openSandboxTab(api);
   }, [api]);
 
   const [providers, setProviders] = useState<HostingType[]>([]);

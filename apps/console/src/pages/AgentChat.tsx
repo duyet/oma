@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
-import { readApiError } from "../lib/api";
+import { readApiError, useApi } from "../lib/api";
 import { useApiQuery } from "../lib/useApiQuery";
+import {
+  ensureSandboxTabForEnvironment,
+  isNoSandboxTabError,
+  openSandboxTab,
+} from "../lib/sandboxTab";
 import { useDefaultEnvironment } from "../lib/useDefaultEnvironment";
 import { Select, SelectOption } from "../components/Select";
 
@@ -25,6 +30,11 @@ export function AgentChat() {
   const [pickedEnvId, setPickedEnvId] = useState("");
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // Set when a turn failed because no browser-vm sandbox tab was paired —
+  // renders the inline "open the sandbox tab" prompt below.
+  const [needsSandboxTab, setNeedsSandboxTab] = useState(false);
+  const lastTextRef = useRef("");
+  const api = useApi().api;
 
   const { data: agent } = useApiQuery<AgentLite>(agent_id ? `/v1/agents/${agent_id}` : null);
   const isLocalRuntime = !!agent?.runtime_binding;
@@ -48,13 +58,22 @@ export function AgentChat() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingText]);
 
-  const sendMessage = async () => {
-    const text = input.trim();
+  const sendMessage = async (overrideText?: string) => {
+    const text = (overrideText ?? input).trim();
     if (!text || !agent_id || loading || envBlocked) return;
-    setInput("");
-    setMessages((prev) => [...prev, { role: "user", text }]);
+    if (!overrideText) {
+      setInput("");
+      setMessages((prev) => [...prev, { role: "user", text }]);
+    }
+    lastTextRef.current = text;
+    setNeedsSandboxTab(false);
     setLoading(true);
     setStreamingText("");
+
+    // A browser-vm environment executes in a paired browser tab. Open it
+    // here, inside the click handler, so the popup blocker allows it — the
+    // backend waits ~45s for the tab to come online before failing.
+    await ensureSandboxTabForEnvironment(api, resolvedEnvId);
 
     try {
       let sid = sessionId;
@@ -112,6 +131,7 @@ export function AgentChat() {
                   setStreamingText((prev) => prev + parsed.delta);
                 } else if (parsed.type === "agent.message" && parsed.content) {
                   const fullText = parsed.content.map((c) => c.text || "").join("");
+                  if (isNoSandboxTabError(fullText)) setNeedsSandboxTab(true);
                   setMessages((prev) => [...prev, { role: "agent", text: fullText }]);
                   setStreamingText("");
                 }
@@ -126,6 +146,7 @@ export function AgentChat() {
       setStreamingText("");
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
+        if (isNoSandboxTabError((err as Error).message)) setNeedsSandboxTab(true);
         setMessages((prev) => [...prev, { role: "agent", text: `Error: ${(err as Error).message}` }]);
       }
     }
@@ -179,6 +200,26 @@ export function AgentChat() {
             </div>
           </div>
         ))}
+        {needsSandboxTab && (
+          <div className="max-w-2xl mx-auto rounded-lg border border-border bg-bg-surface px-4 py-3 text-sm text-fg-muted flex items-center gap-3">
+            <span className="flex-1">
+              This environment runs its sandbox in a browser tab, and none is connected yet.
+            </span>
+            <button
+              onClick={async () => {
+                const opened = await openSandboxTab(api);
+                if (!opened) return;
+                setNeedsSandboxTab(false);
+                // Give the tab a moment to pair + boot its VM; the backend
+                // waits for the runtime to come online from there.
+                setTimeout(() => { void sendMessage(lastTextRef.current); }, 2000);
+              }}
+              className="px-3 py-1.5 bg-brand text-brand-fg text-sm font-medium rounded-md hover:bg-brand-hover transition-colors shrink-0"
+            >
+              Open sandbox tab & retry
+            </button>
+          </div>
+        )}
         {streamingText && (
           <div className="flex justify-start">
             <div className="max-w-[80%] rounded-lg px-4 py-2 text-sm bg-bg-surface text-fg border border-border">
@@ -200,7 +241,7 @@ export function AgentChat() {
             className="flex-1 border border-border rounded-md px-3 py-2 text-sm bg-bg text-fg outline-none focus:border-brand disabled:opacity-50"
           />
           <button
-            onClick={sendMessage}
+            onClick={() => sendMessage()}
             disabled={loading || envsLoading || envBlocked || !input.trim()}
             className="px-4 py-2 bg-brand text-brand-fg text-sm font-medium rounded-md hover:bg-brand-hover disabled:opacity-50 transition-colors"
           >

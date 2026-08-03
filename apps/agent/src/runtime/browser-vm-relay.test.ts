@@ -158,6 +158,7 @@ describe("BrowserVmRelaySandbox", () => {
       envWith({ rows: [], run: browserTab(received) }),
       "sess_1",
       "t1",
+      0,
     ));
     await expect(sandbox.exec("echo hi")).rejects.toBeInstanceOf(SandboxProviderUnavailableError);
     await expect(sandbox.exec("echo hi")).rejects.toThrow(/sandbox tab/);
@@ -171,9 +172,33 @@ describe("BrowserVmRelaySandbox", () => {
       envWith({ db, run: browserTab(received) }),
       "sess_1",
       "t1",
+      0,
     ));
     await expect(sandbox.exec("echo hi")).rejects.toBeInstanceOf(SandboxProviderUnavailableError);
     expect(received).toHaveLength(0);
+  });
+
+  it("waits for a tab that pairs after the first op starts", async () => {
+    // The Console opens the sandbox tab from the send-message click, so a
+    // fresh session normally races a tab that is still pairing. The relay
+    // polls within its wait window instead of failing on the first miss.
+    const received: Array<Record<string, unknown>> = [];
+    let lookups = 0;
+    const db = {
+      prepare: () => ({
+        bind: () => ({
+          all: async () => ({ results: ++lookups >= 2 ? [{ id: "rt_tab" }] : [] }),
+        }),
+      }),
+    } as unknown as Env["MAIN_DB"];
+    const sandbox = track(new BrowserVmRelaySandbox(
+      envWith({ db, run: browserTab(received) }),
+      "sess_1",
+      "t1",
+      10_000,
+    ));
+    expect(await sandbox.exec("echo hi")).toBe("exit=0\nout:echo hi");
+    expect(lookups).toBeGreaterThan(1);
   });
 
   it("throws SandboxProviderUnavailableError when the session has no tenant", async () => {

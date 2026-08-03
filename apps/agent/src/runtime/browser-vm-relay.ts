@@ -43,6 +43,16 @@ import {
 import { pickOnlineRuntimeId } from "./bridge-relay";
 import { SandboxProviderUnavailableError } from "./sandbox";
 
+/**
+ * How long a connect waits for a browser-vm tab to come online before
+ * failing. The Console opens the tab from the send-message click handler, so
+ * a fresh session normally races a tab that is still pairing and booting its
+ * WASM VM; without this window every such turn would fail on the spot. Kept
+ * short enough that a genuinely absent tab still fails loudly and visibly.
+ */
+const WAIT_FOR_TAB_MS = 45_000;
+const WAIT_POLL_MS = 1_500;
+
 const NO_TAB_MESSAGE =
   "no browser sandbox tab connected — open your workspace's sandbox tab from " +
   "the Console so this browser-vm environment can execute there.";
@@ -98,11 +108,19 @@ export class BrowserVmRelaySandbox implements SandboxExecutor {
   #sandbox: BrowserVmSandbox | null = null;
   #ws: AttachedWs | null = null;
   #runtimeId = "";
+  #waitForTabMs: number;
+  #closed = false;
 
-  constructor(env: Env, sessionId: string, tenantId: string | undefined) {
+  constructor(
+    env: Env,
+    sessionId: string,
+    tenantId: string | undefined,
+    waitForTabMs = WAIT_FOR_TAB_MS,
+  ) {
     this.#env = env;
     this.#sessionId = sessionId;
     this.#tenantId = tenantId ?? "";
+    this.#waitForTabMs = waitForTabMs;
   }
 
   // ── SandboxExecutor surface (delegates to the inner adapter) ────────────
@@ -152,6 +170,9 @@ export class BrowserVmRelaySandbox implements SandboxExecutor {
   }
 
   async destroy(): Promise<void> {
+    // Stop any in-flight wait-for-tab poll immediately — teardown must not
+    // sit out the full window waiting for a tab nobody is going to open.
+    this.#closed = true;
     // Join a connect that's still in flight. Dropping the promise instead
     // would let it finish after us and leave an orphaned RuntimeRoom socket
     // open with nobody holding a reference to close it. Bounded by the 5s
@@ -199,7 +220,7 @@ export class BrowserVmRelaySandbox implements SandboxExecutor {
       );
     }
 
-    const runtimeId = await pickOnlineRuntimeId(env.MAIN_DB, this.#tenantId, "browser-vm");
+    const runtimeId = await this.#waitForRuntimeId(env.MAIN_DB);
     if (!runtimeId) throw new SandboxProviderUnavailableError(NO_TAB_MESSAGE);
     this.#runtimeId = runtimeId;
 
@@ -231,6 +252,23 @@ export class BrowserVmRelaySandbox implements SandboxExecutor {
     this.#ws = ws;
     this.#sandbox = sandbox;
     return sandbox;
+  }
+
+  /**
+   * Poll for an online browser-vm runtime, up to `waitForTabMs`. The first
+   * lookup is immediate, so a tab that is already paired costs nothing extra.
+   * Aborts as soon as `destroy()` is called so teardown never blocks on a
+   * tab that is never going to show up.
+   */
+  async #waitForRuntimeId(db: NonNullable<Env["MAIN_DB"]>): Promise<string | null> {
+    const deadline = Date.now() + this.#waitForTabMs;
+    for (;;) {
+      const id = await pickOnlineRuntimeId(db, this.#tenantId, "browser-vm");
+      if (id) return id;
+      if (this.#closed || Date.now() + WAIT_POLL_MS > deadline) return null;
+      await new Promise((resolve) => setTimeout(resolve, WAIT_POLL_MS));
+      if (this.#closed) return null;
+    }
   }
 
   #onDisconnect(err: Error): void {

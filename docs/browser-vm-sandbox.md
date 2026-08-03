@@ -168,9 +168,12 @@ buffer at completion; chunk streaming is a drop-in extension.
 
 The tab has no address. We rely on the RuntimeRoom pairing: the tab registers
 as an online `runtime` (heartbeat every ~25 s), and `pickOnlineRuntimeId`
-selects the freshest one for the tenant. No online tab → the first sandbox op
-fails loud with "open your browser sandbox tab", exactly like the bridge
-daemon's "run bridge setup" message.
+selects the freshest one for the tenant. Because the Console opens the tab from
+the send-message click, a fresh session races a tab that is still pairing and
+booting its VM, so the relay polls for an online runtime for up to **45 s**
+(1.5 s interval, aborted immediately by `destroy()`) before giving up. Still no
+online tab → the sandbox op fails loud with "open your browser sandbox tab",
+exactly like the bridge daemon's "run bridge setup" message.
 
 ### 5.2 No raw TCP → networking is faked, and that's the biggest limitation
 
@@ -273,6 +276,24 @@ points:
   `/workspace` writes to OPFS.
 - Console: the Runtimes page shows a `browser-vm` provider card with an
   "Open sandbox tab" action (mints a pairing code, opens `/sandbox-tab`).
+- Console: the agent form's **Agent runtime** control offers Browser as a
+  third mode next to Cloud and Local. It is a sandbox provider, not a
+  harness, so the mode selects (or creates) a `browser-vm` environment and
+  records it on the agent as `metadata.default_environment_id` plus
+  `metadata.runtime_kind: "browser"`; the harness and model are unchanged.
+  New sessions for that agent preselect that environment. The marker exists
+  because "which sandbox provider" is a property of the environment, so
+  without it every surface that shows an agent's runtime kind (agents table,
+  detail page, session inspector) would have to fetch the environment list.
+- Console: the chat surfaces (`AgentChat`, `SessionDetail`) also open that tab
+  **automatically**. On send, if the session's environment is `browser-vm` and
+  no `browser-vm` runtime is online for the tenant (`GET /v1/runtimes`), they
+  call the same mint-and-open path from inside the click handler so the popup
+  blocker allows it, deduped against a tab opened in the last 90 s that hasn't
+  been closed yet (a booting tab isn't heartbeating, so the API check alone
+  would stack tabs). Helpers: `apps/console/src/lib/sandboxTab.ts`. If a turn
+  still fails with the no-tab message, the chat shows an inline "Open sandbox
+  tab & retry" prompt that reopens the tab and re-sends the last message.
 
 **VM image configuration.** The pairing code is all the Console passes, so the
 tab asks for the engine assets itself: when no image is configured it shows a
