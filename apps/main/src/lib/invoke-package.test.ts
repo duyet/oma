@@ -77,6 +77,30 @@ describe("GET /v1/agents/:id/publications", () => {
   });
 });
 
+describe("GET /v1/integrations/telegram (two-segment mount, e2e)", () => {
+  it("reaches the package's '/' route through the full pattern", async () => {
+    const pkg = new Hono();
+    pkg.get("/", (c) => c.json({ ok: true }));
+    const outer = new Hono();
+    outer.use("*", async (c, next) => {
+      c.set("tenant_id" as never, "tenant-a" as never);
+      await next();
+    });
+    const group = new Hono().all("*", (c) =>
+      invokePackage(c, pkg, "/integrations/telegram"),
+    );
+    outer.route("/v1/integrations/telegram", group);
+    const ctx = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
+    const res = await outer.fetch(
+      new Request("https://api.test/v1/integrations/telegram"),
+      {},
+      ctx,
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+});
+
 describe("two-segment flat mounts (issue: /v1/integrations/telegram 404)", () => {
   it("keeps the full pattern when mountPath names both segments", () => {
     const { path, mountAt } = rewriteForPackage(
