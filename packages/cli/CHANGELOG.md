@@ -1,5 +1,18 @@
 # @getoma/cli
 
+## 0.1.8
+
+### Patch Changes
+
+- db536d2: Inject vault credentials for relayed sandbox ops through a local proxy in the bridge daemon.
+- 5d49b35: Warn during bridge setup that local sandboxes use the machine's own git/gh credentials.
+- 10f14e9: Add `oma bridge start`, `stop`, and `restart` to control the installed daemon
+  service without a full re-`setup`. They dispatch to the host's service manager
+  (launchd / systemd / Task Scheduler) and report daemon liveness afterward — the
+  missing "reconnect this machine" verbs the Console now points users to.
+- 86a03bb: bridge daemon: optional OpenShell sandbox backend for relayed sandbox ops (opt-in via `oma bridge setup` or `BRIDGE_SANDBOX_BACKEND=openshell`); `oma bridge status` now reports the active backend.
+- 4e872c9: Add command-level tests for the `oma schedules` verbs; export the internal command registry so handlers are unit-testable with a stubbed fetch (no behavior change).
+
 ## 0.1.7
 
 ### Patch Changes
