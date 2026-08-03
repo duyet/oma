@@ -299,11 +299,13 @@ describe("GitHubProvider.completeManagedInstallLink", () => {
     expect(container.vaults.created.length).toBe(1);
   });
 
+  // `github.install.workspace` IS accepted here (GitHub can route a Connect
+  // install to the OAuth Callback URL) — any other kind is not.
   it("rejects a wrong-kind state", async () => {
     const container = buildFakeGitHubContainer();
     const provider = await providerWithKey(container);
     const wrongState = await container.jwt.sign(
-      { kind: "github.install.workspace", userId: "user_1", returnUrl: RETURN_URL },
+      { kind: "github.install.pub", userId: "user_1", returnUrl: RETURN_URL },
       3600,
     );
 
