@@ -76,3 +76,22 @@ describe("GET /v1/agents/:id/publications", () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe("two-segment flat mounts (issue: /v1/integrations/telegram 404)", () => {
+  it("keeps the full pattern when mountPath names both segments", () => {
+    const { path, mountAt } = rewriteForPackage(
+      "/v1/integrations/telegram",
+      "/integrations/telegram",
+    );
+    expect(mountAt).toBe("/integrations/telegram");
+    expect(path).toBe("/integrations/telegram");
+  });
+
+  it("routes subpaths through the same pattern", () => {
+    const { path } = rewriteForPackage(
+      "/v1/integrations/telegram/link",
+      "/integrations/telegram",
+    );
+    expect(path).toBe("/integrations/telegram/link");
+  });
+});

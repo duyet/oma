@@ -496,7 +496,10 @@ const telegramConnectionRoutes = new Hono<{ Bindings: Env; Variables: { tenant_i
     sharedBotToken: (c.env as unknown as { TELEGRAM_SHARED_BOT_TOKEN?: string })
       .TELEGRAM_SHARED_BOT_TOKEN,
   });
-  return invokePackage(c, app);
+  // Two-segment mount: flat mode would strip only "integrations" and hand
+  // the package "/telegram" (→ 404 on its "/" routes); the nested mode
+  // matches the full pattern instead.
+  return invokePackage(c, app, "/integrations/telegram");
 });
 
 // Cross-instance federation registry (issue #132). The remote API key is
