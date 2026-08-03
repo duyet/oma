@@ -1,6 +1,12 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router";
-import { TriangleAlertIcon } from "lucide-react";
+import {
+  ActivityIcon,
+  BotIcon,
+  PlayIcon,
+  TimerIcon,
+  TriangleAlertIcon,
+} from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { formatQueryError, useApiQuery } from "../lib/useApiQuery";
 import { StatusPill } from "../components/Badge";
@@ -9,7 +15,7 @@ import { Skeleton } from "../components/Skeleton";
 import { StackedAssembly } from "../components/StackedAssembly";
 import { GettingStartedGuide } from "../components/GettingStartedGuide";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "../components/ui/card";
+import { Card } from "../components/ui/card";
 import { formatCompact, formatSandboxTime, formatSessionDuration } from "../lib/format";
 import { rowActivateKeyDown } from "@/lib/utils";
 
@@ -118,6 +124,7 @@ export function Dashboard() {
   const metrics = [
     {
       label: "Sandbox time",
+      icon: TimerIcon,
       value: formatSandboxTime(stats?.total_sandbox_seconds),
       caption: statsQuery.error ? "Couldn't load" : stats?.total_sandbox_seconds ? "all time" : "No usage yet",
       isLoading: statsQuery.isLoading,
@@ -125,6 +132,7 @@ export function Dashboard() {
     },
     {
       label: "Sessions run",
+      icon: PlayIcon,
       value: (stats?.total_usage_sessions ?? 0).toLocaleString(),
       caption: statsQuery.error ? "Couldn't load" : stats?.total_usage_sessions ? "all time" : "No usage yet",
       isLoading: statsQuery.isLoading,
@@ -132,13 +140,16 @@ export function Dashboard() {
     },
     {
       label: "Active sessions",
+      icon: ActivityIcon,
       value: `${runningCount ?? 0}${runningHasMore ? "+" : ""}`,
       caption: runningSessionsQuery.error ? "Couldn't load" : "right now",
       isLoading: runningSessionsQuery.isLoading,
       isError: !!runningSessionsQuery.error,
+      isLive: (runningCount ?? 0) > 0,
     },
     {
       label: "Agents",
+      icon: BotIcon,
       value: (stats?.agents ?? 0).toLocaleString(),
       caption: statsQuery.error ? "Couldn't load" : stats?.agents ? "total" : "No agents yet",
       isLoading: statsQuery.isLoading,
@@ -179,30 +190,41 @@ export function Dashboard() {
             surface. Purely informational (unlike the resource-count row
             below), so no click-to-navigate here. */}
         <section>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {metrics.map((m) => (
-              <Card
-                key={m.label}
-                data-testid={`metric-card-${m.label}`}
-                className="bg-bg-surface/40"
-              >
-                <CardContent className="py-0.5">
+          {/* One segmented strip instead of four floating cards — the
+              divide-x keeps the numbers on a shared baseline and the icon
+              row makes each cell scannable without adding height. */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 rounded-xl border border-border bg-bg-surface/40 divide-y divide-border lg:divide-y-0 lg:divide-x max-lg:[&>*:nth-child(odd)]:border-r max-lg:[&>*:nth-child(odd)]:border-border">
+            {metrics.map((m) => {
+              const Icon = m.icon;
+              return (
+                <div
+                  key={m.label}
+                  data-testid={`metric-card-${m.label}`}
+                  className="px-5 py-4"
+                >
+                  <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] text-fg-muted font-medium">
+                    <Icon className="h-3.5 w-3.5 text-fg-subtle" aria-hidden />
+                    {m.label}
+                    {"isLive" in m && m.isLive ? (
+                      <span
+                        className="ml-0.5 h-1.5 w-1.5 rounded-full bg-success animate-pulse"
+                        aria-hidden
+                      />
+                    ) : null}
+                  </div>
                   {m.isLoading ? (
-                    <Skeleton className="h-8 w-20" rounded="sm" />
+                    <Skeleton className="mt-2 h-7 w-16" rounded="sm" />
                   ) : (
-                    <div className="font-display text-[32px] leading-none font-semibold text-fg tabular-nums">
+                    <div className="mt-1.5 font-display text-[26px] leading-none font-semibold text-fg tabular-nums">
                       {m.value}
                     </div>
                   )}
-                  <div className="mt-2.5 text-[11px] uppercase tracking-[0.08em] text-fg-muted font-medium">
-                    {m.label}
-                  </div>
-                  <div className={`mt-0.5 text-[12px] ${m.isError ? "text-danger" : "text-fg-subtle"}`}>
+                  <div className={`mt-1 text-[12px] ${m.isError ? "text-danger" : "text-fg-subtle"}`}>
                     {m.caption}
                   </div>
-                </CardContent>
-              </Card>
-            ))}
+                </div>
+              );
+            })}
           </div>
         </section>
 
@@ -211,7 +233,7 @@ export function Dashboard() {
             other; failed/empty fetches fall back to a quiet empty state
             rather than erroring the page. */}
         <section>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 max-w-5xl">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {/* 7-day activity sparkline */}
             <Card title="Last 7 days">
               {usageQuery.isLoading && !usage ? (
@@ -227,7 +249,7 @@ export function Dashboard() {
               ) : usage && usage.daily.length > 0 ? (
                 <MiniSparkline data={usage.daily.slice(-7)} />
               ) : (
-                <p className="text-sm text-fg-subtle">No sessions in the last 7 days.</p>
+                <div className="flex h-[120px] items-center justify-center text-sm text-fg-subtle">No sessions in the last 7 days.</div>
               )}
             </Card>
 
@@ -246,7 +268,7 @@ export function Dashboard() {
               ) : usage ? (
                 <MiniTokenBar usage={usage} />
               ) : (
-                <p className="text-sm text-fg-subtle">No token usage recorded.</p>
+                <div className="flex h-[120px] items-center justify-center text-sm text-fg-subtle">No token usage recorded.</div>
               )}
             </Card>
           </div>
