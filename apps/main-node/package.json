@@ -48,7 +48,7 @@
     "@duyet/oma-queue": "workspace:*",
     "@duyet/oma-quotas": "workspace:*",
     "@duyet/oma-rate-limit": "workspace:*",
-    "@duyet/oma-sandbox": "workspace:*",
+    "@getoma/sandbox-sdk": "workspace:*",
     "@duyet/oma-scheduler": "workspace:*",
     "@duyet/oma-schema": "workspace:*",
     "@duyet/oma-session-runtime": "workspace:*",

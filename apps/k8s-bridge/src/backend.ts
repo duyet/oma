@@ -61,7 +61,7 @@ export interface BridgeBackend {
 // ─── Backend auto-detection ──────────────────────────────────────────
 //
 // Mirrors `resolveDefaultLocalSandboxProvider` in
-// packages/sandbox/src/provider-config.ts: an explicit BRIDGE_BACKEND is
+// packages/sandbox-sdk/src/provider-config.ts: an explicit BRIDGE_BACKEND is
 // trusted as-is; when unset (or "auto"), the presence of
 // OPENSHELL_GATEWAY_ENDPOINT selects the OpenShell backend, otherwise
 // Kubernetes. Pure so it's unit-testable without a process env.

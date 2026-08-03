@@ -80,7 +80,7 @@ function instanceTypesForProvider(provider: string): { id: string; label: string
 interface EnvConfigBlock {
   type: string;
   /** Preferred over `type` when set — see AGENTS.md "Environments" and
-   *  packages/sandbox/src/provider-config.ts. Read-only here; the create
+   *  packages/sandbox-sdk/src/provider-config.ts. Read-only here; the create
    *  dialog (EnvironmentsList) only ever sets `type`, so this is populated
    *  by API/CLI-created environments. */
   sandbox_provider?: string;

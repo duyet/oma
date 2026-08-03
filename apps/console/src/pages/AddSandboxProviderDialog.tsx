@@ -2,14 +2,13 @@ import { useState } from "react";
 
 import { useApi } from "../lib/api";
 import { useApiMutation } from "../lib/useApiQuery";
-import { Modal } from "../components/Modal";
 import { Button } from "@/components/ui/button";
 import { Select, SelectOption } from "../components/Select";
 import { TextInput, SecretInput } from "../components/Input";
 
-// The console doesn't bundle @duyet/oma-sandbox, so we mirror the
+// The console doesn't bundle @getoma/sandbox-sdk, so we mirror the
 // provider→env mapping that `providerConfigToEnv` applies server-side
-// (apps/main-node + packages/sandbox). Each BYOK-able provider declares
+// (apps/main-node + packages/sandbox-sdk). Each BYOK-able provider declares
 // the fields it needs; on submit we fold them into the
 // `{ type, label, apiKey, baseURL, config }` shape the Node route expects.
 type FieldTarget = "apiKey" | "baseURL" | { configKey: string };
@@ -127,33 +126,30 @@ const PROVIDERS: ProviderSchema[] = [
 
 const PROVIDER_BY_TYPE = new Map(PROVIDERS.map((p) => [p.type, p]));
 
-interface AddSandboxProviderDialogProps {
-  open: boolean;
-  onClose: () => void;
-  /** Called after a successful create so the parent can refetch +metrics. */
+export { PROVIDERS, PROVIDER_BY_TYPE };
+
+interface SandboxProviderFormFieldsProps {
   onCreated: () => void;
+  onDone?: () => void;
 }
 
-export function AddSandboxProviderDialog({
-  open,
-  onClose,
+export function SandboxProviderFormFields({
   onCreated,
-}: AddSandboxProviderDialogProps) {
+  onDone,
+}: SandboxProviderFormFieldsProps) {
   const { api } = useApi();
   const [selectedType, setSelectedType] = useState(PROVIDERS[0].type);
   const [label, setLabel] = useState("");
   const [description, setDescription] = useState("");
   const [values, setValues] = useState<Record<string, string>>({});
 
-  // Default to the first provider so the Select never holds an empty value
-  // (Radix Select forbids empty-string Item values and would throw).
   const schema = PROVIDER_BY_TYPE.get(selectedType) ?? PROVIDERS[0];
 
   const mutation = useApiMutation<{ data: unknown }>({
     onSuccess: () => {
       onCreated();
       reset();
-      onClose();
+      onDone?.();
     },
   });
 
@@ -199,73 +195,67 @@ export function AddSandboxProviderDialog({
   }
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Add sandbox provider"
-      subtitle="Bring your own key (BYOK) — register a sandbox backend the console can provision into."
-      maxWidth="max-w-lg"
-      footer={
-        <>
-          <Button variant="ghost" onClick={onClose} disabled={mutation.status === "pending"}>
+    <div className="space-y-4">
+      <div>
+        <label className="block text-[13px] font-medium text-fg mb-1.5">Provider type</label>
+        <Select value={selectedType} onValueChange={handleProviderChange}>
+          {PROVIDERS.map((p) => (
+            <SelectOption key={p.type} value={p.type}>
+              {p.label}
+            </SelectOption>
+          ))}
+        </Select>
+        <p className="mt-1 text-[12px] text-fg-muted">{schema.blurb}</p>
+      </div>
+
+      <TextInput
+        label="Label"
+        placeholder="My Daytona account"
+        value={label}
+        onChange={(e) => setLabel(e.target.value)}
+      />
+
+      <TextInput
+        label="Description"
+        hint="Optional — shown on the provider card."
+        placeholder="Production sandbox pool"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+      />
+
+      {schema.fields.map((f) =>
+        f.secret ? (
+          <SecretInput
+            key={f.key}
+            label={f.label}
+            hint={f.hint}
+            placeholder={f.placeholder}
+            value={values[f.key] ?? ""}
+            onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+          />
+        ) : (
+          <TextInput
+            key={f.key}
+            label={f.label}
+            hint={f.hint}
+            placeholder={f.placeholder}
+            value={values[f.key] ?? ""}
+            onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+          />
+        ),
+      )}
+
+      <div className="flex items-center justify-end gap-2 pt-2">
+        {onDone && (
+          <Button variant="ghost" onClick={onDone} disabled={mutation.status === "pending"}>
             Cancel
           </Button>
-          <Button onClick={() => void handleSubmit()} disabled={!canSubmit}>
-            {mutation.status === "pending" ? "Adding…" : "Add provider"}
-          </Button>
-        </>
-      }
-    >
-      <div className="space-y-4">
-        <div>
-          <label className="block text-[13px] font-medium text-fg mb-1.5">Provider type</label>
-          <Select value={selectedType} onValueChange={handleProviderChange}>
-            {PROVIDERS.map((p) => (
-              <SelectOption key={p.type} value={p.type}>
-                {p.label}
-              </SelectOption>
-            ))}
-          </Select>
-          <p className="mt-1 text-[12px] text-fg-muted">{schema.blurb}</p>
-        </div>
-
-        <TextInput
-          label="Label"
-          placeholder="My Daytona account"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-        />
-
-        <TextInput
-          label="Description"
-          hint="Optional — shown on the provider card."
-          placeholder="Production sandbox pool"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-
-        {schema.fields.map((f) =>
-          f.secret ? (
-            <SecretInput
-              key={f.key}
-              label={f.label}
-              hint={f.hint}
-              placeholder={f.placeholder}
-              value={values[f.key] ?? ""}
-              onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
-            />
-          ) : (
-            <TextInput
-              key={f.key}
-              label={f.label}
-              hint={f.hint}
-              placeholder={f.placeholder}
-              value={values[f.key] ?? ""}
-              onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
-            />
-          ),
         )}
+        <Button onClick={() => void handleSubmit()} disabled={!canSubmit}>
+          {mutation.status === "pending" ? "Saving…" : "Save"}
+        </Button>
       </div>
-    </Modal>
+    </div>
   );
 }
+

@@ -80,7 +80,7 @@ import {
   resolveDefaultLocalSandboxProvider,
   type SandboxProviderConfig,
   type SandboxUsageRecord,
-} from "@duyet/oma-sandbox";
+} from "@getoma/sandbox-sdk";
 import {
   buildAgentRoutes,
   buildScheduleRoutes,
@@ -163,7 +163,7 @@ import { NodeSessionRouter } from "./lib/node-session-router.js";
 import { nodeOutputsAdapter } from "./lib/node-outputs-adapter.js";
 import { nodeSessionLifecycle } from "./lib/node-session-lifecycle.js";
 import { NodeWorkspaceBackupService } from "./lib/node-workspace-backup.js";
-import { DefaultSandboxOrchestrator } from "@duyet/oma-sandbox/orchestrator";
+import { DefaultSandboxOrchestrator } from "@getoma/sandbox-sdk/orchestrator";
 import {
   createAuthMiddleware as buildAuthMw,
   type TrustedProxyGuardConfig,
@@ -747,7 +747,7 @@ function getDefaultLocalSandboxProvider(): Promise<string> {
   if (!defaultLocalSandboxProviderPromise) {
     defaultLocalSandboxProviderPromise = (async () => {
       const { probeOpenShellGateway, resolveOpenShellTlsFromEnv } = await import(
-        "@duyet/oma-sandbox/adapters/openshell"
+        "@getoma/sandbox-sdk/adapters/openshell"
       );
       const tls = resolveOpenShellTlsFromEnv(process.env);
       const decision = await resolveDefaultLocalSandboxProvider(process.env, (endpoint) =>
@@ -768,7 +768,7 @@ function getDefaultLocalSandboxProvider(): Promise<string> {
 // effort: any failure returns undefined and the adapter proceeds without it.
 async function getSessionEnvConfig(
   sessionId: string,
-): Promise<import("@duyet/oma-sandbox").SandboxFactoryContext["environmentConfig"] | undefined> {
+): Promise<import("@getoma/sandbox-sdk").SandboxFactoryContext["environmentConfig"] | undefined> {
   try {
     const row = await sql
       .prepare(`SELECT tenant_id, environment_id FROM sessions WHERE id = ?`)
@@ -779,7 +779,7 @@ async function getSessionEnvConfig(
       tenantId: row.tenant_id,
       environmentId: row.environment_id,
     });
-    return env?.config as import("@duyet/oma-sandbox").SandboxFactoryContext["environmentConfig"];
+    return env?.config as import("@getoma/sandbox-sdk").SandboxFactoryContext["environmentConfig"];
   } catch {
     return undefined;
   }
@@ -788,7 +788,7 @@ async function getSessionEnvConfig(
 async function buildSandbox(
   sessionId: string,
   workdir: string,
-): Promise<import("@duyet/oma-sandbox").SandboxExecutor> {
+): Promise<import("@getoma/sandbox-sdk").SandboxExecutor> {
   const envProvider = await resolveEnvProvider(sessionId);
   const providerId = (
     envProvider ?? process.env.SANDBOX_PROVIDER ?? (await getDefaultLocalSandboxProvider())
@@ -822,7 +822,7 @@ async function buildSandbox(
 // crash-induced orphan would exist. Fire-and-forget: must never delay the
 // HTTP listener or take main-node down if the cluster call fails.
 if (["k8s", "kubernetes"].includes((process.env.SANDBOX_PROVIDER ?? "").toLowerCase())) {
-  import("@duyet/oma-sandbox/adapters/kubernetes")
+  import("@getoma/sandbox-sdk/adapters/kubernetes")
     .then((mod) =>
       mod.sweepOrphanedSandboxes({
         namespace: process.env.OMA_K8S_NAMESPACE,
@@ -1677,7 +1677,7 @@ v1.get("/hosting_types", async (c) => {
     latency_ms: number;
     last_checked: string;
     reason?: string;
-    capacity?: import("@duyet/oma-sandbox").SandboxCapacity;
+    capacity?: import("@getoma/sandbox-sdk").SandboxCapacity;
   }>();
   for (const p of providers) {
     try {

@@ -714,11 +714,11 @@ export class K8sManager implements BridgeBackend {
     // Untyped dynamic import: the sandbox package ships raw .ts via
     // "exports", which this CJS tsc build can't resolve — typing comes
     // from the structural KubernetesSandboxExecutorLike interface above.
-    const mod = await import("@duyet/oma-sandbox/adapters/kubernetes" as string);
+    const mod = await import("@getoma/sandbox-sdk/adapters/kubernetes" as string);
     const executor: KubernetesSandboxExecutorLike = new mod.KubernetesSandboxExecutor({
       sessionId,
       namespace: options?.namespace ?? this.namespace,
-      // Default matches DEFAULT_SANDBOX_IMAGE in @duyet/oma-sandbox (this
+      // Default matches DEFAULT_SANDBOX_IMAGE in @getoma/sandbox-sdk (this
       // CJS build can't import the raw-.ts package statically — keep the
       // literal in lock-step). Batteries-included toolset image built from
       // docker/base/Dockerfile; bare node:22-slim had no curl/git (issue

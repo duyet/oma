@@ -114,7 +114,7 @@ ServiceAccount or RBAC**.
 
 > **Image note:** the default local relay runs with the published
 > `@getoma/cli` on any Node image. The OpenShell backend dynamically imports
-> `@duyet/oma-sandbox` (an internal, never-published workspace package), so it
+> `@getoma/sandbox-sdk` (currently an internal workspace package; public npm publish is planned in a follow-up), so it
 > must run from an image with that package present — build
 > [`Dockerfile.openshell`](../../deploy/cli-bridge-daemon/Dockerfile.openshell)
 > from the repo root.

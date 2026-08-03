@@ -463,7 +463,7 @@ process lifetime), preferring OpenShell when it is. Override with
 `openshell` forces OpenShell without probing (fails loudly at first use if
 actually unreachable, same as any other explicit selection), `subprocess`
 disables the auto-detect entirely. See `resolveDefaultLocalSandboxProvider`
-in `packages/sandbox/src/provider-config.ts`.
+in `packages/sandbox-sdk/src/provider-config.ts`.
 
 ### Running an OpenShell gateway
 
@@ -549,7 +549,7 @@ An OMA environment's `config.networking` / `config.packages` are translated
 into a downstream OpenShell `SandboxPolicy` (proto `SandboxSpec.policy`) and
 attached at `CreateSandbox`, so OMA's egress restrictions are enforced by the
 gateway's default-deny proxy. The mapping is a pure module
-(`packages/sandbox/src/adapters/openshell-policy.ts`) used by **both** paths:
+(`packages/sandbox-sdk/src/adapters/openshell-policy.ts`) used by **both** paths:
 the direct gRPC adapter (self-host) and the bridge's OpenShell backend (CF, the
 policy is mapped on the Worker and forwarded through the bridge).
 

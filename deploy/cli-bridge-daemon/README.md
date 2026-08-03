@@ -6,7 +6,7 @@ executes relayed cloud-agent sandbox ops. Two backends:
 - **local** (default) — subprocess + host filesystem, inside the pod. Works
   with the published `@getoma/cli` on a plain `node:22-slim` image.
 - **openshell** — relay each op to an NVIDIA OpenShell gateway over gRPC. Needs
-  an image with `@duyet/oma-sandbox` present (see `Dockerfile.openshell`).
+  an image with `@getoma/sandbox-sdk` present (see `Dockerfile.openshell`).
 
 The daemon only makes **outbound** connections (WS to the control plane, gRPC
 to the gateway) — it never touches the Kubernetes API, so it needs **no RBAC**.

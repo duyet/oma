@@ -46,7 +46,7 @@
     "@duyet/oma-model-cards-store": "workspace:*",
     "@duyet/oma-outbound-snapshots-store": "workspace:*",
     "@duyet/oma-payments": "workspace:*",
-    "@duyet/oma-sandbox": "workspace:*",
+    "@getoma/sandbox-sdk": "workspace:*",
     "@duyet/oma-services": "workspace:*",
     "@duyet/oma-session-runtime": "workspace:*",
     "@duyet/oma-session-secrets-store": "workspace:*",

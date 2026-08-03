@@ -12,7 +12,7 @@ on:
     paths:
       - 'apps/agent/**'
       - 'packages/session-runtime/**'
-      - 'packages/sandbox/**'
+      - 'packages/sandbox-sdk/**'
       - 'packages/shared/**'
       - '.github/workflows/deploy-agent.yml'
 

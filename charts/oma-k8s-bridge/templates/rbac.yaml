@@ -14,7 +14,7 @@ RBAC is split by scope, not bundled into one ClusterRole:
      (.Values.rbac.targetNamespace, falling back to .Values.config.namespace)
      — covers everything K8sManager.createBox/destroyBox/exec/readFile/
      writeFile/getSandboxLogs actually do to a session's sandbox: create the
-     `Sandbox` custom resource (packages/sandbox/src/adapters/kubernetes.ts),
+     `Sandbox` custom resource (packages/sandbox-sdk/src/adapters/kubernetes.ts),
      exec into and read logs from the pod it produces. This is namespaced
      because every verb here targets objects that live in that one
      namespace — a Role is sufficient and strictly less privilege than a
@@ -31,7 +31,7 @@ comments for exactly which method uses it. No wildcards, no
 cluster-admin, no unused verbs (e.g. `watch` is dropped: neither
 k8s-manager.ts nor the KubernetesSandboxExecutor adapter ever opens a
 watch — Sandbox readiness is polled, see waitForReady in
-packages/sandbox/src/adapters/kubernetes.ts).
+packages/sandbox-sdk/src/adapters/kubernetes.ts).
 */ -}}
 {{- $targetNs := .Values.rbac.targetNamespace | default .Values.config.namespace -}}
 apiVersion: rbac.authorization.k8s.io/v1

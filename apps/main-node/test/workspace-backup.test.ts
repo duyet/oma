@@ -20,7 +20,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { fileURLToPath } from "node:url";
 import { InMemoryBlobStore } from "@duyet/oma-blob-store";
-import type { SandboxExecutor } from "@duyet/oma-sandbox";
+import type { SandboxExecutor } from "@getoma/sandbox-sdk";
 import { NodeWorkspaceBackupService } from "../src/lib/node-workspace-backup.js";
 
 class FakeSandbox implements SandboxExecutor {

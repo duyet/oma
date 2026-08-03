@@ -2,8 +2,8 @@
 #
 # The default local relay works with the published npm CLI on a plain Node
 # image (see deployment.yaml). The OpenShell backend, however, dynamically
-# imports `@duyet/oma-sandbox` (the gRPC adapter) at runtime — an INTERNAL
-# workspace package that never publishes to npm — so it must be present in
+# imports `@getoma/sandbox-sdk` (the gRPC adapter) at runtime — currently an
+# internal workspace package (public npm publish planned in a follow-up) — so it must be present in
 # node_modules. This image builds the CLI from the monorepo with that package
 # linked. Build from the repo ROOT:
 #
@@ -24,7 +24,7 @@ RUN corepack enable
 WORKDIR /app
 COPY --from=build /app /app
 ENV HOME=/home/oma
-# @duyet/oma-sandbox stays external in the CLI bundle and resolves from the
+# @getoma/sandbox-sdk stays external in the CLI bundle and resolves from the
 # workspace node_modules at runtime (its gRPC deps come along).
 ENTRYPOINT ["node", "packages/cli/dist/index.js"]
 CMD ["bridge", "daemon"]

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { XCircleIcon, TimerIcon } from "lucide-react";
+import { XCircleIcon, SettingsIcon, TerminalIcon, TimerIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useApi } from "../lib/api";
 import { formatQueryError, useApiQuery } from "../lib/useApiQuery";
@@ -10,10 +10,11 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Modal } from "../components/Modal";
-import { AddSandboxProviderDialog } from "./AddSandboxProviderDialog";
 import { RowActionsMenu } from "../components/RowActionsMenu";
 import { ProviderMark } from "../components/ProviderMark";
 import { RuntimesIcon } from "../components/icons";
+import { AddRuntimeDialog } from "../components/AddRuntimeDialog";
+import { CopyButton } from "../components/CopyButton";
 import { cn, rowActivateKeyDown } from "@/lib/utils";
 import { useConfirm } from "@/hooks/useConfirm";
 import {
@@ -106,7 +107,7 @@ const SYSTEM_PROVIDER_ENVS = [
 // and their detail dialog. `bridge restart` restarts the installed daemon
 // service; if the machine was never set up it prints a hint to run
 // `bridge setup` instead.
-const RECONNECT_CMD = "npx @getoma/cli bridge restart";
+import { RECONNECT_CMD } from "../lib/bridge-commands";
 
 function formatHeartbeat(unixSeconds: number): string {
   const ago = Math.floor(Date.now() / 1000) - unixSeconds;
@@ -137,7 +138,7 @@ function CapacityBar({ label, metric }: { label: string; metric: CapacityMetric 
           {formatCapacityValue(metric.used, metric.unit)} / {formatCapacityValue(metric.total, metric.unit)}
         </span>
       </div>
-      <div className="h-1.5 w-full rounded-full bg-bg-surface overflow-hidden">
+      <div className="h-1 w-full rounded-full bg-bg-surface overflow-hidden">
         <div className={cn("h-full rounded-full", barColor)} style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -153,7 +154,7 @@ function CapacityGauges({ capacity }: { capacity: ProviderCapacity }) {
   const present = entries.filter((e): e is [string, CapacityMetric] => e[1] !== undefined);
   if (present.length === 0) return null;
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1">
       {present.map(([label, metric]) => (
         <CapacityBar key={label} label={label} metric={metric} />
       ))}
@@ -238,12 +239,10 @@ function UseInEnvironmentSection({
         an environment. Create or edit an environment and set its sandbox provider
         {providerId ? (
           <>
-            {" "}
-            to{" "}
+            {" "}to{" "}
             <code className="bg-bg-surface px-1 rounded font-mono text-[11px]">{providerId}</code>
           </>
-        ) : null}{" "}
-        to route work here.
+        ) : null}{" "}to route work here.
       </p>
       <Button size="sm" variant="secondary" onClick={onGo}>
         Go to Environments →
@@ -303,7 +302,7 @@ function AvailabilityNote({ p }: { p: HostingType }) {
   return (
     <div
       className={cn(
-        "rounded-md px-2 py-1.5 text-[11px] leading-relaxed space-y-1.5",
+        "rounded-md px-2 py-1.5 text-[11px] leading-relaxed space-y-1",
         view.state === "unavailable"
           ? "bg-bg-surface text-fg-muted"
           : "bg-warning-subtle/40 text-fg-muted",
@@ -312,6 +311,85 @@ function AvailabilityNote({ p }: { p: HostingType }) {
       <p>{view.reason}</p>
       <MissingEnvChips names={view.missingEnv} />
     </div>
+  );
+}
+
+// Section header used for every top-level and sub-section on this page.
+// Accepts an optional `icon` (rendered when present) and optional `dotColor`
+// (rendered when present) so the same component covers both the top-level
+// "Sandbox providers" / "Connected machines" headers and the Online/Offline
+// sub-headers.
+function SectionHeader({
+  title,
+  count,
+  icon,
+  dotColor,
+}: {
+  title: string;
+  count: number;
+  icon?: ReactNode;
+  dotColor?: string;
+}) {
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      {icon ? (
+        <span className="size-4 text-fg-subtle shrink-0">{icon}</span>
+      ) : dotColor ? (
+        <span className={cn("w-2 h-2 rounded-full shrink-0", dotColor)} />
+      ) : null}
+      <h3 className="text-sm font-semibold text-fg">{title}</h3>
+      {count > 0 && (
+        <Badge variant="outline" className="text-[10px] font-mono">{count}</Badge>
+      )}
+    </div>
+  );
+}
+
+// Renders a titled group of MachineCard entries. Shared by the Online and
+// Offline sub-sections so the two .map blocks don't duplicate the grid + card
+// props.
+function MachineGrid({
+  title,
+  machines,
+  dotColor,
+  onRevoke,
+  onOpenDetail,
+  copied,
+  onCopy,
+}: {
+  title: string;
+  machines: Runtime[];
+  dotColor: string;
+  onRevoke: (id: string) => void;
+  onOpenDetail: (r: Runtime) => void;
+  copied: string | null;
+  onCopy: (text: string, key: string) => void;
+}) {
+  return (
+    <section>
+      <SectionHeader title={title} count={machines.length} dotColor={dotColor} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {machines.map((r) => (
+          <MachineCard
+            key={r.id}
+            r={r}
+            onRevoke={onRevoke}
+            onOpenDetail={onOpenDetail}
+            copied={copied}
+            onCopy={onCopy}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// Copy-block variant of the shared CopyButton used by the K8s/Helm walkthrough
+// and the setup modal. Renders as a full-width block with a `<pre>` for
+// multi-line commands; the icon-swap logic lives in the shared component.
+function CopyBlock({ id, text, copied, onCopy }: { id: string; text: string; copied: string | null; onCopy: (text: string, key: string) => void }) {
+  return (
+    <CopyButton id={id} text={text} copied={copied} onCopy={onCopy} preClassName="flex-1 min-w-0 overflow-x-auto font-mono text-xs leading-relaxed text-fg whitespace-pre" />
   );
 }
 
@@ -337,37 +415,33 @@ function ProviderCard({ p, onSetup, onRemove, onOpenDetail, onOpenSandboxTab }: 
       tabIndex={clickable ? 0 : undefined}
       role={clickable ? "button" : undefined}
     >
-      <CardHeader>
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 items-start gap-2.5">
-            {/* Brand color reads as "this is live". Anything not healthy —
-                unhealthy, not configured, no health reported — drops to the
-                monochrome glyph so the grid can be scanned for working
-                runtimes without reading a single word. */}
-            <ProviderMark
-              id={p.id}
-              colored={status === "healthy"}
-              className={cn(
-                "mt-0.5 size-5 shrink-0",
-                status === "healthy" ? "text-fg" : "text-fg-subtle opacity-60",
-              )}
-            />
-            <div className="min-w-0">
-              <CardTitle className="truncate">{p.label}</CardTitle>
-              <div className="text-xs text-fg-subtle font-mono mt-0.5 truncate" title={p.id}>{p.id}</div>
-            </div>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2.5">
+          {/* Brand color reads as "this is live". Anything not healthy —
+              unhealthy, not configured, no health reported — drops to the
+              monochrome glyph so the grid can be scanned for working
+              runtimes without reading a single word. */}
+          <ProviderMark
+            id={p.id}
+            colored={status === "healthy"}
+            className={cn(
+              "size-4 shrink-0",
+              status === "healthy" ? "text-fg" : "text-fg-subtle opacity-60",
+            )}
+          />
+          <div className="flex-1 min-w-0">
+            <CardTitle className="truncate text-[13px]">{p.label}</CardTitle>
           </div>
-          <span className={cn("shrink-0 w-2.5 h-2.5 rounded-full mt-1.5", healthDot)} title={healthLabel} />
+          <span className={cn("shrink-0 w-2 h-2 rounded-full", healthDot)} title={healthLabel} />
         </div>
+        <div className="text-[10px] text-fg-subtle font-mono truncate" title={p.id}>{p.id}</div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-3 flex-1">
-        <p className="text-xs text-fg-muted leading-relaxed">{p.description}</p>
+      <CardContent className="flex flex-col gap-2.5 flex-1 pt-0">
+        <p className="text-[11px] text-fg-muted leading-relaxed line-clamp-2">{p.description}</p>
 
         <div className="flex flex-wrap gap-1">
           {p.type === "system" ? (
-            <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
-              System provider
-            </Badge>
+            <Badge variant="outline" className="text-[10px]">System</Badge>
           ) : (
             <Badge variant="secondary" className="text-[10px]">BYOK</Badge>
           )}
@@ -403,25 +477,25 @@ function ProviderCard({ p, onSetup, onRemove, onOpenDetail, onOpenSandboxTab }: 
 
         <div className="mt-auto flex flex-col gap-2">
           {/* Status line */}
-          <div className="flex items-center gap-3 text-[11px] text-fg-subtle">
+          <div className="flex items-center gap-2 text-[11px] text-fg-subtle">
             {health && (
-              <>
-                <span className="inline-flex items-center gap-1">
-                  <span className={cn("w-1.5 h-1.5 rounded-full", healthDot)} />
-                  {healthLabel}
-                </span>
+              <span className="inline-flex items-center gap-1">
+                <span className={cn("w-1.5 h-1.5 rounded-full", healthDot)} />
+                {healthLabel}
                 {status === "healthy" && (
                   <>
-                    <span className="inline-flex items-center gap-1">
-                      <TimerIcon className="size-3" />
+                    <span className="text-fg-muted mx-0.5">·</span>
+                    <span className="inline-flex items-center gap-0.5">
+                      <TimerIcon className="size-2.5" />
                       {formatLatency(health.latency_ms)}
                     </span>
+                    <span className="text-fg-muted mx-0.5">·</span>
                     <span className="font-mono">
                       {new Date(health.last_checked).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </span>
                   </>
                 )}
-              </>
+              </span>
             )}
             {!health && (
               <span className="inline-flex items-center gap-1">
@@ -535,58 +609,32 @@ function MachineCard({ r, onRevoke, onOpenDetail, copied, onCopy }: { r: Runtime
       tabIndex={clickable ? 0 : undefined}
       role={clickable ? "button" : undefined}
     >
-      <CardHeader>
-        {/* min-w-0 on this flex row + the left column lets the UUID id truncate
-            instead of forcing the card wider. */}
-        <div className="flex items-start justify-between gap-2 min-w-0">
-          {/* Machines get an icon slot too, so they line up with the provider
-              cards in the same grid instead of starting flush left. The OS
-              mark is the identifying logo here (a Mac is a Mac); it goes
-              full-color-ish when online and dims when the daemon is gone. */}
-          <div className="flex min-w-0 items-start gap-2.5">
-            <OsMark
-              os={r.os}
-              className={cn(
-                "mt-0.5 size-5 shrink-0",
-                online ? "text-fg" : "text-fg-subtle opacity-60",
-              )}
-            />
-            <div className="min-w-0">
-            <CardTitle className="truncate">{r.hostname}</CardTitle>
-            <div className="text-xs text-fg-subtle font-mono mt-0.5 truncate" title={r.id}>{r.id}</div>
-            </div>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2.5">
+          <OsMark
+            os={r.os}
+            className={cn(
+              "size-4 shrink-0",
+              online ? "text-fg" : "text-fg-subtle opacity-60",
+            )}
+          />
+          <div className="flex-1 min-w-0">
+            <CardTitle className="truncate text-[13px]">{r.hostname}</CardTitle>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <span
-              className={cn("w-2.5 h-2.5 rounded-full", online ? "bg-success" : "bg-fg-subtle")}
-              title={r.status}
-            />
-            <RowActionsMenu
-              label={`Actions for ${r.hostname}`}
-              actions={[
-                {
-                  label: "Revoke",
-                  icon: <XCircleIcon className="size-4" />,
-                  destructive: true,
-                  onSelect: () => onRevoke(r.id),
-                },
-              ]}
-            />
-          </div>
+          <span className={cn("shrink-0 w-2 h-2 rounded-full", online ? "bg-success" : "bg-fg-subtle")} title={r.status} />
         </div>
+        <div className="text-[10px] text-fg-subtle font-mono truncate" title={r.id}>{r.id}</div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-3 flex-1">
+      <CardContent className="flex flex-col gap-2.5 flex-1 pt-0">
         <div className="flex flex-wrap gap-1">
-          <Badge variant="default" className="text-[10px] uppercase tracking-wider">
-            Machine
-          </Badge>
+          <Badge variant="default" className="text-[10px]">Machine</Badge>
           <Badge variant="outline" className="text-[10px] inline-flex items-center gap-1">
-            <OsMark os={r.os} className="size-3 shrink-0" />
-            {r.os}
+            <OsMark os={r.os} className="size-2.5 shrink-0" />
+            <span className="truncate max-w-[120px]">{r.os}</span>
           </Badge>
         </div>
 
-        <div className="text-xs text-fg-muted space-y-1">
+        <div className="text-[11px] text-fg-muted space-y-0.5">
           <div>
             <span className="text-fg-subtle">Agents:</span>{" "}
             <span className="font-mono">
@@ -633,18 +681,18 @@ function MachineCard({ r, onRevoke, onOpenDetail, copied, onCopy }: { r: Runtime
         {!online && (
           <div className="rounded-md border border-border bg-bg-surface/50 p-2" onClick={(e) => e.stopPropagation()}>
             <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1">Reconnect — run on that machine</div>
-            <button
-              onClick={() => onCopy(RECONNECT_CMD, `reconnect-${r.id}`)}
-              aria-label={`Copy reconnect command for ${r.hostname}`}
+            <CopyButton
+              id={`reconnect-${r.id}`}
+              text={RECONNECT_CMD}
+              copied={copied}
+              onCopy={onCopy}
               className="group w-full text-left rounded border border-border bg-bg px-2 py-1.5 flex items-center gap-2 hover:border-border-strong transition-colors"
-            >
-              <span className="flex-1 min-w-0 overflow-x-auto font-mono text-[11px] text-fg whitespace-nowrap">{RECONNECT_CMD}</span>
-              <span className="shrink-0 text-fg-subtle group-hover:text-fg"><ClipboardIcon ok={copied === `reconnect-${r.id}`} /></span>
-            </button>
+              preClassName="flex-1 min-w-0 overflow-x-auto font-mono text-[11px] text-fg whitespace-nowrap"
+            />
           </div>
         )}
 
-        <div className="mt-auto flex items-center gap-3 text-[11px] text-fg-subtle">
+        <div className="mt-auto flex items-center gap-2 text-[11px] text-fg-subtle">
           <span className="inline-flex items-center gap-1">
             <span className={cn("w-1.5 h-1.5 rounded-full", online ? "bg-success" : "bg-fg-subtle")} />
             {r.status}
@@ -743,7 +791,12 @@ function MachineDetailDialog({
               <span className="text-fg">{r.hostname}</span>, run this to restart it (if it was
               never set up, it'll point you to <code className="bg-bg-surface px-1 rounded font-mono text-[11px]">bridge setup</code>):
             </p>
-            <CopyBlock id={`reconnect-detail-${r.id}`} text={RECONNECT_CMD} copied={copied} onCopy={onCopy} />
+            <CopyButton
+              id={`reconnect-detail-${r.id}`}
+              text={RECONNECT_CMD}
+              copied={copied}
+              onCopy={onCopy}
+            />
           </div>
         )}
         {r.version && (
@@ -962,16 +1015,16 @@ function ProviderDetailDialog({
 function SkeletonCard() {
   return (
     <Card size="sm">
-      <CardHeader>
+      <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="space-y-2 flex-1">
             <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-3 w-16" />
           </div>
-          <Skeleton className="shrink-0 w-2.5 h-2.5 rounded-full mt-1.5" />
+          <Skeleton className="shrink-0 w-2 h-2 rounded-full mt-1" />
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-3 pt-0">
         <Skeleton className="h-3 w-full" />
         <Skeleton className="h-3 w-3/4" />
         <div className="flex gap-1">
@@ -984,163 +1037,11 @@ function SkeletonCard() {
   );
 }
 
-function ClipboardIcon({ ok }: { ok: boolean }) {
-  return ok ? (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 6 9 17l-5-5" /></svg>
-  ) : (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
-  );
-}
-
-/** Click-to-copy shell block. Multi-line commands scroll rather than wrap —
- *  a wrapped `\` continuation is easy to mis-copy by hand. */
-function CopyBlock({
-  id,
-  text,
-  copied,
-  onCopy,
-}: {
-  id: string;
-  text: string;
-  copied: string | null;
-  onCopy: (text: string, key: string) => void;
-}) {
-  return (
-    <button
-      onClick={() => onCopy(text, id)}
-      aria-label={`Copy: ${text.split("\n")[0]}`}
-      className="group w-full text-left rounded-md border border-border bg-bg p-3 flex items-start gap-3 hover:border-border-strong transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
-    >
-      <pre className="flex-1 min-w-0 overflow-x-auto font-mono text-xs leading-relaxed text-fg">
-        {text}
-      </pre>
-      <span className="shrink-0 mt-0.5 text-fg-subtle group-hover:text-fg transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]">
-        <ClipboardIcon ok={copied === id} />
-      </span>
-    </button>
-  );
-}
-
-// Quickstart moved here from the Dashboard — installing the CLI and minting a
-// key is what you do right before connecting a runtime. Lives inside the
-// provider set-up dialog rather than on the page, so `onNavigate` lets the
-// host dismiss that dialog before a step routes away from it.
-function CliQuickstart({ onNavigate }: { onNavigate?: () => void }) {
-  const nav = useNavigate();
-  const [copied, setCopied] = useState<string | null>(null);
-  const copy = (text: string, key: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(key);
-    toast.success("Copied");
-    setTimeout(() => setCopied(null), 1600);
-  };
-
-  const cmd = "npx -y -p @getoma/cli oma";
-  const cmdGlobal = "npm i -g @getoma/cli";
-  const examplePrompt =
-    "Use oma to create a research agent that monitors arXiv for new ML papers daily";
-
-  const CopyIcon = ({ ok }: { ok: boolean }) =>
-    ok ? (
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 6 9 17l-5-5" /></svg>
-    ) : (
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
-    );
-
-  return (
-    <section role="region" aria-label="CLI quickstart" className="border border-border rounded-lg overflow-hidden">
-      {/* Step 1 */}
-      <div className="grid md:grid-cols-[180px_1fr] gap-x-6 gap-y-2 p-5 md:p-6 border-b border-border">
-        <div>
-          <div className="font-mono text-[11px] tracking-wider text-brand">STEP 01</div>
-          <div className="mt-1 font-medium text-fg text-[15px]">Install the CLI</div>
-        </div>
-        <div className="space-y-2.5 min-w-0">
-          <p className="text-sm text-fg-muted">
-            The <code className="font-mono text-[13px] text-fg">oma</code> CLI lets your
-            agent (or you) drive the platform from the terminal.
-          </p>
-          <button
-            onClick={() => copy(cmd, "cmd")}
-            className="group w-full sm:w-auto sm:inline-flex items-center gap-3 pl-3 pr-2 py-2 rounded-md border border-border bg-bg-surface/50 hover:border-border-strong transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)] text-left"
-          >
-            <span className="text-fg-subtle select-none font-mono text-xs">›</span>
-            <span className="font-mono text-[13px] text-fg flex-1 truncate">{cmd}</span>
-            <span className="shrink-0 text-fg-subtle group-hover:text-fg transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)] p-1">
-              <CopyIcon ok={copied === "cmd"} />
-            </span>
-          </button>
-          <p className="text-[12px] text-fg-subtle">
-            or globally:{" "}
-            <button
-              onClick={() => copy(cmdGlobal, "cmd-global")}
-              className="inline-flex items-center min-h-11 sm:min-h-0 font-mono text-fg-muted hover:text-brand transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
-            >
-              {cmdGlobal}
-            </button>
-          </p>
-        </div>
-      </div>
-
-      {/* Step 2 */}
-      <div className="grid md:grid-cols-[180px_1fr] gap-x-6 gap-y-2 p-5 md:p-6 border-b border-border">
-        <div>
-          <div className="font-mono text-[11px] tracking-wider text-brand">STEP 02</div>
-          <div className="mt-1 font-medium text-fg text-[15px]">Mint an API key</div>
-        </div>
-        <div className="space-y-2.5">
-          <p className="text-sm text-fg-muted">
-            Your agent needs this to authenticate. Keep it somewhere it can read.
-          </p>
-          <button
-            onClick={() => {
-              onNavigate?.();
-              nav("/api-keys");
-            }}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-brand text-brand-fg rounded-md text-[13px] font-medium hover:bg-brand-hover transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
-          >
-            Generate API key
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
-          </button>
-        </div>
-      </div>
-
-      {/* Step 3 */}
-      <div className="grid md:grid-cols-[180px_1fr] gap-x-6 gap-y-2 p-5 md:p-6">
-        <div>
-          <div className="font-mono text-[11px] tracking-wider text-brand">STEP 03</div>
-          <div className="mt-1 font-medium text-fg text-[15px]">Hand it the reins</div>
-        </div>
-        <div className="space-y-2.5 min-w-0">
-          <p className="text-sm text-fg-muted">
-            Point your agent at the <code className="font-mono text-[13px] text-fg">oma-cli</code>{" "}
-            or <code className="font-mono text-[13px] text-fg">oma-api</code> skill, then
-            ask for what you want:
-          </p>
-          <button
-            onClick={() => copy(examplePrompt, "prompt")}
-            className="group w-full text-left rounded-md border border-border bg-bg-surface/50 hover:border-border-strong transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)] p-3 flex items-start gap-3"
-          >
-            <span className="shrink-0 mt-0.5 font-mono text-[10px] tracking-wider text-fg-subtle">
-              PROMPT
-            </span>
-            <span className="flex-1 text-[13px] text-fg leading-snug">{examplePrompt}</span>
-            <span className="shrink-0 text-fg-subtle group-hover:text-fg transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)] mt-0.5">
-              <CopyIcon ok={copied === "prompt"} />
-            </span>
-          </button>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 export function RuntimesList() {
   const { api } = useApi();
   const navigate = useNavigate();
-  const [showInstructions, setShowInstructions] = useState(false);
+  const [addMode, setAddMode] = useState<"config" | "connect" | null>(null);
   const [setupProvider, setSetupProvider] = useState<HostingType | null>(null);
-  const [showAddProvider, setShowAddProvider] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   // Click-through detail dialogs — one card at a time (providers and machines
   // never both open at once, but each has its own state so their content
@@ -1250,11 +1151,26 @@ export function RuntimesList() {
   // Providers this deployment genuinely can't run are kept, not dropped —
   // they move into their own section so the main grid stays scannable while
   // the "why not" stays one click away.
-  const { usable: usableProviders, unavailableProviders } = (() => {
-    const { usable, unavailable } = partitionByAvailability(providers, (p) => p.availability);
-    return { usable, unavailableProviders: unavailable };
-  })();
+  const { usable: usableProviders, unavailableProviders } = useMemo(
+    () => {
+      const { usable, unavailable } = partitionByAvailability(providers, (p) => p.availability);
+      return { usable, unavailableProviders: unavailable };
+    },
+    [providers],
+  );
   const deploymentLabel = runtimeLabel(deploymentRuntime);
+
+  // Partition machines into online (green dot, colored icon) and offline
+  // (gray dot, grayscale icon).
+  const { online: onlineMachines, offline: offlineMachines } = useMemo(
+    () => {
+      const online: Runtime[] = [];
+      const offline: Runtime[] = [];
+      for (const r of runtimes) (r.status === "online" ? online : offline).push(r);
+      return { online, offline };
+    },
+    [runtimes],
+  );
 
   const loading = providersLoading || runtimesLoading;
   const isEmpty =
@@ -1265,11 +1181,7 @@ export function RuntimesList() {
     runtimes.length === 0;
 
   return (
-    <div role="main" aria-label="Sandbox Runtime" className="-m-3 p-4 space-y-10">
-      {/* Unified: sandbox providers + connected machines in one grid.
-          System providers come from host env vars, BYOK providers from
-          the API, machines from `oma bridge daemon` — but to a user they
-          are all just "where can my agent's sandbox run". */}
+    <div role="main" aria-label="Sandbox Runtime" className="-m-3 p-4 space-y-8">
       <section role="region" aria-label="Runtimes">
         <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
@@ -1287,11 +1199,13 @@ export function RuntimesList() {
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Button size="sm" variant="secondary" onClick={() => setShowAddProvider(true)}>
-              + Add provider
+            <Button size="sm" onClick={() => setAddMode("config")} className="gap-1.5">
+              <SettingsIcon className="size-3.5 shrink-0" />
+              Config provider
             </Button>
-            <Button size="sm" onClick={() => setShowInstructions(true)}>
-              + Connect machine
+            <Button size="sm" onClick={() => setAddMode("connect")} className="gap-1.5">
+              <TerminalIcon className="size-3.5 shrink-0" />
+              Connect local machine
             </Button>
           </div>
         </div>
@@ -1328,28 +1242,53 @@ export function RuntimesList() {
           </div>
         )}
 
-        {!loading && (usableProviders.length > 0 || runtimes.length > 0) && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {usableProviders.map((p) => (
-              <ProviderCard
-                key={p.id}
-                p={p}
-                onSetup={setSetupProvider}
-                onRemove={removeProvider}
-                onOpenDetail={setDetailProvider}
-                onOpenSandboxTab={() => void openBrowserVmTab()}
-              />
-            ))}
-            {runtimes.map((r) => (
-              <MachineCard
-                key={r.id}
-                r={r}
+        {/* Sandbox providers section */}
+        {!loading && usableProviders.length > 0 && (
+          <div className="space-y-4">
+            <SectionHeader title="Sandbox providers" count={usableProviders.length} icon={<SettingsIcon className="size-4" />} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {usableProviders.map((p) => (
+                <ProviderCard
+                  key={p.id}
+                  p={p}
+                  onSetup={setSetupProvider}
+                  onRemove={removeProvider}
+                  onOpenDetail={setDetailProvider}
+                  onOpenSandboxTab={() => void openBrowserVmTab()}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Connected machines — split into Online and Offline */}
+        {!loading && runtimes.length > 0 && (
+          <div className="space-y-4">
+            <SectionHeader title="Connected machines" count={runtimes.length} icon={<TerminalIcon className="size-4" />} />
+
+            {onlineMachines.length > 0 && (
+              <MachineGrid
+                title="Online"
+                machines={onlineMachines}
+                dotColor="bg-success"
                 onRevoke={(id) => void remove(id)}
                 onOpenDetail={setDetailMachine}
                 copied={copied}
                 onCopy={copy}
               />
-            ))}
+            )}
+
+            {offlineMachines.length > 0 && (
+              <MachineGrid
+                title="Offline"
+                machines={offlineMachines}
+                dotColor="bg-fg-subtle"
+                onRevoke={(id) => void remove(id)}
+                onOpenDetail={setDetailMachine}
+                copied={copied}
+                onCopy={copy}
+              />
+            )}
           </div>
         )}
 
@@ -1386,7 +1325,7 @@ export function RuntimesList() {
       <details className="rounded-lg border border-border bg-bg-surface/50">
         <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-fg select-none hover:text-fg">
           <span className="inline-flex items-center gap-2">
-            <ProviderMark id="k8s" colored className="size-4 shrink-0 text-fg-subtle" />
+            <RuntimesIcon className="size-4 shrink-0 text-fg-subtle" />
             Run sandboxes on Kubernetes (Helm)
           </span>
         </summary>
@@ -1512,7 +1451,7 @@ export function RuntimesList() {
               back. No Helm chart ships for the gateway itself yet; it implements the same HTTP
               contract as oma-k8s-bridge (see{" "}
               <code className="bg-bg-surface px-1 rounded">
-                packages/sandbox/src/adapters/kubernetes-remote.ts
+                packages/sandbox-sdk/src/adapters/kubernetes-remote.ts
               </code>
               ) — you deploy your own gateway implementing that contract in-cluster.{" "}
               <span className="text-fg">Known limitation:</span> memory-store and
@@ -1527,16 +1466,16 @@ export function RuntimesList() {
               href="https://docs.oma.duyet.net/deploy/k8s-bridge/"
               target="_blank"
               rel="noreferrer"
-              className="underline hover:text-fg"
+              className="underline hover:text-brand"
             >
-              docs.oma.duyet.net/deploy/k8s-bridge
+              docs.oma.duyet.net/deploy/k8s-bridge/
             </a>
-            ; the 10-minute path is{" "}
+            . Or see the quickstart at{" "}
             <a
-              href="https://docs.oma.duyet.net/deploy/kubernetes/"
+              href="https://docs.oma.duyet.net/deploy/kubernetes"
               target="_blank"
               rel="noreferrer"
-              className="underline hover:text-fg"
+              className="underline hover:text-brand"
             >
               deploy/kubernetes
             </a>
@@ -1575,70 +1514,13 @@ export function RuntimesList() {
           </div>
           <p className="text-xs text-fg-subtle">
             The full provider API is documented at{" "}
-            <a href="https://docs.oma.duyet.net/build/sandbox-providers" target="_blank" rel="noreferrer" className="underline hover:text-fg">
+            <a href="https://docs.oma.duyet.net/build/sandbox-providers" target="_blank" rel="noreferrer" className="underline hover:text-brand">
               docs.oma.duyet.net/build/sandbox-providers
             </a>
             .
           </p>
         </div>
       </details>
-
-      {/* Connect-machine instructions */}
-      <Modal
-        open={showInstructions}
-        onClose={() => setShowInstructions(false)}
-        title="Connect a local machine"
-        footer={<Button onClick={() => setShowInstructions(false)}>Done</Button>}
-      >
-        <div className="space-y-4 text-sm">
-          <p className="text-fg-muted">
-            On the machine you want to connect, run:
-          </p>
-          <div className="bg-bg-surface border border-border rounded-lg p-3 font-mono text-xs space-y-1">
-            <div className="text-fg select-all">npx @getoma/cli bridge setup</div>
-          </div>
-          <p className="text-fg-muted text-xs">
-            Setup opens this browser for OAuth, writes credentials to{" "}
-            <code className="bg-bg-surface px-1 rounded">~/.oma/bridge/</code>, and (on macOS) installs a launchd job
-            that keeps the daemon running across reboots. The daemon scans your <code className="bg-bg-surface px-1 rounded">$PATH</code> for
-            ACP-compatible agents and reports them here.
-          </p>
-          <div>
-            <p className="text-fg-muted text-xs mb-1.5">
-              <strong>★ Featured agents</strong> — OMA's recommended set:
-            </p>
-            <ul className="text-xs text-fg-muted space-y-1 ml-4 list-disc font-mono">
-              <li><span className="text-fg">claude-acp</span> · <code className="bg-bg-surface px-1 rounded">npx -y @agentclientprotocol/claude-agent-acp</code> (auto-installed if <code className="bg-bg-surface px-1 rounded">claude</code> is on PATH)</li>
-              <li><span className="text-fg">codex-acp</span> · download from <a href="https://github.com/zed-industries/codex-acp/releases" target="_blank" rel="noreferrer" className="underline">zed-industries/codex-acp releases</a></li>
-              <li><span className="text-fg">openclaw</span> · <code className="bg-bg-surface px-1 rounded">npm i -g openclaw</code> (uses <code className="bg-bg-surface px-1 rounded">openclaw acp</code> bridge)</li>
-              <li><span className="text-fg">hermes</span> · <code className="bg-bg-surface px-1 rounded">curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash</code></li>
-            </ul>
-          </div>
-          <div>
-            <p className="text-fg-muted text-xs mb-1.5">
-              Setup auto-installs an ACP wrapper when an upstream binary is on <code className="bg-bg-surface px-1 rounded">$PATH</code>:
-            </p>
-            <ul className="text-xs text-fg-muted space-y-1 ml-4 list-disc">
-              <li><code className="bg-bg-surface px-1 rounded">claude</code> → installs <code className="bg-bg-surface px-1 rounded">@agentclientprotocol/claude-agent-acp</code></li>
-              <li><code className="bg-bg-surface px-1 rounded">codex</code> → installs <code className="bg-bg-surface px-1 rounded">@normahq/codex-acp-bridge</code> (drives codex over ACP)</li>
-              <li><code className="bg-bg-surface px-1 rounded">gemini</code> missing → installs <code className="bg-bg-surface px-1 rounded">@google/gemini-cli</code> (ships ACP natively)</li>
-            </ul>
-          </div>
-          <p className="text-fg-muted text-xs">
-            30+ other agents (gemini, opencode, cline, cursor, kimi, qwen-code, …) come from the
-            <a href="https://agentclientprotocol.com/get-started/registry" target="_blank" rel="noreferrer" className="underline hover:text-fg ml-1">
-              official ACP Registry
-            </a> — daemon fetches the manifest at startup and any installed binary becomes selectable.
-          </p>
-        </div>
-      </Modal>
-
-      {/* Add sandbox provider (BYOK) dialog */}
-      <AddSandboxProviderDialog
-        open={showAddProvider}
-        onClose={() => setShowAddProvider(false)}
-        onCreated={() => void loadProviders()}
-      />
 
       {/* Set-up dialog for a not-configured provider (e.g. Local subprocess).
           Holds the CLI quickstart too — installing the CLI and minting a key
@@ -1663,14 +1545,12 @@ export function RuntimesList() {
             </div>
             <p className="text-fg-muted text-xs">
               Setup opens this browser for OAuth, writes credentials to{" "}
-              <code className="bg-bg-surface px-1 rounded">~/.oma/bridge/</code>, and (on macOS) installs a launchd job
+              <code className="bg-bg-surface px-1 rounded font-mono text-[11px]">~/.oma/bridge/</code>, and (on macOS) installs a launchd job
               that keeps the daemon running across reboots. Once connected, this provider flips to{" "}
-              <span className="text-success">Healthy</span> and any ACP agents on <code className="bg-bg-surface px-1 rounded">$PATH</code> appear as
+              <span className="text-success">Healthy</span> and any ACP agents on <code className="bg-bg-surface px-1 rounded font-mono text-[11px]">$PATH</code> appear as
               machines in the list behind this dialog.
             </p>
           </div>
-
-          <CliQuickstart onNavigate={() => setSetupProvider(null)} />
         </div>
       </Modal>
 
@@ -1690,6 +1570,16 @@ export function RuntimesList() {
         onClose={() => setDetailMachine(null)}
         onRevoke={(id) => void remove(id)}
         onUseInEnvironment={goToEnvironments}
+        copied={copied}
+        onCopy={copy}
+      />
+
+      {/* Combined "Add runtime" dialog */}
+      <AddRuntimeDialog
+        open={addMode !== null}
+        defaultMode={addMode ?? "config"}
+        onClose={() => setAddMode(null)}
+        onProviderCreated={() => void loadProviders()}
         copied={copied}
         onCopy={copy}
       />

@@ -3,14 +3,14 @@ import { OpenShellManager } from "../src/openshell-manager";
 import { createRouter } from "../src/router";
 
 // Mock the OpenShell gRPC adapter so these tests never touch a real gateway.
-// The manager dynamically imports "@duyet/oma-sandbox/adapters/openshell";
+// The manager dynamically imports "@getoma/sandbox-sdk/adapters/openshell";
 // vi.mock intercepts that specifier.
 const execMock = vi.fn(async (cmd: string) => `exit=0\n${cmd}`);
 const destroyMock = vi.fn(async () => {});
 const setEnvMock = vi.fn(async () => {});
 const ctorCalls: unknown[] = [];
 
-vi.mock("@duyet/oma-sandbox/adapters/openshell", () => ({
+vi.mock("@getoma/sandbox-sdk/adapters/openshell", () => ({
   OpenShellSandbox: class {
     constructor(opts: unknown) {
       ctorCalls.push(opts);

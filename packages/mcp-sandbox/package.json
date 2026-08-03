@@ -11,7 +11,7 @@
     "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
-    "@duyet/oma-sandbox": "workspace:*",
+    "@getoma/sandbox-sdk": "workspace:*",
     "@duyet/oma-shared": "workspace:*",
     "ai": "^6.0.158",
     "zod": "^3.22.0"

@@ -17,7 +17,7 @@
  *   tab → relay   { type: "sandbox.result", request_id, ok, result?, error? }
  *
  * The frame plumbing + correlation lives in BrowserVmSandbox (frozen adapter in
- * @duyet/oma-sandbox/adapters/browser-vm). This file's job is purely the
+ * @getoma/sandbox-sdk/adapters/browser-vm). This file's job is purely the
  * transport: pick the tenant's online browser-vm runtime, open the RuntimeRoom
  * sandbox WS, complete the `attached` handshake, wrap the live socket in a
  * BrowserVmTransport, and construct the inner adapter against it. All
@@ -39,7 +39,7 @@ import type { Env } from "@duyet/oma-shared";
 import {
   BrowserVmSandbox,
   type BrowserVmTransport,
-} from "@duyet/oma-sandbox/adapters/browser-vm";
+} from "@getoma/sandbox-sdk/adapters/browser-vm";
 import { pickOnlineRuntimeId } from "./bridge-relay";
 import { SandboxProviderUnavailableError } from "./sandbox";
 

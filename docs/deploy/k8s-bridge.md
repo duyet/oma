@@ -19,7 +19,7 @@ Cloudflare Worker → k8s-bridge (HTTPS + Bearer) → Kubernetes API → Pod
 
 The bridge itself ships as a container image and runs as a Deployment
 inside your cluster. The OMA sandbox adapter
-(`packages/sandbox/src/adapters/k8s-bridge.ts`) uses `globalThis.fetch`
+(`packages/sandbox-sdk/src/adapters/k8s-bridge.ts`) uses `globalThis.fetch`
 — zero driver deps — making it the only sandbox provider that works in
 a Cloudflare Worker while managing real Kubernetes pods.
 
@@ -141,7 +141,7 @@ All values in `values.yaml`:
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Cloudflare Worker                         │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │  K8sBridgeSandbox (packages/sandbox/src/adapters/)        │  │
+│  │  K8sBridgeSandbox (packages/sandbox-sdk/src/adapters/)        │  │
 │  │  • globalThis.fetch — no driver deps                      │  │
 │  │  • K8S_BRIDGE_URL env → baseUrl                           │  │
 │  │  • K8S_BRIDGE_TOKEN env → Bearer auth                     │  │
@@ -670,7 +670,7 @@ curl -H "Authorization: Bearer $K8S_BRIDGE_TOKEN" \
 The chart (`charts/oma-k8s-bridge/templates/rbac.yaml`) grants the least
 privilege that the bridge's actual code paths need, derived directly from
 `apps/k8s-bridge/src/k8s-manager.ts` and
-`packages/sandbox/src/adapters/kubernetes.ts` — not a hand-guessed
+`packages/sandbox-sdk/src/adapters/kubernetes.ts` — not a hand-guessed
 permissive set. It's split into a namespace-scoped `Role` (everything that
 touches a single session's sandbox) and a `ClusterRole` (the handful of
 operations that are genuinely cluster-scoped or must span every
@@ -745,7 +745,7 @@ or `pods/status patch` (the bridge only ever deletes the owning `Sandbox`
 object and lets the controller cascade pod teardown — it never patches pod
 status directly), `namespaces` access, and any `watch` verb (Sandbox
 readiness is polled, not watched — see `waitForReady` in
-`packages/sandbox/src/adapters/kubernetes.ts`).
+`packages/sandbox-sdk/src/adapters/kubernetes.ts`).
 
 The `Role`/`RoleBinding` are created in `rbac.targetNamespace` (falls back
 to `config.namespace` — the namespace sandbox pods actually run in), bound
@@ -832,7 +832,7 @@ containers:
 This hardens the bridge process itself. It does not affect the ephemeral
 **sandbox** pods it creates for sessions — those are shaped by the
 `agent-sandbox` controller's `Sandbox` CRD `podTemplate.spec` (image,
-`runtimeClassName`, resources — see `packages/sandbox/src/adapters/
+`runtimeClassName`, resources — see `packages/sandbox-sdk/src/adapters/
 kubernetes.ts`) and the cluster's own PodSecurity/RuntimeClass setup, since
 sandbox pods run untrusted agent-generated code and their hardening is a
 cluster-operator decision (e.g. gVisor/Kata via `runtimeClassName`, or a
@@ -964,7 +964,7 @@ K8S_CPU=1
 K8S_MEMORY=512
 ```
 
-The `sandboxFactory` in `packages/sandbox/src/adapters/k8s-bridge.ts`
+The `sandboxFactory` in `packages/sandbox-sdk/src/adapters/k8s-bridge.ts`
 reads these env vars at boot and constructs a `K8sBridgeSandbox` instance
 for each session.
 
@@ -1021,7 +1021,7 @@ Where the environment `env_k8s` has:
 ### Provider Registration (Self-host Node)
 
 On the self-host Node runtime, k8s-bridge is registered through the
-`SandboxProviderRegistry` in `packages/sandbox`. It is available alongside
+`SandboxProviderRegistry` in `packages/sandbox-sdk`. It is available alongside
 all other providers. No additional registration step is needed — set
 `SANDBOX_PROVIDER=k8s-bridge` and the factory resolves it.
 

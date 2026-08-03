@@ -6,7 +6,7 @@
 import { describe, it, expect } from "vitest";
 import { buildTools } from "./tools";
 import type { AgentConfig } from "@duyet/oma-shared";
-import type { SandboxExecutor } from "@duyet/oma-sandbox";
+import type { SandboxExecutor } from "@getoma/sandbox-sdk";
 import type { WorkerLoader, DynamicWorkerCode } from "@duyet/oma-shared";
 
 // Minimal SandboxExecutor — the tool never touches it, so exec/read/write throw.

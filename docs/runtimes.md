@@ -166,7 +166,7 @@ docker-compose).
 ## Choosing a sandbox provider per environment
 
 An environment's `config.sandbox_provider` selects which adapter creates
-its sandboxes (`packages/sandbox/src/provider-config.ts`):
+its sandboxes (`packages/sandbox-sdk/src/provider-config.ts`):
 
 | Provider id | Isolation | Config knob for image |
 |---|---|---|

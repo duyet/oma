@@ -153,9 +153,6 @@ importers:
       '@duyet/oma-payments':
         specifier: workspace:*
         version: link:../../packages/payments
-      '@duyet/oma-sandbox':
-        specifier: workspace:*
-        version: link:../../packages/sandbox
       '@duyet/oma-services':
         specifier: workspace:*
         version: link:../../packages/services
@@ -183,6 +180,9 @@ importers:
       '@duyet/oma-vaults-store':
         specifier: workspace:*
         version: link:../../packages/vaults-store
+      '@getoma/sandbox-sdk':
+        specifier: workspace:*
+        version: link:../../packages/sandbox-sdk
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@4.3.6)
@@ -453,9 +453,9 @@ importers:
 
   apps/k8s-bridge:
     dependencies:
-      '@duyet/oma-sandbox':
+      '@getoma/sandbox-sdk':
         specifier: workspace:*
-        version: link:../../packages/sandbox
+        version: link:../../packages/sandbox-sdk
       '@hono/node-server':
         specifier: ^1.13.0
         version: 1.19.14(hono@4.12.12)
@@ -568,9 +568,6 @@ importers:
       '@duyet/oma-quotas':
         specifier: workspace:*
         version: link:../../packages/quotas
-      '@duyet/oma-sandbox':
-        specifier: workspace:*
-        version: link:../../packages/sandbox
       '@duyet/oma-scheduler':
         specifier: workspace:*
         version: link:../../packages/scheduler
@@ -604,6 +601,9 @@ importers:
       '@duyet/oma-webhooks':
         specifier: workspace:*
         version: link:../../packages/webhooks
+      '@getoma/sandbox-sdk':
+        specifier: workspace:*
+        version: link:../../packages/sandbox-sdk
       fflate:
         specifier: ^0.8.2
         version: 0.8.2
@@ -718,9 +718,6 @@ importers:
       '@duyet/oma-rate-limit':
         specifier: workspace:*
         version: link:../../packages/rate-limit
-      '@duyet/oma-sandbox':
-        specifier: workspace:*
-        version: link:../../packages/sandbox
       '@duyet/oma-scheduler':
         specifier: workspace:*
         version: link:../../packages/scheduler
@@ -751,6 +748,9 @@ importers:
       '@duyet/oma-vaults-store':
         specifier: workspace:*
         version: link:../../packages/vaults-store
+      '@getoma/sandbox-sdk':
+        specifier: workspace:*
+        version: link:../../packages/sandbox-sdk
       '@hono/node-server':
         specifier: ^1.13.0
         version: 1.19.14(hono@4.12.12)
@@ -1419,12 +1419,12 @@ importers:
 
   packages/mcp-sandbox:
     dependencies:
-      '@duyet/oma-sandbox':
-        specifier: workspace:*
-        version: link:../sandbox
       '@duyet/oma-shared':
         specifier: workspace:*
         version: link:../shared
+      '@getoma/sandbox-sdk':
+        specifier: workspace:*
+        version: link:../sandbox-sdk
       ai:
         specifier: ^6.0.158
         version: 6.0.182(zod@3.25.76)
@@ -1573,7 +1573,7 @@ importers:
         specifier: ^4.7.0
         version: 4.12.12
 
-  packages/sandbox:
+  packages/sandbox-sdk:
     dependencies:
       '@boxlite-ai/boxlite':
         specifier: ^0.9.0
@@ -1718,9 +1718,6 @@ importers:
       '@duyet/oma-event-log':
         specifier: workspace:*
         version: link:../event-log
-      '@duyet/oma-sandbox':
-        specifier: workspace:*
-        version: link:../sandbox
       '@duyet/oma-shared':
         specifier: workspace:*
         version: link:../shared
@@ -1730,6 +1727,9 @@ importers:
       '@duyet/oma-webhooks':
         specifier: workspace:*
         version: link:../webhooks
+      '@getoma/sandbox-sdk':
+        specifier: workspace:*
+        version: link:../sandbox-sdk
       ai:
         specifier: ^6.0.158
         version: 6.0.158(zod@4.4.3)
@@ -2809,6 +2809,7 @@ packages:
 
   '@daytonaio/sdk@0.171.0':
     resolution: {integrity: sha512-k+HauFkfOTnpupHNJty8pkKS8ChfxEpWLF+zc7VvePiotjJf6Is1KVpgUkPG1NOdWbExdtTRVXIKchI6+16PVg==}
+    deprecated: 'Moved to @daytona/sdk, same API, no breaking changes. Please update: npm uninstall @daytonaio/sdk && npm i @daytona/sdk'
 
   '@dotenvx/dotenvx@1.66.0':
     resolution: {integrity: sha512-qlQFhHUjhRDybrinqLAD0MClVZDOrsq80O8eD5iSjz3Qa/4f3Jg7SQrOaSobrRyP1QaWIYLGtGpj2c7H0D8NUw==}
@@ -12073,7 +12074,7 @@ snapshots:
       '@smithy/middleware-endpoint': 4.4.32
       '@smithy/protocol-http': 5.3.14
       '@smithy/smithy-client': 4.12.13
-      '@smithy/types': 4.14.1
+      '@smithy/types': 4.15.0
       buffer: 5.6.0
       events: 3.3.0
       stream-browserify: 3.0.0

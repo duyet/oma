@@ -43,7 +43,7 @@ config:
 # Only consulted when config.backend is "openshell" (or "auto" with an
 # endpoint set). Maps directly onto the OPENSHELL_* env vars
 # `OpenShellSandbox` / `resolveOpenShellTlsFromEnv` read
-# (packages/sandbox/src/adapters/openshell.ts).
+# (packages/sandbox-sdk/src/adapters/openshell.ts).
 openshell:
   # host:port (or DNS name) of the OpenShell gateway, e.g.
   # openshell.openshell.svc.cluster.local:50051. Required when

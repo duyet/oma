@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@duyet/oma-event-log": "workspace:*",
-    "@duyet/oma-sandbox": "workspace:*",
+    "@getoma/sandbox-sdk": "workspace:*",
     "@duyet/oma-webhooks": "workspace:*",
     "@duyet/oma-shared": "workspace:*",
     "@duyet/oma-sql-client": "workspace:*",

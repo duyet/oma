@@ -93,7 +93,7 @@ Alternatively, on the Cloudflare deployment, set `K8S_BRIDGE_URL` and
 `K8S_BRIDGE_TOKEN` as Worker secrets (`wrangler secret put`) before first
 boot to auto-seed `k8s-bridge` as a **system** provider — no registration
 call needed, but every environment shares the same cluster and token. See
-`seedSystemProviders` in `packages/sandbox/src/provider-config.ts`.
+`seedSystemProviders` in `packages/sandbox-sdk/src/provider-config.ts`.
 
 ## 4. End-to-end verification
 

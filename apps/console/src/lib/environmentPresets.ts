@@ -6,7 +6,7 @@
  * Sources of truth this mirrors — keep in sync if either changes:
  *  - AGENTS.md "Environments" → "Sandbox Provider on the Cloudflare
  *    Deployment" (required secrets, CF vs self-host availability)
- *  - packages/sandbox/src/provider-config.ts SYSTEM_PROVIDERS (provider
+ *  - packages/sandbox-sdk/src/provider-config.ts SYSTEM_PROVIDERS (provider
  *    ids, env var names, cfCompatible classification)
  */
 

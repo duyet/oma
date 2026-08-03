@@ -36,7 +36,7 @@
     "@duyet/oma-scheduler": "workspace:*",
     "@duyet/oma-services": "workspace:*",
     "@duyet/oma-session-runtime": "workspace:*",
-    "@duyet/oma-sandbox": "workspace:*",
+    "@getoma/sandbox-sdk": "workspace:*",
     "@duyet/oma-webhooks": "workspace:*",
     "@duyet/oma-session-secrets-store": "workspace:*",
     "@duyet/oma-sessions-store": "workspace:*",

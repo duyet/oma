@@ -20,7 +20,7 @@ metadata:
 rules:
 # Sandbox lifecycle — K8sManager.createBox creates a bare `Sandbox` custom
 # resource per session; destroyBox deletes it. No `watch`: readiness is
-# polled (waitForReady in packages/sandbox/src/adapters/kubernetes.ts).
+# polled (waitForReady in packages/sandbox-sdk/src/adapters/kubernetes.ts).
 - apiGroups: ["agents.x-k8s.io"]
   resources: ["sandboxes"]
   verbs: ["create", "get", "list", "delete"]

@@ -4,7 +4,7 @@
  * The Cloudflare deployment can't spawn `child_process` inside a Worker, so an
  * agent with a *local* environment (`sandbox_provider: "subprocess"`) has its
  * sandbox ops relayed here over the daemon WebSocket. This mirrors the
- * self-host `LocalSubprocessSandbox` (packages/sandbox) with a lean,
+ * self-host `LocalSubprocessSandbox` (packages/sandbox-sdk) with a lean,
  * dependency-free implementation (node builtins only) so it doesn't bloat the
  * published CLI bundle.
  *

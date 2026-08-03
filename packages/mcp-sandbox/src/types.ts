@@ -1,4 +1,4 @@
-import type { SandboxProviderConfig, SandboxExecutor } from "@duyet/oma-sandbox";
+import type { SandboxProviderConfig, SandboxExecutor } from "@getoma/sandbox-sdk";
 
 export interface McpSandboxContext {
   registry: {

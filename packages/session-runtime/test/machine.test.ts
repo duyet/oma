@@ -29,7 +29,7 @@ import { RuntimeAdapterImpl, type RuntimeAdapter } from "../src/adapter";
 import { SessionStateMachine, type SessionMachineDeps } from "../src/machine";
 import { TurnWatchdogTimeoutError } from "../src/watchdog";
 import type { AgentConfig, UserMessageEvent } from "@duyet/oma-shared";
-import type { SandboxExecutor } from "@duyet/oma-sandbox";
+import type { SandboxExecutor } from "@getoma/sandbox-sdk";
 
 const AGENT: AgentConfig = {
   id: "agent_test",
