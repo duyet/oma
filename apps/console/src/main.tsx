@@ -134,11 +134,11 @@ const RESOURCES_HUB: HubConfig = {
 
 const SETTINGS_HUB: HubConfig = {
   title: "Settings",
-  description: "Workspace configuration: members, API keys, sandbox runtimes, and eval runs.",
+  description: "Workspace configuration: members, API keys, sandbox providers, and eval runs.",
   tabs: [
     { label: "Members", path: "/members", description: "People with access to this workspace — invite teammates by email and manage roles." },
     { label: "API Keys", path: "/api-keys", description: "Authenticate the CLI, the SDK, or your own code against this platform's API." },
-    { label: "Sandbox Runtimes", path: "/runtimes", description: "Everywhere a sandbox can run — system providers, BYOK providers, and connected machines." },
+    { label: "Sandbox providers", path: "/runtimes", description: "Everywhere a sandbox can run — system providers, BYOK providers, and connected machines." },
     { label: "Eval Runs", path: "/evals", description: "Task suites scored against one agent in one environment — pass rates per trial." },
   ],
 };
@@ -289,7 +289,7 @@ const protectedRoutes: RouteObject[] = [
     ],
   },
 
-  // ── Settings hub ── API Keys / Sandbox Runtimes / Eval Runs. (ConnectRuntime
+  // ── Settings hub ── API Keys / Sandbox providers / Eval Runs. (ConnectRuntime
   // lives at the top-level `/connect-runtime` route, outside AppShell.) The
   // eval-run detail renders under the hub too (parent tab stays highlighted),
   // matching the Resources hub's list+detail routes.
@@ -298,7 +298,7 @@ const protectedRoutes: RouteObject[] = [
     children: [
       { path: "members", element: <Members />, handle: { crumb: "Members" } },
       { path: "api-keys", element: <ApiKeysList />, handle: { crumb: "API Keys" } },
-      { path: "runtimes", element: <RuntimesList />, handle: { crumb: "Sandbox Runtime" } },
+      { path: "runtimes", element: <RuntimesList />, handle: { crumb: "Sandbox providers" } },
       {
         path: "evals",
         handle: { crumb: "Eval Runs" },

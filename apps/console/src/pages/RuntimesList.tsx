@@ -13,8 +13,10 @@ import { Modal } from "../components/Modal";
 import { RowActionsMenu } from "../components/RowActionsMenu";
 import { ProviderMark } from "../components/ProviderMark";
 import { RuntimesIcon } from "../components/icons";
-import { AddRuntimeDialog } from "../components/AddRuntimeDialog";
+import { AddRuntimeDialog, type AddRuntimeMode } from "../components/AddRuntimeDialog";
 import { CopyButton } from "../components/CopyButton";
+import { CopyBlock } from "../components/CopyBlock";
+import { RegisterK8sClusterDialog } from "../components/RegisterK8sClusterDialog";
 import { cn, rowActivateKeyDown } from "@/lib/utils";
 import { useConfirm } from "@/hooks/useConfirm";
 import {
@@ -218,11 +220,11 @@ function OsMark({ os, className }: { os: string; className?: string }) {
   );
 }
 
-// Shared "how do I actually use this runtime" block for the detail dialogs.
-// Runtimes aren't picked directly — an environment selects a sandbox
-// provider and sessions select an environment — so the actionable next step
-// is always "go configure an environment". Links to /environments (no
-// /environments/new route exists; the list page owns the create dialog).
+// Shared "how do I actually use this provider" block for the detail dialogs.
+// Sandbox providers aren't picked directly — an environment selects a
+// sandbox provider and sessions select an environment — so the actionable
+// next step is always "go configure an environment". Links to /environments
+// (no /environments/new route exists; the list page owns the create dialog).
 function UseInEnvironmentSection({
   providerId,
   onGo,
@@ -234,7 +236,7 @@ function UseInEnvironmentSection({
     <div className="rounded-md border border-border bg-bg-surface/50 p-3 space-y-2">
       <div className="text-sm font-medium text-fg">Use in an environment</div>
       <p className="text-xs text-fg-muted leading-relaxed">
-        Runtimes aren't selected directly. An{" "}
+        Sandbox providers aren&rsquo;t selected directly. An{" "}
         <span className="text-fg">environment</span> picks a sandbox provider, and a session picks
         an environment. Create or edit an environment and set its sandbox provider
         {providerId ? (
@@ -384,14 +386,8 @@ function MachineGrid({
   );
 }
 
-// Copy-block variant of the shared CopyButton used by the K8s/Helm walkthrough
-// and the setup modal. Renders as a full-width block with a `<pre>` for
-// multi-line commands; the icon-swap logic lives in the shared component.
-function CopyBlock({ id, text, copied, onCopy }: { id: string; text: string; copied: string | null; onCopy: (text: string, key: string) => void }) {
-  return (
-    <CopyButton id={id} text={text} copied={copied} onCopy={onCopy} preClassName="flex-1 min-w-0 overflow-x-auto font-mono text-xs leading-relaxed text-fg whitespace-pre" />
-  );
-}
+// `CopyBlock` (multi-line command copy button) lives in components/CopyBlock.tsx
+// and is shared with the register-k8s-cluster dialog.
 
 function ProviderCard({ p, onSetup, onRemove, onOpenDetail, onOpenSandboxTab }: { p: HostingType; onSetup?: (p: HostingType) => void; onRemove?: (p: HostingType) => void; onOpenDetail?: (p: HostingType) => void; onOpenSandboxTab?: () => void }) {
   const health = p.health;
@@ -1037,11 +1033,185 @@ function SkeletonCard() {
   );
 }
 
+// K8s provider ids — the family that routes to the register-cluster dialog
+// rather than the bridge-daemon or env-var setup path. Matches the provider
+// table in AGENTS.md § Sandbox Provider on the Cloudflare Deployment.
+const K8S_PROVIDER_IDS = new Set(["k8s", "k8s-bridge", "k8s-remote", "openshell"]);
+
+function isK8sProvider(p: HostingType): boolean {
+  return K8S_PROVIDER_IDS.has(p.id) || K8S_PROVIDER_IDS.has(p.provider);
+}
+
+// Provider-specific setup content. Replaces the old hardcoded `bridge setup`
+// modal that fired for EVERY not-configured provider (C8). Three branches:
+//   - subprocess → bridge daemon instructions (the one case the old modal
+//     was actually correct for)
+//   - BYOK → reconfigure hint (BYOK providers are user-added; "Set up" only
+//     surfaces when one is misconfigured)
+//   - system (env-gated) → the env var(s) to set on the host
+// K8s-family providers never reach this modal — `handleSetup` routes them
+// straight to the RegisterK8sClusterDialog. This modal still handles a K8s
+// provider defensively (bounce-to-register) in case the detail dialog's
+// Set up button slips through.
+function SetupProviderModal({
+  provider,
+  onClose,
+  onOpenAddK8s,
+  onOpenAddProvider,
+}: {
+  provider: HostingType | null;
+  onClose: () => void;
+  onOpenAddK8s: () => void;
+  onOpenAddProvider: () => void;
+}) {
+  if (!provider) return null;
+  const p = provider;
+
+  if (isK8sProvider(p)) {
+    return (
+      <Modal
+        open
+        onClose={onClose}
+        title={`Set up ${p.label}`}
+        subtitle="Register a Kubernetes cluster"
+        maxWidth="max-w-lg"
+        footer={
+          <>
+            <Button variant="ghost" onClick={onClose}>
+              Close
+            </Button>
+            <Button
+              onClick={() => {
+                onClose();
+                onOpenAddK8s();
+              }}
+            >
+              Register a cluster
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-fg-muted leading-relaxed">
+          Kubernetes sandboxes run behind the in-cluster{" "}
+          <span className="text-fg">oma-bridge-daemon</span> (the bridge daemon,
+          not the older <span className="text-fg">oma-k8s-bridge</span> HTTP
+          bridge). Generate a pairing token and install the Helm chart to
+          connect a cluster.
+        </p>
+      </Modal>
+    );
+  }
+
+  if (p.provider === "subprocess") {
+    return (
+      <Modal
+        open
+        onClose={onClose}
+        title={`Set up ${p.label}`}
+        subtitle="Run this on the machine you want to connect."
+        maxWidth="max-w-3xl"
+        footer={<Button onClick={onClose}>Done</Button>}
+      >
+        <div className="space-y-4 text-sm">
+          <p className="text-fg-muted">
+            Connect this host by starting the bridge daemon:
+          </p>
+          <div className="bg-bg-surface border border-border rounded-lg p-3 font-mono text-xs space-y-1">
+            <div className="text-fg select-all">npx @getoma/cli bridge setup</div>
+          </div>
+          <p className="text-fg-muted text-xs">
+            Setup opens this browser for OAuth, writes credentials to{" "}
+            <code className="bg-bg-surface px-1 rounded font-mono text-[11px]">~/.oma/bridge/</code>, and (on macOS) installs a launchd job
+            that keeps the daemon running across reboots. Once connected, this provider flips to{" "}
+            <span className="text-success">Healthy</span> and any ACP agents on <code className="bg-bg-surface px-1 rounded font-mono text-[11px]">$PATH</code> appear as
+            machines in the list behind this dialog.
+          </p>
+        </div>
+      </Modal>
+    );
+  }
+
+  if (p.type === "byok") {
+    return (
+      <Modal
+        open
+        onClose={onClose}
+        title={`Set up ${p.label}`}
+        subtitle="This is a provider you added."
+        maxWidth="max-w-lg"
+        footer={
+          <>
+            <Button variant="ghost" onClick={onClose}>
+              Close
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                onClose();
+                onOpenAddProvider();
+              }}
+            >
+              Add another provider
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-fg-muted leading-relaxed">
+          This sandbox provider was added with your own credentials. To change
+          its configuration, remove it from its card&rsquo;s menu and add a new
+          one with the updated details.
+        </p>
+      </Modal>
+    );
+  }
+
+  // System provider gated by an env var. Find the matching env var name(s)
+  // from the seed table so the operator sees exactly what to set.
+  const envVars = SYSTEM_PROVIDER_ENVS.filter(
+    (e) => e.providerId === p.id || e.providerId === p.provider,
+  );
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Set up ${p.label}`}
+      subtitle="Set the matching env var on the host and restart."
+      maxWidth="max-w-lg"
+      footer={<Button onClick={onClose}>Done</Button>}
+    >
+      <div className="space-y-3 text-sm">
+        <p className="text-fg-muted leading-relaxed">
+          System sandbox providers are seeded from environment variables at
+          startup. Set the matching variable(s) on the host and restart:
+        </p>
+        {envVars.length > 0 ? (
+          <div className="bg-bg border border-border rounded-lg p-3 font-mono text-xs space-y-1 overflow-x-auto">
+            {envVars.map(({ env }) => (
+              <div key={env} className="text-fg whitespace-nowrap">{env}</div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-fg-subtle">
+            See the &ldquo;How to enable additional sandbox providers&rdquo;
+            section below for the full env-var list.
+          </p>
+        )}
+        <p className="text-xs text-fg-subtle leading-relaxed">
+          On Cloudflare, set these with{" "}
+          <code className="bg-bg-surface px-1 rounded font-mono text-[11px]">wrangler secret put</code>{" "}
+          instead of a <code className="bg-bg-surface px-1 rounded font-mono text-[11px]">.env</code> file.
+        </p>
+      </div>
+    </Modal>
+  );
+}
+
 export function RuntimesList() {
   const { api } = useApi();
   const navigate = useNavigate();
-  const [addMode, setAddMode] = useState<"config" | "connect" | null>(null);
+  const [addMode, setAddMode] = useState<AddRuntimeMode | null>(null);
   const [setupProvider, setSetupProvider] = useState<HostingType | null>(null);
+  const [registerK8sOpen, setRegisterK8sOpen] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   // Click-through detail dialogs — one card at a time (providers and machines
   // never both open at once, but each has its own state so their content
@@ -1119,8 +1289,8 @@ export function RuntimesList() {
   const remove = async (id: string) => {
     if (
       !(await confirm({
-        title: "Revoke this runtime?",
-        description: "Daemon on that machine will stop being able to attach.",
+        title: "Revoke this machine?",
+        description: "The bridge daemon on that machine will stop being able to attach.",
         confirmLabel: "Revoke",
         destructive: true,
       }))
@@ -1160,6 +1330,20 @@ export function RuntimesList() {
   );
   const deploymentLabel = runtimeLabel(deploymentRuntime);
 
+  // Split usable providers into BYOK (user-added via the API) and system
+  // (built-in, env-gated). The two get their own sections so an operator
+  // can tell at a glance which providers they configured vs which shipped
+  // with the deployment.
+  const { byokProviders, systemProviders } = useMemo(
+    () => {
+      const byok: HostingType[] = [];
+      const system: HostingType[] = [];
+      for (const p of usableProviders) (p.type === "byok" ? byok : system).push(p);
+      return { byokProviders: byok, systemProviders: system };
+    },
+    [usableProviders],
+  );
+
   // Partition machines into online (green dot, colored icon) and offline
   // (gray dot, grayscale icon).
   const { online: onlineMachines, offline: offlineMachines } = useMemo(
@@ -1180,311 +1364,227 @@ export function RuntimesList() {
     providers.length === 0 &&
     runtimes.length === 0;
 
+  // Provider-specific setup routing (C8). K8s family → the register-cluster
+  // dialog; everything else → the branching SetupProviderModal (which
+  // itself dispatches subprocess / BYOK / env-gated).
+  const handleSetup = useCallback((p: HostingType) => {
+    if (isK8sProvider(p)) {
+      setRegisterK8sOpen(true);
+    } else {
+      setSetupProvider(p);
+    }
+  }, []);
+
   return (
-    <div role="main" aria-label="Sandbox Runtime" className="-m-3 p-4 space-y-8">
-      <section role="region" aria-label="Runtimes">
-        <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-fg">Runtimes</h2>
-            <p className="text-sm text-fg-subtle mt-0.5">
-              Everywhere a sandbox can run — system providers on this host,
-              BYOK providers, and machines you connected via{" "}
-              <code className="text-xs bg-bg-surface px-1 py-0.5 rounded font-mono">oma bridge daemon</code>
+    <div role="main" aria-label="Sandbox providers" className="-m-3 p-4 space-y-8">
+      {/* (a) Header — single H1, one-sentence subtitle, one "Add" CTA,
+          deployment pill. The two old header buttons collapsed into the
+          Add CTA's branching dialog (C3+C4). */}
+      <section>
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg font-semibold text-fg">Sandbox providers</h1>
+              {deploymentLabel && (
+                <Badge variant="outline" className="text-[10px] font-mono">
+                  Deployment: {deploymentLabel}
+                </Badge>
+              )}
+            </div>
+            <p className="text-sm text-fg-subtle">
+              Everywhere a sandbox can run — machines you connected, providers you
+              configured, and the built-in providers on this deployment.
             </p>
-            {deploymentLabel && (
-              <p className="text-xs text-fg-subtle mt-1">
-                Showing availability for the{" "}
-                <span className="text-fg-muted">{deploymentLabel}</span>.
-              </p>
-            )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Button size="sm" onClick={() => setAddMode("config")} className="gap-1.5">
+            <Button
+              size="sm"
+              onClick={() => setAddMode("connect")}
+              className="gap-1.5"
+            >
               <SettingsIcon className="size-3.5 shrink-0" />
-              Config provider
-            </Button>
-            <Button size="sm" onClick={() => setAddMode("connect")} className="gap-1.5">
-              <TerminalIcon className="size-3.5 shrink-0" />
-              Connect local machine
+              Add
             </Button>
           </div>
         </div>
+      </section>
 
-        {loading && (
+      {/* (b) Slim cross-link callout. Promotes the buried UseInEnvironment
+          hint to the top of the page so operators don't have to open a
+          detail dialog to learn how providers are actually used. */}
+      <div className="rounded-md border border-border bg-bg-surface/50 px-3 py-2 flex items-center justify-between gap-3">
+        <p className="text-xs text-fg-muted leading-relaxed">
+          Providers are assigned per-environment — an environment picks a
+          sandbox provider, and a session picks an environment.
+        </p>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="shrink-0 text-[12px] h-7"
+          onClick={goToEnvironments}
+        >
+          Go to Environments →
+        </Button>
+      </div>
+
+      {loading && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
+        </div>
+      )}
+
+      {providersError && (
+        <div className="rounded-lg border border-border bg-bg-surface p-4 text-sm text-fg-muted flex items-center justify-between gap-3">
+          <span>Failed to load providers: {providersError}</span>
+          <Button size="sm" variant="outline" onClick={() => void loadProviders()}>
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {runtimesError && (
+        <div className="rounded-lg border border-border bg-bg-surface p-4 text-sm text-fg-muted flex items-center justify-between gap-3">
+          <span>Failed to load machines: {runtimesError}</span>
+          <Button size="sm" variant="outline" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {isEmpty && (
+        <div className="rounded-lg border border-border bg-bg-surface p-4 text-sm text-fg-muted">
+          No sandbox providers or machines yet. Use{" "}
+          <span className="text-fg">Add</span> to connect a machine, register a
+          provider, or register a Kubernetes cluster.
+        </div>
+      )}
+
+      {/* (c) Your machines — online-first. Machines are computers paired via
+          the bridge daemon (oma bridge daemon), surfaced as the subprocess
+          sandbox provider's relay targets. */}
+      {!loading && runtimes.length > 0 && (
+        <div className="space-y-4">
+          <SectionHeader title="Your machines" count={runtimes.length} icon={<TerminalIcon className="size-4" />} />
+
+          {onlineMachines.length > 0 && (
+            <MachineGrid
+              title="Online"
+              machines={onlineMachines}
+              dotColor="bg-success"
+              onRevoke={(id) => void remove(id)}
+              onOpenDetail={setDetailMachine}
+              copied={copied}
+              onCopy={copy}
+            />
+          )}
+
+          {offlineMachines.length > 0 && (
+            <MachineGrid
+              title="Offline"
+              machines={offlineMachines}
+              dotColor="bg-fg-subtle"
+              onRevoke={(id) => void remove(id)}
+              onOpenDetail={setDetailMachine}
+              copied={copied}
+              onCopy={copy}
+            />
+          )}
+        </div>
+      )}
+
+      {/* (d) Configured providers — BYOK the user added via the API or the
+          Add → Register a provider dialog. */}
+      {!loading && byokProviders.length > 0 && (
+        <div className="space-y-4">
+          <SectionHeader title="Configured providers" count={byokProviders.length} icon={<SettingsIcon className="size-4" />} />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
+            {byokProviders.map((p) => (
+              <ProviderCard
+                key={p.id}
+                p={p}
+                onSetup={handleSetup}
+                onRemove={removeProvider}
+                onOpenDetail={setDetailProvider}
+                onOpenSandboxTab={() => void openBrowserVmTab()}
+              />
+            ))}
           </div>
-        )}
+        </div>
+      )}
 
-        {providersError && (
-          <div className="rounded-lg border border-border bg-bg-surface p-4 text-sm text-fg-muted flex items-center justify-between gap-3">
-            <span>Failed to load providers: {providersError}</span>
-            <Button size="sm" variant="outline" onClick={() => void loadProviders()}>
-              Retry
-            </Button>
+      {/* (e) Built-in providers — system providers shipped with this build.
+          The four K8s ids (k8s, k8s-bridge, k8s-remote, openshell) route
+          their Set-up action to the register-cluster dialog via
+          handleSetup; everything else routes to the env-var setup modal. */}
+      {!loading && systemProviders.length > 0 && (
+        <div className="space-y-4">
+          <SectionHeader title="Built-in providers" count={systemProviders.length} icon={<RuntimesIcon className="size-4" />} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {systemProviders.map((p) => (
+              <ProviderCard
+                key={p.id}
+                p={p}
+                onSetup={handleSetup}
+                onRemove={removeProvider}
+                onOpenDetail={setDetailProvider}
+                onOpenSandboxTab={() => void openBrowserVmTab()}
+              />
+            ))}
           </div>
-        )}
+        </div>
+      )}
 
-        {runtimesError && (
-          <div className="mt-3 rounded-lg border border-border bg-bg-surface p-4 text-sm text-fg-muted flex items-center justify-between gap-3">
-            <span>Failed to load runtimes: {runtimesError}</span>
-            <Button size="sm" variant="outline" onClick={() => void refetch()}>
-              Retry
-            </Button>
-          </div>
-        )}
-
-        {isEmpty && (
-          <div className="rounded-lg border border-border bg-bg-surface p-4 text-sm text-fg-muted">
-            No runtimes yet. Add a sandbox provider, or run{" "}
-            <code className="text-xs bg-bg px-1 py-0.5 rounded">npx @getoma/cli bridge setup</code>{" "}
-            on a machine you want to connect.
-          </div>
-        )}
-
-        {/* Sandbox providers section */}
-        {!loading && usableProviders.length > 0 && (
-          <div className="space-y-4">
-            <SectionHeader title="Sandbox providers" count={usableProviders.length} icon={<SettingsIcon className="size-4" />} />
+      {/* (f) Available on other deployments — providers this build ships but
+          this deployment can't run. Collapsed so the main grid stays
+          scannable; the "why not" stays one click away. */}
+      {!loading && unavailableProviders.length > 0 && (
+        <details className="rounded-lg border border-border bg-bg-surface/50">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-fg select-none">
+            Available on other deployments ({unavailableProviders.length})
+          </summary>
+          <div className="px-4 pb-4">
+            <p className="text-xs text-fg-muted mb-3 leading-relaxed">
+              These sandbox providers exist in this build but can&rsquo;t run
+              {deploymentLabel ? ` on the ${deploymentLabel.toLowerCase()}` : " here"}.
+              Each card explains why.
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {usableProviders.map((p) => (
-                <ProviderCard
-                  key={p.id}
-                  p={p}
-                  onSetup={setSetupProvider}
-                  onRemove={removeProvider}
-                  onOpenDetail={setDetailProvider}
-                  onOpenSandboxTab={() => void openBrowserVmTab()}
-                />
+              {unavailableProviders.map((p) => (
+                <ProviderCard key={p.id} p={p} onOpenDetail={setDetailProvider} />
               ))}
             </div>
           </div>
-        )}
+        </details>
+      )}
 
-        {/* Connected machines — split into Online and Offline */}
-        {!loading && runtimes.length > 0 && (
-          <div className="space-y-4">
-            <SectionHeader title="Connected machines" count={runtimes.length} icon={<TerminalIcon className="size-4" />} />
+      {/* Footer: ONE Kubernetes docs link (C5+C12). The ~200-line inline
+          walkthrough that used to live here was self-contradicting and
+          pointed at the WRONG chart (oma-k8s-bridge). The correct
+          register-cluster flow is the "Add → Register k8s cluster" dialog,
+          which installs oma-bridge-daemon — the bridge daemon. */}
+      <p className="text-xs text-fg-subtle">
+        Sandboxes on Kubernetes? See{" "}
+        <a
+          href="https://docs.oma.duyet.net/deploy/k8s-sandbox-backends"
+          target="_blank"
+          rel="noreferrer"
+          className="underline hover:text-brand"
+        >
+          docs.oma.duyet.net/deploy/k8s-sandbox-backends
+        </a>{" "}
+        or use{" "}
+        <button
+          type="button"
+          onClick={() => setRegisterK8sOpen(true)}
+          className="underline hover:text-brand"
+        >
+          Register a Kubernetes cluster
+        </button>
+        .
+      </p>
 
-            {onlineMachines.length > 0 && (
-              <MachineGrid
-                title="Online"
-                machines={onlineMachines}
-                dotColor="bg-success"
-                onRevoke={(id) => void remove(id)}
-                onOpenDetail={setDetailMachine}
-                copied={copied}
-                onCopy={copy}
-              />
-            )}
-
-            {offlineMachines.length > 0 && (
-              <MachineGrid
-                title="Offline"
-                machines={offlineMachines}
-                dotColor="bg-fg-subtle"
-                onRevoke={(id) => void remove(id)}
-                onOpenDetail={setDetailMachine}
-                copied={copied}
-                onCopy={copy}
-              />
-            )}
-          </div>
-        )}
-
-        {/* Providers this build ships that this deployment can't run. They
-            used to be omitted entirely, which left an operator unable to tell
-            "unsupported here" from "I typed it wrong". Collapsed by default so
-            they don't crowd the runtimes you can actually use. */}
-        {!loading && unavailableProviders.length > 0 && (
-          <details className="mt-6 rounded-lg border border-border bg-bg-surface/50">
-            <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-fg select-none">
-              Not available on this deployment ({unavailableProviders.length})
-            </summary>
-            <div className="px-4 pb-4">
-              <p className="text-xs text-fg-muted mb-3 leading-relaxed">
-                These sandbox providers exist in this build but can't run
-                {deploymentLabel ? ` on the ${deploymentLabel.toLowerCase()}` : " here"}.
-                Each card explains why.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {unavailableProviders.map((p) => (
-                  <ProviderCard key={p.id} p={p} onOpenDetail={setDetailProvider} />
-                ))}
-              </div>
-            </div>
-          </details>
-        )}
-      </section>
-
-      {/* Kubernetes install help. Steps mirror charts/oma-k8s-bridge/README.md
-          — keep them in sync if the chart's install flow changes. Deliberately
-          shows the create-Secret-out-of-band path rather than `--set
-          secret.token=...`: the latter lands a real token in `helm history`
-          and shell history, and is for local testing only. */}
-      <details className="rounded-lg border border-border bg-bg-surface/50">
-        <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-fg select-none hover:text-fg">
-          <span className="inline-flex items-center gap-2">
-            <RuntimesIcon className="size-4 shrink-0 text-fg-subtle" />
-            Run sandboxes on Kubernetes (Helm)
-          </span>
-        </summary>
-        <div className="px-4 pb-4 space-y-3 text-sm text-fg-muted">
-          <p>
-            A Cloudflare Worker can't load a kubeconfig, so sandboxes on Kubernetes
-            run behind the <span className="text-fg">oma-k8s-bridge</span> — a small
-            token-gated HTTP service you install in the cluster. Deploy the bridge,
-            point OMA at it, and{" "}
-            <span className="text-fg">K8s Bridge (remote)</span> turns{" "}
-            <span className="text-success">Healthy</span> above.
-          </p>
-          <p className="text-xs text-fg-subtle">
-            This is the <code className="bg-bg-surface px-1 rounded">k8s-bridge</code>{" "}
-            provider. Not to be confused with{" "}
-            <code className="bg-bg-surface px-1 rounded">k8s</code>, which needs a local
-            kubeconfig and only runs on the self-host Node runtime.
-          </p>
-
-          <div>
-            <div className="text-xs text-fg-subtle mb-1.5">
-              1 · Create the bearer token the bridge requires, as a Secret
-            </div>
-            <CopyBlock
-              id="k8s-secret"
-              copied={copied}
-              onCopy={copy}
-              text={
-                "kubectl create namespace sandboxes\n" +
-                "kubectl -n sandboxes create secret generic oma-k8s-bridge-token \\\n" +
-                '  --from-literal=K8S_BRIDGE_TOKEN="$(openssl rand -base64 32)"'
-              }
-            />
-          </div>
-
-          <div>
-            <div className="text-xs text-fg-subtle mb-1.5">
-              2 · Install the chart, pointing at that Secret
-            </div>
-            <CopyBlock
-              id="k8s-helm"
-              copied={copied}
-              onCopy={copy}
-              text={
-                "helm install oma-k8s-bridge ./charts/oma-k8s-bridge \\\n" +
-                "  --namespace sandboxes \\\n" +
-                "  --set secret.existingSecret=oma-k8s-bridge-token \\\n" +
-                "  --set config.namespace=sandboxes"
-              }
-            />
-          </div>
-
-          <div>
-            <div className="text-xs text-fg-subtle mb-1.5">
-              3 · Wait for rollout, then check it answers
-            </div>
-            <CopyBlock
-              id="k8s-verify"
-              copied={copied}
-              onCopy={copy}
-              text={
-                "kubectl -n sandboxes rollout status deployment/oma-k8s-bridge\n" +
-                "kubectl -n sandboxes port-forward svc/oma-k8s-bridge 8100:8100 &\n" +
-                'curl -H "Authorization: Bearer $K8S_BRIDGE_TOKEN" \\\n' +
-                "  http://localhost:8100/api/v1/health"
-              }
-            />
-          </div>
-
-          <div>
-            <div className="text-xs text-fg-subtle mb-1.5">
-              4 · Point OMA at the bridge, then restart the host
-            </div>
-            <CopyBlock
-              id="k8s-env"
-              copied={copied}
-              onCopy={copy}
-              text={
-                "K8S_BRIDGE_URL=http://oma-k8s-bridge.sandboxes.svc.cluster.local:8100\n" +
-                "K8S_BRIDGE_TOKEN=<the token from step 1>"
-              }
-            />
-            <p className="mt-1.5 text-xs text-fg-subtle">
-              On Cloudflare, set these with{" "}
-              <code className="bg-bg-surface px-1 rounded">wrangler secret put</code> instead
-              of a <code className="bg-bg-surface px-1 rounded">.env</code> file.
-            </p>
-          </div>
-
-          <div className="pt-1 border-t border-border">
-            <div className="text-xs text-fg-subtle mb-1.5">
-              5 · Point an environment at it
-            </div>
-            <p>
-              On the <span className="text-fg">self-host Node</span> runtime, set{" "}
-              <code className="bg-bg-surface px-1 rounded">sandbox_provider: "k8s"</code> — it talks
-              to the cluster directly via <code className="bg-bg-surface px-1 rounded">KubernetesSandboxExecutor</code>,
-              no bridge needed:
-            </p>
-            <CopyBlock
-              id="k8s-env-self-host"
-              copied={copied}
-              onCopy={copy}
-              text={'{\n  "sandbox_provider": "k8s",\n  "namespace": "sandboxes"\n}'}
-            />
-            <p className="mt-2">
-              On the <span className="text-fg">Cloudflare</span> deployment, a Worker has no
-              kubeconfig, so use <code className="bg-bg-surface px-1 rounded">k8s-remote</code>{" "}
-              instead — it speaks the same boxrun-shaped HTTP API as the bridge above, but to an
-              in-cluster <span className="text-fg">k8s-sandbox-gateway</span> service (create /
-              exec+SSE / files-as-tar / destroy) rather than to oma-k8s-bridge directly:
-            </p>
-            <CopyBlock
-              id="k8s-env-remote"
-              copied={copied}
-              onCopy={copy}
-              text={'{\n  "sandbox_provider": "k8s-remote"\n}'}
-            />
-            <p className="mt-1.5 text-xs text-fg-subtle">
-              Requires <code className="bg-bg-surface px-1 rounded">K8S_SANDBOX_GATEWAY_URL</code>{" "}
-              (<code className="bg-bg-surface px-1 rounded">wrangler secret put</code>) pointing at
-              that gateway — missing it fails the session clearly rather than silently falling
-              back. No Helm chart ships for the gateway itself yet; it implements the same HTTP
-              contract as oma-k8s-bridge (see{" "}
-              <code className="bg-bg-surface px-1 rounded">
-                packages/sandbox-sdk/src/adapters/kubernetes-remote.ts
-              </code>
-              ) — you deploy your own gateway implementing that contract in-cluster.{" "}
-              <span className="text-fg">Known limitation:</span> memory-store and
-              session-outputs bind-mounts aren't available over the gateway's HTTP tar API, same
-              as BoxRun.
-            </p>
-          </div>
-
-          <p className="text-xs text-fg-subtle">
-            Full reference — values, ingress/TLS, RBAC, and troubleshooting — at{" "}
-            <a
-              href="https://docs.oma.duyet.net/deploy/k8s-bridge/"
-              target="_blank"
-              rel="noreferrer"
-              className="underline hover:text-brand"
-            >
-              docs.oma.duyet.net/deploy/k8s-bridge/
-            </a>
-            . Or see the quickstart at{" "}
-            <a
-              href="https://docs.oma.duyet.net/deploy/kubernetes"
-              target="_blank"
-              rel="noreferrer"
-              className="underline hover:text-brand"
-            >
-              deploy/kubernetes
-            </a>
-            .
-          </p>
-        </div>
-      </details>
-
-      {/* Provider registration help */}
+      {/* Provider registration help — the env-var reference. Kept (C5 says
+          only the K8s walkthrough goes). */}
       <details className="rounded-lg border border-border bg-bg-surface/50">
         <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-fg select-none hover:text-fg">
           <span className="inline-flex items-center gap-2">
@@ -1522,37 +1622,14 @@ export function RuntimesList() {
         </div>
       </details>
 
-      {/* Set-up dialog for a not-configured provider (e.g. Local subprocess).
-          Holds the CLI quickstart too — installing the CLI and minting a key
-          is the same job as connecting the runtime, so the steps live where
-          you actually do them instead of taking up the page at all times.
-          Hence the wider shell: three step rows need more than max-w-lg. */}
-      <Modal
-        open={setupProvider !== null}
+      {/* Provider-specific setup dialog (C8). Branches by provider type —
+          see SetupProviderModal above. */}
+      <SetupProviderModal
+        provider={setupProvider}
         onClose={() => setSetupProvider(null)}
-        title={`Set up ${setupProvider?.label ?? "provider"}`}
-        subtitle="Run this on the machine you want to connect."
-        maxWidth="max-w-3xl"
-        footer={<Button onClick={() => setSetupProvider(null)}>Done</Button>}
-      >
-        <div className="space-y-5 text-sm">
-          <div className="space-y-4">
-            <p className="text-fg-muted">
-              Connect this host's local runtime by starting the bridge daemon:
-            </p>
-            <div className="bg-bg-surface border border-border rounded-lg p-3 font-mono text-xs space-y-1">
-              <div className="text-fg select-all">npx @getoma/cli bridge setup</div>
-            </div>
-            <p className="text-fg-muted text-xs">
-              Setup opens this browser for OAuth, writes credentials to{" "}
-              <code className="bg-bg-surface px-1 rounded font-mono text-[11px]">~/.oma/bridge/</code>, and (on macOS) installs a launchd job
-              that keeps the daemon running across reboots. Once connected, this provider flips to{" "}
-              <span className="text-success">Healthy</span> and any ACP agents on <code className="bg-bg-surface px-1 rounded font-mono text-[11px]">$PATH</code> appear as
-              machines in the list behind this dialog.
-            </p>
-          </div>
-        </div>
-      </Modal>
+        onOpenAddK8s={() => setRegisterK8sOpen(true)}
+        onOpenAddProvider={() => setAddMode("config")}
+      />
 
       {/* Click-through detail dialogs for a provider / machine card. Mirror the
           card's own actions (Set up / Remove / Revoke) plus a "use in an
@@ -1560,7 +1637,7 @@ export function RuntimesList() {
       <ProviderDetailDialog
         provider={detailProvider}
         onClose={() => setDetailProvider(null)}
-        onSetup={setSetupProvider}
+        onSetup={handleSetup}
         onRemove={removeProvider}
         onUseInEnvironment={goToEnvironments}
         onOpenSandboxTab={() => void openBrowserVmTab()}
@@ -1574,12 +1651,24 @@ export function RuntimesList() {
         onCopy={copy}
       />
 
-      {/* Combined "Add runtime" dialog */}
+      {/* Combined "Add" branching dialog (C3+C4). Three branches: connect a
+          machine, register a sandbox provider, register a Kubernetes
+          cluster. */}
       <AddRuntimeDialog
         open={addMode !== null}
-        defaultMode={addMode ?? "config"}
+        defaultMode={addMode ?? "connect"}
         onClose={() => setAddMode(null)}
         onProviderCreated={() => void loadProviders()}
+        copied={copied}
+        onCopy={copy}
+      />
+
+      {/* Standalone register-k8s dialog — opened from the footer link, a K8s
+          provider card's Set up, or the Add dialog's third tab (which
+          embeds the same form inline). */}
+      <RegisterK8sClusterDialog
+        open={registerK8sOpen}
+        onClose={() => setRegisterK8sOpen(false)}
         copied={copied}
         onCopy={copy}
       />

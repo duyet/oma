@@ -172,7 +172,7 @@ const navGroups: NavGroup[] = [
       { to: "/members", label: "Members", icon: UsersIcon },
       { to: "/evals", label: "Eval Runs", icon: CircleCheckBigIcon },
       { to: "/api-keys", label: "API Keys", icon: ApiKeysIcon, badge: "api_keys" },
-      { to: "/runtimes", label: "Sandbox Runtime", icon: RuntimesIcon, badge: "runtimes" },
+      { to: "/runtimes", label: "Sandbox providers", icon: RuntimesIcon, badge: "runtimes" },
     ],
   },
 ];
