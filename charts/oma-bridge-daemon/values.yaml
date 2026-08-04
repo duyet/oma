@@ -111,9 +111,20 @@ agentSandbox:
   # https://github.com/kubernetes-sigs/agent-sandbox/releases/download/<version>/sandbox-with-extensions.yaml
   manifestUrl: ""
   hook:
+    # The pre-install Job runs `/bin/sh -ec "… kubectl apply …"`, so the image
+    # MUST ship both kubectl AND a POSIX shell. The default (bitnamilegacy/
+    # kubectl) includes both — registry.k8s.io/kubectl is distroless and has no
+    # /bin/sh, which makes the hook fail with `exec: "/bin/sh": no such file`.
+    #
+    # We use the bitnamilegacy namespace rather than bitnami/kubectl: Bitnami
+    # migrated the structured version tags off Docker Hub in Aug 2025 (only
+    # bitnami/kubectl:latest still resolves there); bitnamilegacy is the
+    # archived continuation and still publishes shell-equipped kubectl images
+    # at no cost. Swap to any shell-equipped kubectl image you trust (e.g.
+    # alpine/k8s:<k8s-major>, or Bitnami's paid Secure registry).
     image:
-      repository: registry.k8s.io/kubectl
-      tag: v1.31.0
+      repository: bitnamilegacy/kubectl
+      tag: "1.31"
     serverSideApply: true
 
 # The daemon is a headless outbound WebSocket client — no HTTP port, no

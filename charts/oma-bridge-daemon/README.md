@@ -54,9 +54,10 @@ kubectl -n oma create secret generic oma-bridge-daemon-creds \
 ```
 
 (Or manage it with [external-secrets](https://external-secrets.io/) /
-sealed-secrets and keep `secret.existingSecret` pointed at the result. Both
-keys are required — the chart's `creds-src` volume projects exactly
-`credentials.json` + `machine-id`.)
+sealed-secrets and keep `secret.existingSecret` pointed at the result. Only
+`credentials.json` is required — `machine-id` is optional, and a Secret with
+just `credentials.json` mounts cleanly; the daemon's `getOrCreateMachineId`
+auto-generates a fresh identity when it's absent.)
 
 **3. Install the chart**, pointing at that Secret:
 
@@ -99,7 +100,7 @@ helm install oma-bridge-daemon ./charts/oma-bridge-daemon \
 | `agentSandbox.enabled` | `false` | Install the agent-sandbox controller hook explicitly (auto-rendered when `openshell.enabled`) |
 | `agentSandbox.version` | `v0.5.4` | agent-sandbox release tag (GitHub Releases) |
 | `agentSandbox.manifestUrl` | `""` | Override the full manifest URL (reviewed fork/mirror) |
-| `agentSandbox.hook.image.repository` / `.tag` | `registry.k8s.io/kubectl` / `v1.31.0` | Installer hook image |
+| `agentSandbox.hook.image.repository` / `.tag` | `bitnamilegacy/kubectl` / `1.31` | Installer hook image (must include a POSIX shell + kubectl) |
 | `agentSandbox.hook.serverSideApply` | `true` | Pass `--force-conflicts` to `kubectl apply --server-side` |
 | `resources` | `100m/128Mi` requests, `1/512Mi` limits | Daemon pod resources |
 | `nameOverride` / `fullnameOverride` | `""` / `""` | Name overrides |

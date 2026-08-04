@@ -38,14 +38,6 @@ app.kubernetes.io/name: {{ include "oma-bridge-daemon.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
-{{- define "oma-bridge-daemon.serviceAccountName" -}}
-{{- if .Values.serviceAccount.create }}
-{{- default (include "oma-bridge-daemon.fullname" .) .Values.serviceAccount.name }}
-{{- else }}
-{{- .Values.serviceAccount.name }}
-{{- end }}
-{{- end }}
-
 {{- define "oma-bridge-daemon.secretName" -}}
 {{- default (include "oma-bridge-daemon.fullname" .) .Values.secret.existingSecret }}
 {{- end }}

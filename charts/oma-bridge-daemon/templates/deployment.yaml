@@ -134,6 +134,14 @@ spec:
             # npx needs a writable home for its cache; keep the rest read-only.
             - name: npm-cache
               mountPath: /home/oma/.npm
+            # Writable /tmp — required because readOnlyRootFilesystem: true
+            # otherwise blocks the daemon's two production temp-file paths:
+            #   * local backend ACP install — packages/cli/src/bridge/lib/binary-installer.ts:111
+            #     writes the downloaded archive to os.tmpdir() before extracting.
+            #   * openshell backend — packages/cli/src/bridge/lib/openshell-client.ts:167
+            #     writes the gRPC proto to os.tmpdir() before loadSync().
+            - name: tmp
+              mountPath: /tmp
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -145,22 +153,24 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
-        # Read-only source of the paired credentials + machine-id; copied
-        # into bridge-state by the init container. Both keys must exist in
-        # the Secret (see README pairing steps); the `items` filter below
-        # projects only those two keys at defaultMode 0400.
+        # Read-only source of the paired credentials (+ optional machine-id);
+        # copied into bridge-state by the init container. No `items` filter:
+        # machine-id is OPTIONAL — a Secret with only credentials.json must
+        # still mount cleanly (the daemon's getOrCreateMachineId auto-
+        # generates when absent). An `items` list rejects a Secret that omits
+        # any listed key, so listing both would break the documented-only-
+        # credentials.json pairing path. Every key the Secret carries
+        # projects at defaultMode 0400.
         - name: creds-src
           secret:
             secretName: {{ include "oma-bridge-daemon.secretName" . }}
             defaultMode: 0400
-            items:
-              - key: {{ .Values.secret.credentialsKey }}
-                path: credentials.json
-              - key: {{ .Values.secret.machineIdKey }}
-                path: machine-id
         # Writable daemon state (credentials.json, machine-id, sessions/).
         # Ephemeral by design: re-seeded from the Secret on every restart.
         - name: bridge-state
           emptyDir: {}
         - name: npm-cache
+          emptyDir: {}
+        # Backs /tmp in the daemon container — see volumeMount above.
+        - name: tmp
           emptyDir: {}
