@@ -6,10 +6,10 @@
 // ─── CRD used ───────────────────────────────────────────────────────────
 //
 // This adapter creates a bare `Sandbox` custom resource directly:
-//   apiVersion: agents.x-k8s.io/v1alpha1
+//   apiVersion: agents.x-k8s.io/v1beta1
 //   kind: Sandbox
 //   spec.podTemplate.spec: a real corev1.PodSpec (image, command, resources,
-//     runtimeClassName, serviceAccountName, ...) — see api/v1alpha1/
+//     runtimeClassName, serviceAccountName, ...) — see api/v1beta1/
 //     sandbox_types.go in the agent-sandbox repo.
 //
 // We deliberately do NOT go through `SandboxClaim` + `SandboxTemplate`
@@ -94,7 +94,15 @@ import { getLogger } from "@duyet/oma-observability";
 const moduleLogger = getLogger("k8s-sandbox");
 
 const GROUP = "agents.x-k8s.io";
-const VERSION = "v1alpha1";
+// v1beta1: the agent-sandbox API graduated from v1alpha1 in v0.5.0, and the
+// v1alpha1 served version was DROPPED in v0.5.4 (the release the oma chart's
+// agentSandbox hook installs). The spec shape this adapter builds
+// (spec.podTemplate.spec) is unchanged across the graduation; v1alpha1's
+// spec.replicas was removed and replaced by the optional operatingMode
+// (defaults to Running), which this adapter leaves unset. OpenShell's
+// kubernetes driver also requires v1beta1, so a cluster running OpenShell
+// must be on agent-sandbox >= v0.5.x — which only serves v1beta1.
+const VERSION = "v1beta1";
 const PLURAL = "sandboxes";
 const CONTAINER_NAME = "sandbox";
 const OMA_MANAGED_LABEL_KEY = "agents.x-k8s.io/oma-managed";
@@ -745,7 +753,7 @@ export class KubernetesSandboxExecutor implements SandboxExecutor {
   }
 
   /** Poll the Sandbox object until its `Ready` condition is True (matches
-   *  SandboxConditionReady in api/v1alpha1/sandbox_types.go), or throw
+   *  SandboxConditionReady in api/v1beta1/sandbox_types.go), or throw
    *  after readyTimeoutMs. No watch API used — a k3s-friendly poll loop
    *  keeps this adapter's client surface small. */
   private async waitForReady(customApi: K8sCustomObjectsApiLike): Promise<SandboxCustomResource> {
@@ -782,7 +790,7 @@ export class KubernetesSandboxExecutor implements SandboxExecutor {
    *    1. `agents.x-k8s.io/pod-name` annotation (set for warm-pool adoption).
    *    2. `status.selector` label selector (the CRD's scale subresource
    *       exposes this — see +kubebuilder:subresource:scale in
-   *       api/v1alpha1/sandbox_types.go) via a pod list.
+   *       api/v1beta1/sandbox_types.go) via a pod list.
    *    3. The Sandbox's own name — the controller's common convention for
    *       freshly-created (non-adopted) sandboxes is to name the pod
    *       after the Sandbox object itself. */

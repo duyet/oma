@@ -172,11 +172,18 @@ describe("KubernetesSandboxExecutor", () => {
     await sandbox.exec("echo ok");
 
     expect(world.createCalls).toHaveLength(1);
-    const { namespace, name } = world.createCalls[0];
+    const { namespace, name, body } = world.createCalls[0];
     expect(namespace).toBe("oma-tenants");
     expect(name).toMatch(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/);
     expect(name.length).toBeLessThanOrEqual(63);
     expect(name.startsWith("oma-")).toBe(true);
+    // The agent-sandbox API graduated to v1beta1 in v0.5.0 and v0.5.4 drops
+    // v1alpha1 entirely — a Sandbox CR posted at v1alpha1 is rejected by any
+    // current controller. Lock the version so a regression is caught here,
+    // not as a cryptic create failure on a live cluster.
+    expect((body as { apiVersion: string }).apiVersion).toBe("agents.x-k8s.io/v1beta1");
+    expect((body as { spec: { podTemplate: { spec: unknown } } }).spec.podTemplate.spec)
+      .toBeTruthy();
   });
 
   it("exec() returns combined stdout+stderr with no exit suffix on success", async () => {
