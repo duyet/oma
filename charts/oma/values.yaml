@@ -106,9 +106,11 @@ config:
 
   # Sandbox provider. "k8s" uses the agents.x-k8s.io Sandbox CRD (requires
   # the controller — see agentSandbox.enabled to auto-install it, and
-  # templates/rbac.yaml for the OMA runtime's own grants). Other providers
-  # (subprocess, litebox, daytona, ...) exist in apps/main-node but "k8s" is
-  # the intended path for this chart.
+  # templates/rbac.yaml for the OMA runtime's own grants). "openshell" drives
+  # an NVIDIA OpenShell gateway over gRPC (self-host Node speaks to it
+  # directly — see config.openshell below). Other providers (subprocess,
+  # litebox, daytona, ...) exist in apps/main-node but "k8s"/"openshell" are
+  # the intended paths for this chart.
   sandboxProvider: "k8s"
   k8s:
     # Namespace where sandbox pods are created. Default: .Release.Namespace.
@@ -123,6 +125,17 @@ config:
     # (serviceAccount.name / fullname). Override to isolate sandbox pods
     # from the main pod's RBAC.
     serviceAccount: ""
+  # OpenShell provider — used when sandboxProvider: "openshell". Self-host
+  # Node speaks gRPC directly to the gateway (no k8s-bridge needed). Deploy
+  # the gateway separately (e.g. the ghcr.io/nvidia/openshell/helm-chart
+  # chart) and point `endpoint` at its Service. OpenShell is default-deny
+  # egress and does NOT auto-install packages — bake any apt/pip deps into a
+  # custom `image`, and note networking.type=unrestricted is not expressible.
+  openshell:
+    # Gateway endpoint host:port (required when sandboxProvider=openshell).
+    endpoint: ""
+    # Sandbox container image override (defaults to the gateway's image).
+    image: ""
 
 # oma-vault sidecar (outbound credential MITM proxy). The env block is
 # hardcoded in infra/homelab/oma/deployment.yaml and made values-driven here.
