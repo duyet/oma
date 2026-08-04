@@ -1,0 +1,18 @@
+apiVersion: v2
+name: oma-bridge-daemon
+description: OMA bridge daemon — k8s sandbox worker that registers to an OMA control plane
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+dependencies:
+  # OpenShell gateway subchart (NVIDIA). Pulled from the OCI registry and
+  # aliased as `openshellGateway` so its values sit under `.Values.openshellGateway`
+  # without colliding with this chart's own `openshell:` block. The condition
+  # mirrors `.Values.openshell.enabled` — when false the subchart is skipped
+  # entirely and `helm dependency build` is still required but the templates
+  # render nothing from it.
+  - name: helm-chart          # OpenShell's chart name (its Chart.yaml `name`)
+    repository: oci://ghcr.io/nvidia/openshell
+    version: 0.0.97
+    condition: openshell.enabled
+    alias: openshellGateway
