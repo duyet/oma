@@ -516,3 +516,237 @@ describe("/agents/runtime/* — multi-tenant CLI bridge daemon (step 2)", () => 
     });
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────
+// POST /agents/runtime/exchange — kind branching (issue: k8s pairing codes)
+//
+// A `kind='k8s_pairing'` connect_runtime_code is multi-use within its TTL
+// (pods bounce, emptyDirs vanish, re-registration must stay non-interactive).
+// A `kind='browser_oauth'` code (the legacy 5-min handshake) stays
+// single-use — `used_at` flips on first redemption and a second attempt
+// is rejected. Pre-0037 rows have kind=NULL and must keep their original
+// single-use behavior.
+// ──────────────────────────────────────────────────────────────────────────
+
+async function seedConnectCode(opts: {
+  userId: string;
+  tenantId: string;
+  kind: string | null;
+  state?: string;
+  usedAt?: number | null;
+  expiresAt?: number;
+}): Promise<{ code: string; state: string }> {
+  const code = `pc_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}`;
+  const state = opts.state ?? `state_${Math.random().toString(36).slice(2, 12)}`;
+  const now = Math.floor(Date.now() / 1000);
+  const expiresAt = opts.expiresAt ?? now + 3600;
+  const tenantId = opts.tenantId;
+  const tenantName = `Workspace ${tenantId}`;
+  const userName = `user-${opts.userId}@test.local`;
+
+  // tenant row — needed for the name join inside /exchange; tolerated if missing.
+  await env.AUTH_DB
+    .prepare(
+      `INSERT OR IGNORE INTO "tenant" (id, name, createdAt, updatedAt) VALUES (?, ?, ?, ?)`,
+    )
+    .bind(tenantId, tenantName, now * 1000, now * 1000)
+    .run();
+
+  // user row — better-auth schema.
+  await env.AUTH_DB
+    .prepare(
+      `INSERT OR REPLACE INTO "user" (id, name, email, emailVerified, tenantId, role, createdAt, updatedAt)
+       VALUES (?, ?, ?, 1, ?, 'owner', ?, ?)`,
+    )
+    .bind(opts.userId, `Test ${opts.userId}`, userName, tenantId, now * 1000, now * 1000)
+    .run();
+
+  // membership so the /exchange membership lookup is non-empty.
+  await env.AUTH_DB
+    .prepare(
+      `INSERT OR REPLACE INTO "membership" (user_id, tenant_id, role, created_at) VALUES (?, ?, 'owner', ?)`,
+    )
+    .bind(opts.userId, tenantId, now)
+    .run();
+
+  // The connect_runtime_codes row. kind=NULL mirrors a pre-0037 row.
+  if (opts.kind === null) {
+    // Insert without the kind column to simulate a pre-migration row, then
+    // it reads back as NULL and /exchange falls back to 'browser_oauth'.
+    await env.AUTH_DB
+      .prepare(
+        `INSERT INTO "connect_runtime_codes" (code, user_id, tenant_id, state, expires_at, used_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(code, opts.userId, tenantId, state, expiresAt, opts.usedAt ?? null)
+      .run();
+  } else {
+    await env.AUTH_DB
+      .prepare(
+        `INSERT INTO "connect_runtime_codes" (code, user_id, tenant_id, state, expires_at, used_at, kind)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(code, opts.userId, tenantId, state, expiresAt, opts.usedAt ?? null, opts.kind)
+      .run();
+  }
+
+  return { code, state };
+}
+
+function exchangeBody(opts: { code: string; state: string; machineId: string }) {
+  return JSON.stringify({
+    code: opts.code,
+    state: opts.state,
+    machine_id: opts.machineId,
+    hostname: `host-${opts.machineId}`,
+    os: "linux",
+    version: "0.0.1-test",
+  });
+}
+
+describe("POST /agents/runtime/exchange — kind branching (k8s pairing codes)", () => {
+  beforeAll(async () => {
+    await api("/health").catch(() => {});
+  });
+
+  it("k8s_pairing code is multi-use within TTL — two redemptions both succeed", async () => {
+    const uid = `u_k8s_${Math.random().toString(36).slice(2, 8)}`;
+    const { code, state } = await seedConnectCode({
+      userId: uid,
+      tenantId: `tn_k8s_${Math.random().toString(36).slice(2, 6)}`,
+      kind: "k8s_pairing",
+    });
+
+    const machineA = `machine-k8s-a-${Math.random().toString(36).slice(2, 6)}`;
+    const machineB = `machine-k8s-b-${Math.random().toString(36).slice(2, 6)}`;
+
+    const r1 = await api("/agents/runtime/exchange", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: exchangeBody({ code, state, machineId: machineA }),
+    });
+    expect(r1.status).toBe(200);
+    const b1 = await r1.json();
+    expect(b1.runtime_id).toBeTruthy();
+    expect(typeof b1.token).toBe("string");
+    expect(b1.token.startsWith("sk_machine_")).toBe(true);
+
+    const r2 = await api("/agents/runtime/exchange", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: exchangeBody({ code, state, machineId: machineB }),
+    });
+    expect(r2.status).toBe(200);
+    const b2 = await r2.json();
+    expect(b2.runtime_id).toBeTruthy();
+    expect(b2.token.startsWith("sk_machine_")).toBe(true);
+
+    // Multi-use means the code row was never flipped to used_at.
+    const row = await env.AUTH_DB
+      .prepare(`SELECT used_at FROM "connect_runtime_codes" WHERE code = ?`)
+      .bind(code)
+      .first<{ used_at: number | null }>();
+    expect(row!.used_at).toBeNull();
+  });
+
+  it("browser_oauth code is single-use — second redemption rejected", async () => {
+    const uid = `u_oauth_${Math.random().toString(36).slice(2, 8)}`;
+    const { code, state } = await seedConnectCode({
+      userId: uid,
+      tenantId: `tn_oauth_${Math.random().toString(36).slice(2, 6)}`,
+      kind: "browser_oauth",
+    });
+    const machine = `machine-oauth-${Math.random().toString(36).slice(2, 6)}`;
+
+    const r1 = await api("/agents/runtime/exchange", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: exchangeBody({ code, state, machineId: machine }),
+    });
+    expect(r1.status).toBe(200);
+
+    const r2 = await api("/agents/runtime/exchange", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: exchangeBody({ code, state, machineId: machine }),
+    });
+    expect(r2.status).toBe(400);
+    // Routes return the Anthropic-compatible envelope
+    // `{type:"error", error:{type,message}}` (errorEnvelopeMiddleware
+    // in apps/main/src/index.ts), so the message lives at error.message.
+    const b2 = await r2.json();
+    expect(b2.error.message).toMatch(/already used/);
+
+    // Single-use means the code row was flipped to used_at.
+    const row = await env.AUTH_DB
+      .prepare(`SELECT used_at FROM "connect_runtime_codes" WHERE code = ?`)
+      .bind(code)
+      .first<{ used_at: number | null }>();
+    expect(row!.used_at).not.toBeNull();
+  });
+
+  it("pre-0037 row (kind=NULL) keeps single-use semantics — backward compat", async () => {
+    const uid = `u_legacy_${Math.random().toString(36).slice(2, 8)}`;
+    const { code, state } = await seedConnectCode({
+      userId: uid,
+      tenantId: `tn_legacy_${Math.random().toString(36).slice(2, 6)}`,
+      kind: null, // simulates a row from before migration 0037
+    });
+    const machine = `machine-legacy-${Math.random().toString(36).slice(2, 6)}`;
+
+    const r1 = await api("/agents/runtime/exchange", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: exchangeBody({ code, state, machineId: machine }),
+    });
+    expect(r1.status).toBe(200);
+
+    const r2 = await api("/agents/runtime/exchange", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: exchangeBody({ code, state, machineId: machine }),
+    });
+    expect(r2.status).toBe(400);
+    expect((await r2.json()).error.message).toMatch(/already used/);
+  });
+
+  it("browser_oauth code rejected on second attempt does NOT burn a fresh code's state", async () => {
+    // Regression: an expired or state-mismatched attempt on a valid
+    // browser_oauth code must not flip used_at. We exercise the
+    // state-mismatch path — the code should remain redeemable after a
+    // bad-state probe, then succeed with the right state, then fail.
+    const uid = `u_state_${Math.random().toString(36).slice(2, 8)}`;
+    const { code, state } = await seedConnectCode({
+      userId: uid,
+      tenantId: `tn_state_${Math.random().toString(36).slice(2, 6)}`,
+      kind: "browser_oauth",
+    });
+    const machine = `machine-state-${Math.random().toString(36).slice(2, 6)}`;
+
+    // Bad state — must reject without burning the code.
+    const rBad = await api("/agents/runtime/exchange", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: exchangeBody({ code, state: "wrong-state-xxx", machineId: machine }),
+    });
+    expect(rBad.status).toBe(400);
+    expect((await rBad.json()).error.message).toMatch(/state mismatch/);
+
+    // Code still redeemable with the right state.
+    const rOk = await api("/agents/runtime/exchange", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: exchangeBody({ code, state, machineId: machine }),
+    });
+    expect(rOk.status).toBe(200);
+
+    // Now it's burned.
+    const rAgain = await api("/agents/runtime/exchange", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: exchangeBody({ code, state, machineId: machine }),
+    });
+    expect(rAgain.status).toBe(400);
+    expect((await rAgain.json()).error.message).toMatch(/already used/);
+  });
+});

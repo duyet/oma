@@ -45,6 +45,12 @@ export const runtimeDaemonRoutes = new Hono<{
 
 const CODE_TTL_SECONDS = 5 * 60;
 
+// Pairing-code TTL bounds (POST /v1/runtimes/pairing-token). Long-lived
+// multi-use codes redeemed non-interactively by in-cluster daemons —
+// default 24h, hard cap 7d. See route comment.
+const PAIRING_TTL_DEFAULT_HOURS = 24;
+const PAIRING_TTL_MAX_HOURS = 24 * 7;
+
 function generateCode(): string {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
@@ -102,6 +108,76 @@ runtimesRoutes.post("/connect-runtime", async (c) => {
     .run();
 
   return c.json({ code, expires_at: expiresAt });
+});
+
+// POST /v1/runtimes/pairing-token — mint a long-lived, multi-use pairing
+// code for non-interactive runtime registration (k8s `oma bridge daemon`,
+// infra-as-code, headless pods). Unlike the 5-min single-use code minted
+// by /connect-runtime (the browser OAuth handshake), a pairing code is
+// redeemable many times within its TTL — pods bounce, emptyDirs vanish,
+// and requiring a human to re-open the browser on every restart defeats
+// the point.
+//
+// Same connect_runtime_codes table + same /agents/runtime/exchange
+// redemption path; the `kind='k8s_pairing'` discriminator tells /exchange
+// to skip the single-use `used_at` gate. Default TTL 24h, clamped to
+// [1h, 168h] (1 hour to 7 days). Bound to the authed user at mint time,
+// so redemption authorizes THAT user's runtime — never anonymous.
+//
+// Body: { ttl_hours?: number (default 24, clamped 1..168), label?: string }
+// Response: { code, state, expires_at, kind: "k8s_pairing" }
+runtimesRoutes.post("/pairing-token", async (c) => {
+  const userId = c.get("user_id");
+  const tenantId = c.get("tenant_id");
+  if (!userId || !tenantId) return c.json({ error: "unauthorized" }, 401);
+
+  const body = (await c.req.json().catch(() => ({}))) as { ttl_hours?: number; label?: string };
+  const ttlHours = Number(body.ttl_hours);
+  const ttl = Number.isFinite(ttlHours) && ttlHours > 0
+    ? Math.min(Math.max(Math.floor(ttlHours), 1), PAIRING_TTL_MAX_HOURS)
+    : PAIRING_TTL_DEFAULT_HOURS;
+  void body.label; // reserved for future listing/caption — unused for now
+
+  const code = generateCode();
+  const state = generateCode();
+  const expiresAt = Math.floor(Date.now() / 1000) + ttl * 3600;
+
+  await c.env.MAIN_DB
+    .prepare(
+      `INSERT INTO "connect_runtime_codes" (code, user_id, tenant_id, state, expires_at, kind)
+       VALUES (?, ?, ?, ?, ?, 'k8s_pairing')`,
+    )
+    .bind(code, userId, tenantId, state, expiresAt)
+    .run();
+
+  return c.json({ code, state, expires_at: expiresAt, kind: "k8s_pairing" });
+});
+
+// DELETE /v1/runtimes/pairing-token/:code — revoke an outstanding pairing
+// code before its TTL lapses. Browser-facing, so the same authMiddleware
+// guards it; only the code's original minter may revoke it. Returns 404
+// (not 403) for codes owned by other users — non-oracle, matching the
+// existing DELETE /v1/runtimes/:id behavior so this endpoint can't double
+// as a "does this code exist?" probe.
+runtimesRoutes.delete("/pairing-token/:code", async (c) => {
+  const userId = c.get("user_id");
+  if (!userId) return c.json({ error: "unauthorized" }, 401);
+
+  const code = c.req.param("code");
+  const owned = await c.env.MAIN_DB
+    .prepare(
+      `SELECT code FROM "connect_runtime_codes" WHERE code = ? AND user_id = ? AND kind = 'k8s_pairing'`,
+    )
+    .bind(code, userId)
+    .first<{ code: string }>();
+  if (!owned) return c.json({ error: "not found" }, 404);
+
+  await c.env.MAIN_DB
+    .prepare(`DELETE FROM "connect_runtime_codes" WHERE code = ? AND kind = 'k8s_pairing'`)
+    .bind(code)
+    .run();
+
+  return c.json({ ok: true });
 });
 
 // GET /v1/runtimes — list user's runtimes.
@@ -216,20 +292,34 @@ runtimeDaemonRoutes.post("/exchange", async (c) => {
 
   const row = await c.env.MAIN_DB
     .prepare(
-      `SELECT user_id, tenant_id, state, expires_at, used_at FROM "connect_runtime_codes" WHERE code = ?`,
+      `SELECT user_id, tenant_id, state, expires_at, used_at, kind FROM "connect_runtime_codes" WHERE code = ?`,
     )
     .bind(code)
-    .first<{ user_id: string; tenant_id: string; state: string; expires_at: number; used_at: number | null }>();
+    .first<{ user_id: string; tenant_id: string; state: string; expires_at: number; used_at: number | null; kind: string | null }>();
 
   if (!row) return c.json({ error: "invalid code" }, 400);
-  if (row.used_at) return c.json({ error: "code already used" }, 400);
+  // Single-use enforcement only applies to the original browser-OAuth
+  // handshake codes. A `k8s_pairing` code (POST /v1/runtimes/pairing-token)
+  // is intentionally multi-use within its TTL — k8s pods bounce and
+  // re-registration must stay non-interactive. Pre-0037 rows have
+  // kind=NULL (column didn't exist) and fall through to the single-use
+  // path, preserving their original behavior.
+  const codeKind = row.kind ?? "browser_oauth";
+  if (codeKind === "browser_oauth" && row.used_at) {
+    return c.json({ error: "code already used" }, 400);
+  }
   if (row.expires_at < now) return c.json({ error: "code expired" }, 400);
   if (row.state !== state) return c.json({ error: "state mismatch" }, 400);
 
-  await c.env.MAIN_DB
-    .prepare(`UPDATE "connect_runtime_codes" SET used_at = ? WHERE code = ?`)
-    .bind(now, code)
-    .run();
+  // Flip `used_at` only AFTER every validation passed, so an expired or
+  // state-mismatched attempt doesn't burn a still-valid browser_oauth code.
+  // Skipped entirely for k8s_pairing — multi-use within TTL is the point.
+  if (codeKind === "browser_oauth") {
+    await c.env.MAIN_DB
+      .prepare(`UPDATE "connect_runtime_codes" SET used_at = ? WHERE code = ?`)
+      .bind(now, code)
+      .run();
+  }
 
   // Idempotent runtime insert: re-running `oma bridge setup` from same UNIX
   // user / same machine reuses the existing row.

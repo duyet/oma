@@ -1,6 +1,6 @@
 // Local ACP runtime tables (Node-PG variant of cf-auth/runtimes).
 
-import { bigint, index, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
+import { bigint, index, integer, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const runtimes = pgTable(
   "runtimes",
@@ -47,6 +47,18 @@ export const connect_runtime_codes = pgTable(
     state: text("state").notNull(),
     expires_at: bigint("expires_at", { mode: "number" }).notNull(),
     used_at: bigint("used_at", { mode: "number" }),
+    // Discriminator added by 0037: 'browser_oauth' (5-min single-use) or
+    // 'k8s_pairing' (long-lived multi-use for non-interactive in-cluster
+    // registration). Defaults to 'browser_oauth' so pre-existing rows keep
+    // their original semantics.
+    kind: text("kind").notNull().default("browser_oauth"),
+    // Reserved cap on redemption count (NULL = unlimited within TTL). Not
+    // enforced today; slot added so a future use-cap can ship without a
+    // second migration.
+    max_uses: integer("max_uses"),
   },
-  (t) => [index("idx_connect_runtime_codes_expires").on(t.expires_at)],
+  (t) => [
+    index("idx_connect_runtime_codes_expires").on(t.expires_at),
+    index("idx_connect_runtime_codes_user_kind").on(t.user_id, t.kind, t.expires_at),
+  ],
 );
