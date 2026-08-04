@@ -62,6 +62,12 @@ auto-generates a fresh identity when it's absent.)
 **3. Install the chart**, pointing at that Secret:
 
 ```bash
+# Fetch chart dependencies first. The OpenShell subchart is conditionally
+# declared in Chart.yaml, so even local-only installs should run this — it is
+# a no-op when openshell.enabled is false but lets the OpenShell path work
+# without a second step.
+helm dependency build ./charts/oma-bridge-daemon
+
 # Local subprocess backend (default) — runs sandbox ops inside the pod:
 helm install oma-bridge-daemon ./charts/oma-bridge-daemon \
   --namespace oma \
@@ -78,7 +84,10 @@ helm install oma-bridge-daemon ./charts/oma-bridge-daemon \
 
 > Pairing is interactive — there is no non-interactive `oma bridge setup`
 > path. The credentials.json is the OAuth output, not something to generate
-> in CI. Once paired, the Secret is the only secret this chart consumes.
+> in CI. The pairing Secret is the primary secret this chart consumes; when
+> you also enable the OpenShell backend with gateway auth, set
+> `openshell.token.existingSecret` to a second Secret carrying the gateway
+> bearer token (see [Values](#values)).
 
 ## Values
 
@@ -92,6 +101,7 @@ helm install oma-bridge-daemon ./charts/oma-bridge-daemon \
 | `secret.existingSecret` | `oma-bridge-daemon-creds` | Pre-existing Secret holding `credentials.json` + `machine-id` |
 | `secret.credentialsKey` / `secret.machineIdKey` | `credentials.json` / `machine-id` | Keys inside that Secret |
 | `secret.credentials` | `""` | Inline credentials.json (unusual — see [Secrets](#secrets)) |
+| `secret.machineId` | `""` | Inline machine-id (pairs with `secret.credentials`; empty = daemon auto-generates) |
 | `openshell.enabled` | `false` | Install the OpenShell gateway subchart + agent-sandbox hook and auto-derive the daemon's openshell env |
 | `openshell.gatewayEndpoint` | `""` | Override the derived `host:port`; empty auto-derives `openshell-gateway.<ns>.svc.cluster.local:8080` |
 | `openshell.sandboxNamespace` | `""` | Namespace OpenShell Sandbox CRs land in (default = release namespace) |
@@ -100,6 +110,7 @@ helm install oma-bridge-daemon ./charts/oma-bridge-daemon \
 | `agentSandbox.enabled` | `false` | Install the agent-sandbox controller hook explicitly (auto-rendered when `openshell.enabled`) |
 | `agentSandbox.version` | `v0.5.4` | agent-sandbox release tag (GitHub Releases) |
 | `agentSandbox.manifestUrl` | `""` | Override the full manifest URL (reviewed fork/mirror) |
+| `agentSandbox.manifestSha256` | `""` | Optional SHA-256 of the manifest; when set the hook verifies before applying |
 | `agentSandbox.hook.image.repository` / `.tag` | `bitnamilegacy/kubectl` / `1.31` | Installer hook image (must include a POSIX shell + kubectl) |
 | `agentSandbox.hook.serverSideApply` | `true` | Pass `--force-conflicts` to `kubectl apply --server-side` |
 | `resources` | `100m/128Mi` requests, `1/512Mi` limits | Daemon pod resources |

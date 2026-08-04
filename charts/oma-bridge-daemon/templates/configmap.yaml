@@ -9,7 +9,16 @@ Non-secret backend config for the bridge daemon. Two derivations:
     true; otherwise "".
 
 OPENSHELL_IMAGE is a pass-through (empty = gateway default).
+
+Guard: the OpenShell backend dynamically imports @getoma/sandbox-sdk, which the
+shipped default image (node:22-slim) does NOT include. Fail rendering early
+when openshell.enabled is true and the image is still the exact default, so a
+forgotten image override surfaces here rather than as a runtime crash on the
+first relayed op.
 */}}
+{{- if and .Values.openshell.enabled (eq .Values.image.repository "node") (eq .Values.image.tag "22-slim") -}}
+{{- fail "openshell.enabled=true needs a daemon image that ships @getoma/sandbox-sdk. The default node:22-slim does not include it — set image.repository/image.tag to a compatible image (see deploy/cli-bridge-daemon/Dockerfile.openshell)." -}}
+{{- end -}}
 {{- $backend := "" -}}
 {{- if .Values.bridge.backend }}
 {{- $backend = .Values.bridge.backend }}

@@ -63,6 +63,12 @@ secret:
   # empty, the chart renders its own Secret from this value; otherwise the
   # chart renders no Secret at all. Never commit a real credentials.json.
   credentials: ""
+  # Optional inline machine-id (string) paired with `secret.credentials` for
+  # the unusual inline-Secret path. Empty = the generated Secret carries only
+  # credentials.json and the daemon auto-generates a machine-id on first run.
+  # Prefer the out-of-band `oma bridge setup` Secret — never commit a real
+  # machine-id.
+  machineId: ""
 
 # OpenShell gateway subchart + backend auto-derivation. Enable to install
 # NVIDIA's OpenShell gateway as a Helm subchart (pulled from the OCI registry
@@ -110,6 +116,12 @@ agentSandbox:
   # = computed from `version` as
   # https://github.com/kubernetes-sigs/agent-sandbox/releases/download/<version>/sandbox-with-extensions.yaml
   manifestUrl: ""
+  # Optional SHA-256 of the manifest for supply-chain integrity. When set, the
+  # install hook downloads the manifest, verifies its sha256sum against this
+  # value, and only then runs `kubectl apply`. Empty = apply directly from the
+  # URL (version-pinned, no content check). The hook image must ship `curl`
+  # and `sha256sum` when this is set (bitnamilegacy/kubectl does).
+  manifestSha256: ""
   hook:
     # The pre-install Job runs `/bin/sh -ec "… kubectl apply …"`, so the image
     # MUST ship both kubectl AND a POSIX shell. The default (bitnamilegacy/

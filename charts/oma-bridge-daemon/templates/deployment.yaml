@@ -34,6 +34,14 @@ spec:
     metadata:
       labels:
         {{- include "oma-bridge-daemon.labels" . | nindent 8 }}
+      annotations:
+        # Roll the pod when chart-managed config or inline credentials change.
+        # The ConfigMap is always chart-managed; the Secret only renders on the
+        # unusual inline path (secret.credentials). An existingSecret
+        # (out-of-band) is intentionally NOT tracked here — its lifecycle is
+        # the operator's, not Helm's.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
     spec:
       securityContext:
         runAsNonRoot: true
@@ -124,7 +132,6 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.openshell.token.existingSecret }}
                   key: {{ .Values.openshell.token.secretKey }}
-                  optional: true
             {{- end }}
           volumeMounts:
             # Writable: holds credentials.json + machine-id (seeded by the
