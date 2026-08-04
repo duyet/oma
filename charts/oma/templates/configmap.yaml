@@ -28,13 +28,28 @@ data:
   {{- if .Values.config.apiCompat }}
   OMA_API_COMPAT: {{ .Values.config.apiCompat | quote }}
   {{- end }}
-  # Sandbox executor: create a Sandbox CR (agents.x-k8s.io) per session and
-  # exec tool commands into the adopted pod. Requires the RBAC in
-  # templates/rbac.yaml and serviceAccountName on the deployment. In-cluster
-  # auth is picked up automatically (KUBERNETES_SERVICE_HOST).
+  # Sandbox provider selection — provider-specific keys below are gated on
+  # this value so an openshell deploy doesn't carry inert k8s RBAC env (and
+  # vice versa).
   SANDBOX_PROVIDER: {{ .Values.config.sandboxProvider | quote }}
+  {{- if eq .Values.config.sandboxProvider "openshell" }}
+  # OpenShell provider: self-host Node speaks gRPC directly to the gateway
+  # (OPENSHELL_GATEWAY_ENDPOINT, host:port). No k8s RBAC is used in this mode
+  # — the gateway owns the Sandbox CRs. Optional bearer OPENSHELL_TOKEN and
+  # TLS material (OPENSHELL_GATEWAY_TLS / _CA_PATH / ...) come from the
+  # resolved Secret if set there.
+  OPENSHELL_GATEWAY_ENDPOINT: {{ .Values.config.openshell.endpoint | quote }}
+  {{- with .Values.config.openshell.image }}
+  OPENSHELL_IMAGE: {{ . | quote }}
+  {{- end }}
+  {{- else }}
+  # k8s provider: create a Sandbox CR (agents.x-k8s.io) per session and exec
+  # tool commands into the adopted pod. Requires the RBAC in templates/rbac.yaml
+  # and serviceAccountName on the deployment. In-cluster auth is picked up
+  # automatically (KUBERNETES_SERVICE_HOST).
   OMA_K8S_NAMESPACE: {{ .Values.config.k8s.namespace | default .Release.Namespace | quote }}
   SANDBOX_IMAGE: {{ .Values.config.k8s.image | quote }}
   OMA_K8S_CPU: {{ .Values.config.k8s.cpu | quote }}
   OMA_K8S_MEMORY: {{ .Values.config.k8s.memory | quote }}
   OMA_K8S_SERVICE_ACCOUNT: {{ .Values.config.k8s.serviceAccount | default (include "oma.serviceAccountName" .) | quote }}
+  {{- end }}
