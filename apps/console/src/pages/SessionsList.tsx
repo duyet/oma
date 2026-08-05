@@ -662,6 +662,18 @@ export function SessionsList() {
     [agents],
   );
 
+  // Agent id → display name for the table column. Same /v1/agents fetch the
+  // filter chip + create modal already use (loadAux); no extra network.
+  // Matches Dashboard's recent-sessions labeling so operators see names
+  // rather than mono ids when the agent is still in the tenant.
+  const agentNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of agents) {
+      if (a.id) map.set(a.id, a.name || a.id);
+    }
+    return map;
+  }, [agents]);
+
   const filters = (
     <FilterBar
       agent={{
@@ -760,11 +772,25 @@ export function SessionsList() {
       },
       {
         id: "agent",
-        accessorFn: (s) => s.agent.id,
+        accessorFn: (s) =>
+          agentNameById.get(s.agent.id) ?? s.agent.id,
         header: "Agent",
-        cell: ({ row }) => (
-          <span className="text-fg-muted font-mono text-xs">{row.original.agent.id}</span>
-        ),
+        cell: ({ row }) => {
+          const id = row.original.agent.id;
+          const name = agentNameById.get(id);
+          return (
+            <span
+              className="text-fg-muted text-xs max-w-[12rem] block truncate"
+              title={name ? `${name} (${id})` : id}
+            >
+              {name ? (
+                name
+              ) : (
+                <span className="font-mono">{id}</span>
+              )}
+            </span>
+          );
+        },
       },
       {
         id: "duration",
@@ -851,7 +877,7 @@ export function SessionsList() {
         size: 56,
       },
     ],
-    [api, refreshSessions, confirm],
+    [api, refreshSessions, confirm, agentNameById],
   );
 
   const hasActiveFilter = !!search || !!filterAgent || status !== "any" || created.after !== undefined || created.before !== undefined;
