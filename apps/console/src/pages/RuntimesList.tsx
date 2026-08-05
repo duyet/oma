@@ -13,10 +13,11 @@ import { Modal } from "../components/Modal";
 import { RowActionsMenu } from "../components/RowActionsMenu";
 import { ProviderMark } from "../components/ProviderMark";
 import { RuntimesIcon } from "../components/icons";
-import { AddRuntimeDialog, type AddRuntimeMode } from "../components/AddRuntimeDialog";
+import { ConnectMachineDialog } from "../components/ConnectMachineInstructions";
 import { CopyButton } from "../components/CopyButton";
 import { CopyBlock } from "../components/CopyBlock";
 import { RegisterK8sClusterDialog } from "../components/RegisterK8sClusterDialog";
+import { AddSandboxProviderDialog } from "./AddSandboxProviderDialog";
 import { cn, rowActivateKeyDown } from "@/lib/utils";
 import { useConfirm } from "@/hooks/useConfirm";
 import {
@@ -1209,7 +1210,11 @@ function SetupProviderModal({
 export function RuntimesList() {
   const { api } = useApi();
   const navigate = useNavigate();
-  const [addMode, setAddMode] = useState<AddRuntimeMode | null>(null);
+  // Each "Add" entry button opens its own dedicated dialog — no shared tabbed
+  // modal. The tabs were the bug (close/reopen kept the stale tab); one dialog
+  // per setup kind sidesteps the sync issue entirely.
+  const [connectOpen, setConnectOpen] = useState(false);
+  const [addProviderOpen, setAddProviderOpen] = useState(false);
   const [setupProvider, setSetupProvider] = useState<HostingType | null>(null);
   const [registerK8sOpen, setRegisterK8sOpen] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
@@ -1377,9 +1382,10 @@ export function RuntimesList() {
 
   return (
     <div role="main" aria-label="Sandbox providers" className="-m-3 p-4 space-y-8">
-      {/* (a) Header — single H1, one-sentence subtitle, one "Add" CTA,
-          deployment pill. The two old header buttons collapsed into the
-          Add CTA's branching dialog (C3+C4). */}
+      {/* (a) Header — single H1, one-sentence subtitle, deployment pill, and
+          one "Add" button per setup kind. Each opens a distinct dedicated
+          dialog (connect machine / register provider / register k8s cluster)
+          instead of the old single tabbed modal — the tabs were the bug. */}
       <section>
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div className="space-y-1">
@@ -1396,14 +1402,32 @@ export function RuntimesList() {
               configured, and the built-in providers on this deployment.
             </p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
             <Button
               size="sm"
-              onClick={() => setAddMode("connect")}
+              onClick={() => setConnectOpen(true)}
+              className="gap-1.5"
+            >
+              <TerminalIcon className="size-3.5 shrink-0" />
+              Connect machine
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setAddProviderOpen(true)}
               className="gap-1.5"
             >
               <SettingsIcon className="size-3.5 shrink-0" />
-              Add
+              Register provider
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setRegisterK8sOpen(true)}
+              className="gap-1.5"
+            >
+              <RuntimesIcon className="size-3.5 shrink-0" />
+              Register k8s cluster
             </Button>
           </div>
         </div>
@@ -1628,7 +1652,7 @@ export function RuntimesList() {
         provider={setupProvider}
         onClose={() => setSetupProvider(null)}
         onOpenAddK8s={() => setRegisterK8sOpen(true)}
-        onOpenAddProvider={() => setAddMode("config")}
+        onOpenAddProvider={() => setAddProviderOpen(true)}
       />
 
       {/* Click-through detail dialogs for a provider / machine card. Mirror the
@@ -1651,16 +1675,18 @@ export function RuntimesList() {
         onCopy={copy}
       />
 
-      {/* Combined "Add" branching dialog (C3+C4). Three branches: connect a
-          machine, register a sandbox provider, register a Kubernetes
-          cluster. */}
-      <AddRuntimeDialog
-        open={addMode !== null}
-        defaultMode={addMode ?? "connect"}
-        onClose={() => setAddMode(null)}
-        onProviderCreated={() => void loadProviders()}
+      {/* Each "Add" entry opens a dedicated dialog for that setup kind. No
+          shared tabbed modal — the tabs were the bug. */}
+      <ConnectMachineDialog
+        open={connectOpen}
+        onClose={() => setConnectOpen(false)}
         copied={copied}
         onCopy={copy}
+      />
+      <AddSandboxProviderDialog
+        open={addProviderOpen}
+        onClose={() => setAddProviderOpen(false)}
+        onCreated={() => void loadProviders()}
       />
 
       {/* Standalone register-k8s dialog — opened from the footer link, a K8s

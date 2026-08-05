@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useApi } from "../lib/api";
 import { useApiMutation } from "../lib/useApiQuery";
 import { Button } from "@/components/ui/button";
+import { Modal } from "../components/Modal";
 import { Select, SelectOption } from "../components/Select";
 import { TextInput, SecretInput } from "../components/Input";
 
@@ -256,6 +257,33 @@ export function SandboxProviderFormFields({
         </Button>
       </div>
     </div>
+  );
+}
+
+// Standalone Modal wrapper around `SandboxProviderFormFields`, opened from the
+// Runtimes page header's "Register a provider" button. Mirrors the
+// RegisterK8sClusterDialog / ConnectMachineDialog pattern. The form renders its
+// own Cancel/Save footer (via `onDone`), so this wrapper intentionally omits a
+// Modal footer to avoid stacking two action rows.
+export function AddSandboxProviderDialog({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Register a sandbox provider"
+      subtitle="Register a sandbox backend with your own credentials."
+      maxWidth="max-w-lg"
+    >
+      <SandboxProviderFormFields onCreated={onCreated} onDone={onClose} />
+    </Modal>
   );
 }
 

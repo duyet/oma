@@ -4,11 +4,12 @@
 // chosen backend / namespace / openshell options.
 //
 // Two exports:
-//   - <RegisterK8sClusterForm /> — the inner content, embedded as the third
-//     tab of <AddRuntimeDialog /> (same pattern as SandboxProviderFormFields
-//     and ConnectMachineInstructions).
+//   - <RegisterK8sClusterForm /> — the inner content (kept exported for
+//     reuse; the page wires the standalone dialog below instead).
 //   - <RegisterK8sClusterDialog /> — a standalone Modal wrapper, opened from
-//     a K8s provider card's "Set up" action.
+//     the Runtimes page header "Register k8s cluster" button, a K8s provider
+//     card's "Set up" action, the footer link, or the SetupProviderModal's
+//     bounce-to-register path.
 //
 // The chart referenced is `oma-bridge-daemon` (the in-cluster bridge daemon
 // that pairs a machine/cluster back to this OMA instance). NOT `oma-k8s-bridge`

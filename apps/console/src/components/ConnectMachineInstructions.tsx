@@ -1,9 +1,14 @@
-// Connect-machine instructions shown inside the "Add runtime" dialog's
-// "Connect local machine" tab. Pure presentational — takes the copy state
-// + handler so the parent owns the toast.
+// Connect-machine instructions — the bridge daemon (oma bridge setup) walkthrough.
+// Two exports mirroring the RegisterK8sClusterDialog pattern:
+//   - <ConnectMachineInstructions /> — the inner content, pure presentational.
+//     Takes the copy state + handler so the parent owns the toast.
+//   - <ConnectMachineDialog /> — a standalone Modal wrapper opened from the
+//     Runtimes page header's "Connect a machine" button.
 import { toast } from "sonner";
 
 import { CopyButton } from "./CopyButton";
+import { Modal } from "./Modal";
+import { Button } from "@/components/ui/button";
 import { RECONNECT_CMD, SETUP_CMD } from "../lib/bridge-commands";
 
 const EXAMPLE_AGENTS = [
@@ -119,5 +124,30 @@ export function ConnectMachineInstructions({
         <CopyButton id="bridge-restart" text={RECONNECT_CMD} copied={copied} onCopy={copy} />
       </div>
     </div>
+  );
+}
+
+export function ConnectMachineDialog({
+  open,
+  onClose,
+  copied,
+  onCopy,
+}: {
+  open: boolean;
+  onClose: () => void;
+  copied: string | null;
+  onCopy: (text: string, key: string) => void;
+}) {
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Connect a machine"
+      subtitle="Run the bridge daemon on a machine you want to connect."
+      maxWidth="max-w-3xl"
+      footer={<Button onClick={onClose}>Done</Button>}
+    >
+      <ConnectMachineInstructions copied={copied} onCopy={onCopy} />
+    </Modal>
   );
 }
