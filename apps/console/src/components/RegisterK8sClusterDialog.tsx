@@ -1,14 +1,11 @@
 // Register-a-Kubernetes-cluster flow. Mints a pairing token against
 // `POST /v1/runtimes/pairing-token`, then renders install snippets for
-// Helm / manual env / GitOps, templated from the chosen backend + namespace.
+// Helm / manual env / GitOps / agent prompt.
 //
-// Two exports:
-//   - <RegisterK8sClusterForm /> — the inner content.
-//   - <RegisterK8sClusterDialog /> — Modal wrapper opened from Runtimes.
-//
-// The chart is `oma-bridge-daemon` (in-cluster reverse-WebSocket worker).
-// Not `oma-k8s-bridge` — the older CF→k8s HTTP bridge.
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+// Chart: oma-bridge-daemon (in-cluster reverse-WebSocket worker).
+// Not oma-k8s-bridge — the older CF→k8s HTTP bridge.
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { CheckCircle2Icon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Modal } from "./Modal";
@@ -16,8 +13,16 @@ import { Button } from "@/components/ui/button";
 import { TextInput } from "./Input";
 import { HighlightedCode } from "./HighlightedCode";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Spinner } from "@/components/ui/spinner";
 import { useApi } from "../lib/api";
+import { useApiQuery } from "../lib/useApiQuery";
 import { cn } from "@/lib/utils";
+
+interface RuntimeRow {
+  id: string;
+  hostname?: string;
+  status?: string;
+}
 
 interface PairingToken {
   code: string;
@@ -26,21 +31,14 @@ interface PairingToken {
   kind: "k8s_pairing";
 }
 
-/**
- * How the in-cluster daemon executes sandbox ops.
- *
- * - `subprocess` — tools run **inside the daemon pod** (no extra pods).
- * - `openshell`  — daemon relays each session to an OpenShell gateway that
- *                  creates isolated sandboxes (pods/microVMs) per session.
- */
 type Backend = "subprocess" | "openshell";
-
-type InstallTab = "helm" | "manual" | "gitops";
+type InstallTab = "helm" | "manual" | "gitops" | "prompt";
 
 const DOCS_URL = "https://docs.oma.duyet.net/deploy/bridge-daemon/";
 const CHART_README_URL =
   "https://github.com/duyet/oma/blob/main/charts/oma-bridge-daemon/README.md";
 const CHART_PATH = "https://github.com/duyet/oma/tree/main/charts/oma-bridge-daemon";
+const REPO_URL = "https://github.com/duyet/oma";
 
 function formatExpiry(expiresAtSeconds: number): string {
   const ms = expiresAtSeconds * 1000 - Date.now();
@@ -52,11 +50,7 @@ function formatExpiry(expiresAtSeconds: number): string {
   return "expires in <1m";
 }
 
-const BACKENDS: Array<{
-  id: Backend;
-  title: string;
-  blurb: string;
-}> = [
+const BACKENDS: Array<{ id: Backend; title: string; blurb: string }> = [
   {
     id: "subprocess",
     title: "In-pod (default)",
@@ -73,11 +67,13 @@ const BACKENDS: Array<{
 
 export function RegisterK8sClusterForm({
   onDone,
+  onConnected,
 }: {
   /** @deprecated kept for call-site compat; copy is owned by HighlightedCode */
   copied?: string | null;
   onCopy?: (text: string, key: string) => void;
   onDone?: () => void;
+  onConnected?: (runtime: RuntimeRow) => void;
 }) {
   const { api } = useApi();
   const [backend, setBackend] = useState<Backend>("subprocess");
@@ -86,6 +82,13 @@ export function RegisterK8sClusterForm({
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<InstallTab>("helm");
   const [, setNow] = useState(0);
+  const [connected, setConnected] = useState<RuntimeRow | null>(null);
+
+  // Runtime ids present when the token was minted — only a *new* online
+  // id counts as this install succeeding.
+  const baselineIdsRef = useRef<Set<string>>(new Set());
+  const onConnectedRef = useRef(onConnected);
+  onConnectedRef.current = onConnected;
 
   useEffect(() => {
     if (!token) return;
@@ -93,15 +96,47 @@ export function RegisterK8sClusterForm({
     return () => clearInterval(id);
   }, [token]);
 
+  // Poll while a token is live and we haven't seen the new machine yet.
+  const runtimesQ = useApiQuery<{ runtimes?: RuntimeRow[] }>(
+    "/v1/runtimes",
+    undefined,
+    {
+      enabled: !!token && !connected,
+      refetchInterval: 5_000,
+      staleTime: 0,
+    },
+  );
+
+  useEffect(() => {
+    if (!token || connected) return;
+    const found = (runtimesQ.data?.runtimes ?? []).find(
+      (r) => r.status === "online" && r.id && !baselineIdsRef.current.has(r.id),
+    );
+    if (!found) return;
+    setConnected(found);
+    toast.success(
+      found.hostname ? `Cluster connected: ${found.hostname}` : "Cluster connected",
+    );
+    onConnectedRef.current?.(found);
+  }, [runtimesQ.data, token, connected]);
+
   const serverUrl =
     typeof window !== "undefined" ? window.location.origin : "";
-
   const ns = namespace.trim() || "oma";
   const openshell = backend === "openshell";
 
   async function generateToken() {
     setLoading(true);
     try {
+      try {
+        const existing = await api<{ runtimes?: RuntimeRow[] }>("/v1/runtimes");
+        baselineIdsRef.current = new Set(
+          (existing.runtimes ?? []).map((r) => r.id).filter(Boolean),
+        );
+      } catch {
+        baselineIdsRef.current = new Set();
+      }
+      setConnected(null);
       const res = await api<PairingToken>("/v1/runtimes/pairing-token", {
         method: "POST",
         body: JSON.stringify({ ttl_hours: 24 }),
@@ -117,10 +152,9 @@ export function RegisterK8sClusterForm({
   async function revokeToken() {
     if (!token) return;
     try {
-      await api(`/v1/runtimes/pairing-token/${token.code}`, {
-        method: "DELETE",
-      });
+      await api(`/v1/runtimes/pairing-token/${token.code}`, { method: "DELETE" });
       setToken(null);
+      setConnected(null);
       toast.success("Pairing token revoked");
     } catch {
       // api() already toasts.
@@ -128,8 +162,6 @@ export function RegisterK8sClusterForm({
   }
 
   const snippets = useMemo(() => {
-    // Chart values: empty bridge.backend = subprocess default; "openshell"
-    // + openshell.enabled installs the gateway subchart.
     const valuesYaml = [
       `pairing:`,
       `  existingSecret: oma-bridge-daemon-pairing`,
@@ -161,7 +193,6 @@ export function RegisterK8sClusterForm({
       `  -f values.yaml`,
     ].join("\n");
 
-    // Manual path: secret + ConfigMap env + pointer to raw manifests.
     const envYaml = [
       `apiVersion: v1`,
       `kind: ConfigMap`,
@@ -176,26 +207,22 @@ export function RegisterK8sClusterForm({
             `  # Point at your in-cluster OpenShell gateway (adjust host/port).`,
             `  OPENSHELL_GATEWAY_ENDPOINT: "openshell-gateway.${ns}.svc.cluster.local:8080"`,
           ]
-        : [
-            `  # In-pod mode: leave OPENSHELL_* unset. Tools run inside the daemon pod.`,
-          ]),
+        : [`  # In-pod mode: leave OPENSHELL_* unset. Tools run inside the daemon pod.`]),
     ].join("\n");
 
     const manualCmd = token
       ? [
-          `# 1. Namespace + pairing secret (token stays out of helm history)`,
+          `# 1. Namespace + pairing secret`,
           secretCmd,
           ``,
-          `# 2. Apply env ConfigMap (copy env.yaml below first)`,
+          `# 2. Apply env ConfigMap`,
           `kubectl apply -f env.yaml`,
           ``,
-          `# 3. Deploy the daemon manifests`,
+          `# 3. Deploy daemon manifests`,
           `kubectl apply -f https://raw.githubusercontent.com/duyet/oma/main/deploy/cli-bridge-daemon/`,
-          `#    or: kubectl apply -f deploy/cli-bridge-daemon/  (from a local clone)`,
         ].join("\n")
       : "";
 
-    // GitOps-friendly values (no secret literals — ExternalSecret / SealedSecrets).
     const argoApp = [
       `apiVersion: argoproj.io/v1alpha1`,
       `kind: Application`,
@@ -222,11 +249,8 @@ export function RegisterK8sClusterForm({
       `    server: https://kubernetes.default.svc`,
       `    namespace: ${ns}`,
       `  syncPolicy:`,
-      `    automated:`,
-      `      prune: true`,
-      `      selfHeal: true`,
-      `    syncOptions:`,
-      `      - CreateNamespace=true`,
+      `    automated: { prune: true, selfHeal: true }`,
+      `    syncOptions: ["CreateNamespace=true"]`,
     ].join("\n");
 
     const fluxHelm = [
@@ -238,8 +262,7 @@ export function RegisterK8sClusterForm({
       `spec:`,
       `  interval: 10m`,
       `  url: https://github.com/duyet/oma.git`,
-      `  ref:`,
-      `    branch: main`,
+      `  ref: { branch: main }`,
       `---`,
       `apiVersion: helm.toolkit.fluxcd.io/v2`,
       `kind: HelmRelease`,
@@ -268,11 +291,20 @@ export function RegisterK8sClusterForm({
 
     const gitopsSecretHint = token
       ? [
-          `# Create the pairing secret OUTSIDE Git (or via ExternalSecrets).`,
-          `# Never commit OMA_PAIRING_CODE / OMA_PAIRING_STATE.`,
+          `# Create pairing secret OUTSIDE Git. Never commit OMA_PAIRING_*.`,
           secretCmd,
         ].join("\n")
       : "";
+
+    const agentPrompt = buildAgentPrompt({
+      serverUrl,
+      ns,
+      openshell,
+      token,
+      valuesYaml,
+      secretCmd,
+      helmCmd,
+    });
 
     return {
       valuesYaml,
@@ -283,6 +315,7 @@ export function RegisterK8sClusterForm({
       argoApp,
       fluxHelm,
       gitopsSecretHint,
+      agentPrompt,
     };
   }, [serverUrl, ns, openshell, token]);
 
@@ -292,16 +325,14 @@ export function RegisterK8sClusterForm({
         Install{" "}
         <span className="text-fg font-medium">oma-bridge-daemon</span> in your
         cluster. It opens an outbound WebSocket to this OMA instance and shows
-        up under{" "}
-        <span className="text-fg">Connected machines</span>. Route work with an
-        environment whose sandbox provider is{" "}
+        up under <span className="text-fg">Connected machines</span>. Route
+        work with an environment whose sandbox provider is{" "}
         <code className="rounded bg-bg-surface px-1 font-mono text-[11px]">
           subprocess
         </code>
         .
       </p>
 
-      {/* Backend as compact radio cards — labels describe the real model. */}
       <div className="space-y-1.5">
         <div className="text-[12px] font-medium text-fg">Where sandboxes run</div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -337,7 +368,6 @@ export function RegisterK8sClusterForm({
         hint="Kubernetes namespace for the daemon Deployment."
       />
 
-      {/* Pairing token */}
       <div className="rounded-md border border-border bg-bg-surface/50 px-3 py-2.5 space-y-2">
         {!token ? (
           <div className="flex items-center justify-between gap-3">
@@ -374,9 +404,6 @@ export function RegisterK8sClusterForm({
         )}
       </div>
 
-      {/* Install method — tabs always on top of the install section.
-          Content is usable before a token (values / env / GitOps); secret
-          steps show a short prompt until Generate token is clicked. */}
       <div className="space-y-2.5 pt-1">
         <div className="text-[12px] font-medium text-fg">Install method</div>
         <Tabs
@@ -384,7 +411,7 @@ export function RegisterK8sClusterForm({
           onValueChange={(v) => setTab(v as InstallTab)}
           className="w-full flex flex-col gap-2.5"
         >
-          <TabsList className="grid w-full grid-cols-3 h-9">
+          <TabsList className="grid w-full grid-cols-4 h-9">
             <TabsTrigger value="helm" className="text-[12px]">
               Helm
             </TabsTrigger>
@@ -393,6 +420,9 @@ export function RegisterK8sClusterForm({
             </TabsTrigger>
             <TabsTrigger value="gitops" className="text-[12px]">
               GitOps
+            </TabsTrigger>
+            <TabsTrigger value="prompt" className="text-[12px]">
+              Prompt
             </TabsTrigger>
           </TabsList>
 
@@ -461,24 +491,12 @@ export function RegisterK8sClusterForm({
                 <TokenNeeded />
               )}
             </Step>
-            <p className="text-[11px] text-fg-subtle leading-snug">
-              Copy-paste env for a hand-rolled Deployment: set{" "}
-              <code className="font-mono text-[10px]">BRIDGE_SANDBOX_BACKEND</code>{" "}
-              to{" "}
-              <code className="font-mono text-[10px]">
-                {openshell ? "openshell" : "subprocess"}
-              </code>
-              {openshell
-                ? " and OPENSHELL_GATEWAY_ENDPOINT to your gateway host:port."
-                : ". Tools share the daemon pod — no per-session pods."}
-            </p>
           </TabsContent>
 
           <TabsContent value="gitops" className="space-y-2.5 mt-0 outline-none">
             <p className="text-[11px] text-fg-muted leading-snug">
               Keep pairing secrets out of Git. Create the secret with kubectl
-              (or ExternalSecrets / Sealed Secrets), then sync the chart with
-              Argo CD or Flux.
+              (or ExternalSecrets), then sync the chart with Argo CD or Flux.
             </p>
             <Step n={1} title="Pairing secret (out-of-band)">
               {token ? (
@@ -509,8 +527,59 @@ export function RegisterK8sClusterForm({
               />
             </Step>
           </TabsContent>
+
+          <TabsContent value="prompt" className="space-y-2.5 mt-0 outline-none">
+            <p className="text-[11px] text-fg-muted leading-snug">
+              Paste into Claude Code, Cursor, or Codex on a machine with{" "}
+              <code className="font-mono text-[10px]">kubectl</code> /{" "}
+              <code className="font-mono text-[10px]">helm</code> for this
+              cluster.
+            </p>
+            {!token && (
+              <div className="rounded-md border border-dashed border-border bg-bg px-3 py-2.5 text-[11px] text-fg-muted">
+                Generate a pairing token above so the prompt includes real{" "}
+                <code className="font-mono text-[10px]">OMA_PAIRING_*</code>{" "}
+                values.
+              </div>
+            )}
+            <HighlightedCode
+              code={snippets.agentPrompt}
+              language="text"
+              filename="agent-install-prompt.md"
+              maxHeightClass="max-h-80"
+            />
+          </TabsContent>
         </Tabs>
       </div>
+
+      {(token || connected) && (
+        <div
+          className={cn(
+            "rounded-md border px-3 py-2.5 flex items-start gap-2.5",
+            connected
+              ? "border-success/40 bg-success/5"
+              : "border-border bg-bg-surface/60",
+          )}
+        >
+          {connected ? (
+            <CheckCircle2Icon className="size-4 text-success shrink-0 mt-0.5" />
+          ) : (
+            <Spinner className="size-4 text-brand shrink-0 mt-0.5" />
+          )}
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <div className="text-[12px] font-medium text-fg">
+              {connected
+                ? `Cluster connected${connected.hostname ? `: ${connected.hostname}` : ""}`
+                : "Waiting for cluster to connect…"}
+            </div>
+            <p className="text-[11px] text-fg-muted leading-snug">
+              {connected
+                ? "It appears under Connected machines. You can close this dialog."
+                : "Safe to close — after install and pair succeed, the cluster shows up automatically under Connected machines."}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center justify-between gap-2 pt-1 border-t border-border">
         <div className="flex items-center gap-3 text-[11px]">
@@ -533,7 +602,7 @@ export function RegisterK8sClusterForm({
         </div>
         {onDone && (
           <Button variant="ghost" size="sm" onClick={onDone}>
-            Done
+            {connected ? "Close" : "Done"}
           </Button>
         )}
       </div>
@@ -568,16 +637,93 @@ function TokenNeeded() {
   );
 }
 
+/** Short paste-ready brief for a coding agent with cluster access. */
+function buildAgentPrompt(args: {
+  serverUrl: string;
+  ns: string;
+  openshell: boolean;
+  token: PairingToken | null;
+  valuesYaml: string;
+  secretCmd: string;
+  helmCmd: string;
+}): string {
+  const { serverUrl, ns, openshell, token, valuesYaml, secretCmd, helmCmd } =
+    args;
+  const backend = openshell
+    ? "openshell (per-session sandboxes)"
+    : "subprocess / in-pod (default)";
+  const secret = token
+    ? secretCmd
+    : [
+        `kubectl create namespace ${ns} --dry-run=client -o yaml | kubectl apply -f -`,
+        `kubectl create secret generic oma-bridge-daemon-pairing -n ${ns} \\`,
+        `  --from-literal=OMA_PAIRING_CODE='<FROM_CONSOLE>' \\`,
+        `  --from-literal=OMA_PAIRING_STATE='<FROM_CONSOLE>' \\`,
+        `  --dry-run=client -o yaml | kubectl apply -f -`,
+      ].join("\n");
+
+  return [
+    `# Install OMA bridge daemon on the current Kubernetes cluster`,
+    ``,
+    `Use kubectl/helm on the current context. Install **oma-bridge-daemon**`,
+    `(NOT oma-k8s-bridge). Pair outbound to the OMA control plane.`,
+    ``,
+    `## Parameters`,
+    `- OMA server: ${serverUrl || "(console origin)"}`,
+    `- Namespace: ${ns}`,
+    `- Backend: ${backend}`,
+    `- Chart: ${REPO_URL} → charts/oma-bridge-daemon`,
+    `- Docs: ${DOCS_URL}`,
+    token
+      ? [
+          `- OMA_PAIRING_CODE: ${token.code}`,
+          `- OMA_PAIRING_STATE: ${token.state}`,
+          `- Do not invent codes; do not commit them.`,
+        ].join("\n")
+      : `- No token embedded — ask the human to Generate token in Console first.`,
+    ``,
+    `## Helm steps`,
+    ``,
+    `### 1. Pairing secret`,
+    "```bash",
+    secret,
+    "```",
+    ``,
+    `### 2. values.yaml`,
+    "```yaml",
+    valuesYaml,
+    "```",
+    ``,
+    `### 3. Install`,
+    "```bash",
+    `git clone --depth 1 ${REPO_URL}.git /tmp/oma && cd /tmp/oma`,
+    helmCmd,
+    "```",
+    ``,
+    `### 4. Verify`,
+    "```bash",
+    `kubectl -n ${ns} get pods -l app.kubernetes.io/name=oma-bridge-daemon`,
+    `kubectl -n ${ns} logs -l app.kubernetes.io/name=oma-bridge-daemon --tail=80`,
+    "```",
+    ``,
+    `## Success`,
+    `Pod Ready; logs show pair/connect; Console → Connected machines online.`,
+    `Report resources applied and any errors. Don't change unrelated cluster state.`,
+  ].join("\n");
+}
+
 export function RegisterK8sClusterDialog({
   open,
   onClose,
   copied,
   onCopy,
+  onConnected,
 }: {
   open: boolean;
   onClose: () => void;
   copied?: string | null;
   onCopy?: (text: string, key: string) => void;
+  onConnected?: (runtime: RuntimeRow) => void;
 }) {
   return (
     <Modal
@@ -588,7 +734,15 @@ export function RegisterK8sClusterDialog({
       maxWidth="max-w-2xl"
       footer={<Button onClick={onClose}>Close</Button>}
     >
-      <RegisterK8sClusterForm copied={copied} onCopy={onCopy} />
+      {open ? (
+        <RegisterK8sClusterForm
+          key="register-k8s-open"
+          copied={copied}
+          onCopy={onCopy}
+          onDone={onClose}
+          onConnected={onConnected}
+        />
+      ) : null}
     </Modal>
   );
 }

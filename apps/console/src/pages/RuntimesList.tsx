@@ -1654,6 +1654,7 @@ export function RuntimesList() {
         onClose={() => setRegisterK8sOpen(false)}
         copied={copied}
         onCopy={copy}
+        onConnected={() => void refetch()}
       />
     </div>
   );
