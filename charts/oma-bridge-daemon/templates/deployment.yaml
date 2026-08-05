@@ -50,30 +50,27 @@ spec:
         fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+      {{- if or .Values.secret.existingSecret .Values.secret.credentials }}
+      # The daemon writes inside its config dir at runtime — `sessions/`
+      # (per-session ACP cwds, see packages/cli/src/bridge/lib/session-cwd.ts)
+      # and reads `machine-id`. A Secret volume is always read-only, so
+      # mounting it directly at ~/.oma/bridge makes those writes fail. Copy
+      # the creds (and the stable machine-id, if present) into a writable
+      # emptyDir instead and mount that as the config dir.
+      #
+      # Omitted entirely on the pairing-only path (pairing.existingSecret set,
+      # secret.existingSecret empty): there is no credentials.json Secret to
+      # copy from — the daemon container self-pairs on first boot via
+      # `oma bridge pair` (see the command block below). Emitting an empty
+      # `initContainers:` key is invalid Kubernetes, so the whole key is
+      # gated, not just the container entry.
       initContainers:
-        {{- if or .Values.secret.existingSecret .Values.secret.credentials }}
-        # The daemon writes inside its config dir at runtime — `sessions/`
-        # (per-session ACP cwds, see packages/cli/src/bridge/lib/session-cwd.ts)
-        # and reads `machine-id`. A Secret volume is always read-only, so
-        # mounting it directly at ~/.oma/bridge makes those writes fail. Copy
-        # the creds (and the stable machine-id, if present) into a writable
-        # emptyDir instead and mount that as the config dir.
-        #
-        # Skipped on the pairing-only path (pairing.existingSecret set,
-        # secret.existingSecret empty): there is no credentials.json Secret
-        # to copy from — the daemon container self-pairs on first boot via
-        # `oma bridge pair` (see the command block below).
         - name: seed-creds
           image: busybox:1.36
           command:
             - sh
             - -c
             - |
-              # On the full-pairing path (secret.existingSecret set) copy
-              # credentials.json into the writable emptyDir. On the pairing-
-              # only path (pairing.existingSecret set, no credentials Secret)
-              # the mount is absent — skip and let the daemon self-pair via
-              # `oma bridge pair` on first boot (see the daemon command).
               if [ -d /creds-src ] && [ -f /creds-src/credentials.json ]; then
                 cp /creds-src/credentials.json /home/oma/.oma/bridge/credentials.json
                 chmod 0600 /home/oma/.oma/bridge/credentials.json
@@ -89,10 +86,6 @@ spec:
             - name: creds-src
               mountPath: /creds-src
               readOnly: true
-              # Pairing-only path: the credentials Secret is absent — the
-              # daemon self-pairs via `oma bridge pair` on first boot. Skip
-              # the copy rather than failing the pod.
-              optional: true
             - name: bridge-state
               mountPath: /home/oma/.oma/bridge
           securityContext:
@@ -103,7 +96,7 @@ spec:
                 - ALL
             seccompProfile:
               type: RuntimeDefault
-        {{- end }}
+      {{- end }}
       containers:
         - name: daemon
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
