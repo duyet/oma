@@ -1046,11 +1046,11 @@ function SetupProviderModal({
         }
       >
         <p className="text-sm text-fg-muted leading-relaxed">
-          Kubernetes sandboxes run behind the in-cluster{" "}
-          <span className="text-fg">oma-bridge-daemon</span> (the bridge daemon,
-          not the older <span className="text-fg">oma-k8s-bridge</span> HTTP
-          bridge). Generate a pairing token and install the Helm chart to
-          connect a cluster.
+          Pair a cluster by installing{" "}
+          <span className="text-fg">oma-bridge-daemon</span> (outbound
+          WebSocket worker — not the older{" "}
+          <span className="text-fg">oma-k8s-bridge</span>). Default mode runs
+          tools inside the daemon pod; OpenShell mode isolates each session.
         </p>
       </Modal>
     );
@@ -1343,16 +1343,17 @@ export function RuntimesList() {
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div className="space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-lg font-semibold text-fg">Sandbox providers</h1>
+              <h1 className="text-lg font-semibold text-fg">Runtimes</h1>
               {deploymentLabel && (
                 <Badge variant="outline" className="text-[10px] font-mono">
-                  Deployment: {deploymentLabel}
+                  {deploymentLabel}
                 </Badge>
               )}
             </div>
-            <p className="text-sm text-fg-subtle">
-              Places a sandbox can run on this deployment. Click a card for full
-              details — set up, capacity, and how to use it from an environment.
+            <p className="text-sm text-fg-subtle max-w-2xl">
+              Sandbox providers and paired machines for this deployment.
+              Connect a laptop, register BYOK capacity, or install the
+              bridge daemon on Kubernetes.
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
@@ -1386,13 +1387,15 @@ export function RuntimesList() {
         </div>
       </section>
 
-      {/* (b) Slim cross-link callout. Promotes the buried UseInEnvironment
-          hint to the top of the page so operators don't have to open a
-          detail dialog to learn how providers are actually used. */}
-      <div className="rounded-md border border-border bg-bg-surface/50 px-3 py-2 flex items-center justify-between gap-3">
+      {/* How providers are used — compact, scannable. */}
+      <div className="rounded-md border border-border bg-bg-surface/50 px-3 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <p className="text-xs text-fg-muted leading-relaxed">
-          Providers are assigned per-environment — an environment picks a
-          sandbox provider, and a session picks an environment.
+          <span className="text-fg">Environment</span> → picks a sandbox
+          provider · <span className="text-fg">Session</span> → picks that
+          environment. K8s clusters pair as{" "}
+          <code className="font-mono text-[10px] bg-bg px-1 rounded">subprocess</code>{" "}
+          machines via{" "}
+          <code className="font-mono text-[10px] bg-bg px-1 rounded">oma-bridge-daemon</code>.
         </p>
         <Button
           size="sm"
@@ -1400,7 +1403,7 @@ export function RuntimesList() {
           className="shrink-0 text-[12px] h-7"
           onClick={goToEnvironments}
         >
-          Go to Environments →
+          Environments →
         </Button>
       </div>
 
