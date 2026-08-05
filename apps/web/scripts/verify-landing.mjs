@@ -86,10 +86,34 @@ if (!index.includes("Agent") || !index.includes("Session") || !index.includes("E
 if (!index.includes("RequestFlowInteractive") || !index.includes("ProviderFan")) {
   fail("landing must include the interactive request-path + provider-fan visual structure");
 }
-if (!index.includes("github.com/duyet/oma") || !index.includes("app.oma.duyet.net/login") || !index.includes("docs.oma.duyet.net")) {
+// Hosted CTA may be app root (signed-in → shell, signed-out → login bounce)
+// or the explicit /login path — both are valid.
+if (
+  !index.includes("github.com/duyet/oma") ||
+  !index.includes("app.oma.duyet.net") ||
+  !index.includes("docs.oma.duyet.net")
+) {
   fail("primary CTAs (GitHub, hosted, docs) must remain");
 }
-if (!process.exitCode) ok("landing source sections + concepts + viz + CTAs");
+// Flexibility section: #reach is canonical; #layers must remain as a stable
+// alias so external/old deep links still resolve after the merge.
+if (!/id=["']reach["']/.test(index) || !/id=["']layers["']/.test(index)) {
+  fail("landing must keep id=\"reach\" and alias id=\"layers\" on the flexibility section");
+}
+// Hosted CTA wording: nav/footer/hero say "Try hosted", not the old
+// "Dashboard →" label (dual-ended with login bounce confusion).
+const footer = readFileSync(join(root, "src/components/Footer.astro"), "utf8");
+for (const [name, src] of [
+  ["index.astro", index],
+  ["Base.astro", base],
+  ["Footer.astro", footer],
+]) {
+  if (/\bDashboard\s*→/.test(src)) fail(`${name}: stale "Dashboard →" CTA copy`);
+}
+if (!base.includes("Try hosted") || !footer.includes("Try hosted") || !index.includes("Try hosted")) {
+  fail("Base/Footer/index must expose \"Try hosted\" CTA label");
+}
+if (!process.exitCode) ok("landing source sections + concepts + viz + CTAs + #layers alias");
 
 // --- Built dist (if present) ---
 const distIndex = join(root, "dist/index.html");

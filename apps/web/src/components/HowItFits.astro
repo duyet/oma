@@ -7,6 +7,53 @@
 import HowItFits from "./HowItFits.tsx";
 ---
 
-<div class="fits" aria-label="How it fits together">
-  <HowItFits client:load />
+<div class="fits" aria-label="How it fits together — interactive diagram">
+  {/* SSR orientation shell: hint + reserved min-height so the React island
+      doesn't shove the page when it hydrates. Diagram still SSRs via
+      client:load; min-height only bounds the worst-case shift. */}
+  <p class="fits-hint">
+    <span class="fits-hint-label">Interactive</span>
+    <span class="fits-hint-copy"
+      >Four steps: Configure · Compose · Run · Reach. Click any card for
+      details. On small screens, collapse columns with the chevrons.</span
+    >
+  </p>
+  <div class="fits-diagram">
+    <HowItFits client:load />
+  </div>
 </div>
+
+<style>
+  .fits-hint {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem 0.75rem;
+    margin: 0 0 0.85rem;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: var(--color-fg-muted);
+  }
+  .fits-hint-label {
+    font-family: var(--font-mono);
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-brand);
+  }
+  .fits-hint-copy {
+    color: var(--color-fg-subtle);
+  }
+  /* Reserve vertical space for the four-column assembly so hydration and
+     late font metrics don't reflow the sections below. Tuned to typical
+     desktop diagram height; mobile columns stack so min-height is a floor. */
+  .fits-diagram {
+    min-height: 18rem;
+  }
+  @media (min-width: 768px) {
+    .fits-diagram {
+      min-height: 22rem;
+    }
+  }
+</style>

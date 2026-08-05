@@ -11,9 +11,12 @@ on:
     branches: [main]
     paths:
       - 'apps/agent/**'
-      - 'packages/session-runtime/**'
-      - 'packages/sandbox-sdk/**'
-      - 'packages/shared/**'
+      # Workers bundle workspace packages at deploy time. Selective path
+      # lists lagged (api-types, notify schemas, email, telegram, …) so
+      # package-only fixes never reached the SessionDO worker. Match
+      # build-node-images.yml: any package change redeploys.
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
       - '.github/workflows/deploy-agent.yml'
 
 concurrency:

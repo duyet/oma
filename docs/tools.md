@@ -7,6 +7,7 @@ The `agent_toolset_20260401` provides:
 | `bash` | Execute commands in the sandbox |
 | `read` | Read files from sandbox filesystem |
 | `write` | Write/create files (auto-creates directories) |
+| `output_file` | Write a persistent session output artifact under `/mnt/session/outputs/<filename>` — survives session end, downloadable via the Files panel and `GET /v1/sessions/:id/outputs`. Use for final artifacts; scratch work belongs in `/workspace/`. |
 | `edit` | Surgical string replacement in files |
 | `glob` | Find files matching a pattern |
 | `grep` | Search file contents with regex |

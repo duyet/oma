@@ -25,7 +25,7 @@ import { wrapToolsWithHooks, type HookDispatchDeps } from "./hooks";
 /** Tools enabled by default when an agent has no explicit tools config.
  *  Excludes opt-in tools that bias the LLM away from cheaper alternatives
  *  — see OPT_IN_TOOLS below. */
-export const DEFAULT_TOOLS = ["bash", "read", "write", "edit", "glob", "grep", "web_fetch", "web_search", "schedule", "cancel_schedule", "list_schedules"];
+export const DEFAULT_TOOLS = ["bash", "read", "write", "edit", "glob", "grep", "web_fetch", "web_search", "schedule", "cancel_schedule", "list_schedules", "output_file"];
 
 /** Tools recognised but NOT registered by default — agents must opt in
  *  via tools config (`{ name: "browser", enabled: true }`).
@@ -802,6 +802,25 @@ export async function buildTools(
         content: z.string().describe("The complete file content to write"),
       }),
       execute: safe(async ({ file_path, content }) => sandbox.writeFile(file_path, content)),
+    });
+  }
+
+  if (enabled.has("output_file")) {
+    tools.output_file = tool({
+      description:
+        "Write content to a persistent session output file, outside the sandbox workspace. " +
+        "Use this for artifacts the user should keep after the session ends: reports, exports, " +
+        "generated docs, packaged code. The file is stored under /mnt/session/outputs/ and " +
+        "is retrievable via the session outputs API and the Files panel.",
+      inputSchema: z.object({
+        filename: z.string().describe("Output filename, e.g. report.md or analysis.json"),
+        content: z.string().describe("The complete file content to write"),
+      }),
+      execute: safe(async ({ filename, content }) => {
+        const target = `/mnt/session/outputs/${filename}`;
+        await sandbox.writeFile(target, content);
+        return `Wrote session output ${filename}`;
+      }),
     });
   }
 

@@ -152,13 +152,14 @@ demos with pre-built Docker images).
 
 ### Built-in Toolset
 
-The `agent_toolset_20260401` provides 8 tools designed for general-purpose agent work:
+The `agent_toolset_20260401` provides 9 tools designed for general-purpose agent work:
 
 | Tool | Description | Key Behaviors |
 |---|---|---|
 | **bash** | Execute shell commands | 2min default timeout, 10min max. Auto-backgrounds long-running processes. SIGTERM on timeout. |
 | **read** | Read files | Returns file content with line numbers. Handles binary detection. |
 | **write** | Write files | Creates parent directories automatically. |
+| **output_file** | Write a persistent session output artifact | Writes to `/mnt/session/outputs/<filename>` — survives session end, downloadable via the Files panel and `GET /v1/sessions/:id/outputs`. Use for final artifacts the user should keep; scratch work belongs in `/workspace/`. |
 | **edit** | String replacement | Surgical find-and-replace. Fails if `old_str` not found or ambiguous. |
 | **glob** | File search | Pattern matching (e.g. `**/*.ts`). Returns sorted file list. |
 | **grep** | Content search | Regex search across files. Returns matching lines with context. |

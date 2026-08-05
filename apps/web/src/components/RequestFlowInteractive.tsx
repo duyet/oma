@@ -111,15 +111,45 @@ export default function RequestFlowInteractive() {
     <div className="wf-flow-explained">
       <style>{`
         .wf-flow-explained { width: 100%; }
-        /* Progress dot rail — mirrors the tab progress used by UseCasesInteractive */
-        .wf-dots { display: flex; justify-content: center; gap: 0.4rem; margin-bottom: 1.25rem; }
+        /* Horizontal scroll shell for .arch-path (min-width 42rem) so mobile
+           never gets page-level overflow; rail stays legible at full size. */
+        .wf-path-scroll {
+          width: 100%;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          padding-bottom: 0.35rem;
+        }
+        /* Progress dot rail — 44px hit targets (padding around a small visual
+           pip) so touch/keyboard users aren't hunting a 7px circle. */
+        .wf-dots {
+          display: flex; justify-content: center; align-items: center;
+          gap: 0.15rem; margin-bottom: 1.25rem;
+        }
         .wf-dot {
-          width: 7px; height: 7px; border-radius: 999px;
+          box-sizing: border-box;
+          display: inline-flex; align-items: center; justify-content: center;
+          width: 44px; height: 44px; padding: 0; margin: 0;
+          border: 0; background: transparent; cursor: pointer;
+          border-radius: 999px;
+        }
+        .wf-dot::after {
+          content: "";
+          width: 8px; height: 8px; border-radius: 999px;
           background: color-mix(in srgb, var(--color-fg) 22%, transparent);
           border: 1px solid color-mix(in srgb, var(--color-fg) 18%, transparent);
-          transition: background-color 140ms ease, border-color 140ms ease;
+          transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease;
         }
-        .wf-dot.is-active { background: var(--color-brand); border-color: var(--color-brand); }
+        .wf-dot.is-active::after {
+          background: var(--color-brand); border-color: var(--color-brand);
+          transform: scale(1.15);
+        }
+        .wf-dot:focus-visible {
+          outline: 2px solid var(--color-brand); outline-offset: 2px;
+        }
+        .wf-dot:hover::after {
+          background: color-mix(in srgb, var(--color-brand) 55%, transparent);
+          border-color: var(--color-brand);
+        }
         /* Explanatory panel */
         .wf-panel { margin-top: 1.75rem; text-align: center; }
         .wf-panel-title {
@@ -143,8 +173,11 @@ export default function RequestFlowInteractive() {
           box-shadow: 0 1px 2px rgba(24, 24, 27, 0.05), 0 0 0 3px color-mix(in srgb, var(--color-brand) 35%, transparent);
         }
         .wf-node-btn {
-          background: none; border: 0; padding: 0; margin: 0; cursor: pointer;
+          background: none; border: 0; margin: 0; cursor: pointer;
+          /* Pad the whole node so the click/tap target clears ~44px tall. */
           display: flex; flex-direction: column; align-items: center; gap: 0.4rem;
+          padding: 0.5rem 0.35rem; min-width: 4.5rem; min-height: 44px;
+          border-radius: 0.6rem;
         }
         .wf-node-btn:focus-visible .arch-node-glyph {
           outline: 2px solid var(--color-brand); outline-offset: 2px;
@@ -157,9 +190,11 @@ export default function RequestFlowInteractive() {
             key={s.name}
             type="button"
             role="tab"
+            id={`wf-tab-${i}`}
             aria-selected={i === active}
-            aria-label={s.name}
-            title={s.name}
+            aria-controls="wf-panel"
+            aria-label={`Step ${i + 1} of ${STEPS.length}: ${s.name} — ${s.sub}`}
+            title={`${s.name}: ${s.sub}`}
             className={`wf-dot ${i === active ? "is-active" : ""}`}
             onMouseEnter={() => { hoverRef.current = i; }}
             onMouseLeave={() => { hoverRef.current = null; }}
@@ -170,33 +205,42 @@ export default function RequestFlowInteractive() {
 
       {/* Pipeline — .arch-path / .arch-node reuse the blueprint rail from
           global.css. Each node is a keyboard+touch button; hover/pause keeps
-          the autoplay readable. */}
-      <ol className="arch-path">
-        {STEPS.map((s, i) => {
-          const isActive = i === active;
-          return (
-            <li key={s.name} className={`arch-node wf-step${isActive ? " is-active" : ""}`}>
-              <button
-                type="button"
-                className="wf-node-btn"
-                aria-expanded={isActive}
-                aria-controls="wf-panel"
-                onMouseEnter={() => { hoverRef.current = i; }}
-                onMouseLeave={() => { hoverRef.current = null; }}
-                onClick={() => { setPinned(true); setActive(i); }}
-              >
-                <span className="arch-node-glyph">
-                  <Glyph name={s.icon} />
-                </span>
-                <span className="arch-node-name">{s.name}</span>
-                <span className="arch-node-sub">{s.sub}</span>
-              </button>
-            </li>
-          );
-        })}
-      </ol>
+          the autoplay readable. Scroll shell contains min-width on mobile. */}
+      <div className="wf-path-scroll">
+        <ol className="arch-path">
+          {STEPS.map((s, i) => {
+            const isActive = i === active;
+            return (
+              <li key={s.name} className={`arch-node wf-step${isActive ? " is-active" : ""}`}>
+                <button
+                  type="button"
+                  className="wf-node-btn"
+                  aria-pressed={isActive}
+                  aria-expanded={isActive}
+                  aria-controls="wf-panel"
+                  aria-label={`Show ${s.name} step: ${s.sub}`}
+                  onMouseEnter={() => { hoverRef.current = i; }}
+                  onMouseLeave={() => { hoverRef.current = null; }}
+                  onClick={() => { setPinned(true); setActive(i); }}
+                >
+                  <span className="arch-node-glyph">
+                    <Glyph name={s.icon} />
+                  </span>
+                  <span className="arch-node-name">{s.name}</span>
+                  <span className="arch-node-sub">{s.sub}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
 
-      <div id="wf-panel" className="wf-panel">
+      <div
+        id="wf-panel"
+        className="wf-panel"
+        role="tabpanel"
+        aria-labelledby={`wf-tab-${active}`}
+      >
         <p className="wf-panel-title">{STEPS[active].name} — what runs here</p>
         <div className="wf-panel-body" aria-live="polite">
           <p>{STEPS[active].body}</p>

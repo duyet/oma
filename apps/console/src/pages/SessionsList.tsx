@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { Controller, useFieldArray, useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -45,6 +45,18 @@ const STATUS_OPTIONS: { value: StatusValue; label: string }[] = [
   { value: "rescheduling", label: "Rescheduling" },
   { value: "terminated", label: "Terminated" },
 ];
+
+const STATUS_VALUES = new Set<string>(
+  STATUS_OPTIONS.map((o) => o.value).filter((v) => v !== "any"),
+);
+
+/** Read `?status=` from the URL for deep-links (e.g. Overview's Active
+ *  sessions card → `/sessions?status=running`). Unknown values fall back
+ *  to "any" so a typo never leaves the list empty forever. */
+function statusFromSearchParam(raw: string | null): StatusValue {
+  if (raw && STATUS_VALUES.has(raw)) return raw as StatusValue;
+  return "any";
+}
 
 // ────────────────────────────────────────────────────────────────────────
 // Form schema (zod)
@@ -238,6 +250,7 @@ function LiveDuration({ created_at, terminated_at }: { created_at: string; termi
 export function SessionsList() {
   const { api } = useApi();
   const nav = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const confirm = useConfirm();
   const [agents, setAgents] = useState<AgentLite[]>([]);
   // Set by the agent Combobox when the user picks an agent. Carries the
@@ -275,10 +288,41 @@ export function SessionsList() {
   // Server-driven filter state. Each piece flows into sessionsParams below
   // → useInfiniteApiQuery resets to page 1 on params change → the list
   // reflects exactly what the server returned (no client-side faking).
+  // Status seeds from `?status=` so Overview's Active sessions card can
+  // deep-link to `/sessions?status=running`.
   const [search, setSearch] = useState("");
   const [filterAgent, setFilterAgent] = useState("");
-  const [status, setStatus] = useState<StatusValue>("any");
+  const [status, setStatus] = useState<StatusValue>(() =>
+    statusFromSearchParam(searchParams.get("status")),
+  );
   const [created, setCreated] = useState<{ after?: number; before?: number }>({});
+
+  // Keep the URL chip in sync when the user changes status in the bar, so
+  // a share/refresh preserves the filter. Other filters stay local-only.
+  const onStatusChange = useCallback(
+    (next: StatusValue) => {
+      setStatus(next);
+      setSearchParams(
+        (prev) => {
+          const sp = new URLSearchParams(prev);
+          if (next === "any") sp.delete("status");
+          else sp.set("status", next);
+          return sp;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  // URL → state: honor external searchParam changes (in-app Link navigations
+  // that re-mount less often than expected, or future push-based history).
+  // onStatusChange already writes both; this only applies when the URL
+  // drifts from local state.
+  useEffect(() => {
+    const fromUrl = statusFromSearchParam(searchParams.get("status"));
+    setStatus((prev) => (prev === fromUrl ? prev : fromUrl));
+  }, [searchParams]);
 
   // Sessions table — cursor-paginated, server-side filtered. Any change to
   // these params resets to page 0 automatically (paramsKey is part of the
@@ -627,6 +671,18 @@ export function SessionsList() {
     [agents],
   );
 
+  // Agent id → display name for the table column. Same /v1/agents fetch the
+  // filter chip + create modal already use (loadAux); no extra network.
+  // Matches Dashboard's recent-sessions labeling so operators see names
+  // rather than mono ids when the agent is still in the tenant.
+  const agentNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of agents) {
+      if (a.id) map.set(a.id, a.name || a.id);
+    }
+    return map;
+  }, [agents]);
+
   const filters = (
     <FilterBar
       agent={{
@@ -637,7 +693,7 @@ export function SessionsList() {
       }}
       status={{
         value: status,
-        onChange: (v) => setStatus(v as StatusValue),
+        onChange: (v) => onStatusChange(v as StatusValue),
         options: STATUS_OPTIONS,
       }}
       created={{ value: created, onChange: setCreated }}
@@ -725,11 +781,25 @@ export function SessionsList() {
       },
       {
         id: "agent",
-        accessorFn: (s) => s.agent.id,
+        accessorFn: (s) =>
+          agentNameById.get(s.agent.id) ?? s.agent.id,
         header: "Agent",
-        cell: ({ row }) => (
-          <span className="text-fg-muted font-mono text-xs">{row.original.agent.id}</span>
-        ),
+        cell: ({ row }) => {
+          const id = row.original.agent.id;
+          const name = agentNameById.get(id);
+          return (
+            <span
+              className="text-fg-muted text-xs max-w-[12rem] block truncate"
+              title={name ? `${name} (${id})` : id}
+            >
+              {name ? (
+                name
+              ) : (
+                <span className="font-mono">{id}</span>
+              )}
+            </span>
+          );
+        },
       },
       {
         id: "duration",
@@ -816,7 +886,7 @@ export function SessionsList() {
         size: 56,
       },
     ],
-    [api, refreshSessions, confirm],
+    [api, refreshSessions, confirm, agentNameById],
   );
 
   const hasActiveFilter = !!search || !!filterAgent || status !== "any" || created.after !== undefined || created.before !== undefined;

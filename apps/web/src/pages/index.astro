@@ -43,7 +43,7 @@ const concepts = [
   },
   {
     name: "Session",
-    body: "A conversation backed by an append-only event log. Streaming, crash recovery, and lifecycle all hang off this durable state.",
+    body: "A conversation with a durable event log. Streaming, crash recovery, and lifecycle all hang off this state — not an ephemeral chat window.",
   },
   {
     name: "Environment",
@@ -72,43 +72,75 @@ const explore = [
   keywords="open managed agents, oma agent platform, self host ai agent, any llm provider agent platform, byok ai agent, claude agent sdk, mcp server host, ai agent cloudflare workers, self host claude code, claude code skills, claude managed agents alternative, claude tag alternative, open source claude tag"
   schemas={schemas}
 >
-  {/* Hero — the assembly diagram leads, full width: it is the product's
-      mental model and the thing worth seeing first. The pitch sits directly
-      under it. Breaks out wider than the text column on large screens.
-      (Kept verbatim from the previous rebuild.) */}
-  <section class:list={[container, "pt-10 pb-12 sm:pt-12 sm:pb-16 lg:pt-14 lg:pb-24"]}>
-    <div class="mb-12 lg:-mx-20 xl:-mx-32">
-      <HowItFits />
-    </div>
-
+  {/* Hero — pitch first so a first-time visitor gets the value prop before the
+      assembly diagram. Diagram follows immediately as the mental model, with
+      its own section label so it doesn't compete with the H1. */}
+  <section class:list={[container, "pt-10 pb-10 sm:pt-14 sm:pb-12 lg:pt-16"]}>
     <div class="max-w-3xl">
+      <p class={eyebrow}>Open source · self-hostable</p>
       <h1
-        class="text-balance text-[clamp(1.75rem,7vw,2.125rem)] font-semibold leading-[1.08] tracking-tighter text-[var(--color-fg)] sm:text-[2.75rem] lg:text-[3.25rem]"
+        class="mt-3 text-balance text-[clamp(1.75rem,7vw,2.125rem)] font-semibold leading-[1.08] tracking-tighter text-[var(--color-fg)] sm:text-[2.75rem] lg:text-[3.25rem]"
       >
         The self-hosted agent platform for any LLM provider and any sandbox
       </h1>
       <p
         class="mt-5 max-w-xl text-pretty text-base leading-relaxed text-[var(--color-fg-muted)] sm:text-lg"
       >
-        Run your own agents on any model, in any sandbox. Deploy to Cloudflare
-        Workers, or run it yourself with Docker.
+        Run agent fleets you control — durable sessions, sandboxed tools, and
+        vault-backed credentials. Deploy on Cloudflare Workers, or self-host
+        with Docker. Bring your own models and sandboxes.
       </p>
 
       <div class="mt-8 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <a href="https://docs.oma.duyet.net" class={btnPrimary}
+          ><Icon name="book" size={16} /> Read the docs</a
+        >
+        {/* App root (not /login): signed-in land on the shell; signed-out
+            bounce to login — matches nav + footer CTAs. */}
+        <a href="https://app.oma.duyet.net/" class={btnOutline}
+          ><Icon name="server" size={16} /> Try hosted</a
+        >
         <a
           href="https://github.com/duyet/oma"
           target="_blank"
           rel="noopener noreferrer"
-          class={btnPrimary}><Icon name="download" size={16} /> Clone the repo</a
-        >
-        <a href="https://docs.oma.duyet.net" class={btnOutline}
-          ><Icon name="book" size={16} /> Read the docs</a
+          class={btnOutline}><Icon name="github" size={16} /> GitHub</a
         >
       </div>
 
-      <p class="mt-6 text-sm text-[var(--color-fg-subtle)]">
-        Apache 2.0 · self-hostable · no vendor lock-in
+      {/* Compact proof bar — real platforms from AGENTS.md, not a vendor invent. */}
+      <p class="mt-5 text-sm leading-relaxed text-[var(--color-fg-subtle)]">
+        <span class="font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--color-fg-subtle)]"
+          >Works with</span
+        >
+        <span class="mx-2 text-[var(--color-border-strong)]" aria-hidden="true">·</span>
+        <span class="text-[var(--color-fg-muted)]"
+          >Cloudflare · Kubernetes · Anthropic · OpenAI-compatible · E2B &amp; Daytona (self-host)</span
+        >
       </p>
+
+      <p class="mt-4 text-sm text-[var(--color-fg-subtle)]">
+        Apache 2.0 · no vendor lock-in · same codebase cloud or self-host
+      </p>
+    </div>
+  </section>
+
+  {/* Assembly diagram — product mental model, now after the pitch and labeled
+      so dense cards have orientation. Negative margins widen on large screens
+      without letting the page scroll sideways (overflow-x-clip). */}
+  <section class:list={[container, "pb-12 sm:pb-16 lg:pb-20"]} aria-labelledby="how-it-fits-heading">
+    <header class="mb-5 sm:mb-6 max-w-3xl">
+      <p class={eyebrow}>How it fits</p>
+      <h2 id="how-it-fits-heading" class={sectionTitle}>
+        Configure · compose · run · reach
+      </h2>
+      <p class={sectionIntro}>
+        Four steps from API key to a live agent. Click any card for a short
+        explanation and links.
+      </p>
+    </header>
+    <div class="overflow-x-clip lg:-mx-12 xl:-mx-24">
+      <HowItFits />
     </div>
   </section>
 
@@ -117,11 +149,11 @@ const explore = [
   <section class={section} data-reveal id="what-is-oma">
     <div class={container}>
       <header class="mb-6 sm:mb-8">
-        <p class={eyebrow}>Product</p>
+        <p class={eyebrow}>Primitives</p>
         <h2 class={sectionTitle}>What Open Managed Agents is</h2>
         <p class={sectionIntro}>
-          A platform for running agent fleets, not a chat UI. Four primitives
-          carry the whole model.
+          A platform for running agent fleets, not a chat UI. Four objects carry
+          the whole model.
         </p>
       </header>
       <div class="grid gap-4 sm:grid-cols-2">
@@ -148,11 +180,11 @@ const explore = [
   <section class={section} data-reveal id="example">
     <div class={container}>
       <header class="mb-6 sm:mb-8">
-        <p class={eyebrow}>Example</p>
+        <p class={eyebrow}>Demo</p>
         <h2 class={sectionTitle}>See it run</h2>
         <p class={sectionIntro}>
-          Pick a use case and follow its trigger → agent → result pipeline,
-          including the local bridge relay, Kubernetes, and the browser sandbox.
+          Pick a use case and follow trigger → agent → result — including the
+          local bridge, Kubernetes, and the browser sandbox.
         </p>
       </header>
       <WiredFlows client:load />
@@ -169,55 +201,47 @@ const explore = [
   <section class={section} data-reveal id="architecture">
     <div class={container}>
       <header class="mb-6 sm:mb-8">
-        <p class={eyebrow}>Anatomy</p>
+        <p class={eyebrow}>Request path</p>
         <h2 class={sectionTitle}>What one request touches</h2>
         <p class={sectionIntro}>
-          Every message runs the same durable path. The session's append-only
-          event log records it, the harness drives the model loop, tools execute
-          in the sandbox, and the outbound proxy injects vault credentials the
-          sandbox never sees.
+          Every message runs the same durable path: the session log records it,
+          the harness drives the model loop, tools run in the sandbox, and the
+          outbound proxy injects vault credentials the sandbox never sees.
         </p>
       </header>
       <RequestFlowInteractive client:load />
     </div>
   </section>
 
-  {/* Reach — any provider in, any sandbox out. */}
+  {/* Flexibility — fan-in/fan-out + the three swappable layers in one section
+      so "any model, any sandbox" is said once, then shown (ProviderFan) and
+      decomposed (ControlPlaneFlow) without a second pitch.
+      Canonical id is #reach; #layers is a zero-size alias so external/old
+      /#layers links still land here after the merge. */}
   <section class={section} data-reveal id="reach">
+    <div id="layers" class="h-0 w-0 overflow-hidden" aria-hidden="true"></div>
     <div class={container}>
       <header class="mb-6 sm:mb-8">
-        <p class={eyebrow}>Reach</p>
+        <p class={eyebrow}>Flexibility</p>
         <h2 class={sectionTitle}>Any model, any sandbox</h2>
         <p class={sectionIntro}>
-          The control plane is the constant. Point it at Anthropic, any
-          OpenAI-compatible gateway, or your own model; run tools on Cloudflare
-          Containers, Kubernetes, an OpenShell bridge, a WASM VM in a browser
-          tab, your own machine over the CLI, a micro-VM vendor, or a
-          Cloudflare Worker isolate for pure code-eval ("Code Mode"). In the
-          middle, one durable spine owns context, state, and memory — so the
-          session survives whichever model or sandbox you swap in.
+          Point models at Anthropic, an OpenAI-compatible gateway, or your own
+          endpoint; run tools on Cloudflare Containers, Kubernetes, OpenShell, a
+          browser WASM VM, your machine via the CLI, a micro-VM vendor, or a
+          Worker isolate. The control plane owns context, state, and memory on a
+          durable spine — so model and sandbox layers swap without rewriting the
+          rest.
         </p>
       </header>
       <ProviderFan />
-    </div>
-  </section>
-
-  {/* Layers — the three routing layers the fan routes across: control plane,
-      the sandbox platform, and AnyRouter models. Bare viz, no border/scroll. */}
-  <section class={section} data-reveal id="layers">
-    <div class={container}>
-      <header class="mb-6 sm:mb-8">
-        <p class={eyebrow}>Layers</p>
-        <h2 class={sectionTitle}>Control plane → Sandbox platform → AnyRouter models</h2>
-        <p class={sectionIntro}>
-          The interchangeability in the fan above is real because these three
-          layers are independently swappable: OMA's durable spine (context, state,
-          memory) lives in the control plane, your pick of sandbox runs the tools,
-          and AnyRouter routes the model calls — swap any layer without touching
-          the others.
+      <div class="mt-10 sm:mt-12">
+        <p
+          class="mb-4 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--color-fg-subtle)]"
+        >
+          Three swappable layers
         </p>
-      </header>
-      <ControlPlaneFlow />
+        <ControlPlaneFlow />
+      </div>
     </div>
   </section>
 
@@ -228,7 +252,7 @@ const explore = [
         <p class={eyebrow}>Explore</p>
         <h2 class={sectionTitle}>Dig deeper</h2>
         <p class={sectionIntro}>
-          The details live on their own pages — pick a thread to pull.
+          Details live on their own pages — pick a thread.
         </p>
       </header>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -237,14 +261,14 @@ const explore = [
             <a
               href={e.href}
               data-lift
-              class="block rounded-xl border border-border bg-[var(--color-card)] p-5 no-underline hover:no-underline"
+              class="block rounded-xl border border-border bg-[var(--color-card)] p-5 no-underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             >
               <div class="mb-2 flex items-center gap-2.5">
                 <Icon name={e.icon} size={18} class="text-[var(--color-brand)]" />
                 <h3 class="text-base font-semibold tracking-tight text-[var(--color-fg)]">
                   {e.title}
                 </h3>
-                <span class="ml-auto text-[var(--color-fg-subtle)]">→</span>
+                <span class="ml-auto text-[var(--color-fg-subtle)]" aria-hidden="true">→</span>
               </div>
               <p class="text-sm leading-relaxed text-[var(--color-fg-muted)]">{e.body}</p>
             </a>
@@ -262,20 +286,20 @@ const explore = [
         Get started
       </h2>
       <p class="mx-auto mt-2 max-w-md text-pretty text-sm leading-relaxed text-[var(--color-fg-muted)] sm:text-base">
-        Clone, deploy, or try the hosted deployment of the same codebase.
+        Read the docs, try the hosted deployment, or clone the same codebase.
       </p>
       <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
+        <a href="https://docs.oma.duyet.net" class={btnPrimary}
+          ><Icon name="book" size={16} /> Read the docs</a
+        >
+        <a href="https://app.oma.duyet.net/" class={btnOutline}
+          ><Icon name="server" size={16} /> Try hosted</a
+        >
         <a
           href="https://github.com/duyet/oma"
           target="_blank"
           rel="noopener noreferrer"
-          class={btnPrimary}><Icon name="download" size={16} /> Clone the repo</a
-        >
-        <a href="https://docs.oma.duyet.net" class={btnOutline}
-          ><Icon name="book" size={16} /> Read the docs</a
-        >
-        <a href="https://app.oma.duyet.net/login" class={btnOutline}
-          ><Icon name="server" size={16} /> Try hosted</a
+          class={btnOutline}><Icon name="github" size={16} /> GitHub</a
         >
       </div>
     </div>
