@@ -23,6 +23,7 @@ export function CopyButton({
       onClick={() => onCopy(text, id)}
       aria-label={`Copy: ${text.split("\n")[0]}`}
       type="button"
+      className={className}
     >
       <pre className={preClassName}>{text}</pre>
       <span className="shrink-0 mt-0.5 text-fg-subtle group-hover:text-fg">
