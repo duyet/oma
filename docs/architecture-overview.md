@@ -189,7 +189,7 @@ open-managed-agents/
 | `harness/registry.ts` | 名字 → 工厂 |
 | `harness/default-loop.ts` (39 KB) | 默认 harness：`generateText` + tool loop + 缓存 + 压缩 |
 | `harness/compaction.ts` (25 KB) | 上下文压缩策略（事件级粒度、摘要、滑窗） |
-| `harness/tools.ts` (51 KB) | bash / read / write / edit / glob / grep / web_fetch / web_search + 派生 mcp_*、call_agent_* |
+| `harness/tools.ts` (51 KB) | bash / read / write / output_file / edit / glob / grep / web_fetch / web_search + 派生 mcp_*、call_agent_* |
 | `harness/browser-tools.ts` | 由 Browser Rendering 暴露的 navigate / click / extract |
 | `harness/skills.ts` | 把 skill 文件挂到 `/home/user/.skills/`，并把 prompt 拼进 system |
 | `harness/provider.ts` | 模型解析（anthropic / openai / 自定义 base_url） |
