@@ -213,8 +213,11 @@ const explore = [
 
   {/* Flexibility — fan-in/fan-out + the three swappable layers in one section
       so "any model, any sandbox" is said once, then shown (ProviderFan) and
-      decomposed (ControlPlaneFlow) without a second pitch. */}
+      decomposed (ControlPlaneFlow) without a second pitch.
+      Canonical id is #reach; #layers is a zero-size alias so external/old
+      /#layers links still land here after the merge. */}
   <section class={section} data-reveal id="reach">
+    <div id="layers" class="h-0 w-0 overflow-hidden" aria-hidden="true"></div>
     <div class={container}>
       <header class="mb-6 sm:mb-8">
         <p class={eyebrow}>Flexibility</p>
