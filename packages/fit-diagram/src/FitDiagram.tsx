@@ -13,7 +13,7 @@
 // correct value on either host without a mapping layer. Web's theme didn't
 // define --color-success/--color-warning; added minimal entries there for
 // the status dot (see apps/web/src/styles/global.css).
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useCallback, useRef, useState } from "react";
 import { ArrowDownIcon, ArrowRightIcon, CheckIcon, ChevronsLeftIcon, ChevronsRightIcon } from "lucide-react";
 import { cn } from "./cn";
 import { ProviderMark } from "./ProviderMark";
@@ -203,10 +203,44 @@ function StepHeader({ step, onCollapse }: { step: FitStep; onCollapse?: () => vo
   );
 }
 
-function ExpandedStepPanel({ step, onCollapse }: { step: FitStep; onCollapse?: () => void }) {
+function ExpandedStepPanel({
+  step,
+  onCollapse,
+  onHeight,
+}: {
+  step: FitStep;
+  onCollapse?: () => void;
+  /** Reports this panel's outer height so the row can lock a floor and
+   *  avoid layout jump when other columns collapse to rails. */
+  onHeight?: (height: number) => void;
+}) {
+  const heightRo = useRef<ResizeObserver | null>(null);
+  const panelRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      heightRo.current?.disconnect();
+      heightRo.current = null;
+      if (!el || !onHeight || typeof ResizeObserver === "undefined") return;
+      const ro = new ResizeObserver((entries) => {
+        const h = entries[0]?.contentRect.height ?? 0;
+        if (h > 0) onHeight(h);
+      });
+      ro.observe(el);
+      heightRo.current = ro;
+      // Immediate read for the first paint (before RO fires).
+      if (el.offsetHeight > 0) onHeight(el.offsetHeight);
+    },
+    [onHeight],
+  );
+
   return (
     // Open panels get a solid border; only collapsed rails stay dashed.
-    <div className={cn("flex min-w-0 flex-1 flex-col rounded-lg border border-border bg-bg-surface p-3", step.wide && "flex-[1.2]")}>
+    <div
+      ref={panelRef}
+      className={cn(
+        "flex h-full min-w-0 flex-1 flex-col rounded-lg border border-border bg-bg-surface p-3",
+        step.wide && "flex-[1.2]",
+      )}
+    >
       <StepHeader step={step} onCollapse={onCollapse} />
       <div className={cn("flex flex-1 flex-col justify-center", step.chain ? "gap-0" : "gap-2")}>
         {step.cards.map((row, i) => (
@@ -241,16 +275,18 @@ function StepPanel({
   step,
   collapsed,
   onToggle,
+  onHeight,
 }: {
   step: FitStep;
   collapsed: boolean;
   onToggle: (expand: boolean) => void;
+  onHeight?: (height: number) => void;
 }) {
   // The wrapper always renders and animates flex-grow/flex-basis — both
   // numeric, so the column smoothly widens/narrows between rail and panel.
   return (
     <div
-      className="flex min-w-0 transition-[flex-grow,flex-basis] duration-[var(--dur-slow,220ms)] ease-[var(--ease-soft,ease-out)] motion-reduce:transition-none"
+      className="flex min-h-0 min-w-0 self-stretch transition-[flex-grow,flex-basis] duration-[var(--dur-slow,220ms)] ease-[var(--ease-soft,ease-out)] motion-reduce:transition-none"
       style={
         collapsed
           ? { flexGrow: 0.0001, flexBasis: "2.75rem" }
@@ -263,7 +299,7 @@ function StepPanel({
           onClick={() => onToggle(true)}
           aria-label={`Expand step ${step.number} — ${step.name}`}
           aria-expanded="false"
-          className="fit-rise flex w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border/70 bg-bg-surface px-1.5 py-3 text-fg-subtle transition-colors hover:border-border-strong hover:text-fg"
+          className="fit-rise flex h-full w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border/70 bg-bg-surface px-1.5 py-3 text-fg-subtle transition-colors hover:border-border-strong hover:text-fg"
         >
           <ChevronsRightIcon className="h-3.5 w-3.5" />
           <span className="font-mono text-[10px] uppercase tracking-[0.12em]" style={{ writingMode: "vertical-rl" }}>
@@ -276,7 +312,7 @@ function StepPanel({
           )}
         </button>
       ) : (
-        <ExpandedStepPanel step={step} onCollapse={() => onToggle(false)} />
+        <ExpandedStepPanel step={step} onCollapse={() => onToggle(false)} onHeight={onHeight} />
       )}
     </div>
   );
@@ -362,6 +398,16 @@ export interface FitDiagramProps {
 
 export function FitDiagram({ steps, formula, collapsible, className }: FitDiagramProps) {
   const { rowRef, expandedSet, toggleStep } = useCapacityAccordion(steps);
+  // Grow-only floor: once an expanded panel has been measured, never let the
+  // row shrink below that height when columns collapse to rails. Prevents the
+  // rest of the page from jumping under the diagram.
+  const [rowFloor, setRowFloor] = useState(0);
+  const reportHeight = useCallback((h: number) => {
+    setRowFloor((prev) => (h > prev ? Math.ceil(h) : prev));
+  }, []);
+  // Baseline floor before first measure (and for non-collapsible hosts).
+  const floorPx = Math.max(rowFloor, 320);
+
   return (
     <div className={className}>
       {/* Self-contained keyframes — the package ships no CSS file, so the
@@ -369,17 +415,26 @@ export function FitDiagram({ steps, formula, collapsible, className }: FitDiagra
       <style>{FIT_KEYFRAMES}</style>
       {formula && <FitFormula rows={formula} />}
       {/* Always a single horizontal row — narrow viewports collapse columns
-          to rails (capacity accordion) instead of stacking to 4 rows. The
-          min-height keeps the panel from shrinking when every step is
-          collapsed to a rail. */}
-      <div ref={collapsible ? rowRef : undefined} className="flex flex-row items-stretch min-h-[20rem]">
+          to rails (capacity accordion) instead of stacking to 4 rows.
+          minHeight is a grow-only floor from measured expanded panels so
+          collapse never reflows the page under the diagram. */}
+      <div
+        ref={collapsible ? rowRef : undefined}
+        className="flex flex-row items-stretch"
+        style={{ minHeight: floorPx }}
+      >
         {steps.map((s, i) => (
           <Fragment key={s.number}>
             {i > 0 && <FlowPointer />}
             {collapsible ? (
-              <StepPanel step={s} collapsed={!expandedSet.has(s.number)} onToggle={(expand) => toggleStep(s.number, expand)} />
+              <StepPanel
+                step={s}
+                collapsed={!expandedSet.has(s.number)}
+                onToggle={(expand) => toggleStep(s.number, expand)}
+                onHeight={reportHeight}
+              />
             ) : (
-              <ExpandedStepPanel step={s} />
+              <ExpandedStepPanel step={s} onHeight={reportHeight} />
             )}
           </Fragment>
         ))}

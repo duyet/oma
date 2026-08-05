@@ -105,7 +105,11 @@ export default function HowItFits() {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   const open = useCallback(
-    (title: string, desc: string, extra?: Pick<DialogContent, "points" | "flow">) => {
+    (
+      title: string,
+      desc: string,
+      extra?: Partial<Omit<DialogContent, "title" | "desc">>,
+    ) => {
       setDialog({ title, desc, ...extra });
       dialogRef.current?.showModal();
     },
