@@ -51,12 +51,18 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       initContainers:
+        {{- if or .Values.secret.existingSecret .Values.secret.credentials }}
         # The daemon writes inside its config dir at runtime — `sessions/`
         # (per-session ACP cwds, see packages/cli/src/bridge/lib/session-cwd.ts)
         # and reads `machine-id`. A Secret volume is always read-only, so
         # mounting it directly at ~/.oma/bridge makes those writes fail. Copy
         # the creds (and the stable machine-id, if present) into a writable
         # emptyDir instead and mount that as the config dir.
+        #
+        # Skipped on the pairing-only path (pairing.existingSecret set,
+        # secret.existingSecret empty): there is no credentials.json Secret
+        # to copy from — the daemon container self-pairs on first boot via
+        # `oma bridge pair` (see the command block below).
         - name: seed-creds
           image: busybox:1.36
           command:
@@ -87,6 +93,7 @@ spec:
                 - ALL
             seccompProfile:
               type: RuntimeDefault
+        {{- end }}
       containers:
         - name: daemon
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -95,6 +102,21 @@ spec:
             - sh
             - -c
             - |
+              {{- if .Values.pairing.existingSecret }}
+              # Non-interactive pairing (Track 2): when no credentials.json
+              # exists yet, redeem OMA_PAIRING_CODE + OMA_PAIRING_STATE via
+              # `oma bridge pair` before starting the daemon. The daemon's
+              # own self-pair branch (daemon.ts) is the matching fallback
+              # for when this script is bypassed — both write the same
+              # credentials.json, so subsequent restarts skip the pair step.
+              if [ ! -f /home/oma/.oma/bridge/credentials.json ]; then
+                {{- if .Values.cliVersion }}
+                npx -y @getoma/cli@{{ .Values.cliVersion }} bridge pair
+                {{- else }}
+                npx -y @getoma/cli bridge pair
+                {{- end }}
+              fi
+              {{- end }}
               {{- if .Values.cliVersion }}
               exec npx -y @getoma/cli@{{ .Values.cliVersion }} bridge daemon
               {{- else }}
@@ -104,6 +126,25 @@ spec:
             # homedir() → $HOME; the creds Secret is mounted under it below.
             - name: HOME
               value: /home/oma
+            {{- if .Values.pairing.existingSecret }}
+            # Non-interactive pairing env (Track 2). The daemon (and the
+            # `oma bridge pair` command in the command block above) read
+            # these to redeem a multi-use k8s_pairing code against
+            # /agents/runtime/exchange without a browser. Mutually exclusive
+            # with `secret.existingSecret` — set exactly one.
+            - name: OMA_PAIRING_CODE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.pairing.existingSecret }}
+                  key: {{ .Values.pairing.codeKey }}
+            - name: OMA_PAIRING_STATE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.pairing.existingSecret }}
+                  key: {{ .Values.pairing.stateKey }}
+            - name: OMA_SERVER_URL
+              value: {{ .Values.pairing.serverUrl | quote }}
+            {{- end }}
             # Backend selection (packages/cli/src/bridge/lib/sandbox-backend.ts).
             # Empty/absent = local relay. Setting OPENSHELL_GATEWAY_ENDPOINT
             # alone does NOT flip this — BRIDGE_SANDBOX_BACKEND=openshell must
@@ -160,6 +201,7 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
+        {{- if or .Values.secret.existingSecret .Values.secret.credentials }}
         # Read-only source of the paired credentials (+ optional machine-id);
         # copied into bridge-state by the init container. No `items` filter:
         # machine-id is OPTIONAL — a Secret with only credentials.json must
@@ -168,10 +210,15 @@ spec:
         # any listed key, so listing both would break the documented-only-
         # credentials.json pairing path. Every key the Secret carries
         # projects at defaultMode 0400.
+        #
+        # Skipped on the pairing-only path (pairing.existingSecret set,
+        # secret.existingSecret empty) — there's no credentials Secret to
+        # mount; the daemon self-pairs on first boot via oma bridge pair.
         - name: creds-src
           secret:
             secretName: {{ include "oma-bridge-daemon.secretName" . }}
             defaultMode: 0400
+        {{- end }}
         # Writable daemon state (credentials.json, machine-id, sessions/).
         # Ephemeral by design: re-seeded from the Secret on every restart.
         - name: bridge-state

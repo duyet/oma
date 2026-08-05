@@ -45,10 +45,28 @@ bridge:
 # (kubectl create secret, external-secrets, sealed-secrets, ...). Never pass
 # credentials.json on the Helm command line — it lands in helm history /
 # release storage in plaintext.
+#
+# Two pairing paths ship credentials into the cluster:
+#   1. Post-pair credentials.json via `secret.existingSecret` (the classic
+#      OAuth-on-a-laptop path; default). The daemon reads its identity
+#      directly from credentials.json.
+#   2. Non-interactive code→creds self-pair via `pairing.existingSecret`
+#      (Track 2; k8s / CI friendly). Mint a multi-use pairing code in the
+#      Console (`POST /v1/runtimes/pairing-token`, kind k8s_pairing), ship
+#      the code + state into the cluster as a Secret, and the chart's
+#      startup loop runs `oma bridge pair` once to redeem them, persisting
+#      credentials.json on the writable emptyDir before exec'ing the daemon.
+#
+# Set ONE of `secret.existingSecret` OR `pairing.existingSecret`, not both.
+# The daemon reads its identity ONLY from credentials.json — both paths
+# converge on that file; the difference is whether you pre-pair it out of
+# band or let the pod pair itself on first boot.
 secret:
   # Name of the pre-existing Secret holding credentials.json + machine-id.
   # The default matches the name the README's pairing steps create, so a
   # Secret named `oma-bridge-daemon-creds` "just works" with no override.
+  # Set to "" (and set `pairing.existingSecret` below) to switch to the
+  # non-interactive self-pair path.
   existingSecret: oma-bridge-daemon-creds
   # Key inside the Secret holding the paired credentials.json. The daemon
   # reads identity ONLY from credentials.json.
@@ -69,6 +87,30 @@ secret:
   # Prefer the out-of-band `oma bridge setup` Secret — never commit a real
   # machine-id.
   machineId: ""
+
+# Non-interactive pairing Secret (Track 2 — k8s / CI). Mint a multi-use
+# pairing code in the Console (`POST /v1/runtimes/pairing-token`,
+# kind k8s_pairing), then ship the code + state into the cluster as a Secret
+# and reference it here. The daemon's startup loop runs `oma bridge pair`
+# once on first boot to redeem them, persists credentials.json on the
+# writable emptyDir, then exec's the daemon. Mutually exclusive with
+# `secret.existingSecret`: setting both is a misconfiguration — pick exactly
+# one path. When `pairing.existingSecret` is empty (default), no pairing env
+# is rendered and the chart expects the classic credentials.json Secret
+# (`secret.existingSecret`) instead.
+pairing:
+  # Name of the pre-existing Secret carrying OMA_PAIRING_CODE + OMA_PAIRING_STATE.
+  # Empty = non-interactive pairing is disabled; the chart falls back to
+  # `secret.existingSecret`. Mutually exclusive with `secret.existingSecret`.
+  existingSecret: ""
+  # Key inside that Secret holding the pairing code.
+  codeKey: OMA_PAIRING_CODE
+  # Key inside that Secret holding the server-issued state token.
+  stateKey: OMA_PAIRING_STATE
+  # OMA control plane the code is redeemed against. The daemon reads the
+  # final server URL from credentials.json (written by `oma bridge pair`),
+  # so this value is consumed only at first-boot pairing time.
+  serverUrl: https://app.oma.duyet.net
 
 # OpenShell gateway subchart + backend auto-derivation. Enable to install
 # NVIDIA's OpenShell gateway as a Helm subchart (pulled from the OCI registry
