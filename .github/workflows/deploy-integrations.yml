@@ -11,11 +11,12 @@ on:
     branches: [main]
     paths:
       - 'apps/integrations/**'
-      - 'packages/integrations-core/**'
-      - 'packages/slack/**'
-      - 'packages/github/**'
-      - 'packages/linear/**'
-      - 'packages/shared/**'
+      # Integrations depends on http-routes, telegram, observability,
+      # scheduler, tenant-db, … — not just the integration packages.
+      # Selective paths skipped redeploys when those moved. Match the
+      # other worker deploys: any package change redeploys.
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
       - '.github/workflows/deploy-integrations.yml'
 
 concurrency:

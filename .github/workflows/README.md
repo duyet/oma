@@ -22,9 +22,12 @@ All require these repo secrets:
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API token with Workers permissions |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
 
-Path triggers are scoped per app plus its key dependency packages
-so changes to `packages/shared/` trigger all workers that depend on it,
-while changes to `apps/main/` only trigger the main worker.
+Worker deploys (`deploy-main` / `deploy-agent` / `deploy-integrations`)
+trigger on their app path **and** any `packages/**` change — workers
+bundle workspace packages at deploy time, so a selective package list
+routinely left prod stale. Website also watches `packages/fit-diagram/**`.
+Docs stays scoped to `apps/docs/**` (Starlight content lives there; root
+`docs/` is repo-side developer notes and is not the public site).
 
 ## Self-host deploy
 

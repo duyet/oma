@@ -75,7 +75,7 @@
     "sync:secrets:prod:dry": "node scripts/sync-secrets-prod.mjs --to worker --dry-run",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "pnpm -r --filter='@duyet/oma-*' build && changeset publish"
+    "release": "pnpm --filter @getoma/cli --filter @getoma/sdk build && changeset publish"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "0.95.1",

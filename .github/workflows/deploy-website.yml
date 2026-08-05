@@ -10,6 +10,8 @@ on:
     branches: [main]
     paths:
       - 'apps/web/**'
+      # Landing site imports the shared How-it-fits diagram package.
+      - 'packages/fit-diagram/**'
       - '.github/workflows/deploy-website.yml'
 
 concurrency:

@@ -13,9 +13,12 @@ on:
     paths:
       - 'apps/main/**'
       - 'apps/console/**'
-      - 'packages/http-routes/**'
-      - 'packages/services/**'
-      - 'packages/shared/**'
+      # Workers bundle workspace packages at deploy time. A selective
+      # packages/* list routinely lagged (api-types, db-schema, payments,
+      # scheduler, vaults-store, …) so package-only fixes never reached
+      # prod. Match build-node-images.yml: any package change redeploys.
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
       - '.github/workflows/deploy-main.yml'
 
 concurrency:
