@@ -69,9 +69,15 @@ spec:
             - sh
             - -c
             - |
-              set -e
-              cp /creds-src/credentials.json /home/oma/.oma/bridge/credentials.json
-              chmod 0600 /home/oma/.oma/bridge/credentials.json
+              # On the full-pairing path (secret.existingSecret set) copy
+              # credentials.json into the writable emptyDir. On the pairing-
+              # only path (pairing.existingSecret set, no credentials Secret)
+              # the mount is absent — skip and let the daemon self-pair via
+              # `oma bridge pair` on first boot (see the daemon command).
+              if [ -d /creds-src ] && [ -f /creds-src/credentials.json ]; then
+                cp /creds-src/credentials.json /home/oma/.oma/bridge/credentials.json
+                chmod 0600 /home/oma/.oma/bridge/credentials.json
+              fi
               # Seed machine-id when the Secret carries one — keeps the
               # runtime identity stable across pod restarts. Optional: a
               # missing machine-id simply means the daemon registers a fresh
@@ -83,6 +89,10 @@ spec:
             - name: creds-src
               mountPath: /creds-src
               readOnly: true
+              # Pairing-only path: the credentials Secret is absent — the
+              # daemon self-pairs via `oma bridge pair` on first boot. Skip
+              # the copy rather than failing the pod.
+              optional: true
             - name: bridge-state
               mountPath: /home/oma/.oma/bridge
           securityContext:

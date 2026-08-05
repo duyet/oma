@@ -67,7 +67,7 @@ secret:
   # Secret named `oma-bridge-daemon-creds` "just works" with no override.
   # Set to "" (and set `pairing.existingSecret` below) to switch to the
   # non-interactive self-pair path.
-  existingSecret: oma-bridge-daemon-creds
+  existingSecret: ""
   # Key inside the Secret holding the paired credentials.json. The daemon
   # reads identity ONLY from credentials.json.
   credentialsKey: credentials.json
