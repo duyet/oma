@@ -1,0 +1,193 @@
+---
+title: Register a Kubernetes cluster (bridge daemon)
+description: Pair your cluster to OMA with oma-bridge-daemon — in-pod tools or OpenShell isolation.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+The **bridge daemon** (`oma-bridge-daemon`) is a long-lived Deployment in
+**your** Kubernetes cluster. It connects **out** over a reverse WebSocket to
+an OMA control plane (for example `https://app.oma.duyet.net`) and executes
+sandbox ops the platform relays to it.
+
+In the Console this is **Runtimes → Register k8s cluster**. The daemon shows
+up under **Connected machines**. Route sessions with an environment whose
+sandbox provider is `subprocess`.
+
+<Aside type="note" title="Not oma-k8s-bridge">
+`oma-bridge-daemon` is the reverse-WebSocket worker. The older
+[`oma-k8s-bridge`](/deploy/k8s-bridge/) is a different component: an HTTP
+gateway that creates Kubernetes pods for the `k8s-remote` provider. Do not
+confuse the two charts.
+</Aside>
+
+## Where sandboxes run
+
+| Mode | Chart values | What happens |
+|---|---|---|
+| **In-pod (default)** | `bridge.backend: ""` (or `subprocess` / `local`) · `openshell.enabled: false` | `bash` / `read` / `write` / … run **inside the daemon pod**. One Deployment; sessions share that pod’s process space and filesystem. No extra pods per session. |
+| **OpenShell** | `bridge.backend: openshell` · `openshell.enabled: true` | The daemon relays each session to an [OpenShell](https://github.com/NVIDIA/OpenShell) gateway, which creates **isolated sandboxes** (pods/microVMs) per turn. |
+
+In-pod mode is **not** “spawn a pod, then spawn containers inside it.” It is
+literally subprocess execution in the daemon container — the same mental model
+as `oma bridge daemon` on a laptop, just packaged as a Deployment.
+
+OpenShell is the path when you want isolation and per-session sandboxes on
+the cluster.
+
+## Prerequisites
+
+- Kubernetes 1.25+, `kubectl`, Helm 3 (for the Helm path)
+- An OMA control plane that accepts bridge runtimes
+- A multi-use pairing token from the Console (**Register k8s cluster → Generate token**) or `POST /v1/runtimes/pairing-token`
+
+## Pairing secret (all install paths)
+
+Never put the pairing code in Helm `--set` or in Git. Create a Secret first:
+
+```bash
+export NS=oma
+export CODE='pair_…'   # from Console
+export STATE='st_…'
+
+kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic oma-bridge-daemon-pairing \
+  --namespace "$NS" \
+  --from-literal=OMA_PAIRING_CODE="$CODE" \
+  --from-literal=OMA_PAIRING_STATE="$STATE" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+On first boot the pod redeems the code, writes `credentials.json` on an
+emptyDir, then starts the daemon. Subsequent restarts reuse the creds.
+
+## Install options
+
+<Tabs>
+<TabItem label="Helm">
+
+```yaml
+# values.yaml
+pairing:
+  existingSecret: oma-bridge-daemon-pairing
+  serverUrl: https://app.oma.duyet.net   # your control plane
+bridge:
+  backend: ""          # in-pod; use "openshell" for OpenShell
+  namespace: oma
+openshell:
+  enabled: false       # true installs the gateway subchart + wires env
+```
+
+```bash
+# From a clone of https://github.com/duyet/oma
+helm dependency build ./charts/oma-bridge-daemon
+helm upgrade --install oma-bridge-daemon ./charts/oma-bridge-daemon \
+  --namespace oma \
+  -f values.yaml
+```
+
+OpenShell in one step:
+
+```bash
+helm upgrade --install oma-bridge-daemon ./charts/oma-bridge-daemon \
+  --namespace oma \
+  --set secret.existingSecret= \
+  --set pairing.existingSecret=oma-bridge-daemon-pairing \
+  --set pairing.serverUrl=https://app.oma.duyet.net \
+  --set openshell.enabled=true
+```
+
+</TabItem>
+<TabItem label="Manual / env">
+
+Hand-roll a Deployment or use
+[`deploy/cli-bridge-daemon`](https://github.com/duyet/oma/tree/main/deploy/cli-bridge-daemon).
+
+```yaml
+# env.yaml — ConfigMap keys the daemon reads
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oma-bridge-daemon-config
+  namespace: oma
+data:
+  OMA_SERVER_URL: "https://app.oma.duyet.net"
+  # In-pod tools (default):
+  BRIDGE_SANDBOX_BACKEND: "subprocess"
+  # OpenShell instead:
+  # BRIDGE_SANDBOX_BACKEND: "openshell"
+  # OPENSHELL_GATEWAY_ENDPOINT: "openshell-gateway.oma.svc.cluster.local:8080"
+```
+
+```bash
+kubectl apply -f env.yaml
+# Pairing secret as above, then:
+kubectl apply -f deploy/cli-bridge-daemon/
+```
+
+Setting `OPENSHELL_GATEWAY_ENDPOINT` alone does **not** select OpenShell —
+`BRIDGE_SANDBOX_BACKEND=openshell` must be explicit.
+
+</TabItem>
+<TabItem label="GitOps (Argo CD / Flux)">
+
+Create the pairing Secret out-of-band (kubectl, ExternalSecrets, Sealed
+Secrets). Commit only chart values.
+
+**Argo CD** (`Application` sketch):
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: oma-bridge-daemon
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/duyet/oma.git
+    path: charts/oma-bridge-daemon
+    targetRevision: main
+    helm:
+      values: |
+        pairing:
+          existingSecret: oma-bridge-daemon-pairing
+          serverUrl: https://app.oma.duyet.net
+        bridge:
+          backend: ""
+        openshell:
+          enabled: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: oma
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+```
+
+**Flux** (`HelmRelease` sketch): point `chart.spec` at the same path in the
+oma GitRepository; set the same `values.pairing` / `values.bridge` /
+`values.openshell` keys. Full examples live in the Console **GitOps** tab
+when you register a cluster.
+
+</TabItem>
+</Tabs>
+
+## After install
+
+1. Console → **Runtimes** → the machine should appear **Online** (heartbeat).
+2. Create or edit an **Environment** with `sandbox_provider: "subprocess"`
+   (or leave the default subprocess path).
+3. Start a session on that environment — tool calls relay to the daemon.
+
+Revoke the pairing token in the Console once the pod has paired.
+
+## Chart reference
+
+- Chart: [`charts/oma-bridge-daemon`](https://github.com/duyet/oma/tree/main/charts/oma-bridge-daemon)
+- Values + backends: chart README
+- Backend comparison with `k8s-remote` / HTTP bridge:
+  [Kubernetes sandbox backends](https://github.com/duyet/oma/blob/main/docs/deploy/k8s-sandbox-backends.md)

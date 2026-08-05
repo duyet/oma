@@ -212,7 +212,7 @@ describe("<RuntimesList /> provider availability", () => {
     renderPage();
 
     await waitFor(() => expect(screen.getByText("Cloudflare Sandbox")).toBeInTheDocument());
-    expect(screen.getByText(/Deployment: Self-host Node runtime/)).toBeInTheDocument();
+    expect(screen.getByText(/Self-host Node runtime/)).toBeInTheDocument();
   });
 
   it("offers no Set up button for a provider that cannot run here", async () => {

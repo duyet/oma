@@ -1,29 +1,23 @@
 // Register-a-Kubernetes-cluster flow. Mints a pairing token against
-// `POST /v1/runtimes/pairing-token`, then renders four copy-paste steps
-// (token, values.yaml, kubectl secret, helm install) templated from the
-// chosen backend / namespace / openshell options.
+// `POST /v1/runtimes/pairing-token`, then renders install snippets for
+// Helm / manual env / GitOps, templated from the chosen backend + namespace.
 //
 // Two exports:
-//   - <RegisterK8sClusterForm /> — the inner content (kept exported for
-//     reuse; the page wires the standalone dialog below instead).
-//   - <RegisterK8sClusterDialog /> — a standalone Modal wrapper, opened from
-//     the Runtimes page header "Register k8s cluster" button, a K8s provider
-//     card's "Set up" action, the footer link, or the SetupProviderModal's
-//     bounce-to-register path.
+//   - <RegisterK8sClusterForm /> — the inner content.
+//   - <RegisterK8sClusterDialog /> — Modal wrapper opened from Runtimes.
 //
-// The chart referenced is `oma-bridge-daemon` (the in-cluster bridge daemon
-// that pairs a machine/cluster back to this OMA instance). NOT `oma-k8s-bridge`
-// — that's the older CF→k8s HTTP bridge, a different thing entirely.
-import { useEffect, useState } from "react";
+// The chart is `oma-bridge-daemon` (in-cluster reverse-WebSocket worker).
+// Not `oma-k8s-bridge` — the older CF→k8s HTTP bridge.
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { Modal } from "./Modal";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectOption } from "./Select";
 import { TextInput } from "./Input";
-import { CopyBlock } from "./CopyBlock";
+import { HighlightedCode } from "./HighlightedCode";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useApi } from "../lib/api";
+import { cn } from "@/lib/utils";
 
 interface PairingToken {
   code: string;
@@ -32,15 +26,22 @@ interface PairingToken {
   kind: "k8s_pairing";
 }
 
-type Backend = "local" | "openshell";
+/**
+ * How the in-cluster daemon executes sandbox ops.
+ *
+ * - `subprocess` — tools run **inside the daemon pod** (no extra pods).
+ * - `openshell`  — daemon relays each session to an OpenShell gateway that
+ *                  creates isolated sandboxes (pods/microVMs) per session.
+ */
+type Backend = "subprocess" | "openshell";
 
-const DOCS_URL = "https://docs.oma.duyet.net/deploy/k8s-sandbox-backends";
+type InstallTab = "helm" | "manual" | "gitops";
+
+const DOCS_URL = "https://docs.oma.duyet.net/deploy/bridge-daemon/";
 const CHART_README_URL =
   "https://github.com/duyet/oma/blob/main/charts/oma-bridge-daemon/README.md";
+const CHART_PATH = "https://github.com/duyet/oma/tree/main/charts/oma-bridge-daemon";
 
-// Relative-time countdown for a future unix-second timestamp. Returns a
-// coarse "~Nh Nm" / "~Nm" / "expired" string — good enough for a 24h token
-// without dragging in a date-fns dependency.
 function formatExpiry(expiresAtSeconds: number): string {
   const ms = expiresAtSeconds * 1000 - Date.now();
   if (ms <= 0) return "expired";
@@ -51,24 +52,39 @@ function formatExpiry(expiresAtSeconds: number): string {
   return "expires in <1m";
 }
 
+const BACKENDS: Array<{
+  id: Backend;
+  title: string;
+  blurb: string;
+}> = [
+  {
+    id: "subprocess",
+    title: "In-pod (default)",
+    blurb:
+      "bash/read/write run inside the daemon pod. One Deployment — no extra pods per session.",
+  },
+  {
+    id: "openshell",
+    title: "OpenShell",
+    blurb:
+      "Daemon relays each session to an OpenShell gateway, which spins an isolated sandbox per turn.",
+  },
+];
+
 export function RegisterK8sClusterForm({
-  copied,
-  onCopy,
   onDone,
 }: {
-  copied: string | null;
-  onCopy: (text: string, key: string) => void;
+  /** @deprecated kept for call-site compat; copy is owned by HighlightedCode */
+  copied?: string | null;
+  onCopy?: (text: string, key: string) => void;
   onDone?: () => void;
 }) {
   const { api } = useApi();
-  const [backend, setBackend] = useState<Backend>("local");
+  const [backend, setBackend] = useState<Backend>("subprocess");
   const [namespace, setNamespace] = useState("oma");
-  const [openshellEnabled, setOpenshellEnabled] = useState(false);
   const [token, setToken] = useState<PairingToken | null>(null);
   const [loading, setLoading] = useState(false);
-  // `now` exists only to re-render the countdown once a minute while a token
-  // is live. It's read inside formatExpiry via Date.now() but we need state
-  // to trigger the re-render.
+  const [tab, setTab] = useState<InstallTab>("helm");
   const [, setNow] = useState(0);
 
   useEffect(() => {
@@ -77,11 +93,11 @@ export function RegisterK8sClusterForm({
     return () => clearInterval(id);
   }, [token]);
 
-  // The daemon pairs back to whichever origin the Console is served from —
-  // same host, same auth realm. `window.location.origin` is correct in the
-  // browser; the SSR guard is defensive (Vite SPA renders client-side only).
   const serverUrl =
     typeof window !== "undefined" ? window.location.origin : "";
+
+  const ns = namespace.trim() || "oma";
+  const openshell = backend === "openshell";
 
   async function generateToken() {
     setLoading(true);
@@ -92,7 +108,7 @@ export function RegisterK8sClusterForm({
       });
       setToken(res);
     } catch {
-      // api() already toasts network/auth failures.
+      // api() already toasts.
     } finally {
       setLoading(false);
     }
@@ -111,250 +127,419 @@ export function RegisterK8sClusterForm({
     }
   }
 
-  // Templated install blocks. All four are pure functions of the form state
-  // + the minted token, so changing the namespace or backend after minting
-  // updates the commands in place — the token itself is independent.
-  const valuesYaml = `pairing:
-  existingSecret: oma-bridge-daemon-pairing
-  serverUrl: ${serverUrl}
-bridge:
-  backend: ${backend}
-  namespace: ${namespace}
-openshell:
-  enabled: ${openshellEnabled ? "true" : "false"}`;
+  const snippets = useMemo(() => {
+    // Chart values: empty bridge.backend = subprocess default; "openshell"
+    // + openshell.enabled installs the gateway subchart.
+    const valuesYaml = [
+      `pairing:`,
+      `  existingSecret: oma-bridge-daemon-pairing`,
+      `  serverUrl: ${serverUrl}`,
+      `bridge:`,
+      `  # "" = in-pod subprocess; "openshell" = per-session isolated sandboxes`,
+      `  backend: ${openshell ? "openshell" : '""'}`,
+      `  namespace: ${ns}`,
+      `openshell:`,
+      `  enabled: ${openshell ? "true" : "false"}`,
+    ].join("\n");
 
-  const kubectlCmd = token
-    ? `kubectl create namespace ${namespace} --dry-run=client -o yaml | kubectl apply -f -\n` +
-      `kubectl create secret generic oma-bridge-daemon-pairing \\\n` +
-      `  --namespace ${namespace} \\\n` +
-      `  --from-literal=OMA_PAIRING_CODE='${token.code}' \\\n` +
-      `  --from-literal=OMA_PAIRING_STATE='${token.state}'`
-    : "";
+    const secretCmd = token
+      ? [
+          `kubectl create namespace ${ns} --dry-run=client -o yaml | kubectl apply -f -`,
+          `kubectl create secret generic oma-bridge-daemon-pairing \\`,
+          `  --namespace ${ns} \\`,
+          `  --from-literal=OMA_PAIRING_CODE='${token.code}' \\`,
+          `  --from-literal=OMA_PAIRING_STATE='${token.state}' \\`,
+          `  --dry-run=client -o yaml | kubectl apply -f -`,
+        ].join("\n")
+      : "";
 
-  const helmCmd = `helm install oma-bridge-daemon ./charts/oma-bridge-daemon \\\n` +
-    `  --namespace ${namespace} \\\n` +
-    `  -f values.yaml`;
+    const helmCmd = [
+      `# From a clone of github.com/duyet/oma`,
+      `helm dependency build ./charts/oma-bridge-daemon`,
+      `helm upgrade --install oma-bridge-daemon ./charts/oma-bridge-daemon \\`,
+      `  --namespace ${ns} \\`,
+      `  -f values.yaml`,
+    ].join("\n");
+
+    // Manual path: secret + ConfigMap env + pointer to raw manifests.
+    const envYaml = [
+      `apiVersion: v1`,
+      `kind: ConfigMap`,
+      `metadata:`,
+      `  name: oma-bridge-daemon-config`,
+      `  namespace: ${ns}`,
+      `data:`,
+      `  OMA_SERVER_URL: "${serverUrl}"`,
+      `  BRIDGE_SANDBOX_BACKEND: "${openshell ? "openshell" : "subprocess"}"`,
+      ...(openshell
+        ? [
+            `  # Point at your in-cluster OpenShell gateway (adjust host/port).`,
+            `  OPENSHELL_GATEWAY_ENDPOINT: "openshell-gateway.${ns}.svc.cluster.local:8080"`,
+          ]
+        : [
+            `  # In-pod mode: leave OPENSHELL_* unset. Tools run inside the daemon pod.`,
+          ]),
+    ].join("\n");
+
+    const manualCmd = token
+      ? [
+          `# 1. Namespace + pairing secret (token stays out of helm history)`,
+          secretCmd,
+          ``,
+          `# 2. Apply env ConfigMap (copy env.yaml below first)`,
+          `kubectl apply -f env.yaml`,
+          ``,
+          `# 3. Deploy the daemon manifests`,
+          `kubectl apply -f https://raw.githubusercontent.com/duyet/oma/main/deploy/cli-bridge-daemon/`,
+          `#    or: kubectl apply -f deploy/cli-bridge-daemon/  (from a local clone)`,
+        ].join("\n")
+      : "";
+
+    // GitOps-friendly values (no secret literals — ExternalSecret / SealedSecrets).
+    const argoApp = [
+      `apiVersion: argoproj.io/v1alpha1`,
+      `kind: Application`,
+      `metadata:`,
+      `  name: oma-bridge-daemon`,
+      `  namespace: argocd`,
+      `spec:`,
+      `  project: default`,
+      `  source:`,
+      `    repoURL: https://github.com/duyet/oma.git`,
+      `    path: charts/oma-bridge-daemon`,
+      `    targetRevision: main`,
+      `    helm:`,
+      `      values: |`,
+      `        pairing:`,
+      `          existingSecret: oma-bridge-daemon-pairing`,
+      `          serverUrl: ${serverUrl}`,
+      `        bridge:`,
+      `          backend: ${openshell ? "openshell" : '""'}`,
+      `          namespace: ${ns}`,
+      `        openshell:`,
+      `          enabled: ${openshell ? "true" : "false"}`,
+      `  destination:`,
+      `    server: https://kubernetes.default.svc`,
+      `    namespace: ${ns}`,
+      `  syncPolicy:`,
+      `    automated:`,
+      `      prune: true`,
+      `      selfHeal: true`,
+      `    syncOptions:`,
+      `      - CreateNamespace=true`,
+    ].join("\n");
+
+    const fluxHelm = [
+      `apiVersion: source.toolkit.fluxcd.io/v1`,
+      `kind: GitRepository`,
+      `metadata:`,
+      `  name: oma`,
+      `  namespace: flux-system`,
+      `spec:`,
+      `  interval: 10m`,
+      `  url: https://github.com/duyet/oma.git`,
+      `  ref:`,
+      `    branch: main`,
+      `---`,
+      `apiVersion: helm.toolkit.fluxcd.io/v2`,
+      `kind: HelmRelease`,
+      `metadata:`,
+      `  name: oma-bridge-daemon`,
+      `  namespace: ${ns}`,
+      `spec:`,
+      `  interval: 10m`,
+      `  chart:`,
+      `    spec:`,
+      `      chart: charts/oma-bridge-daemon`,
+      `      sourceRef:`,
+      `        kind: GitRepository`,
+      `        name: oma`,
+      `        namespace: flux-system`,
+      `  values:`,
+      `    pairing:`,
+      `      existingSecret: oma-bridge-daemon-pairing`,
+      `      serverUrl: ${serverUrl}`,
+      `    bridge:`,
+      `      backend: ${openshell ? "openshell" : '""'}`,
+      `      namespace: ${ns}`,
+      `    openshell:`,
+      `      enabled: ${openshell}`,
+    ].join("\n");
+
+    const gitopsSecretHint = token
+      ? [
+          `# Create the pairing secret OUTSIDE Git (or via ExternalSecrets).`,
+          `# Never commit OMA_PAIRING_CODE / OMA_PAIRING_STATE.`,
+          secretCmd,
+        ].join("\n")
+      : "";
+
+    return {
+      valuesYaml,
+      secretCmd,
+      helmCmd,
+      envYaml,
+      manualCmd,
+      argoApp,
+      fluxHelm,
+      gitopsSecretHint,
+    };
+  }, [serverUrl, ns, openshell, token]);
 
   return (
-    <div className="space-y-4 text-sm">
-      <p className="text-fg-muted">
-        Deploy the{" "}
-        <span className="text-fg">oma-bridge-daemon</span> Helm chart into your
-        cluster. It pairs back to this OMA instance over a short-lived token
-        and registers as a machine the{" "}
-        <code className="bg-bg-surface px-1 rounded font-mono text-[11px]">subprocess</code>{" "}
-        sandbox provider can route work to.
+    <div className="space-y-3 text-sm">
+      <p className="text-[12px] text-fg-muted leading-relaxed">
+        Install{" "}
+        <span className="text-fg font-medium">oma-bridge-daemon</span> in your
+        cluster. It opens an outbound WebSocket to this OMA instance and shows
+        up under{" "}
+        <span className="text-fg">Connected machines</span>. Route work with an
+        environment whose sandbox provider is{" "}
+        <code className="rounded bg-bg-surface px-1 font-mono text-[11px]">
+          subprocess
+        </code>
+        .
       </p>
 
-      {/* Options */}
-      <div className="space-y-3">
-        <div>
-          <label className="block text-[13px] font-medium text-fg mb-1.5">
-            Bridge backend
-          </label>
-          <Select
-            value={backend}
-            onValueChange={(v) => setBackend(v as Backend)}
-          >
-            <SelectOption value="local">
-              local — relay sandboxes to a host on the cluster node (default)
-            </SelectOption>
-            <SelectOption value="openshell">
-              openshell — delegate to an NVIDIA OpenShell gateway
-            </SelectOption>
-          </Select>
+      {/* Backend as compact radio cards — labels describe the real model. */}
+      <div className="space-y-1.5">
+        <div className="text-[12px] font-medium text-fg">Where sandboxes run</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {BACKENDS.map((b) => {
+            const selected = backend === b.id;
+            return (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => setBackend(b.id)}
+                className={cn(
+                  "text-left rounded-md border px-2.5 py-2 transition-colors",
+                  selected
+                    ? "border-brand bg-brand/5 ring-1 ring-brand/30"
+                    : "border-border hover:border-border-strong bg-bg-surface/40",
+                )}
+              >
+                <div className="text-[12px] font-medium text-fg">{b.title}</div>
+                <div className="text-[11px] text-fg-muted leading-snug mt-0.5">
+                  {b.blurb}
+                </div>
+              </button>
+            );
+          })}
         </div>
-
-        <TextInput
-          label="Namespace"
-          placeholder="oma"
-          value={namespace}
-          onChange={(e) => setNamespace(e.target.value)}
-          hint="Kubernetes namespace the daemon installs into."
-        />
-
-        <label className="flex items-start gap-2.5 cursor-pointer select-none">
-          <Checkbox
-            checked={openshellEnabled}
-            onCheckedChange={(c) => setOpenshellEnabled(c === true)}
-            className="mt-0.5"
-          />
-          <span>
-            <span className="block text-[13px] font-medium text-fg">
-              Enable OpenShell
-            </span>
-            <span className="block text-[12px] text-fg-muted">
-              Sets{" "}
-              <code className="bg-bg-surface px-1 rounded font-mono text-[11px]">
-                openshell.enabled
-              </code>{" "}
-              in the chart values. Only meaningful with the{" "}
-              <code className="bg-bg-surface px-1 rounded font-mono text-[11px]">
-                openshell
-              </code>{" "}
-              backend — leaves the{" "}
-              <code className="bg-bg-surface px-1 rounded font-mono text-[11px]">
-                local
-              </code>{" "}
-              path alone.
-            </span>
-          </span>
-        </label>
       </div>
 
-      {/* Generate / revoke token */}
-      <div className="rounded-md border border-border bg-bg-surface/50 p-3 space-y-2">
+      <TextInput
+        label="Namespace"
+        placeholder="oma"
+        value={namespace}
+        onChange={(e) => setNamespace(e.target.value)}
+        hint="Kubernetes namespace for the daemon Deployment."
+      />
+
+      {/* Pairing token */}
+      <div className="rounded-md border border-border bg-bg-surface/50 px-3 py-2.5 space-y-2">
         {!token ? (
-          <>
-            <p className="text-[12px] text-fg-muted leading-relaxed">
-              Generate a multi-use pairing token (24h). It&rsquo;s bound to your
-              account — anyone with it can register a machine/cluster on your
-              behalf. Revoke it from here the moment it&rsquo;s installed.
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[11px] text-fg-muted leading-snug flex-1 min-w-0">
+              Multi-use pairing token (24h), bound to your account. Generate
+              first — install steps need it.
             </p>
             <Button
               size="sm"
+              className="shrink-0"
               onClick={() => void generateToken()}
-              disabled={loading || namespace.trim().length === 0}
+              disabled={loading || ns.length === 0}
             >
-              {loading ? "Generating…" : "Generate pairing token"}
+              {loading ? "Generating…" : "Generate token"}
             </Button>
-          </>
+          </div>
         ) : (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <div className="text-[12px] text-fg">
-                Token active —{" "}
-                <span className="text-fg-muted">
-                  {formatExpiry(token.expires_at)}
-                </span>
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-[12px] text-fg font-medium">Token ready</div>
+              <div className="text-[11px] text-fg-muted">
+                {formatExpiry(token.expires_at)} · multi-use · revoke after install
               </div>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-destructive hover:text-destructive h-7 px-2 text-[12px]"
-                onClick={() => void revokeToken()}
-              >
-                Revoke
-              </Button>
             </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-destructive hover:text-destructive h-7 px-2 text-[12px] shrink-0"
+              onClick={() => void revokeToken()}
+            >
+              Revoke
+            </Button>
           </div>
         )}
       </div>
 
-      {/* Install steps — only render once a token exists, since every block
-          references it. Options stay editable so the operator can re-template
-          after tweaking namespace/backend. */}
       {token && (
-        <div className="space-y-4">
-          <div>
-            <div className="text-xs text-fg-subtle mb-1.5">
-              1 · Pairing token
-            </div>
-            <CopyBlock
-              id="k8s-pairing-code"
-              text={token.code}
-              copied={copied}
-              onCopy={onCopy}
-            />
-            <p className="mt-1.5 text-[11px] text-fg-subtle leading-relaxed">
-              Multi-use, {formatExpiry(token.expires_at)}, bound to your
-              account. Revoke from this Console.
-            </p>
-          </div>
+        <Tabs
+          value={tab}
+          onValueChange={(v) => setTab(v as InstallTab)}
+          className="gap-2"
+        >
+          <TabsList variant="line" className="w-full">
+            <TabsTrigger value="helm" className="flex-1 text-[12px]">
+              Helm
+            </TabsTrigger>
+            <TabsTrigger value="manual" className="flex-1 text-[12px]">
+              Manual / env
+            </TabsTrigger>
+            <TabsTrigger value="gitops" className="flex-1 text-[12px]">
+              GitOps
+            </TabsTrigger>
+          </TabsList>
 
-          <div>
-            <div className="text-xs text-fg-subtle mb-1.5">
-              2 · <code className="font-mono">values.yaml</code>
-            </div>
-            <CopyBlock
-              id="k8s-values-yaml"
-              text={valuesYaml}
-              copied={copied}
-              onCopy={onCopy}
-            />
-          </div>
+          <TabsContent value="helm" className="space-y-2.5 mt-0">
+            <Step n={1} title="Pairing secret">
+              <HighlightedCode
+                code={snippets.secretCmd}
+                language="bash"
+                filename="create-pairing-secret.sh"
+                maxHeightClass="max-h-40"
+              />
+            </Step>
+            <Step n={2} title="values.yaml">
+              <HighlightedCode
+                code={snippets.valuesYaml}
+                language="yaml"
+                filename="values.yaml"
+                maxHeightClass="max-h-48"
+              />
+            </Step>
+            <Step n={3} title="Install chart">
+              <HighlightedCode
+                code={snippets.helmCmd}
+                language="bash"
+                filename="helm-install.sh"
+                maxHeightClass="max-h-40"
+              />
+              <p className="text-[11px] text-fg-subtle leading-snug mt-1">
+                Chart:{" "}
+                <a
+                  href={CHART_PATH}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline hover:text-brand"
+                >
+                  charts/oma-bridge-daemon
+                </a>
+                . Not{" "}
+                <code className="font-mono text-[10px]">oma-k8s-bridge</code>.
+              </p>
+            </Step>
+          </TabsContent>
 
-          <div>
-            <div className="text-xs text-fg-subtle mb-1.5">
-              3 · Create the namespace + Secret out-of-band
-            </div>
-            <CopyBlock
-              id="k8s-kubectl-secret"
-              text={kubectlCmd}
-              copied={copied}
-              onCopy={onCopy}
-            />
-            <p className="mt-1.5 text-[11px] text-fg-subtle leading-relaxed">
-              The namespace apply is idempotent — safe to re-run on an existing
-              cluster. Passing the token via{" "}
-              <code className="bg-bg-surface px-1 rounded font-mono text-[11px]">
-                --from-literal
-              </code>{" "}
-              keeps it out of{" "}
-              <code className="bg-bg-surface px-1 rounded font-mono text-[11px]">
-                helm history
-              </code>{" "}
-              and your shell history.
-            </p>
-          </div>
-
-          <div>
-            <div className="text-xs text-fg-subtle mb-1.5">
-              4 · Install the chart
-            </div>
-            <CopyBlock
-              id="k8s-helm-install"
-              text={helmCmd}
-              copied={copied}
-              onCopy={onCopy}
-            />
-            <p className="mt-1.5 text-[11px] text-fg-subtle leading-relaxed">
-              This is the{" "}
-              <code className="bg-bg-surface px-1 rounded font-mono text-[11px]">
-                oma-bridge-daemon
-              </code>{" "}
-              chart — the in-cluster bridge daemon that pairs back to this
-              instance. Not{" "}
-              <code className="bg-bg-surface px-1 rounded font-mono text-[11px]">
-                oma-k8s-bridge
+          <TabsContent value="manual" className="space-y-2.5 mt-0">
+            <Step n={1} title="Env ConfigMap">
+              <HighlightedCode
+                code={snippets.envYaml}
+                language="yaml"
+                filename="env.yaml"
+                maxHeightClass="max-h-48"
+              />
+            </Step>
+            <Step n={2} title="Apply secret + manifests">
+              <HighlightedCode
+                code={snippets.manualCmd}
+                language="bash"
+                filename="manual-deploy.sh"
+                maxHeightClass="max-h-56"
+              />
+            </Step>
+            <p className="text-[11px] text-fg-subtle leading-snug">
+              Copy-paste env for a hand-rolled Deployment: set{" "}
+              <code className="font-mono text-[10px]">BRIDGE_SANDBOX_BACKEND</code>{" "}
+              to{" "}
+              <code className="font-mono text-[10px]">
+                {openshell ? "openshell" : "subprocess"}
               </code>
-              , which is the older Cloudflare→k8s HTTP bridge.
+              {openshell
+                ? " and OPENSHELL_GATEWAY_ENDPOINT to your gateway host:port."
+                : ". Tools share the daemon pod — no per-session pods."}
             </p>
-          </div>
+          </TabsContent>
 
-          <div className="pt-1 border-t border-border flex items-center justify-between gap-2">
-            <p className="text-[11px] text-fg-subtle leading-relaxed">
-              Full chart reference + troubleshooting:
+          <TabsContent value="gitops" className="space-y-2.5 mt-0">
+            <p className="text-[11px] text-fg-muted leading-snug">
+              Keep pairing secrets out of Git. Create the secret with kubectl
+              (or ExternalSecrets / Sealed Secrets), then sync the chart with
+              Argo CD or Flux.
             </p>
-            <div className="flex items-center gap-3 shrink-0">
-              <a
-                href={CHART_README_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[11px] underline hover:text-brand"
-              >
-                chart README
-              </a>
-              <a
-                href={DOCS_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[11px] underline hover:text-brand"
-              >
-                docs
-              </a>
-            </div>
-          </div>
-        </div>
+            <Step n={1} title="Pairing secret (out-of-band)">
+              <HighlightedCode
+                code={snippets.gitopsSecretHint}
+                language="bash"
+                filename="pairing-secret.sh"
+                maxHeightClass="max-h-40"
+              />
+            </Step>
+            <Step n={2} title="Argo CD Application">
+              <HighlightedCode
+                code={snippets.argoApp}
+                language="yaml"
+                filename="argocd-application.yaml"
+                maxHeightClass="max-h-56"
+              />
+            </Step>
+            <Step n={3} title="Flux HelmRelease (alt)">
+              <HighlightedCode
+                code={snippets.fluxHelm}
+                language="yaml"
+                filename="flux-helmrelease.yaml"
+                maxHeightClass="max-h-56"
+              />
+            </Step>
+          </TabsContent>
+        </Tabs>
       )}
 
-      {onDone && (
-        <div className="flex justify-end pt-1">
-          <Button variant="ghost" onClick={onDone}>
+      <div className="flex items-center justify-between gap-2 pt-1 border-t border-border">
+        <div className="flex items-center gap-3 text-[11px]">
+          <a
+            href={DOCS_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="underline hover:text-brand text-fg-subtle"
+          >
+            Docs
+          </a>
+          <a
+            href={CHART_README_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="underline hover:text-brand text-fg-subtle"
+          >
+            Chart README
+          </a>
+        </div>
+        {onDone && (
+          <Button variant="ghost" size="sm" onClick={onDone}>
             Done
           </Button>
-        </div>
-      )}
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Step({
+  n,
+  title,
+  children,
+}: {
+  n: number;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <div className="text-[11px] text-fg-subtle mb-1 font-medium">
+        <span className="font-mono text-fg-muted">{n}.</span> {title}
+      </div>
+      {children}
     </div>
   );
 }
@@ -367,15 +552,15 @@ export function RegisterK8sClusterDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  copied: string | null;
-  onCopy: (text: string, key: string) => void;
+  copied?: string | null;
+  onCopy?: (text: string, key: string) => void;
 }) {
   return (
     <Modal
       open={open}
       onClose={onClose}
       title="Register a Kubernetes cluster"
-      subtitle="Install the bridge daemon chart and pair it to this instance."
+      subtitle="Deploy oma-bridge-daemon and pair it to this instance."
       maxWidth="max-w-2xl"
       footer={<Button onClick={onClose}>Close</Button>}
     >
