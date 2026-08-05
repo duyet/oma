@@ -506,9 +506,10 @@ export default function WiredFlows() {
         className="font-mono"
         style={{
           display: "flex",
+          flexWrap: "wrap",
           alignItems: "baseline",
           justifyContent: "space-between",
-          gap: "0.75rem",
+          gap: "0.5rem 0.75rem",
           margin: "0 0 0.75rem",
           fontSize: "0.72rem",
           fontWeight: 600,
@@ -516,7 +517,7 @@ export default function WiredFlows() {
         }}
       >
         <span>One agent, wired to your stack</span>
-        <span style={{ fontWeight: 400, color: "var(--color-fg-subtle)", whiteSpace: "nowrap" }} aria-hidden="true">
+        <span style={{ fontWeight: 400, color: "var(--color-fg-subtle)" }} aria-hidden="true">
           input → agent → result
         </span>
       </p>

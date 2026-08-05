@@ -1,26 +1,28 @@
 ---
 // "Where it runs" — the three routing layers, as a compact linear pipeline:
-//   control plane  →  sandbox platform  →  AnyRouter models
+//   control plane  →  sandbox platform  →  models
 // Desktop: horizontal row joined by arrows. Mobile: stacks vertically with the
 // arrow rotating to point down. No border/box around it (matches the bare-viz
 // directive) — just the nodes and their connecting line.
+// Models are provider-agnostic (Anthropic, OpenAI-compatible, AnyRouter/BYOK
+// gateways, model cards) — not AnyRouter-only.
 const STAGES = [
   {
     name: "Control plane",
     sub: "context · state · memory · event log",
   },
   {
-    name: "SANDBOX PLATFORM",
+    name: "Sandbox",
     sub: "Cloudflare · Kubernetes · OpenShell · browser VM · your machine",
   },
   {
-    name: "AnyRouter models",
-    sub: "provider/model routing · model cards · BYOK gateway",
+    name: "Models",
+    sub: "Anthropic · OpenAI-compatible · AnyRouter · BYOK",
   },
 ] as const;
 ---
 
-<figure class="cpf" aria-label="OMa routing layers: control plane to sandbox platform to AnyRouter models">
+<figure class="cpf" aria-label="OMA routing layers: control plane to sandbox to models">
   <ol class="cpf-pipeline">
     {
       STAGES.map((s, i) => (
@@ -37,7 +39,7 @@ const STAGES = [
     }
   </ol>
   <figcaption>
-    <span>the control plane owns the durable spine, the sandbox platform runs tools, AnyRouter routes models</span>
+    <span>control plane owns the durable spine · sandbox runs tools · models are pluggable</span>
   </figcaption>
 </figure>
 

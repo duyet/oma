@@ -41,8 +41,9 @@ const columns: { heading: string; links: { label: string; href: string; external
     heading: "Community",
     links: [
       { label: "GitHub", href: "https://github.com/duyet/oma", external: true },
-      { label: "Dashboard", href: "https://app.oma.duyet.net/", external: true },
-      { label: "Try hosted", href: "https://app.oma.duyet.net/login", external: true },
+      // Single hosted entry — signed-in users land on the app shell; signed-out
+      // are bounced to login. Avoids dual Dashboard / Try hosted dead-ends.
+      { label: "Try hosted", href: "https://app.oma.duyet.net/", external: true },
     ],
   },
 ];
