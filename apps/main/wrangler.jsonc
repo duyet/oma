@@ -35,7 +35,13 @@
       // chat page, widget.js, and session/SSE endpoints. Without this the
       // ASSETS SPA fallback would serve the Console index.html for /p/<slug>
       // and a visitor would land on the operator login instead of the bot.
-      "/p/*"
+      "/p/*",
+      // Browser-VM sandbox host (docs/browser-vm-sandbox.md): the worker
+      // serves a COOP/COEP HTML page from browser-vm-host.ts. Without this,
+      // Assets SPA fallback serves Console index.html → React catch-all
+      // Navigate to /agents, so "Open sandbox tab" never reaches the host.
+      "/sandbox-tab",
+      "/sandbox-tab/*"
     ]
   },
 

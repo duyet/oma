@@ -267,7 +267,9 @@ points:
   attach, `pickOnlineRuntimeId(db, tenant, "browser-vm")` (runtimes rows carry
   a `kind` column: `daemon` | `browser-vm`), fail-loud
   `SandboxProviderUnavailableError` when no tab is online.
-- The host page is served by `apps/main` at `GET /sandbox-tab`
+- The host page is served by `apps/main` at `GET /sandbox-tab` (must be
+  listed under `assets.run_worker_first` in `apps/main/wrangler.jsonc` so
+  the Console SPA fallback does not claim the path and redirect to `/agents`)
   (`apps/main/src/routes/browser-vm-host.ts`) with COOP/COEP set; it pairs via
   `POST /agents/runtime/exchange` (`kind: "browser-vm"`), attaches the
   RuntimeRoom WS via `?access_token=` (a browser WebSocket cannot set an
