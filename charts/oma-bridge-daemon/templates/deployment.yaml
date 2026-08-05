@@ -1,0 +1,183 @@
+{{/*
+oma bridge daemon — in-cluster Deployment.
+
+Runs `oma bridge daemon` as a long-lived reverse-WebSocket agent that
+connects OUT to the OMA control plane and executes relayed cloud-agent
+sandbox ops. Two backends:
+
+  * local  (default)  — subprocess + host filesystem, inside this pod.
+  * openshell         — relay each op to an OpenShell gateway over gRPC
+                        (BRIDGE_SANDBOX_BACKEND=openshell +
+                        OPENSHELL_GATEWAY_ENDPOINT, both sourced from the
+                        ConfigMap).
+
+The daemon makes only OUTBOUND connections (WS to the control plane, gRPC to
+the OpenShell gateway) and never touches the Kubernetes API — so, unlike the
+k8s-bridge, it has NO ServiceAccount/RBAC grants, NO Service, NO Ingress, and
+NO PVC (state is re-seeded from the creds Secret on every restart).
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "oma-bridge-daemon.fullname" . }}
+  labels:
+    {{- include "oma-bridge-daemon.labels" . | nindent 4 }}
+spec:
+  # Each replica is a distinct machine to the control plane. Keep at 1 unless
+  # you intend multiple independent runtimes (they'd share credentials here
+  # and conflict on machine-id).
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "oma-bridge-daemon.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "oma-bridge-daemon.labels" . | nindent 8 }}
+      annotations:
+        # Roll the pod when chart-managed config or inline credentials change.
+        # The ConfigMap is always chart-managed; the Secret only renders on the
+        # unusual inline path (secret.credentials). An existingSecret
+        # (out-of-band) is intentionally NOT tracked here — its lifecycle is
+        # the operator's, not Helm's.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        # The daemon writes inside its config dir at runtime — `sessions/`
+        # (per-session ACP cwds, see packages/cli/src/bridge/lib/session-cwd.ts)
+        # and reads `machine-id`. A Secret volume is always read-only, so
+        # mounting it directly at ~/.oma/bridge makes those writes fail. Copy
+        # the creds (and the stable machine-id, if present) into a writable
+        # emptyDir instead and mount that as the config dir.
+        - name: seed-creds
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              cp /creds-src/credentials.json /home/oma/.oma/bridge/credentials.json
+              chmod 0600 /home/oma/.oma/bridge/credentials.json
+              # Seed machine-id when the Secret carries one — keeps the
+              # runtime identity stable across pod restarts. Optional: a
+              # missing machine-id simply means the daemon registers a fresh
+              # identity on first run.
+              if [ -f /creds-src/machine-id ]; then
+                cp /creds-src/machine-id /home/oma/.oma/bridge/machine-id
+              fi
+          volumeMounts:
+            - name: creds-src
+              mountPath: /creds-src
+              readOnly: true
+            - name: bridge-state
+              mountPath: /home/oma/.oma/bridge
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+      containers:
+        - name: daemon
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              {{- if .Values.cliVersion }}
+              exec npx -y @getoma/cli@{{ .Values.cliVersion }} bridge daemon
+              {{- else }}
+              exec npx -y @getoma/cli bridge daemon
+              {{- end }}
+          env:
+            # homedir() → $HOME; the creds Secret is mounted under it below.
+            - name: HOME
+              value: /home/oma
+            # Backend selection (packages/cli/src/bridge/lib/sandbox-backend.ts).
+            # Empty/absent = local relay. Setting OPENSHELL_GATEWAY_ENDPOINT
+            # alone does NOT flip this — BRIDGE_SANDBOX_BACKEND=openshell must
+            # be set explicitly.
+            - name: BRIDGE_SANDBOX_BACKEND
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "oma-bridge-daemon.fullname" . }}
+                  key: BRIDGE_SANDBOX_BACKEND
+                  optional: true
+            - name: OPENSHELL_GATEWAY_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "oma-bridge-daemon.fullname" . }}
+                  key: OPENSHELL_GATEWAY_ENDPOINT
+                  optional: true
+            - name: OPENSHELL_IMAGE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "oma-bridge-daemon.fullname" . }}
+                  key: OPENSHELL_IMAGE
+                  optional: true
+            {{- if .Values.openshell.token.existingSecret }}
+            - name: OPENSHELL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.openshell.token.existingSecret }}
+                  key: {{ .Values.openshell.token.secretKey }}
+            {{- end }}
+          volumeMounts:
+            # Writable: holds credentials.json + machine-id (seeded by the
+            # init container) plus the sessions/ state the daemon writes.
+            - name: bridge-state
+              mountPath: /home/oma/.oma/bridge
+            # npx needs a writable home for its cache; keep the rest read-only.
+            - name: npm-cache
+              mountPath: /home/oma/.npm
+            # Writable /tmp — required because readOnlyRootFilesystem: true
+            # otherwise blocks the daemon's two production temp-file paths:
+            #   * local backend ACP install — packages/cli/src/bridge/lib/binary-installer.ts:111
+            #     writes the downloaded archive to os.tmpdir() before extracting.
+            #   * openshell backend — packages/cli/src/bridge/lib/openshell-client.ts:167
+            #     writes the gRPC proto to os.tmpdir() before loadSync().
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        # Read-only source of the paired credentials (+ optional machine-id);
+        # copied into bridge-state by the init container. No `items` filter:
+        # machine-id is OPTIONAL — a Secret with only credentials.json must
+        # still mount cleanly (the daemon's getOrCreateMachineId auto-
+        # generates when absent). An `items` list rejects a Secret that omits
+        # any listed key, so listing both would break the documented-only-
+        # credentials.json pairing path. Every key the Secret carries
+        # projects at defaultMode 0400.
+        - name: creds-src
+          secret:
+            secretName: {{ include "oma-bridge-daemon.secretName" . }}
+            defaultMode: 0400
+        # Writable daemon state (credentials.json, machine-id, sessions/).
+        # Ephemeral by design: re-seeded from the Secret on every restart.
+        - name: bridge-state
+          emptyDir: {}
+        - name: npm-cache
+          emptyDir: {}
+        # Backs /tmp in the daemon container — see volumeMount above.
+        - name: tmp
+          emptyDir: {}

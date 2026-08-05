@@ -1,0 +1,48 @@
+{{/*
+Non-secret backend config for the bridge daemon. Two derivations:
+
+  * BRIDGE_SANDBOX_BACKEND — explicit bridge.backend wins; otherwise "openshell"
+    when openshell.enabled flips the subchart on; otherwise "" (local relay).
+  * OPENSHELL_GATEWAY_ENDPOINT — explicit openshell.gatewayEndpoint wins;
+    otherwise auto-derived from the gateway Service the OpenShell subchart
+    installs (<svc>.<ns>.svc.cluster.local:8080) when openshell.enabled is
+    true; otherwise "".
+
+OPENSHELL_IMAGE is a pass-through (empty = gateway default).
+
+Guard: the OpenShell backend dynamically imports @getoma/sandbox-sdk, which the
+shipped default image (node:22-slim) does NOT include. Fail rendering early
+when openshell.enabled is true and the image is still the exact default, so a
+forgotten image override surfaces here rather than as a runtime crash on the
+first relayed op.
+*/}}
+{{- if and .Values.openshell.enabled (eq .Values.image.repository "node") (eq .Values.image.tag "22-slim") -}}
+{{- fail "openshell.enabled=true needs a daemon image that ships @getoma/sandbox-sdk. The default node:22-slim does not include it — set image.repository/image.tag to a compatible image (see deploy/cli-bridge-daemon/Dockerfile.openshell)." -}}
+{{- end -}}
+{{- $backend := "" -}}
+{{- if .Values.bridge.backend }}
+{{- $backend = .Values.bridge.backend }}
+{{- else if .Values.openshell.enabled }}
+{{- $backend = "openshell" }}
+{{- end -}}
+
+{{- $endpoint := "" -}}
+{{- if .Values.openshell.gatewayEndpoint }}
+{{- $endpoint = .Values.openshell.gatewayEndpoint }}
+{{- else if .Values.openshell.enabled }}
+{{- $ns := .Values.openshell.sandboxNamespace | default .Release.Namespace }}
+{{- $endpoint = printf "openshell-gateway.%s.svc.cluster.local:8080" $ns }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "oma-bridge-daemon.fullname" . }}
+  labels:
+    {{- include "oma-bridge-daemon.labels" . | nindent 4 }}
+data:
+  # "" (or omit) = local subprocess relay. "openshell" = gRPC relay.
+  BRIDGE_SANDBOX_BACKEND: {{ $backend | quote }}
+  # Required when BRIDGE_SANDBOX_BACKEND=openshell. gRPC `host:port` of the gateway.
+  OPENSHELL_GATEWAY_ENDPOINT: {{ $endpoint | quote }}
+  # Optional OpenShell sandbox image; empty = gateway default.
+  OPENSHELL_IMAGE: {{ .Values.openshell.image | quote }}

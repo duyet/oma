@@ -66,6 +66,18 @@ environment. See [`AGENTS.md`](../../AGENTS.md) → sandbox provider table.
 
 `oma bridge daemon` can also run **in-cluster** as a reverse-WebSocket runtime
 (the `subprocess` provider's relay), and it too can front an OpenShell gateway.
+
+> **Helm alternative.** The [`oma-bridge-daemon`](../../charts/oma-bridge-daemon)
+> chart packages the raw manifests below into a values-driven chart — pair once
+> with `oma bridge setup`, ship the resulting `credentials.json` **and**
+> `machine-id` into a Secret (see the chart README for the exact `kubectl
+> create secret` command), run `helm dependency build` to fetch the optional
+> OpenShell subchart, then `helm install` with `openshell.enabled=true` to get
+> the gateway subchart and the daemon's OpenShell env wired up automatically.
+> The raw manifests in
+> [`deploy/cli-bridge-daemon`](../../deploy/cli-bridge-daemon) remain available
+> for cases where you want to hand-edit the Deployment/ConfigMap directly.
+
 Manifests live in [`deploy/cli-bridge-daemon`](../../deploy/cli-bridge-daemon):
 
 ```bash

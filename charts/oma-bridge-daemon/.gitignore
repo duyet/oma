@@ -1,0 +1,4 @@
+# Extracted subchart from `helm dependency build`. Chart.lock IS committed
+# (it captures the resolved OCI digest so installs are reproducible); the
+# exploded charts/ dir is purely a local build artifact.
+charts/

@@ -1,0 +1,153 @@
+# Default image for the daemon container. The published @getoma/cli runs on a
+# plain Node image — no build step is required for the local (subprocess)
+# backend. For the OpenShell backend, build a custom image that also ships
+# @getoma/sandbox-sdk (see deploy/cli-bridge-daemon/Dockerfile.openshell).
+image:
+  repository: node
+  tag: "22-slim"
+  pullPolicy: IfNotPresent
+
+# Pin @getoma/cli for `npx -y @getoma/cli@<cliVersion> bridge daemon`. Empty
+# (default) = always pull the latest published CLI. Pinning is recommended for
+# production so a breaking CLI release can't flip the daemon's behavior
+# overnight.
+cliVersion: ""
+
+# OMA control plane the daemon pairs against. Documented here for reference
+# only — the daemon reads the actual server URL from credentials.json
+# (written by `oma bridge setup`), NOT from this env value. Use this field to
+# document which instance the paired creds belong to (e.g. in a values file
+# committed alongside the install).
+controlPlane:
+  url: https://app.oma.duyet.net
+
+# Bridge daemon runtime configuration.
+bridge:
+  # Which sandbox backend the daemon runs:
+  #   ""          — local subprocess relay (default; runs sandbox ops inside
+  #                 this pod using the host kernel + filesystem).
+  #   "openshell" — relay each sandbox op to an OpenShell gateway over gRPC.
+  #
+  # Note (important): setting OPENSHELL_GATEWAY_ENDPOINT alone does NOT flip
+  # the backend. BRIDGE_SANDBOX_BACKEND=openshell must be set explicitly —
+  # this matches the daemon's own resolution rule
+  # (packages/cli/src/bridge/lib/sandbox-backend.ts). When `openshell.enabled`
+  # is true the ConfigMap auto-derives "openshell" UNLESS an explicit override
+  # is set here (explicit always wins).
+  backend: ""
+  # Namespace the daemon runs in. Default = release namespace. (Reported for
+  # documentation; the pod lands in .Release.Namespace regardless.)
+  namespace: ""
+
+# Paired credentials Secret. The normal flow is `oma bridge setup` (run once
+# on a browser-capable machine) writing ~/.oma/bridge/credentials.json and
+# ~/.oma/bridge/machine-id, which you then ship into the cluster as a Secret
+# (kubectl create secret, external-secrets, sealed-secrets, ...). Never pass
+# credentials.json on the Helm command line — it lands in helm history /
+# release storage in plaintext.
+secret:
+  # Name of the pre-existing Secret holding credentials.json + machine-id.
+  # The default matches the name the README's pairing steps create, so a
+  # Secret named `oma-bridge-daemon-creds` "just works" with no override.
+  existingSecret: oma-bridge-daemon-creds
+  # Key inside the Secret holding the paired credentials.json. The daemon
+  # reads identity ONLY from credentials.json.
+  credentialsKey: credentials.json
+  # Key inside the Secret holding the stable machine-id. Copied next to
+  # credentials.json by the init container so the daemon re-uses the same
+  # runtime identity across pod restarts instead of registering a fresh one
+  # on every cold start.
+  machineIdKey: machine-id
+  # Optional inline credentials.json (multiline string). UNUSUAL — the normal
+  # path is the out-of-band Secret above. When set AND existingSecret is
+  # empty, the chart renders its own Secret from this value; otherwise the
+  # chart renders no Secret at all. Never commit a real credentials.json.
+  credentials: ""
+  # Optional inline machine-id (string) paired with `secret.credentials` for
+  # the unusual inline-Secret path. Empty = the generated Secret carries only
+  # credentials.json and the daemon auto-generates a machine-id on first run.
+  # Prefer the out-of-band `oma bridge setup` Secret — never commit a real
+  # machine-id.
+  machineId: ""
+
+# OpenShell gateway subchart + backend auto-derivation. Enable to install
+# NVIDIA's OpenShell gateway as a Helm subchart (pulled from the OCI registry
+# at chart build time) alongside the daemon, and auto-derive the daemon's
+# OPENSHELL_GATEWAY_ENDPOINT + BRIDGE_SANDBOX_BACKEND to point at the
+# in-cluster gateway Service.
+openshell:
+  # Feature flag: when true, (1) install the OpenShell gateway subchart,
+  # (2) render the agent-sandbox controller install hook (see agentSandbox
+  # below), and (3) auto-derive BRIDGE_SANDBOX_BACKEND=openshell +
+  # OPENSHELL_GATEWAY_ENDPOINT in the daemon's ConfigMap.
+  enabled: false
+  # Override the derived gateway endpoint (`host:port`). When empty and
+  # openshell.enabled is true, the ConfigMap auto-derives
+  # `openshell-gateway.<sandboxNamespace>.svc.cluster.local:8080` — match
+  # this to the OpenShell gateway Service name + port in the subchart.
+  gatewayEndpoint: ""
+  # Namespace OpenShell Sandbox CRs land in. Defaults to the release
+  # namespace. Match this to where the agent-sandbox controller runs.
+  sandboxNamespace: ""
+  # Optional sandbox container image OpenShell launches; empty = gateway
+  # default.
+  image: ""
+  token:
+    # Name of a pre-existing Secret carrying the OPENSHELL_TOKEN bearer
+    # credential for the gateway. Empty = no OPENSHELL_TOKEN env is set on
+    # the daemon (the gateway then allows unauthenticated access, or relies
+    # on its own internal auth). Never set a real token in values.yaml —
+    # same out-of-band pattern as secret.existingSecret.
+    existingSecret: ""
+    secretKey: OPENSHELL_TOKEN
+
+# agent-sandbox controller install. The OpenShell gateway's Kubernetes driver
+# requires the kubernetes-sigs agent-sandbox CRDs + controller
+# (sandboxes.agents.x-k8s.io) — the same substrate the k8s-remote provider
+# uses. The hook is a Helm pre-install/pre-upgrade Job that
+# `kubectl apply --server-side`s the manifest. When `openshell.enabled` is
+# true the hook renders automatically; set `agentSandbox.enabled` explicitly
+# to install the controller without the OpenShell subchart.
+agentSandbox:
+  enabled: false
+  # agent-sandbox release tag (GitHub Releases). Used to build the manifest URL.
+  version: "v0.5.4"
+  # Override the entire manifest URL if you host a reviewed fork/mirror. Empty
+  # = computed from `version` as
+  # https://github.com/kubernetes-sigs/agent-sandbox/releases/download/<version>/sandbox-with-extensions.yaml
+  manifestUrl: ""
+  # Optional SHA-256 of the manifest for supply-chain integrity. When set, the
+  # install hook downloads the manifest, verifies its sha256sum against this
+  # value, and only then runs `kubectl apply`. Empty = apply directly from the
+  # URL (version-pinned, no content check). The hook image must ship `curl`
+  # and `sha256sum` when this is set (bitnamilegacy/kubectl does).
+  manifestSha256: ""
+  hook:
+    # The pre-install Job runs `/bin/sh -ec "… kubectl apply …"`, so the image
+    # MUST ship both kubectl AND a POSIX shell. The default (bitnamilegacy/
+    # kubectl) includes both — registry.k8s.io/kubectl is distroless and has no
+    # /bin/sh, which makes the hook fail with `exec: "/bin/sh": no such file`.
+    #
+    # We use the bitnamilegacy namespace rather than bitnami/kubectl: Bitnami
+    # migrated the structured version tags off Docker Hub in Aug 2025 (only
+    # bitnami/kubectl:latest still resolves there); bitnamilegacy is the
+    # archived continuation and still publishes shell-equipped kubectl images
+    # at no cost. Swap to any shell-equipped kubectl image you trust (e.g.
+    # alpine/k8s:<k8s-major>, or Bitnami's paid Secure registry).
+    image:
+      repository: bitnamilegacy/kubectl
+      tag: "1.31"
+    serverSideApply: true
+
+# The daemon is a headless outbound WebSocket client — no HTTP port, no
+# Service, no Ingress. Resources are the only sizing knob.
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+nameOverride: ""
+fullnameOverride: ""

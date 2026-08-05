@@ -1,0 +1,50 @@
+{{/* Helm hook resources that install the kubernetes-sigs agent-sandbox
+     controller + CRDs before the chart's own resources. These are
+     NOT owned by the chart's main release objects — they carry helm.sh/hook
+     annotations so Helm runs them as pre-install/pre-upgrade Jobs and
+     deletes them on success. The CRDs/controller applied by the Job are
+     likewise NOT owned by Helm (kubectl apply, not helm install), so they
+     survive `helm uninstall` — correct, since removing the daemon should
+     not tear down the cluster's sandbox substrate.
+
+     Gate: renders when EITHER `agentSandbox.enabled` is set OR
+     `openshell.enabled` is set (OpenShell's Kubernetes driver requires the
+     agent-sandbox CRDs + controller, same substrate the k8s-remote provider
+     uses), so enabling the OpenShell subchart alone is sufficient. */}}
+{{- if or .Values.agentSandbox.enabled .Values.openshell.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "oma-bridge-daemon.fullname" . }}-agent-sandbox-installer
+  labels:
+    {{- include "oma-bridge-daemon.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-2"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "oma-bridge-daemon.fullname" . }}-agent-sandbox-installer
+  labels:
+    {{- include "oma-bridge-daemon.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-2"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  # cluster-admin is the pragmatic choice: the installer applies CRDs,
+  # a controller Deployment, and cluster-scoped resources via one
+  # `kubectl apply -f <url>`. For a hardened cluster, narrow this to a
+  # custom ClusterRole granting only the CRD/controller resources the
+  # manifest actually touches (and pin agentSandbox.manifestUrl to a
+  # reviewed copy so the verb set stays stable).
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "oma-bridge-daemon.fullname" . }}-agent-sandbox-installer
+    namespace: {{ .Release.Namespace }}
+{{- end }}
