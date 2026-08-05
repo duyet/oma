@@ -539,8 +539,28 @@ input:focus-visible,
   color: var(--color-fg-subtle);
 }
 .prose p { margin: 1rem 0; }
-.prose ul, .prose ol { margin: 1rem 0; padding-left: 1.5rem; }
-.prose li { margin: 0.25rem 0; }
+/* Tailwind preflight sets `ol, ul { list-style: none }` — restore markers
+   for markdown-rendered blog lists (disc / decimal). Nested levels use
+   circle then square so multi-level lists stay readable. */
+.prose ul {
+  margin: 1rem 0;
+  padding-left: 1.5rem;
+  list-style-type: disc;
+  list-style-position: outside;
+}
+.prose ol {
+  margin: 1rem 0;
+  padding-left: 1.5rem;
+  list-style-type: decimal;
+  list-style-position: outside;
+}
+.prose ul ul { list-style-type: circle; }
+.prose ul ul ul { list-style-type: square; }
+.prose ol ol { list-style-type: lower-alpha; }
+.prose li {
+  margin: 0.25rem 0;
+  display: list-item;
+}
 .prose code {
   font-family: var(--font-mono);
   font-size: 0.9em;
