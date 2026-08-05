@@ -374,32 +374,40 @@ export function RegisterK8sClusterForm({
         )}
       </div>
 
-      {token && (
+      {/* Install method — tabs always on top of the install section.
+          Content is usable before a token (values / env / GitOps); secret
+          steps show a short prompt until Generate token is clicked. */}
+      <div className="space-y-2.5 pt-1">
+        <div className="text-[12px] font-medium text-fg">Install method</div>
         <Tabs
           value={tab}
           onValueChange={(v) => setTab(v as InstallTab)}
-          className="gap-2"
+          className="w-full flex flex-col gap-2.5"
         >
-          <TabsList variant="line" className="w-full">
-            <TabsTrigger value="helm" className="flex-1 text-[12px]">
+          <TabsList className="grid w-full grid-cols-3 h-9">
+            <TabsTrigger value="helm" className="text-[12px]">
               Helm
             </TabsTrigger>
-            <TabsTrigger value="manual" className="flex-1 text-[12px]">
+            <TabsTrigger value="manual" className="text-[12px]">
               Manual / env
             </TabsTrigger>
-            <TabsTrigger value="gitops" className="flex-1 text-[12px]">
+            <TabsTrigger value="gitops" className="text-[12px]">
               GitOps
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="helm" className="space-y-2.5 mt-0">
+          <TabsContent value="helm" className="space-y-2.5 mt-0 outline-none">
             <Step n={1} title="Pairing secret">
-              <HighlightedCode
-                code={snippets.secretCmd}
-                language="bash"
-                filename="create-pairing-secret.sh"
-                maxHeightClass="max-h-40"
-              />
+              {token ? (
+                <HighlightedCode
+                  code={snippets.secretCmd}
+                  language="bash"
+                  filename="create-pairing-secret.sh"
+                  maxHeightClass="max-h-40"
+                />
+              ) : (
+                <TokenNeeded />
+              )}
             </Step>
             <Step n={2} title="values.yaml">
               <HighlightedCode
@@ -432,7 +440,7 @@ export function RegisterK8sClusterForm({
             </Step>
           </TabsContent>
 
-          <TabsContent value="manual" className="space-y-2.5 mt-0">
+          <TabsContent value="manual" className="space-y-2.5 mt-0 outline-none">
             <Step n={1} title="Env ConfigMap">
               <HighlightedCode
                 code={snippets.envYaml}
@@ -442,12 +450,16 @@ export function RegisterK8sClusterForm({
               />
             </Step>
             <Step n={2} title="Apply secret + manifests">
-              <HighlightedCode
-                code={snippets.manualCmd}
-                language="bash"
-                filename="manual-deploy.sh"
-                maxHeightClass="max-h-56"
-              />
+              {token ? (
+                <HighlightedCode
+                  code={snippets.manualCmd}
+                  language="bash"
+                  filename="manual-deploy.sh"
+                  maxHeightClass="max-h-56"
+                />
+              ) : (
+                <TokenNeeded />
+              )}
             </Step>
             <p className="text-[11px] text-fg-subtle leading-snug">
               Copy-paste env for a hand-rolled Deployment: set{" "}
@@ -462,19 +474,23 @@ export function RegisterK8sClusterForm({
             </p>
           </TabsContent>
 
-          <TabsContent value="gitops" className="space-y-2.5 mt-0">
+          <TabsContent value="gitops" className="space-y-2.5 mt-0 outline-none">
             <p className="text-[11px] text-fg-muted leading-snug">
               Keep pairing secrets out of Git. Create the secret with kubectl
               (or ExternalSecrets / Sealed Secrets), then sync the chart with
               Argo CD or Flux.
             </p>
             <Step n={1} title="Pairing secret (out-of-band)">
-              <HighlightedCode
-                code={snippets.gitopsSecretHint}
-                language="bash"
-                filename="pairing-secret.sh"
-                maxHeightClass="max-h-40"
-              />
+              {token ? (
+                <HighlightedCode
+                  code={snippets.gitopsSecretHint}
+                  language="bash"
+                  filename="pairing-secret.sh"
+                  maxHeightClass="max-h-40"
+                />
+              ) : (
+                <TokenNeeded />
+              )}
             </Step>
             <Step n={2} title="Argo CD Application">
               <HighlightedCode
@@ -494,7 +510,7 @@ export function RegisterK8sClusterForm({
             </Step>
           </TabsContent>
         </Tabs>
-      )}
+      </div>
 
       <div className="flex items-center justify-between gap-2 pt-1 border-t border-border">
         <div className="flex items-center gap-3 text-[11px]">
@@ -540,6 +556,14 @@ function Step({
         <span className="font-mono text-fg-muted">{n}.</span> {title}
       </div>
       {children}
+    </div>
+  );
+}
+
+function TokenNeeded() {
+  return (
+    <div className="rounded-md border border-dashed border-border bg-bg px-3 py-2.5 text-[11px] text-fg-muted">
+      Generate a pairing token above to fill in the secret command.
     </div>
   );
 }
