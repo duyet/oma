@@ -32,6 +32,13 @@ Cloudflare (Workers + Durable Objects + Containers) or self-hosted Node
 - [README](https://github.com/duyet/oma/blob/main/README.md): quickstarts, tool catalog, API examples
 - [Examples](https://github.com/duyet/oma/tree/main/examples): copy-paste agent + environment configs, pre-built Docker images
 
+## Features
+
+- [Agent Sandbox](https://oma.duyet.net/features/agent-sandbox/): any sandbox provider
+- [Local Machine](https://oma.duyet.net/features/local-machine/): bridge a laptop/workstation
+- [Private Kubernetes](https://oma.duyet.net/features/private-kubernetes/): Helm-connect your cluster for pod sandboxes
+- [Coding Agents](https://oma.duyet.net/features/coding-agents/): long-running coding sessions
+
 ## Compare
 
 - [OMA vs. Open Tag](https://oma.duyet.net/open-tag/)

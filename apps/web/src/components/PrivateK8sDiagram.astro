@@ -1,0 +1,220 @@
+---
+// Architecture diagram: OMA control plane → Helm charts → private cluster
+// sandboxes. Self-contained SVG using site theme tokens (same grammar as
+// DeploymentDiagram). Two connect paths: outbound bridge daemon (no
+// inbound) and k8s-bridge HTTP gateway (for Cloudflare Workers).
+---
+
+<figure class="pk8s-figure">
+  <svg
+    class="pk8s-svg"
+    viewBox="0 0 920 480"
+    role="img"
+    aria-labelledby="pk8s-title pk8s-desc"
+    preserveAspectRatio="xMidYMid meet"
+  >
+    <title id="pk8s-title">Connect a private Kubernetes cluster to Open Managed Agents</title>
+    <desc id="pk8s-desc">
+      The OMA control plane keeps sessions and the model loop. Helm installs
+      either an outbound bridge daemon or an HTTP k8s-bridge gateway in your
+      private cluster; each session provisions a sandbox pod there.
+    </desc>
+
+    <defs>
+      <marker id="pk8s-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" class="pk8s-arrowhead" />
+      </marker>
+    </defs>
+
+    <!-- Control plane -->
+    <rect x="260" y="16" width="400" height="78" rx="12" class="pk8s-box pk8s-box-core" />
+    <text x="460" y="42" class="pk8s-title">OMA control plane</text>
+    <text x="460" y="62" class="pk8s-sub">app.oma.duyet.net · Cloudflare Worker · or self-host Node</text>
+    <text x="460" y="80" class="pk8s-sub pk8s-sub-dim">sessions · event log · model loop · vault · Console</text>
+
+    <!-- Wires from plane to two paths -->
+    <g class="pk8s-wire">
+      <path d="M360 94 V118 H200 V140" marker-end="url(#pk8s-arrow)" />
+      <path d="M560 94 V118 H720 V140" marker-end="url(#pk8s-arrow)" />
+    </g>
+
+    <!-- Path A: bridge daemon -->
+    <rect x="40" y="140" width="320" height="148" rx="12" class="pk8s-column" />
+    <text x="56" y="164" class="pk8s-col-title">Path A · outbound bridge</text>
+    <text x="344" y="164" class="pk8s-col-tag">no inbound</text>
+
+    <rect x="56" y="180" width="288" height="44" rx="8" class="pk8s-box pk8s-box-helm" />
+    <text x="72" y="200" class="pk8s-node">helm install oma-bridge-daemon</text>
+    <text x="72" y="216" class="pk8s-node-sub">charts/oma-bridge-daemon</text>
+
+    <rect x="56" y="234" width="288" height="40" rx="8" class="pk8s-box" />
+    <text x="72" y="252" class="pk8s-node">daemon dials out (WebSocket)</text>
+    <text x="72" y="266" class="pk8s-node-sub">pairs once · heartbeats · reverse relay</text>
+
+    <!-- Path B: k8s-bridge -->
+    <rect x="560" y="140" width="320" height="148" rx="12" class="pk8s-column" />
+    <text x="576" y="164" class="pk8s-col-title">Path B · HTTP gateway</text>
+    <text x="864" y="164" class="pk8s-col-tag">CF Worker</text>
+
+    <rect x="576" y="180" width="288" height="44" rx="8" class="pk8s-box pk8s-box-helm" />
+    <text x="592" y="200" class="pk8s-node">helm install oma-k8s-bridge</text>
+    <text x="592" y="216" class="pk8s-node-sub">charts/oma-k8s-bridge</text>
+
+    <rect x="576" y="234" width="288" height="40" rx="8" class="pk8s-box" />
+    <text x="592" y="252" class="pk8s-node">Worker → plain HTTP / SSE</text>
+    <text x="592" y="266" class="pk8s-node-sub">k8s-remote · openshell providers</text>
+
+    <!-- Wires into cluster -->
+    <g class="pk8s-wire">
+      <path d="M200 288 V310" marker-end="url(#pk8s-arrow)" />
+      <path d="M720 288 V310" marker-end="url(#pk8s-arrow)" />
+    </g>
+
+    <!-- Private cluster band -->
+    <rect x="40" y="310" width="840" height="150" rx="12" class="pk8s-cluster" />
+    <text x="60" y="336" class="pk8s-col-title">Your private Kubernetes cluster</text>
+    <text x="860" y="336" class="pk8s-col-tag">your VPC · your RBAC</text>
+
+    <!-- Pods row -->
+    <rect x="60" y="356" width="180" height="80" rx="8" class="pk8s-box pk8s-box-pod" />
+    <text x="150" y="386" class="pk8s-node pk8s-center">sandbox pod</text>
+    <text x="150" y="406" class="pk8s-node-sub pk8s-center">session A · bash / files</text>
+    <text x="150" y="422" class="pk8s-node-sub pk8s-center">Sandbox CRD</text>
+
+    <rect x="260" y="356" width="180" height="80" rx="8" class="pk8s-box pk8s-box-pod" />
+    <text x="350" y="386" class="pk8s-node pk8s-center">sandbox pod</text>
+    <text x="350" y="406" class="pk8s-node-sub pk8s-center">session B · tools</text>
+    <text x="350" y="422" class="pk8s-node-sub pk8s-center">isolated /workspace</text>
+
+    <rect x="460" y="356" width="180" height="80" rx="8" class="pk8s-box pk8s-box-pod" />
+    <text x="550" y="386" class="pk8s-node pk8s-center">sandbox pod</text>
+    <text x="550" y="406" class="pk8s-node-sub pk8s-center">session C · MCP</text>
+    <text x="550" y="422" class="pk8s-node-sub pk8s-center">NetworkPolicy</text>
+
+    <rect x="660" y="356" width="200" height="80" rx="8" class="pk8s-box pk8s-box-opt" />
+    <text x="760" y="386" class="pk8s-node pk8s-center">OpenShell (opt.)</text>
+    <text x="760" y="406" class="pk8s-node-sub pk8s-center">policy-enforced</text>
+    <text x="760" y="422" class="pk8s-node-sub pk8s-center">microVM sandboxes</text>
+  </svg>
+  <figcaption class="pk8s-caption">
+    Control plane stays outside the cluster. Helm ships the worker that reaches in — either an
+    outbound reverse-WebSocket daemon or an HTTP bridge for Cloudflare Workers. Each session gets
+    a pod (or OpenShell sandbox) on <em>your</em> cluster.
+  </figcaption>
+</figure>
+
+<style>
+  .pk8s-figure {
+    margin: 0;
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+  }
+  .pk8s-svg {
+    display: block;
+    width: 100%;
+    min-width: 40rem;
+    height: auto;
+  }
+  .pk8s-caption {
+    margin-top: 0.85rem;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--color-fg-muted);
+    max-width: 48rem;
+  }
+  .pk8s-caption em {
+    font-style: normal;
+    color: var(--color-fg);
+    font-weight: 500;
+  }
+
+  .pk8s-box {
+    fill: var(--color-card);
+    stroke: var(--color-border);
+    stroke-width: 1.25;
+  }
+  .pk8s-box-core {
+    stroke: color-mix(in srgb, var(--color-brand) 55%, var(--color-border));
+    fill: color-mix(in srgb, var(--color-brand) 8%, var(--color-card));
+  }
+  .pk8s-box-helm {
+    stroke: color-mix(in srgb, var(--color-blue) 50%, var(--color-border));
+    fill: color-mix(in srgb, var(--color-blue) 7%, var(--color-card));
+  }
+  .pk8s-box-pod {
+    stroke: color-mix(in srgb, var(--color-green) 45%, var(--color-border));
+    fill: color-mix(in srgb, var(--color-green) 6%, var(--color-card));
+  }
+  .pk8s-box-opt {
+    stroke: var(--color-border);
+    fill: color-mix(in srgb, var(--color-bg-surface) 70%, var(--color-card));
+    stroke-dasharray: 4 3;
+  }
+  .pk8s-column {
+    fill: transparent;
+    stroke: color-mix(in srgb, var(--color-border-strong) 80%, transparent);
+    stroke-width: 1.25;
+    stroke-dasharray: 4 4;
+  }
+  .pk8s-cluster {
+    fill: color-mix(in srgb, var(--color-bg-surface) 55%, transparent);
+    stroke: color-mix(in srgb, var(--color-green) 35%, var(--color-border));
+    stroke-width: 1.4;
+  }
+
+  .pk8s-title {
+    fill: var(--color-fg);
+    font-family: var(--font-display, inherit);
+    font-size: 15px;
+    font-weight: 600;
+    text-anchor: middle;
+  }
+  .pk8s-sub {
+    fill: var(--color-fg-muted);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    text-anchor: middle;
+  }
+  .pk8s-sub-dim {
+    fill: var(--color-fg-subtle);
+  }
+  .pk8s-col-title {
+    fill: var(--color-fg);
+    font-family: var(--font-display, inherit);
+    font-size: 13px;
+    font-weight: 600;
+    text-anchor: start;
+  }
+  .pk8s-col-tag {
+    fill: var(--color-fg-subtle);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-anchor: end;
+  }
+  .pk8s-node {
+    fill: var(--color-fg);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 500;
+    text-anchor: start;
+  }
+  .pk8s-node-sub {
+    fill: var(--color-fg-muted);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-anchor: start;
+  }
+  .pk8s-center {
+    text-anchor: middle;
+  }
+  .pk8s-wire {
+    fill: none;
+    stroke: var(--color-fg-subtle);
+    stroke-width: 1.4;
+  }
+  .pk8s-arrowhead {
+    fill: var(--color-fg-subtle);
+  }
+</style>
