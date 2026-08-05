@@ -256,11 +256,15 @@ export function Dashboard() {
   // Mature tenants already know the stack map — keep it behind a disclosure
   // so Overview leads with metrics / recent work. New tenants (no agents or
   // no sessions yet) keep the assembly open and prominent.
-  const isSetUp =
-    !statsQuery.isLoading &&
-    !statsQuery.error &&
+  //
+  // Default CLOSED while stats are still loading: `isSetUp` used to be false
+  // during load (because of the `!isLoading` gate), which forced
+  // `defaultOpen={true}` and then flipped to closed once counts landed —
+  // returning operators saw the full map flash open then collapse.
+  const isMature =
     (stats?.agents ?? 0) > 0 &&
     ((stats?.sessions ?? 0) > 0 || recentSessions.length > 0);
+  const assemblyDefaultOpen = statsQuery.isLoading ? false : !isMature;
 
   return (
     <div className="pb-4">
@@ -441,7 +445,7 @@ export function Dashboard() {
             the conceptual map and the setup checklist in one panel.
             Set-up tenants get it collapsed by default so they aren't forced
             to scroll past the architecture map every visit. */}
-        <StackedAssembly defaultOpen={!isSetUp} />
+        <StackedAssembly defaultOpen={assemblyDefaultOpen} />
 
         {/* Recent sessions */}
         <section>

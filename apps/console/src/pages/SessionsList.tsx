@@ -315,6 +315,15 @@ export function SessionsList() {
     [setSearchParams],
   );
 
+  // URL → state: honor external searchParam changes (in-app Link navigations
+  // that re-mount less often than expected, or future push-based history).
+  // onStatusChange already writes both; this only applies when the URL
+  // drifts from local state.
+  useEffect(() => {
+    const fromUrl = statusFromSearchParam(searchParams.get("status"));
+    setStatus((prev) => (prev === fromUrl ? prev : fromUrl));
+  }, [searchParams]);
+
   // Sessions table — cursor-paginated, server-side filtered. Any change to
   // these params resets to page 0 automatically (paramsKey is part of the
   // query key).

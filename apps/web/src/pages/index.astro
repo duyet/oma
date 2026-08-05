@@ -95,7 +95,9 @@ const explore = [
         <a href="https://docs.oma.duyet.net" class={btnPrimary}
           ><Icon name="book" size={16} /> Read the docs</a
         >
-        <a href="https://app.oma.duyet.net/login" class={btnOutline}
+        {/* App root (not /login): signed-in land on the shell; signed-out
+            bounce to login — matches nav + footer CTAs. */}
+        <a href="https://app.oma.duyet.net/" class={btnOutline}
           ><Icon name="server" size={16} /> Try hosted</a
         >
         <a
@@ -290,7 +292,7 @@ const explore = [
         <a href="https://docs.oma.duyet.net" class={btnPrimary}
           ><Icon name="book" size={16} /> Read the docs</a
         >
-        <a href="https://app.oma.duyet.net/login" class={btnOutline}
+        <a href="https://app.oma.duyet.net/" class={btnOutline}
           ><Icon name="server" size={16} /> Try hosted</a
         >
         <a

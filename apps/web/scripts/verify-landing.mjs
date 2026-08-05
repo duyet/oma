@@ -86,7 +86,13 @@ if (!index.includes("Agent") || !index.includes("Session") || !index.includes("E
 if (!index.includes("RequestFlowInteractive") || !index.includes("ProviderFan")) {
   fail("landing must include the interactive request-path + provider-fan visual structure");
 }
-if (!index.includes("github.com/duyet/oma") || !index.includes("app.oma.duyet.net/login") || !index.includes("docs.oma.duyet.net")) {
+// Hosted CTA may be app root (signed-in → shell, signed-out → login bounce)
+// or the explicit /login path — both are valid.
+if (
+  !index.includes("github.com/duyet/oma") ||
+  !index.includes("app.oma.duyet.net") ||
+  !index.includes("docs.oma.duyet.net")
+) {
   fail("primary CTAs (GitHub, hosted, docs) must remain");
 }
 // Flexibility section: #reach is canonical; #layers must remain as a stable

@@ -140,3 +140,6 @@ describe("<SessionsList /> status URL deep-link", () => {
     expect(await screen.findByText("Nightly digest")).toBeInTheDocument();
   });
 });
+
+// agentNameById resolution is covered above; status deep-link seeds the
+// filter bar chip + the /v1/sessions request (Overview Active sessions card).
