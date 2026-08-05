@@ -224,7 +224,15 @@ function QuickViewBody({ view }: { view: QuickView }) {
   );
 }
 
-export function StackedAssembly() {
+/** `defaultOpen` controls whether the architecture map is expanded on
+ *  first paint. New / empty tenants keep it open (the default); set-up
+ *  tenants pass `false` so Overview leads with metrics without forcing a
+ *  scroll past the map every visit. */
+export function StackedAssembly({
+  defaultOpen = true,
+}: {
+  defaultOpen?: boolean;
+} = {}) {
   const nav = useNavigate();
   const [quick, setQuick] = useState<QuickView | null>(null);
 
@@ -589,30 +597,71 @@ export function StackedAssembly() {
   const steps = [configure, compose, run, reach];
   const requiredDone = [configure.done, agentReady].filter(Boolean).length;
 
-  return (
-    <section className="border border-border rounded-lg p-5 md:p-6">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 className="font-display text-lg font-semibold text-fg">
-          How it fits together
-        </h2>
-        <span className="text-[12px] tabular-nums text-fg-subtle">
-          {requiredDone} of 2 required steps complete
-        </span>
-      </div>
-      <p className="mt-1 mb-3 text-[13px] text-fg-muted">
-        Configure the pieces, compose them into an agent, and every conversation
-        runs as a session inside a sandbox. Reach is optional. Click any card to
-        manage that piece.
-      </p>
+  const intro = (
+    <p className="mt-1 mb-3 text-[13px] text-fg-muted">
+      Configure the pieces, compose them into an agent, and every conversation
+      runs as a session inside a sandbox. Reach is optional. Click any card to
+      manage that piece.
+    </p>
+  );
 
-      <FitDiagram
-        steps={steps}
-        collapsible
-        formula={[
-          { lhs: "agent", parts: ["model", "skills", "mcp"] },
-          { lhs: "session", parts: ["agent", "env", "vaults"] },
-        ]}
-      />
+  const diagram = (
+    <FitDiagram
+      steps={steps}
+      collapsible
+      formula={[
+        { lhs: "agent", parts: ["model", "skills", "mcp"] },
+        { lhs: "session", parts: ["agent", "env", "vaults"] },
+      ]}
+    />
+  );
+
+  const progressLabel = `${requiredDone} of 2 required steps complete`;
+
+  return (
+    <section
+      className="border border-border rounded-lg"
+      data-testid="stacked-assembly"
+      data-open={defaultOpen ? "true" : "false"}
+    >
+      {defaultOpen ? (
+        <div className="p-5 md:p-6">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h2 className="font-display text-lg font-semibold text-fg">
+              How it fits together
+            </h2>
+            <span className="text-[12px] tabular-nums text-fg-subtle">
+              {progressLabel}
+            </span>
+          </div>
+          {intro}
+          {diagram}
+        </div>
+      ) : (
+        // Returning / set-up tenants: start closed so Overview doesn't force
+        // a scroll past the architecture map. Native <details> keeps this
+        // free of extra state and accessible out of the box.
+        <details className="group">
+          <summary className="flex cursor-pointer list-none flex-wrap items-baseline justify-between gap-x-4 gap-y-1 p-5 md:p-6 outline-none marker:content-none [&::-webkit-details-marker]:hidden">
+            <h2 className="font-display text-lg font-semibold text-fg">
+              How it fits together
+            </h2>
+            <span className="text-[12px] tabular-nums text-fg-subtle">
+              {progressLabel}
+              <span className="ml-2 text-fg-muted group-open:hidden">
+                · Show map
+              </span>
+              <span className="ml-2 text-fg-muted hidden group-open:inline">
+                · Hide map
+              </span>
+            </span>
+          </summary>
+          <div className="border-t border-border px-5 pb-5 pt-3 md:px-6 md:pb-6">
+            {intro}
+            {diagram}
+          </div>
+        </details>
+      )}
 
       {quick && (
         <Modal

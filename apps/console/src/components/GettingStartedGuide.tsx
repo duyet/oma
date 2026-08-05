@@ -10,7 +10,7 @@
 // Dismissal is persisted in localStorage — a returning user shouldn't have to
 // re-dismiss it on every page load — and long-form explanation lives in a
 // multi-step tour dialog rather than inline, so the panel stays four rows tall.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CheckIcon, ArrowRightIcon, XIcon, SparklesIcon } from "lucide-react";
@@ -22,6 +22,15 @@ import { Modal } from "./Modal";
 import { AgentIcon, SessionsIcon, EnvIcon, VaultIcon } from "./icons";
 
 export const GETTING_STARTED_DISMISSED_KEY = "oma.dashboard.getting-started.dismissed";
+/** Marks that every setup step was complete on a prior visit. Combined with
+ *  `allDone` on a later load, the guide auto-hides so a fully set-up
+ *  tenant doesn't re-see "You're all set up" every Overview visit. The
+ *  first time every step completes, the completion banner still shows. */
+export const GETTING_STARTED_COMPLETED_KEY = "oma.dashboard.getting-started.completed";
+/** Per page-load snapshot of COMPLETED_KEY — sessionStorage so React Strict
+ *  Mode remounts re-read the same "before this load" value instead of the
+ *  value this load just wrote (which would auto-hide the first completion). */
+const COMPLETED_SNAPSHOT_KEY = "oma.dashboard.getting-started.completed-snapshot";
 
 function readDismissed(): boolean {
   try {
@@ -37,6 +46,37 @@ function persistDismissed(): void {
     localStorage.setItem(GETTING_STARTED_DISMISSED_KEY, "1");
   } catch {
     // Non-fatal: the guide just reappears next load.
+  }
+}
+
+function readCompletedSeen(): boolean {
+  try {
+    return localStorage.getItem(GETTING_STARTED_COMPLETED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function persistCompletedSeen(): void {
+  try {
+    localStorage.setItem(GETTING_STARTED_COMPLETED_KEY, "1");
+  } catch {
+    // Non-fatal.
+  }
+}
+
+/** Whether COMPLETED_KEY was already set *before* this page load. Cached in
+ *  sessionStorage so a mid-load write to COMPLETED_KEY (or a Strict Mode
+ *  remount) can't flip the decision for the first completion visit. */
+function completedBeforeThisPageLoad(): boolean {
+  try {
+    const cached = sessionStorage.getItem(COMPLETED_SNAPSHOT_KEY);
+    if (cached === "1" || cached === "0") return cached === "1";
+    const v = readCompletedSeen();
+    sessionStorage.setItem(COMPLETED_SNAPSHOT_KEY, v ? "1" : "0");
+    return v;
+  } catch {
+    return readCompletedSeen();
   }
 }
 
@@ -117,6 +157,10 @@ export function GettingStartedGuide() {
   const nav = useNavigate();
   const [dismissed, setDismissed] = useState(readDismissed);
   const [tourOpen, setTourOpen] = useState(false);
+  // Snapshot of "completed on a prior visit" for this page load. See
+  // completedBeforeThisPageLoad — must not flip when we write COMPLETED_KEY
+  // mid-session (first "You're all set up" visit must still show).
+  const completedBefore = useRef(completedBeforeThisPageLoad()).current;
 
   // Same query keys the dashboard/StackedAssembly already use — TanStack
   // dedupes, so mounting this panel adds no network request.
@@ -191,16 +235,36 @@ export function GettingStartedGuide() {
 
   const doneCount = steps.filter((s) => s.done).length;
   const allDone = doneCount === steps.length;
+  // First incomplete step is the only "do this next" target — visual
+  // emphasis + a stronger CTA so operators don't scan four equal-weight rows.
+  const nextStepId = steps.find((s) => !s.done)?.id ?? null;
+
+  // Once every step is complete, remember it for the next visit. Returning
+  // visits that already saw full completion auto-hide (no re-show). The
+  // first visit that reaches allDone still shows "You're all set up".
+  useEffect(() => {
+    if (!allDone || dismissed) return;
+    // Wait until stats have resolved so we don't act on a still-loading
+    // zero-count snapshot.
+    if (statsQuery.isLoading && !stats) return;
+    if (completedBefore) {
+      persistDismissed();
+      setDismissed(true);
+      return;
+    }
+    persistCompletedSeen();
+  }, [allDone, dismissed, stats, statsQuery.isLoading, completedBefore]);
 
   if (dismissed) return null;
 
   function dismiss() {
     persistDismissed();
+    if (allDone) persistCompletedSeen();
     setDismissed(true);
   }
 
   return (
-    <section data-testid="getting-started-guide">
+    <section data-testid="getting-started-guide" aria-labelledby="getting-started-heading">
       <div className="relative overflow-hidden rounded-xl border border-border bg-bg-surface/40">
         {/* Decorative corner glyph — theme-aware via currentColor + opacity,
             so it reads as a faint watermark in both light and dark. */}
@@ -209,35 +273,53 @@ export function GettingStartedGuide() {
         <div className="relative p-5">
           <div className="flex items-start gap-3">
             <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand">
-              <SparklesIcon className="size-4" />
+              <SparklesIcon className="size-4" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
-              <h2 className="font-display text-lg font-semibold text-fg">
+              <h2
+                id="getting-started-heading"
+                className="font-display text-lg font-semibold text-fg"
+              >
                 {allDone ? "You're all set up" : "Getting started"}
               </h2>
               <p className="mt-0.5 text-[13px] text-fg-muted">
                 {allDone
-                  ? "Every setup step is done. Keep this panel or dismiss it — nothing else changes."
+                  ? "Every setup step is done. Dismiss this panel anytime — you can keep working from Overview."
                   : "Four steps to a working agent. Steps tick off automatically as you create things."}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => setTourOpen(true)}>
-                Take the tour
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={dismiss}
-                aria-label="Dismiss getting started"
-              >
-                <XIcon />
-              </Button>
+              {!allDone && (
+                <Button variant="outline" size="sm" onClick={() => setTourOpen(true)}>
+                  Take the tour
+                </Button>
+              )}
+              {allDone ? (
+                <Button variant="secondary" size="sm" onClick={dismiss}>
+                  Dismiss
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={dismiss}
+                  aria-label="Dismiss getting started"
+                >
+                  <XIcon />
+                </Button>
+              )}
             </div>
           </div>
 
           {/* Progress — a plain segmented bar, one segment per step. */}
-          <div className="mt-4 flex items-center gap-3">
+          <div
+            className="mt-4 flex items-center gap-3"
+            role="progressbar"
+            aria-valuenow={doneCount}
+            aria-valuemin={0}
+            aria-valuemax={steps.length}
+            aria-label={`${doneCount} of ${steps.length} setup steps complete`}
+          >
             <div className="flex flex-1 gap-1" aria-hidden="true">
               {steps.map((s) => (
                 <span
@@ -257,16 +339,20 @@ export function GettingStartedGuide() {
           <ol className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
             {steps.map((step) => {
               const Icon = step.icon;
+              const isNext = !step.done && step.id === nextStepId;
               return (
                 <li
                   key={step.id}
                   data-testid={`guide-step-${step.id}`}
                   data-done={step.done ? "true" : "false"}
+                  data-next={isNext ? "true" : "false"}
                   className={cn(
                     "flex items-start gap-3 rounded-lg border p-3 transition-colors",
                     step.done
                       ? "border-border/60 bg-transparent"
-                      : "border-border bg-bg-surface/60",
+                      : isNext
+                        ? "border-brand/40 bg-brand/[0.04] ring-1 ring-brand/15"
+                        : "border-border bg-bg-surface/60",
                   )}
                 >
                   <span
@@ -274,7 +360,9 @@ export function GettingStartedGuide() {
                       "mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-md",
                       step.done
                         ? "bg-success/15 text-success"
-                        : "bg-bg-surface text-fg-muted ring-1 ring-border",
+                        : isNext
+                          ? "bg-brand/15 text-brand"
+                          : "bg-bg-surface text-fg-muted ring-1 ring-border",
                     )}
                   >
                     {step.done ? (
@@ -290,13 +378,18 @@ export function GettingStartedGuide() {
                         step.done ? "text-fg-muted line-through" : "text-fg",
                       )}
                     >
+                      {isNext ? (
+                        <span className="mr-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-brand">
+                          Next
+                        </span>
+                      ) : null}
                       {step.title}
                     </div>
                     <p className="mt-0.5 text-[12px] text-fg-subtle">{step.body}</p>
                   </div>
                   {!step.done && (
                     <Button
-                      variant="ghost"
+                      variant={isNext ? "secondary" : "ghost"}
                       size="xs"
                       onClick={() => nav(step.to)}
                       className="shrink-0"

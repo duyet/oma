@@ -8,6 +8,7 @@ import { server } from "../mocks/server";
 import {
   GettingStartedGuide,
   GETTING_STARTED_DISMISSED_KEY,
+  GETTING_STARTED_COMPLETED_KEY,
 } from "./GettingStartedGuide";
 
 function mockDeps({
@@ -49,6 +50,7 @@ function renderGuide() {
 describe("GettingStartedGuide", () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   it("renders all four onboarding steps", async () => {
@@ -76,11 +78,33 @@ describe("GettingStartedGuide", () => {
     expect(screen.getByText("2/4 done")).toBeTruthy();
   });
 
+  // First incomplete step is the only "Next" target — equal-weight rows
+  // made operators scan without a clear primary action.
+  it("marks the first incomplete step as Next", async () => {
+    mockDeps({ agents: 2, sessions: 1 });
+    renderGuide();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("guide-step-environment").dataset.next).toBe("true");
+    });
+    expect(screen.getByTestId("guide-step-agent").dataset.next).toBe("false");
+    expect(screen.getByTestId("guide-step-vault").dataset.next).toBe("false");
+    expect(screen.getByText("Next")).toBeTruthy();
+  });
+
   it("reports completion when every step is satisfied", async () => {
     mockDeps({ agents: 1, sessions: 1, environments: 1, vaults: 1 });
     renderGuide();
 
     expect(await screen.findByText("You're all set up")).toBeTruthy();
+    // Completion surfaces a labeled Dismiss button (not just the X icon).
+    expect(screen.getByRole("button", { name: "Dismiss" })).toBeTruthy();
+    // First completion visit records COMPLETED for future auto-hide, but
+    // does not dismiss yet — the operator still sees the banner once.
+    await waitFor(() =>
+      expect(localStorage.getItem(GETTING_STARTED_COMPLETED_KEY)).toBe("1"),
+    );
+    expect(screen.getByTestId("getting-started-guide")).toBeTruthy();
   });
 
   it("hides on dismiss and persists the dismissal", async () => {
@@ -100,6 +124,19 @@ describe("GettingStartedGuide", () => {
     renderGuide();
 
     expect(screen.queryByTestId("getting-started-guide")).toBeNull();
+  });
+
+  it("auto-hides on a returning visit after setup was already complete", async () => {
+    // Prior visit finished every step and recorded COMPLETED. This visit
+    // should not re-show the completion banner.
+    localStorage.setItem(GETTING_STARTED_COMPLETED_KEY, "1");
+    mockDeps({ agents: 1, sessions: 1, environments: 1, vaults: 1 });
+    renderGuide();
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("getting-started-guide")).toBeNull();
+    });
+    expect(localStorage.getItem(GETTING_STARTED_DISMISSED_KEY)).toBe("1");
   });
 
   it("walks the tour dialog forward and back", async () => {
