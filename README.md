@@ -127,9 +127,9 @@ Three charts — full control plane, sandbox-only bridge worker, or an in-cluste
 
 ### Bring your own model
 
-![Anthropic](https://img.shields.io/badge/Anthropic-Claude-D97757?logo=anthropic&logoColor=white) ![OpenAI](https://img.shields.io/badge/OpenAI-compatible-412991?logo=openai&logoColor=white) ![Anthropic-Router](https://img.shields.io/badge/Anthropic--Router-one--click%20OAuth-2ea043)
+![Anthropic](https://img.shields.io/badge/Anthropic-Claude-D97757?logo=anthropic&logoColor=white) ![OpenAI](https://img.shields.io/badge/OpenAI-compatible-412991?logo=openai&logoColor=white) ![AnyRouter](https://img.shields.io/badge/AnyRouter-one--click%20OAuth-2ea043)
 
-Per-tenant **Model Cards** (`ant` / `ant-compatible` / `oai` / `oai-compatible`); one-click Anthropic Router OAuth from the Console; env-var fallback (`ANTHROPIC_API_KEY` / `ANTHROPIC-ROUTER_API_KEY`) so a fresh install runs immediately. The `poolside` harness drives poolside.ai `laguna`/`malibu` over the same loop. → [docs/model-cards.md](docs/model-cards.md) · [AGENTS.md § Model Configuration](AGENTS.md#model-configuration)
+Per-tenant **Model Cards** (`ant` / `ant-compatible` / `oai` / `oai-compatible`); one-click AnyRouter OAuth from the Console; env-var fallback (`ANTHROPIC_API_KEY` / `ANYROUTER_API_KEY`) so a fresh install runs immediately. The `poolside` harness drives [poolside.ai](https://poolside.ai) `laguna`/`malibu` over the same OpenAI-compatible loop. → [docs/model-cards.md](docs/model-cards.md) · [AGENTS.md § Model Configuration](AGENTS.md#model-configuration)
 
 ### Harnesses — pluggable "how"
 
