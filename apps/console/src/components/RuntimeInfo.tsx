@@ -1,25 +1,7 @@
 import { useApiQuery } from "../lib/useApiQuery";
 import { friendlyHostingDescription } from "../lib/hostingTypes";
 import { ProviderMark } from "./ProviderMark";
-
-/** One-line description of each harness — mirrors the wording in
- *  AgentFormDialog.tsx's "Agent runtime" picker so the two surfaces never
- *  drift out of sync. */
-const HARNESS_DESCRIPTIONS: Record<string, string> = {
-  default: "The default loop. Works everywhere and is the right choice for most agents.",
-  "claude-agent-sdk":
-    "Runs the agent through the Claude Agent SDK CLI — the same loop Claude Code uses. Self-hosted deployments only.",
-  "long-running":
-    "Emits periodic progress updates on a fixed cadence — good for tasks that run for a long time unattended.",
-  "acp-proxy": "Runs on a user-registered Local Runtime instead of OMA's cloud sandbox.",
-};
-
-const HARNESS_LABELS: Record<string, string> = {
-  default: "Standard",
-  "claude-agent-sdk": "Claude Agent SDK",
-  "long-running": "Long-running",
-  "acp-proxy": "Local runtime (ACP)",
-};
+import { harnessDescription, harnessLabel, harnessOption } from "../pages/agents/harness-options";
 
 /** Default container image per sandbox provider when the environment
  *  doesn't set config.image / SANDBOX_IMAGE explicitly — see
@@ -73,17 +55,25 @@ export function RuntimeInfo({ harness }: { harness: string }) {
   const { data, isLoading } = useApiQuery<{ data: EnvRecord[] }>("/v1/environments");
   const environments = data?.data ?? [];
   const harnessKey = harness || "default";
+  const option = harnessOption(harnessKey);
 
   return (
     <div className="space-y-4">
       <div>
         <span className="text-xs text-fg-muted block mb-1">Harness</span>
-        <p className="text-sm text-fg font-medium">
-          {HARNESS_LABELS[harnessKey] ?? harnessKey}
+        <p className="text-sm text-fg font-medium flex items-center gap-2 flex-wrap">
+          <span>{harnessLabel(harnessKey)}</span>
+          {option && (
+            <span className="text-[10px] rounded px-1 py-0.5 bg-bg-surface text-fg-subtle font-normal">
+              {option.badge}
+            </span>
+          )}
+          <span className="text-[10px] font-mono text-fg-subtle font-normal">{harnessKey}</span>
         </p>
-        <p className="text-xs text-fg-subtle mt-0.5">
-          {HARNESS_DESCRIPTIONS[harnessKey] ?? "Custom harness."}
-        </p>
+        <p className="text-xs text-fg-subtle mt-0.5">{harnessDescription(harnessKey)}</p>
+        {option?.note && (
+          <p className="text-xs text-fg-subtle mt-1 bg-bg-surface rounded-md px-2 py-1.5">{option.note}</p>
+        )}
       </div>
 
       <div>
@@ -98,7 +88,7 @@ export function RuntimeInfo({ harness }: { harness: string }) {
             <a href="/environments" className="text-brand hover:underline">
               create one
             </a>{" "}
-            so this agent's sessions have somewhere to run.
+            so this agent&apos;s sessions have somewhere to run.
           </p>
         ) : (
           <div className="space-y-2">

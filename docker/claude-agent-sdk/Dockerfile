@@ -1,16 +1,13 @@
-# oma-runtime-claude-agent-sdk — sandbox image for agents that use
-# `harness: "claude-agent-sdk"` (see apps/agent/src/harness/claude-agent-sdk-loop.ts).
+# oma-runtime-claude-agent-sdk — SANDBOX tool image only.
 #
-# IMPORTANT: this is byte-for-byte the base toolset image. The Claude Agent
-# SDK's `query()` spawns Claude Code's CLI as a subprocess on the platform
-# host (apps/main-node — see the module-level jsdoc in
-# claude-agent-sdk-loop.ts for why), NOT inside the sandbox. Tool calls the
-# CLI makes (bash/read/write/edit/glob/grep) are bridged into the SAME
-# sandbox every other harness uses via an in-process MCP server. There is
-# nothing claude-agent-sdk-specific for the sandbox to pre-install.
+# Not the server harness image. For the self-host server with
+# DEFAULT_HARNESS=claude-agent-sdk see:
+#   examples/oma-server-claude-agent-sdk/  →  oma-server-claude-agent-sdk:dev
 #
-# This Dockerfile exists as a named, buildable target (`oma-runtime-
-# claude-agent-sdk`) so environments can pin to it explicitly and diverge
-# later if the CLI ever needs sandbox-side tooling. Until then, treat it as
-# an alias for oma-runtime-base.
+# Naming: oma-runtime-* = sandbox filesystem; oma-server-* = harness host.
+#
+# Byte-for-byte the base toolset image. The Claude Agent SDK's `query()`
+# spawns Claude Code's CLI on the platform host (apps/main-node), NOT
+# inside the sandbox. Tool calls are bridged into this sandbox via an
+# in-process MCP server. Named separately so environments can pin it.
 FROM oma-runtime-base:latest

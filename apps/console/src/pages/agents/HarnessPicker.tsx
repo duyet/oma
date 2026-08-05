@@ -53,6 +53,11 @@ function HarnessCard({
             Recommended
           </span>
         )}
+        {option.tag && (
+          <span className="text-[10px] uppercase tracking-wide rounded px-1 py-0.5 border border-border text-fg-muted">
+            {option.tag}
+          </span>
+        )}
         <span className="text-[10px] rounded px-1 py-0.5 bg-bg-surface text-fg-subtle">
           {option.badge}
         </span>
@@ -69,12 +74,13 @@ export function HarnessPicker({ value, onChange, onSelectLocal }: HarnessPickerP
   const legacy = CLOUD_HARNESS_OPTIONS.some((o) => o.id === value)
     ? undefined
     : legacyHarnessOption(value);
+  const selected = harnessOptionById(value);
   return (
     <div>
       <label className="text-sm font-medium text-fg block mb-1">Harness</label>
       <p className="text-xs text-fg-subtle mb-2">
-        What drives this agent's loop, and where it runs. Pick this first — it decides how the
-        model field below is used.
+        What drives this agent&apos;s loop, and where it can run. Pick this first — it decides how
+        the model field below is used and which features (MCP, providers) apply.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Harness">
         {CLOUD_HARNESS_OPTIONS.map((o) => (
@@ -87,6 +93,13 @@ export function HarnessPicker({ value, onChange, onSelectLocal }: HarnessPickerP
         ))}
         {legacy && <HarnessCard option={legacy} selected onClick={() => {}} />}
       </div>
+      {selected?.capabilities && selected.capabilities.length > 0 && (
+        <ul className="mt-2 text-xs text-fg-subtle bg-bg-surface rounded-lg px-3 py-2 space-y-1 list-disc list-inside">
+          {selected.capabilities.map((c) => (
+            <li key={c}>{c}</li>
+          ))}
+        </ul>
+      )}
       <div className="mt-3">
         <p className="text-xs font-medium text-fg-muted mb-1">On your own machine</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -97,4 +110,8 @@ export function HarnessPicker({ value, onChange, onSelectLocal }: HarnessPickerP
       </div>
     </div>
   );
+}
+
+function harnessOptionById(id: string): HarnessOption | undefined {
+  return CLOUD_HARNESS_OPTIONS.find((o) => o.id === id) ?? legacyHarnessOption(id);
 }

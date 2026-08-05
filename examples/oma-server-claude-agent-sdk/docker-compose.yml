@@ -1,50 +1,41 @@
-# Self-host OMA preconfigured for the `claude-agent-sdk` harness.
+# OMA server image — Claude Agent SDK harness
 #
-# A trimmed sibling of the repo-root docker-compose.yml: same server image,
-# same ./data persistence, but with DEFAULT_HARNESS + the Claude Code CLI
-# auth env wired up. Run it from the REPO ROOT so the build context resolves:
+# Image: oma-server-claude-agent-sdk:dev
+# (server/harness host — NOT oma-runtime-* sandbox images)
 #
-#   docker compose -f examples/claude-agent-sdk-server/docker-compose.yml up --build
+# From repo root:
+#   docker compose -f examples/oma-server-claude-agent-sdk/docker-compose.yml up --build
 #   curl localhost:8787/health
 #
-# For the outbound vault credential-injection sidecar (oma-vault), use the
-# repo-root compose file instead and just add the two env vars marked
-# "harness selection" below to its oma-server service.
+# For vault credential-injection (oma-vault), use the repo-root compose file
+# and set DEFAULT_HARNESS=claude-agent-sdk on oma-server instead.
 
 services:
   oma-server:
     build:
-      # Repo root — the base image needs the whole pnpm workspace.
       context: ../..
       dockerfile: apps/main-node/Dockerfile
-    image: oma/main-node:dev
-    container_name: oma-claude-agent-sdk-server
+    image: oma-server-claude-agent-sdk:dev
+    container_name: oma-server-claude-agent-sdk
     ports:
       - "${OMA_PORT:-8787}:8787"
     env_file:
       - path: ../../.env
         required: false
     environment:
-      # --- harness selection -------------------------------------------
-      # Every agent without an explicit `metadata.harness` runs through
-      # ClaudeAgentSdkHarness (Claude Code's CLI as a subprocess).
+      # --- harness ------------------------------------------------------
       DEFAULT_HARNESS: claude-agent-sdk
 
-      # --- model auth ---------------------------------------------------
-      # Supply ONE of these. ANTHROPIC_API_KEY is the normal path; the OAuth
-      # token (minted with `claude setup-token`) is the CI/CD alternative for
-      # non-interactive deploys and is only consulted when the key is unset.
+      # --- model auth (supply one of key / oauth) -----------------------
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
-      # Anthropic-compatible gateway (e.g. AnyRouter) — see README.
+      # AnyRouter (or other Anthropic-compatible gateway):
+      #   ANTHROPIC_BASE_URL=https://anyrouter.dev/v1
+      #   ANTHROPIC_API_KEY=sk-ar-v1-...
+      # Agent model ids must match the gateway (e.g. anthropic/claude-sonnet-4-6).
       ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
 
-      # --- sandbox provider ---------------------------------------------
-      # `subprocess` (alias `local`) runs tool calls as child processes of the
-      # server, rooted at SANDBOX_WORKDIR. It is the default on self-host Node
-      # and the only provider that needs no extra infrastructure. Swap for
-      # docker-compose / k8s / boxrun via an environment record's
-      # config.sandbox_provider — see AGENTS.md.
+      # --- sandbox ------------------------------------------------------
       SANDBOX_PROVIDER: ${SANDBOX_PROVIDER:-subprocess}
       SANDBOX_WORKDIR: /app/data/sandboxes
 
@@ -55,8 +46,6 @@ services:
       SESSION_OUTPUTS_DIR: /app/data/session-outputs
 
       # --- auth ---------------------------------------------------------
-      # AUTH_DISABLED=1 makes every request tenant "default" — fine for a
-      # local single-user trial, never for a shared deploy.
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
       PLATFORM_ROOT_SECRET: ${PLATFORM_ROOT_SECRET:-}
       AUTH_DISABLED: ${AUTH_DISABLED:-1}

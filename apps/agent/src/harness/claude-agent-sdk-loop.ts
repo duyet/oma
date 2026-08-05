@@ -55,6 +55,7 @@ import type { HarnessInterface, HarnessContext, HarnessRuntime } from "./interfa
 import type { SessionEvent, UserMessageEvent } from "@duyet/oma-shared";
 import { generateEventId, log, logError } from "@duyet/oma-shared";
 import { buildOmaSandboxMcpServer } from "./claude-agent-sdk/sandbox-tools";
+import { buildAgentMcpServersFromPlatformTools } from "./claude-agent-sdk/agent-mcp";
 import { ClaudeAgentSdkEventTranslator } from "./claude-agent-sdk/translate";
 import { resolveClaudeSdkProvider } from "./claude-agent-sdk/model";
 
@@ -123,6 +124,17 @@ export class ClaudeAgentSdkHarness implements HarnessInterface {
     const hasPriorTurn = runtime.history.getEvents().some((e) => e.type === "agent.message");
 
     const mcpServer = buildOmaSandboxMcpServer(runtime.sandbox);
+    // Agent-declared MCP servers were already discovered by buildTools into
+    // ctx.tools as mcp__<server>__<tool> (credential-proxied). Bridge them
+    // into SDK mcpServers so the Claude Code CLI can call them — without
+    // this, agent.mcp_servers are silently ignored by this harness.
+    const agentMcpNames = (ctx.agent.mcp_servers ?? [])
+      .map((s) => s.name)
+      .filter((n): n is string => typeof n === "string" && n.length > 0);
+    const agentMcpServers = buildAgentMcpServersFromPlatformTools(
+      (ctx.tools ?? {}) as Record<string, { description?: string; execute?: (a: unknown) => Promise<unknown> }>,
+      agentMcpNames.length > 0 ? agentMcpNames : null,
+    );
 
     const abortController = new AbortController();
     const onAbort = () => abortController.abort();
@@ -148,7 +160,7 @@ export class ClaudeAgentSdkHarness implements HarnessInterface {
           // for the CLI's own filesystem/bash tools to do, and nothing they
           // could touch the *host* process's disk for.
           tools: [],
-          mcpServers: { oma: mcpServer },
+          mcpServers: { oma: mcpServer, ...agentMcpServers },
           // Ignore project/user .mcp.json, plugins, and on-disk agent
           // frontmatter MCP config — this host may run turns for many
           // agents/tenants and must not leak an unrelated MCP config into

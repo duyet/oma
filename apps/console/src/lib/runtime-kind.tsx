@@ -34,7 +34,7 @@ export const RUNTIME_KINDS: Record<RuntimeKind, RuntimeKindInfo> = {
   cloud: {
     id: "cloud",
     label: "Cloud",
-    description: "Claude Agent SDK, running on OMA",
+    description: "Runs on OMA (Standard loop or Claude Agent SDK harness)",
     Icon: Cloud,
   },
   local: {

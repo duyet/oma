@@ -42,14 +42,14 @@ to xAI's Grok through an OpenAI-compatible Model Card (`provider:
 harness or sandbox-image change. Build it locally the same way:
 `docker build -t oma-example-grok-coding-agent examples/grok-coding-agent`.
 
-`examples/claude-agent-sdk-server/` is a different shape from every example
+`examples/oma-server-claude-agent-sdk/` is a different shape from every example
 above: instead of a *client* that talks to a running instance, it's a
-**server-side** template — a Dockerfile layered on the repo's self-host image
-(`apps/main-node/Dockerfile`) plus a compose file that boots an instance
-preconfigured for the `claude-agent-sdk` harness (`DEFAULT_HARNESS`, Claude
-Code CLI auth, sandbox provider). Use it to *get* a server that can run
-`examples/claude-agent-sdk/`. Run from the repo root:
-`docker compose -f examples/claude-agent-sdk-server/docker-compose.yml up --build`.
+**server-side** template (image **`oma-server-claude-agent-sdk:dev`**) layered
+on the repo's self-host image (`apps/main-node/Dockerfile`) with
+`DEFAULT_HARNESS=claude-agent-sdk`. Not an `oma-runtime-*` sandbox image.
+Use it to *get* a server that can run `examples/claude-agent-sdk/`. From
+the repo root:
+`docker compose -f examples/oma-server-claude-agent-sdk/docker-compose.yml up --build`.
 
 ## Config templates (`examples/agents/`, `examples/environments/`)
 

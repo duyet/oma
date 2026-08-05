@@ -30,7 +30,7 @@ Registered in `apps/agent/src/index.ts` (Cloudflare) and additionally in
 | ACP proxy | `"acp-proxy"` | CF + self-host | Bridges an Agent Client Protocol server. |
 | Long-running | `"long-running"` | CF + self-host | Default loop + periodic `agent.status` heartbeats. |
 | Poolside | `"poolside"` | CF + self-host | Default loop against a [poolside.ai](https://poolside.ai) model (`laguna`/`malibu`) over plain OpenAI-compatible `/chat/completions` — pure `fetch`, no Node builtins. Requires `POOLSIDE_API_KEY`; defaults `agent.model` to `poolside/laguna-s-2.1`. See [`AGENTS.md` § Poolside models](../AGENTS.md#poolside-models-harness-poolside). |
-| Claude Agent SDK | `"claude-agent-sdk"` | **self-host only** | Spawns Claude Code's CLI as a native subprocess via `@anthropic-ai/claude-agent-sdk`. Requires `child_process` + a real filesystem — unavailable inside a Cloudflare Workers isolate, so it's wired into `apps/main-node`'s harness router only, never the CF worker registry. A copy-paste Docker template for running it lives in `examples/claude-agent-sdk-server/`. |
+| Claude Agent SDK | `"claude-agent-sdk"` | **self-host only** | Spawns Claude Code's CLI as a native subprocess via `@anthropic-ai/claude-agent-sdk`. Requires `child_process` + a real filesystem — unavailable inside a Cloudflare Workers isolate, so it's wired into `apps/main-node`'s harness router only, never the CF worker registry. Self-host server image template: `examples/oma-server-claude-agent-sdk/` (`oma-server-claude-agent-sdk:dev`). Console offers it next to **OMA Standard** (`default`) with a Self-host-only badge. |
 
 ### Recommended default: `claude-agent-sdk` on self-host
 
@@ -83,9 +83,12 @@ provider fallback).
 
 | Image | Kind | Use for |
 |---|---|---|
-| `oma-runtime-base` | `docker/base` | Generic toolset sandbox (git, gh, ripgrep, python3, build-essential). Default `config.image` for daytona/e2b/k8s/boxrun adapters. |
-| `oma-runtime-claude-agent-sdk` | `docker/claude-agent-sdk` | Alias for `oma-runtime-base` today — see the file's own comment for why (the CLI subprocess runs on the platform host, not in the sandbox). Named separately so it's pinnable and can diverge later. |
-| `oma-runtime-coding-agent-openai-compat` | `docker/coding-agent-openai-compat` | Alias for `oma-runtime-base` today, for the same reason. Named separately for the same forward-compat reason. |
+| `oma-runtime-base` | `docker/base` | Generic **sandbox** toolset (git, gh, ripgrep, python3, build-essential). Default `config.image` for daytona/e2b/k8s/boxrun adapters. |
+| `oma-runtime-claude-agent-sdk` | `docker/claude-agent-sdk` | **Sandbox only** (not the server harness). Alias for `oma-runtime-base` today — the CLI subprocess runs on the platform host, not in the sandbox. |
+| `oma-runtime-coding-agent-openai-compat` | `docker/coding-agent-openai-compat` | **Sandbox only**. Alias for `oma-runtime-base` today. |
+| `oma-server-claude-agent-sdk` | `examples/oma-server-claude-agent-sdk` | **Server / harness host** — self-host Node with `DEFAULT_HARNESS=claude-agent-sdk`. Do not confuse with `oma-runtime-*`. |
+
+Naming: `oma-server-*` = control plane + harness; `oma-runtime-*` = sandbox filesystem for tool execution.
 
 ```bash
 docker/build.sh                    # build + tag all three
