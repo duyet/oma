@@ -39,6 +39,12 @@ Cloudflare (Workers + Durable Objects + Containers) or self-hosted Node
 - [Private Kubernetes](https://oma.duyet.net/features/private-kubernetes/): Helm-connect your cluster for pod sandboxes
 - [Coding Agents](https://oma.duyet.net/features/coding-agents/): long-running coding sessions
 
+## Blog (selected)
+
+- [Run OMA sandboxes on a private Kubernetes cluster](https://oma.duyet.net/blog/oma-private-kubernetes-cluster/): Helm charts, outbound bridge vs k8s-remote, environment config
+- [Local machine + Claude Code / ACP](https://oma.duyet.net/blog/run-agent-sandbox-local-machine-claude-code-acp/)
+- [OpenShell sandboxes on CLI and Kubernetes](https://oma.duyet.net/blog/openshell-sandboxes-local-cli-and-kubernetes/)
+
 ## Compare
 
 - [OMA vs. Open Tag](https://oma.duyet.net/open-tag/)
