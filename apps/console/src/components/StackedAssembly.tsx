@@ -530,7 +530,7 @@ export function StackedAssembly() {
             title: "Sandbox providers",
             desc: "Where tools execute — the isolated container or micro-VM each session runs inside, set by its environment. Colored = live and healthy; gray = idle or unreachable.",
             href: "/runtimes",
-            linkLabel: "Sandbox Runtime",
+            linkLabel: "Sandbox providers",
             rows: providerIds.map((id, i) => {
               const h = providerHealthOf(id);
               return { primary: providers[i] ?? id, tag: h.label, tone: h.tone, secondary: h.latency };

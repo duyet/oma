@@ -173,7 +173,7 @@ export function Dashboard() {
               onClick={() => nav("/runtimes")}
               className="text-brand hover:underline"
             >
-              Sandbox Runtime page
+              Sandbox providers page
             </button>
             .
           </p>
