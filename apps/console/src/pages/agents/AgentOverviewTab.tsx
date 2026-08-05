@@ -18,6 +18,7 @@ import { AgentWebhooks } from "./AgentWebhooks";
 import { useAgentHub } from "../AgentDetail";
 import type { AgentRecord as Agent } from "../../types/agent";
 import { rowActivateKeyDown } from "@/lib/utils";
+import { harnessLabel, harnessOption } from "./harness-options";
 
 /** Shared publication shape across Linear / GitHub / Slack. */
 interface Pub {
@@ -126,7 +127,20 @@ export function AgentOverviewTab() {
           }
         />
         <span className="text-fg-muted">Harness</span>
-        <span>{displayAgent._oma?.harness || "default"}</span>
+        <span className="inline-flex items-center gap-2 flex-wrap">
+          <span>{harnessLabel(displayAgent._oma?.harness)}</span>
+          {(() => {
+            const opt = harnessOption(displayAgent._oma?.harness || "default");
+            return opt ? (
+              <span className="text-[10px] rounded px-1 py-0.5 bg-bg-surface text-fg-subtle">
+                {opt.badge}
+              </span>
+            ) : null;
+          })()}
+          <span className="text-[10px] font-mono text-fg-subtle">
+            {displayAgent._oma?.harness || "default"}
+          </span>
+        </span>
         {displayAgent._oma?.runtime_binding && (
           <>
             <span className="text-fg-muted">Local Runtime</span>

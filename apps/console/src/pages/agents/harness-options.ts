@@ -11,10 +11,13 @@
  * the Cloud/Local segmented control (a runtime binding *is* the selection),
  * so its card flips the form into Local mode rather than writing
  * `_oma.harness` directly.
+ *
+ * Keep this file as the single source of labels/descriptions used by the
+ * picker, RuntimeInfo, and the agent overview so wording never drifts.
  */
 
 /** Harness ids the cloud (non-local) picker can write to `form.harness`. */
-export type CloudHarnessId = "claude-agent-sdk";
+export type CloudHarnessId = "default" | "claude-agent-sdk";
 
 export interface HarnessOption {
   id: string;
@@ -26,6 +29,8 @@ export interface HarnessOption {
   /** Short "best for" hint. */
   bestFor: string;
   recommended?: boolean;
+  /** Optional secondary chip (e.g. "Claude Code"). */
+  tag?: string;
   /** Model id suggested when this harness is selected. */
   defaultModel?: string;
   /**
@@ -37,6 +42,11 @@ export interface HarnessOption {
   /** Extra deployment requirement surfaced inline under the model field. */
   note?: string;
   /**
+   * Short capability bullets shown under the selected card (tools, skills,
+   * MCP, providers, deployment).
+   */
+  capabilities?: string[];
+  /**
    * True for harness ids the picker no longer offers. Existing agents keep
    * their value — the card renders read-only so an edit never silently
    * rewrites the harness.
@@ -47,13 +57,35 @@ export interface HarnessOption {
 /** Harnesses that run inside OMA (selected by writing `_oma.harness`). */
 export const CLOUD_HARNESS_OPTIONS: HarnessOption[] = [
   {
+    id: "default",
+    name: "OMA Standard",
+    summary: "OMA's built-in tool loop — works on Cloudflare and self-host.",
+    badge: "Cloud + self-host",
+    bestFor: "Best default: full tools, skills, agent MCP, and any model card.",
+    recommended: true,
+    defaultModel: "claude-sonnet-4-6",
+    capabilities: [
+      "Built-in toolset (bash, read, write, edit, glob, grep, web_*)",
+      "Skills + agent MCP servers",
+      "Model cards: Anthropic-wire and OpenAI-compatible (AnyRouter, Grok, …)",
+      "Runs on Cloudflare Workers and self-host Node",
+    ],
+  },
+  {
     id: "claude-agent-sdk",
     name: "Claude Agent SDK",
-    summary: "Delegates the loop to the real Claude Code CLI, running in OMA's cloud.",
-    badge: "Cloud + self-host",
-    bestFor: "Best for the exact Claude Code experience, skills and all.",
-    recommended: true,
+    summary: "Delegates the loop to the real Claude Code CLI on the OMA server.",
+    badge: "Self-host only",
+    bestFor: "Best for the exact Claude Code experience on self-host Node.",
+    tag: "Claude Code",
     modelCaveat: true,
+    note: "Self-host Node only (docker compose / main-node). Not available on the Cloudflare Worker deployment — use OMA Standard there.",
+    capabilities: [
+      "Claude Code CLI subprocess (same loop as Claude Code)",
+      "Skills via composed system prompt; sandbox tools via OMA MCP bridge",
+      "Agent MCP servers proxied through OMA (credentials never in the CLI)",
+      "Anthropic-wire models only (ant / ant-compatible, incl. AnyRouter Anthropic route)",
+    ],
   },
 ];
 
@@ -73,15 +105,6 @@ export const LOCAL_HARNESS_OPTIONS: HarnessOption[] = [
  * the picker. Kept so an existing agent's value renders with a real label.
  */
 export const LEGACY_HARNESS_OPTIONS: HarnessOption[] = [
-  {
-    id: "default",
-    name: "Standard",
-    summary: "OMA's built-in tool loop, running in the platform sandbox.",
-    badge: "Cloud + self-host",
-    bestFor: "Kept for existing agents.",
-    defaultModel: "claude-sonnet-4-6",
-    legacy: true,
-  },
   {
     id: "long-running",
     name: "Long-running",
@@ -108,6 +131,18 @@ export function harnessOption(id: string): HarnessOption | undefined {
   return [...CLOUD_HARNESS_OPTIONS, ...LOCAL_HARNESS_OPTIONS, ...LEGACY_HARNESS_OPTIONS].find(
     (h) => h.id === id,
   );
+}
+
+/** Human label for tables and overview — falls back to the raw id. */
+export function harnessLabel(id: string | null | undefined): string {
+  const key = id && id.length > 0 ? id : "default";
+  return harnessOption(key)?.name ?? key;
+}
+
+/** One-line description for RuntimeInfo / tooltips. */
+export function harnessDescription(id: string | null | undefined): string {
+  const key = id && id.length > 0 ? id : "default";
+  return harnessOption(key)?.summary ?? "Custom harness.";
 }
 
 /** A card for an unrecognised harness value, so editing never loses it. */

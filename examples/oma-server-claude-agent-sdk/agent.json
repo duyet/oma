@@ -1,11 +1,10 @@
 {
-  "name": "Claude Agent SDK Server Example",
-  "description": "Coding agent whose turns are driven by Claude Code's CLI (via @anthropic-ai/claude-agent-sdk) on a self-hosted Node instance.",
+  "name": "Claude Agent SDK (server example)",
+  "description": "Self-host example: harness claude-agent-sdk with skills + MCP placeholders. Use OMA Standard on Cloudflare.",
   "model": "claude-sonnet-4-6",
-  "system": "You are a careful coding assistant. Inspect files before changing them, keep edits minimal, and explain what you changed.",
+  "system": "You are a careful coding assistant running under the Claude Agent SDK harness on self-host OMA. Use sandbox tools for files and shell. Prefer MCP tools when the task needs an external service.",
   "tools": [{ "type": "agent_toolset_20260401" }],
   "harness": "claude-agent-sdk",
-  "metadata": {
-    "harness": "claude-agent-sdk"
-  }
+  "skills": [],
+  "mcp_servers": []
 }

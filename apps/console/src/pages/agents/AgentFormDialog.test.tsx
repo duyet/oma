@@ -42,25 +42,37 @@ describe("<BasicTab /> harness picker", () => {
     );
   });
 
-  it("defaults to the Claude Agent SDK harness and writes it to the config", () => {
+  it("defaults to OMA Standard and omits _oma.harness for the server default", () => {
     render(<Harness />);
-    expect(screen.getByRole("radio", { name: "Claude Agent SDK" })).toHaveAttribute(
+    expect(screen.getByRole("radio", { name: "OMA Standard" })).toHaveAttribute(
       "aria-checked",
       "true",
     );
+    expect(screen.getByTestId("harness").textContent).toBe("default");
+    // formToConfig suppresses _oma when harness is "default".
+    expect(JSON.parse(screen.getByTestId("config").textContent!)._oma).toBeUndefined();
+    expect(screen.getByText(/Built-in toolset/i)).toBeTruthy();
+  });
+
+  it("offers OMA Standard and Claude Agent SDK as first-class cloud harnesses", () => {
+    render(<Harness />);
+    expect(screen.getByRole("radio", { name: "OMA Standard" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Claude Agent SDK" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "ACP Runtime" })).toBeTruthy();
+    for (const gone of ["Long-running", "Poolside"]) {
+      expect(screen.queryByRole("radio", { name: gone })).toBeNull();
+    }
+  });
+
+  it("writes claude-agent-sdk when that card is selected", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.click(screen.getByRole("radio", { name: "Claude Agent SDK" }));
     expect(screen.getByTestId("harness").textContent).toBe("claude-agent-sdk");
     expect(JSON.parse(screen.getByTestId("config").textContent!)._oma).toEqual({
       harness: "claude-agent-sdk",
     });
-    expect(screen.getByText(/applies the per-agent model/i)).toBeTruthy();
-  });
-
-  it("offers only Claude Agent SDK and the local ACP Runtime", () => {
-    render(<Harness />);
-    for (const gone of ["Standard", "Long-running", "Poolside"]) {
-      expect(screen.queryByRole("radio", { name: gone })).toBeNull();
-    }
-    expect(screen.getByRole("radio", { name: "ACP Runtime" })).toBeTruthy();
+    expect(screen.getByText(/Self-host Node only/i)).toBeTruthy();
   });
 
   it("writes the browser environment as the agent's default, leaving the harness alone", () => {
@@ -71,8 +83,8 @@ describe("<BasicTab /> harness picker", () => {
       default_environment_id: "env_browser",
       runtime_kind: "browser",
     });
-    // Browser is a sandbox provider, not a harness — the cloud harness stays.
-    expect(config._oma).toEqual({ harness: "claude-agent-sdk" });
+    // Browser is a sandbox provider, not a harness — Standard stays default.
+    expect(config._oma).toBeUndefined();
   });
 
   it("keeps an existing agent's unsupported harness instead of rewriting it", () => {
@@ -96,7 +108,7 @@ describe("<BasicTab /> harness picker", () => {
     expect(browser).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("radio", { name: /Cloud/ })).toHaveAttribute("aria-checked", "false");
     // The model + harness still apply — only the sandbox moves to the tab.
-    expect(screen.getByRole("radio", { name: "Claude Agent SDK" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "OMA Standard" })).toBeTruthy();
   });
 
   it("the local runtime card switches the form to the Local machine flow", async () => {
@@ -105,7 +117,7 @@ describe("<BasicTab /> harness picker", () => {
 
     await user.click(screen.getByRole("radio", { name: "ACP Runtime" }));
     // Local mode replaces the cloud block with the connect-a-machine state.
-    expect(screen.queryByRole("radio", { name: "Claude Agent SDK" })).toBeNull();
+    expect(screen.queryByRole("radio", { name: "OMA Standard" })).toBeNull();
     expect(screen.getByText(/No runtimes registered/i)).toBeTruthy();
   });
 });

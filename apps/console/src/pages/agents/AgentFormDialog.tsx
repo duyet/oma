@@ -399,9 +399,10 @@ export const INITIAL_FORM = {
   // browser-vm environment. Mutually exclusive with runtimeId in the UI.
   browserEnvId: "",
   // Cloud harness — ignored (implicitly "acp-proxy") whenever runtimeId is
-  // set. "default" emits no _oma.harness at all (server default); it is only
-  // ever reached by hydrating an older agent, not by the picker.
-  harness: "claude-agent-sdk" as string,
+  // set. "default" emits no _oma.harness at all (server default) and is the
+  // create default so Cloudflare Console agents get a loop that works there.
+  // Claude Agent SDK remains a first-class picker option for self-host.
+  harness: "default" as string,
   /** Local skill ids to HIDE from this agent's ACP child. Empty = all
    *  detected local skills are visible (the daemon's default). */
   localSkillBlocklist: [] as string[],

@@ -15,7 +15,7 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 echo "Checking $OMA_BASE_URL/health ..."
 curl -sf "$OMA_BASE_URL/health" >/dev/null || {
   echo "Server not reachable. Start it with:"
-  echo "  docker compose -f examples/claude-agent-sdk-server/docker-compose.yml up --build"
+  echo "  docker compose -f examples/oma-server-claude-agent-sdk/docker-compose.yml up --build"
   exit 1
 }
 
@@ -23,7 +23,7 @@ if [ -z "${OMA_ENV_ID:-}" ]; then
   echo "Creating environment..."
   OMA_ENV_ID=$(curl -sf "$OMA_BASE_URL/v1/environments" \
     -H "x-api-key: $OMA_API_KEY" -H "content-type: application/json" \
-    -d '{"name":"claude-agent-sdk-server","config":{"type":"cloud"}}' \
+    -d '{"name":"oma-server-claude-agent-sdk","config":{"type":"cloud"}}' \
     | tr -d '\n' | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
 fi
 echo "Environment: $OMA_ENV_ID"
@@ -37,7 +37,7 @@ echo "Agent: $AGENT_ID"
 echo "Creating session..."
 SESSION_ID=$(curl -sf "$OMA_BASE_URL/v1/sessions" \
   -H "x-api-key: $OMA_API_KEY" -H "content-type: application/json" \
-  -d "{\"agent\": \"$AGENT_ID\", \"environment_id\": \"$OMA_ENV_ID\", \"title\": \"claude-agent-sdk server example\"}" \
+  -d "{\"agent\": \"$AGENT_ID\", \"environment_id\": \"$OMA_ENV_ID\", \"title\": \"oma-server-claude-agent-sdk example\"}" \
   | tr -d '\n' | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
 echo "Session: $SESSION_ID"
 
