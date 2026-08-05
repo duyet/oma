@@ -30,6 +30,7 @@ cluster, and the trade-offs versus laptop bridge and full self-host.
 
 For a shorter product overview, see the landing page:
 [Private Kubernetes](/features/private-kubernetes/).
+The architecture diagram above is the same viz that page uses.
 
 ## The split that makes this work
 

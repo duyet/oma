@@ -6,6 +6,7 @@ import {
   breadcrumbSchema,
   readingTimeMinutes,
 } from "../../lib/seo";
+import PrivateK8sDiagram from "../../components/PrivateK8sDiagram.astro";
 
 export async function getStaticPaths() {
   const posts = await getCollection("blog");
@@ -24,6 +25,11 @@ function formatDate(d: Date) {
 
 const minutes = readingTimeMinutes(post.body ?? "");
 const slug = post.id;
+
+// Inline architecture diagrams for posts that share a landing-page viz.
+// Blog bodies are plain Markdown (no MDX), so diagrams are slotted by slug
+// rather than imported inside the .md file.
+const showPrivateK8sDiagram = slug === "oma-private-kubernetes-cluster";
 
 // Pick 3 related posts by tag overlap, falling back to recency.
 // Internal links are a real SEO signal — every post that ships should
@@ -112,6 +118,29 @@ const schemas = [
         </div>
       )}
     </header>
+
+    {showPrivateK8sDiagram && (
+      <aside
+        class="mb-10 not-prose rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 sm:p-5"
+        aria-label="Architecture diagram"
+      >
+        <p class="mb-3 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--color-brand)]">
+          How it fits
+        </p>
+        <p class="mb-4 max-w-2xl text-sm leading-relaxed text-[var(--color-fg-muted)]">
+          Same diagram as the{" "}
+          <a href="/features/private-kubernetes/" class="text-[var(--color-brand)] hover:underline">
+            Private Kubernetes
+          </a>{" "}
+          feature page — control plane stays outside the cluster; Helm installs
+          the worker that reaches in.
+        </p>
+        {/* Break out of the article column so the wide SVG stays readable. */}
+        <div class="sm:-mx-2 lg:-mx-8">
+          <PrivateK8sDiagram />
+        </div>
+      </aside>
+    )}
 
     <div class="prose">
       <Content />
