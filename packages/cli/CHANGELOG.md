@@ -1,5 +1,12 @@
 # @getoma/cli
 
+## 0.1.9
+
+### Patch Changes
+
+- 0685800: Add non-interactive runtime pairing (`oma bridge pair` + `OMA_PAIRING_CODE`/`_STATE`/`_SERVER_URL` self-pair) for the in-cluster bridge daemon — redeems a multi-use `k8s_pairing` code via `/agents/runtime/exchange` without a browser. Companion to the `oma-bridge-daemon` chart's `pairing.existingSecret` values block.
+- 04628d8: Internal import rename: `@duyet/oma-sandbox` → `@getoma/sandbox-sdk` in the bridge daemon's OpenShell client. No published-behavior change — the adapter resolves from the workspace at runtime, not from npm.
+
 ## 0.1.8
 
 ### Patch Changes
