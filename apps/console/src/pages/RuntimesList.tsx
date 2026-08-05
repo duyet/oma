@@ -390,12 +390,16 @@ function MachineGrid({
 // `CopyBlock` (multi-line command copy button) lives in components/CopyBlock.tsx
 // and is shared with the register-k8s-cluster dialog.
 
+// Provider grid card — scannable summary + primary CTA only. Capabilities,
+// capacity gauges, external flag, last-checked clock, and full ids live in
+// ProviderDetailDialog (open on click). Diagnostics that block use
+// (availability reason, unhealthy/not-configured reason) stay on the card
+// so the grid answers "why isn't this ready?" without a click.
 function ProviderCard({ p, onSetup, onRemove, onOpenDetail, onOpenSandboxTab }: { p: HostingType; onSetup?: (p: HostingType) => void; onRemove?: (p: HostingType) => void; onOpenDetail?: (p: HostingType) => void; onOpenSandboxTab?: () => void }) {
   const health = p.health;
   const { dot: healthDot, label: healthLabel, status } = providerHealth(p);
   const isBrowserVm = p.provider === "browser-vm";
   const availability = providerAvailabilityView(p.availability);
-
   const clickable = !!onOpenDetail;
 
   return (
@@ -411,13 +415,12 @@ function ProviderCard({ p, onSetup, onRemove, onOpenDetail, onOpenSandboxTab }: 
       onKeyDown={clickable ? rowActivateKeyDown(() => onOpenDetail!(p)) : undefined}
       tabIndex={clickable ? 0 : undefined}
       role={clickable ? "button" : undefined}
+      title={clickable ? `${p.label} — open details` : p.label}
     >
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-2">
         <div className="flex items-center gap-2.5">
-          {/* Brand color reads as "this is live". Anything not healthy —
-              unhealthy, not configured, no health reported — drops to the
-              monochrome glyph so the grid can be scanned for working
-              runtimes without reading a single word. */}
+          {/* Brand color = healthy; monochrome otherwise so working providers
+              scan out of the grid without reading labels. */}
           <ProviderMark
             id={p.id}
             colored={status === "healthy"}
@@ -431,9 +434,8 @@ function ProviderCard({ p, onSetup, onRemove, onOpenDetail, onOpenSandboxTab }: 
           </div>
           <span className={cn("shrink-0 w-2 h-2 rounded-full", healthDot)} title={healthLabel} />
         </div>
-        <div className="text-[10px] text-fg-subtle font-mono truncate" title={p.id}>{p.id}</div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-2.5 flex-1 pt-0">
+      <CardContent className="flex flex-col gap-2 flex-1 pt-0">
         <p className="text-[11px] text-fg-muted leading-relaxed line-clamp-2">{p.description}</p>
 
         <div className="flex flex-wrap gap-1">
@@ -441,9 +443,6 @@ function ProviderCard({ p, onSetup, onRemove, onOpenDetail, onOpenSandboxTab }: 
             <Badge variant="outline" className="text-[10px]">System</Badge>
           ) : (
             <Badge variant="secondary" className="text-[10px]">BYOK</Badge>
-          )}
-          {p.external && (
-            <Badge variant="outline" className="text-[10px]">External</Badge>
           )}
           {availability.badge && (
             <Badge
@@ -458,24 +457,12 @@ function ProviderCard({ p, onSetup, onRemove, onOpenDetail, onOpenSandboxTab }: 
           )}
         </div>
 
-        {/* Availability sits above health: a provider that can't run here at
-            all makes its health irrelevant. */}
         <AvailabilityNote p={p} />
 
-        {p.capabilities.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {p.capabilities.map((cap) => (
-              <Badge key={cap} variant="secondary" className="text-[10px]">
-                {CAP_DISPLAY[cap] ?? cap}
-              </Badge>
-            ))}
-          </div>
-        )}
-
         <div className="mt-auto flex flex-col gap-2">
-          {/* Status line */}
+          {/* Compact health line — latency when healthy; no clock (detail has it). */}
           <div className="flex items-center gap-2 text-[11px] text-fg-subtle">
-            {health && (
+            {health ? (
               <span className="inline-flex items-center gap-1">
                 <span className={cn("w-1.5 h-1.5 rounded-full", healthDot)} />
                 {healthLabel}
@@ -486,15 +473,10 @@ function ProviderCard({ p, onSetup, onRemove, onOpenDetail, onOpenSandboxTab }: 
                       <TimerIcon className="size-2.5" />
                       {formatLatency(health.latency_ms)}
                     </span>
-                    <span className="text-fg-muted mx-0.5">·</span>
-                    <span className="font-mono">
-                      {new Date(health.last_checked).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    </span>
                   </>
                 )}
               </span>
-            )}
-            {!health && (
+            ) : (
               <span className="inline-flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-fg-subtle" />
                 Health N/A
@@ -502,23 +484,16 @@ function ProviderCard({ p, onSetup, onRemove, onOpenDetail, onOpenSandboxTab }: 
             )}
           </div>
 
-          {/* Capacity gauges (only when the provider reports them) */}
-          {status === "healthy" && health?.capacity && (
-            <CapacityGauges capacity={health.capacity} />
-          )}
-
-          {/* Unhealthy reason */}
           {status === "unhealthy" && health?.reason && (
             <p className="text-[11px] text-destructive leading-relaxed rounded-md bg-destructive/10 px-2 py-1.5">
               {health.reason}
             </p>
           )}
 
-          {/* Browser VM → a pairing code + a new tab, not a CLI daemon.
-              Shown regardless of health so a user can open another tab
-              (or reopen a closed one) at any time. */}
+          {/* Browser VM → open a pairing tab (not a CLI setup flow). Keep the
+              CTA on the card so first-run doesn't require opening details. */}
           {isBrowserVm && onOpenSandboxTab && availability.usable && (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
               {status === "not_configured" && health?.reason && (
                 <p className="text-[11px] text-fg-muted leading-relaxed">
                   {health.reason}
@@ -528,20 +503,15 @@ function ProviderCard({ p, onSetup, onRemove, onOpenDetail, onOpenSandboxTab }: 
                 size="sm"
                 variant="secondary"
                 className="w-full"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenSandboxTab();
-                }}
+                onClick={onOpenSandboxTab}
               >
                 Open sandbox tab
               </Button>
             </div>
           )}
 
-          {/* Not configured → offer setup. Skipped when the provider can't run
-              on this deployment at all — there is nothing to set up. */}
           {status === "not_configured" && !isBrowserVm && availability.usable && (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
               {health?.reason && (
                 <p className="text-[11px] text-fg-muted leading-relaxed">
                   {health.reason}
@@ -552,10 +522,7 @@ function ProviderCard({ p, onSetup, onRemove, onOpenDetail, onOpenSandboxTab }: 
                   size="sm"
                   variant="secondary"
                   className="w-full"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSetup(p);
-                  }}
+                  onClick={() => onSetup(p)}
                 >
                   Set up
                 </Button>
@@ -563,7 +530,6 @@ function ProviderCard({ p, onSetup, onRemove, onOpenDetail, onOpenSandboxTab }: 
             </div>
           )}
 
-          {/* BYOK → allow removal */}
           {p.type === "byok" && onRemove && (
             <Button
               size="sm"
@@ -583,9 +549,9 @@ function ProviderCard({ p, onSetup, onRemove, onOpenDetail, onOpenSandboxTab }: 
   );
 }
 
-// A user-connected machine running `oma bridge daemon`, rendered in the
-// same grid as sandbox providers so the page reads as one unified list of
-// "places an agent can run".
+// Connected bridge-daemon machine. Same density rules as ProviderCard: one
+// meta line + offline reconnect; agents list / skills / absolute timestamps
+// live in MachineDetailDialog.
 function MachineCard({ r, onRevoke, onOpenDetail, copied, onCopy }: { r: Runtime; onRevoke: (id: string) => void; onOpenDetail?: (r: Runtime) => void; copied: string | null; onCopy: (text: string, key: string) => void }) {
   const online = r.status === "online";
   const totalSkills = Object.values(r.local_skills ?? {}).reduce(
@@ -593,6 +559,13 @@ function MachineCard({ r, onRevoke, onOpenDetail, copied, onCopy }: { r: Runtime
     0,
   );
   const clickable = !!onOpenDetail;
+  const agentSummary =
+    r.agents.length === 0
+      ? "No agents"
+      : r.agents.length <= 2
+        ? r.agents.map((a) => a.id).join(", ")
+        : `${r.agents.length} agents`;
+
   return (
     <Card
       size="sm"
@@ -605,8 +578,9 @@ function MachineCard({ r, onRevoke, onOpenDetail, copied, onCopy }: { r: Runtime
       onKeyDown={clickable ? rowActivateKeyDown(() => onOpenDetail!(r)) : undefined}
       tabIndex={clickable ? 0 : undefined}
       role={clickable ? "button" : undefined}
+      title={clickable ? `${r.hostname} — open details` : r.hostname}
     >
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-2">
         <div className="flex items-center gap-2.5">
           <OsMark
             os={r.os}
@@ -618,11 +592,13 @@ function MachineCard({ r, onRevoke, onOpenDetail, copied, onCopy }: { r: Runtime
           <div className="flex-1 min-w-0">
             <CardTitle className="truncate text-[13px]">{r.hostname}</CardTitle>
           </div>
-          <span className={cn("shrink-0 w-2 h-2 rounded-full", online ? "bg-success" : "bg-fg-subtle")} title={r.status} />
+          <span
+            className={cn("shrink-0 w-2 h-2 rounded-full", online ? "bg-success" : "bg-fg-subtle")}
+            title={r.status}
+          />
         </div>
-        <div className="text-[10px] text-fg-subtle font-mono truncate" title={r.id}>{r.id}</div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-2.5 flex-1 pt-0">
+      <CardContent className="flex flex-col gap-2 flex-1 pt-0">
         <div className="flex flex-wrap gap-1">
           <Badge variant="default" className="text-[10px]">Machine</Badge>
           <Badge variant="outline" className="text-[10px] inline-flex items-center gap-1">
@@ -631,53 +607,32 @@ function MachineCard({ r, onRevoke, onOpenDetail, copied, onCopy }: { r: Runtime
           </Badge>
         </div>
 
-        <div className="text-[11px] text-fg-muted space-y-0.5">
-          <div>
-            <span className="text-fg-subtle">Agents:</span>{" "}
-            <span className="font-mono">
-              {r.agents.length === 0 ? "—" : r.agents.map((a) => a.id).join(", ")}
-            </span>
-          </div>
-          <div>
-            <span className="text-fg-subtle">Heartbeat:</span>{" "}
-            {r.last_heartbeat ? formatHeartbeat(r.last_heartbeat) : "—"}
-          </div>
+        <div className="text-[11px] text-fg-muted leading-relaxed">
+          <span className="font-mono text-fg">{agentSummary}</span>
+          <span className="text-fg-subtle mx-1">·</span>
+          <span>
+            {r.last_heartbeat ? formatHeartbeat(r.last_heartbeat) : "No heartbeat"}
+          </span>
+          {totalSkills > 0 && (
+            <>
+              <span className="text-fg-subtle mx-1">·</span>
+              <span>
+                {totalSkills} skill{totalSkills === 1 ? "" : "s"}
+              </span>
+            </>
+          )}
         </div>
 
-        {totalSkills > 0 && (
-          <details className="text-xs" onClick={(e) => e.stopPropagation()}>
-            <summary className="cursor-pointer text-fg-muted hover:text-fg select-none">
-              {totalSkills} local skill{totalSkills === 1 ? "" : "s"} detected
-            </summary>
-            <div className="mt-1.5 ml-2 space-y-1.5">
-              {Object.entries(r.local_skills ?? {}).map(([acpId, skills]) =>
-                !skills?.length ? null : (
-                  <div key={acpId}>
-                    <div className="text-fg-subtle text-[10px] uppercase tracking-wider mb-0.5">
-                      for {acpId}
-                    </div>
-                    <ul className="space-y-0.5">
-                      {skills.map((s) => (
-                        <li key={`${acpId}/${s.source_label ?? ""}/${s.id}`} className="font-mono">
-                          <span className="text-fg">{s.id}</span>
-                          <span className="text-fg-subtle ml-1">
-                            ({s.source ?? "global"}{s.source_label ? `:${s.source_label}` : ""})
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ),
-              )}
-            </div>
-          </details>
-        )}
-
-        {/* Offline → the daemon isn't attached; show the one command that brings
-            it back. stopPropagation so copying doesn't open the detail dialog. */}
+        {/* Offline → show the reconnect command on-card; stopPropagation so
+            copy/focus don't open the detail dialog. */}
         {!online && (
-          <div className="rounded-md border border-border bg-bg-surface/50 p-2" onClick={(e) => e.stopPropagation()}>
-            <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1">Reconnect — run on that machine</div>
+          <div
+            className="rounded-md border border-border bg-bg-surface/50 p-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1">
+              Reconnect — run on that machine
+            </div>
             <CopyButton
               id={`reconnect-${r.id}`}
               text={RECONNECT_CMD}
@@ -1012,23 +967,21 @@ function ProviderDetailDialog({
 function SkeletonCard() {
   return (
     <Card size="sm">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="space-y-2 flex-1">
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-3 w-16" />
-          </div>
-          <Skeleton className="shrink-0 w-2 h-2 rounded-full mt-1" />
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2.5">
+          <Skeleton className="size-4 shrink-0 rounded" />
+          <Skeleton className="h-4 w-32 flex-1" />
+          <Skeleton className="shrink-0 w-2 h-2 rounded-full" />
         </div>
       </CardHeader>
-      <CardContent className="space-y-3 pt-0">
+      <CardContent className="space-y-2 pt-0">
         <Skeleton className="h-3 w-full" />
-        <Skeleton className="h-3 w-3/4" />
+        <Skeleton className="h-3 w-2/3" />
         <div className="flex gap-1">
           <Skeleton className="h-5 w-14 rounded-2xl" />
           <Skeleton className="h-5 w-16 rounded-2xl" />
         </div>
-        <Skeleton className="h-3 w-24" />
+        <Skeleton className="h-3 w-24 mt-2" />
       </CardContent>
     </Card>
   );
@@ -1398,8 +1351,8 @@ export function RuntimesList() {
               )}
             </div>
             <p className="text-sm text-fg-subtle">
-              Everywhere a sandbox can run — machines you connected, providers you
-              configured, and the built-in providers on this deployment.
+              Places a sandbox can run on this deployment. Click a card for full
+              details — set up, capacity, and how to use it from an environment.
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
@@ -1477,9 +1430,10 @@ export function RuntimesList() {
 
       {isEmpty && (
         <div className="rounded-lg border border-border bg-bg-surface p-4 text-sm text-fg-muted">
-          No sandbox providers or machines yet. Use{" "}
-          <span className="text-fg">Add</span> to connect a machine, register a
-          provider, or register a Kubernetes cluster.
+          No sandbox providers or machines yet.{" "}
+          <span className="text-fg">Connect machine</span>,{" "}
+          <span className="text-fg">Register provider</span>, or{" "}
+          <span className="text-fg">Register k8s cluster</span> to get started.
         </div>
       )}
 
