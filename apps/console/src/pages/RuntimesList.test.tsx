@@ -248,3 +248,52 @@ describe("<RuntimesList /> provider availability", () => {
     expect(screen.queryByRole("button", { name: "Set up" })).not.toBeInTheDocument();
   });
 });
+
+// Regression test for the "Add" entry restructure (issue: tabs on the Add
+// dialog were broken — close/reopen kept the stale tab). The fix replaced the
+// single tabbed AddRuntimeDialog with one button per setup kind, each opening
+// its own dedicated modal. This locks in: three distinct buttons, each wired to
+// the right dialog.
+describe("<RuntimesList /> Add entry buttons", () => {
+  it("renders one button per setup kind and each opens its own dialog", async () => {
+    server.use(
+      http.get("/v1/hosting_types", () =>
+        HttpResponse.json({ runtime: "cloudflare", data: [provider()] }),
+      ),
+      http.get("/v1/runtimes", () => HttpResponse.json({ runtimes: [] })),
+    );
+
+    renderPage();
+
+    // Header renders the three dedicated entry buttons.
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Connect machine" })).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Register provider" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Register k8s cluster" })).toBeInTheDocument();
+
+    // Connect machine → ConnectMachineDialog
+    await userEvent.click(screen.getByRole("button", { name: "Connect machine" }));
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "Connect a machine" })).toBeInTheDocument(),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Done" }));
+
+    // Register provider → AddSandboxProviderDialog
+    await userEvent.click(screen.getByRole("button", { name: "Register provider" }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Register a sandbox provider" }),
+      ).toBeInTheDocument(),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    // Register k8s cluster → RegisterK8sClusterDialog
+    await userEvent.click(screen.getByRole("button", { name: "Register k8s cluster" }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Register a Kubernetes cluster" }),
+      ).toBeInTheDocument(),
+    );
+  });
+});
