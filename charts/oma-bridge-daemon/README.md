@@ -28,9 +28,19 @@ outbound client re-seeded from a credentials Secret on every restart.
 ## Install
 
 The daemon reads its identity (server URL + paired runtime credentials) ONLY
-from `credentials.json`, which is produced by a one-time interactive pairing
-flow. You therefore pair on a browser-capable machine once, ship the
-resulting creds into the cluster, then install the chart.
+from `credentials.json`. Two paths produce that file:
+
+- **Browser OAuth (default).** Pair on a browser-capable machine once, ship
+  the resulting `credentials.json` into the cluster as a Secret, install.
+- **Non-interactive self-pair (k8s / CI).** Mint a multi-use pairing code in
+  the Console, ship the code + state into the cluster as a Secret, and the
+  pod redeems them itself on first boot via `oma bridge pair`. See
+  [Non-interactive pairing](#non-interactive-pairing-k8s--ci) below.
+
+### Browser OAuth path (default)
+
+You pair on a browser-capable machine once, ship the resulting creds into
+the cluster, then install the chart.
 
 **1. Pair a runtime with the control plane (once, on any machine with a
 browser):**
@@ -82,12 +92,63 @@ helm install oma-bridge-daemon ./charts/oma-bridge-daemon \
   --set openshell.enabled=true
 ```
 
-> Pairing is interactive — there is no non-interactive `oma bridge setup`
-> path. The credentials.json is the OAuth output, not something to generate
-> in CI. The pairing Secret is the primary secret this chart consumes; when
-> you also enable the OpenShell backend with gateway auth, set
+> The pairing Secret is the primary secret this chart consumes; when you
+> also enable the OpenShell backend with gateway auth, set
 > `openshell.token.existingSecret` to a second Secret carrying the gateway
 > bearer token (see [Values](#values)).
+
+### Non-interactive pairing (k8s / CI)
+
+For clusters and CI shells where the browser OAuth click can't run, the
+chart ships a second pairing path. Mint a multi-use `k8s_pairing` code in
+the Console (`POST /v1/runtimes/pairing-token` → `{code, state, expires_at,
+kind}`), ship the code + state into the cluster as a Secret, point
+`pairing.existingSecret` at it, and clear `secret.existingSecret`. The pod's
+startup command runs `oma bridge pair` once on first boot to redeem the code
+against `/agents/runtime/exchange`, persists `credentials.json` on the
+writable emptyDir, then exec's into the daemon. Subsequent restarts skip the
+pair step (the creds file already exists). The daemon also has its own
+built-in self-pair branch keyed on the same env, so an accidentally-deleted
+creds file is recovered automatically.
+
+```bash
+# 1. Mint a multi-use pairing code in the Console (or via the API):
+curl -s -X POST "$BASE/v1/runtimes/pairing-token" \
+  -H "x-api-key: $KEY" -H "content-type: application/json" \
+  -d '{"kind": "k8s_pairing"}'
+# → {"code": "pair_…", "state": "st_…", "expires_at": "…", "kind": "k8s_pairing"}
+
+# 2. Ship code + state into the cluster as a Secret:
+kubectl create namespace oma
+kubectl -n oma create secret generic oma-bridge-pairing \
+  --from-literal=OMA_PAIRING_CODE=pair_… \
+  --from-literal=OMA_PAIRING_STATE=st_…
+
+# 3. Install the chart in pairing mode (secret.existingSecret must be empty):
+helm install oma-bridge-daemon ./charts/oma-bridge-daemon \
+  --namespace oma \
+  --set secret.existingSecret= \
+  --set pairing.existingSecret=oma-bridge-pairing
+```
+
+| Env var | Read from | Purpose |
+|---|---|---|
+| `OMA_PAIRING_CODE` | `pairing.existingSecret[pairing.codeKey]` | Multi-use pairing code minted by `POST /v1/runtimes/pairing-token` |
+| `OMA_PAIRING_STATE` | `pairing.existingSecret[pairing.stateKey]` | Server-issued state token paired with the code |
+| `OMA_SERVER_URL` | `pairing.serverUrl` | Control plane the code is redeemed against (consumed at first-boot pairing; the daemon reads the final URL from `credentials.json`) |
+
+`oma bridge pair` is also runnable directly outside Kubernetes — it reads
+the same env (or `--code` / `--state` flags), redeems them, writes
+`~/.oma/bridge/credentials.json`, prints the runtime id, and exits:
+
+```bash
+OMA_PAIRING_CODE=pair_… OMA_PAIRING_STATE=st_… oma bridge pair --server-url=https://app.oma.duyet.net
+```
+
+> Set exactly ONE of `secret.existingSecret` (post-pair credentials.json)
+> or `pairing.existingSecret` (code → self-pair). The chart's startup
+> command branches on which one is present; configuring both is a
+> misconfiguration.
 
 ## Values
 
@@ -102,6 +163,9 @@ helm install oma-bridge-daemon ./charts/oma-bridge-daemon \
 | `secret.credentialsKey` / `secret.machineIdKey` | `credentials.json` / `machine-id` | Keys inside that Secret |
 | `secret.credentials` | `""` | Inline credentials.json (unusual — see [Secrets](#secrets)) |
 | `secret.machineId` | `""` | Inline machine-id (pairs with `secret.credentials`; empty = daemon auto-generates) |
+| `pairing.existingSecret` | `""` | Pre-existing Secret carrying `OMA_PAIRING_CODE` + `OMA_PAIRING_STATE` for non-interactive self-pair (mutually exclusive with `secret.existingSecret`) |
+| `pairing.codeKey` / `pairing.stateKey` | `OMA_PAIRING_CODE` / `OMA_PAIRING_STATE` | Keys inside that Secret |
+| `pairing.serverUrl` | `https://app.oma.duyet.net` | Control plane the code is redeemed against (consumed at first-boot pairing) |
 | `openshell.enabled` | `false` | Install the OpenShell gateway subchart + agent-sandbox hook and auto-derive the daemon's openshell env |
 | `openshell.gatewayEndpoint` | `""` | Override the derived `host:port`; empty auto-derives `openshell-gateway.<ns>.svc.cluster.local:8080` |
 | `openshell.sandboxNamespace` | `""` | Namespace OpenShell Sandbox CRs land in (default = release namespace) |
@@ -190,6 +254,12 @@ helm lint ./charts/oma-bridge-daemon
 # Default (local subprocess backend) — daemon Deployment + ConfigMap only:
 helm template oma-bridge-daemon ./charts/oma-bridge-daemon \
   --namespace oma
+
+# Non-interactive pairing mode (no pre-paired credentials Secret):
+helm template oma-bridge-daemon ./charts/oma-bridge-daemon \
+  --namespace oma \
+  --set secret.existingSecret= \
+  --set pairing.existingSecret=oma-bridge-pairing
 
 # OpenShell backend against an external gateway (subchart NOT installed):
 helm template oma-bridge-daemon ./charts/oma-bridge-daemon \

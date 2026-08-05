@@ -15,8 +15,9 @@
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { mkdirSync, writeFileSync, unlinkSync } from "node:fs";
-import { readCreds, readSettings } from "../lib/config.js";
+import { readCreds, readSettings, writeCreds, getOrCreateMachineId } from "../lib/config.js";
 import { osTag, currentProfile, paths } from "../lib/platform.js";
+import { pairNonInteractive } from "../lib/pair.js";
 import { detectAll, loadRegistry } from "@duyet/oma-acp-runtime/registry";
 import { SessionManager } from "../lib/session-manager.js";
 import { BridgeSandboxManager, createOpenShellBackend } from "../lib/bridge-sandbox.js";
@@ -65,12 +66,46 @@ const LIVENESS_TIMEOUT_MS = 70 * 1000;
 
 
 export async function runDaemon(): Promise<void> {
-  const creds = await readCreds();
+  let creds = await readCreds();
   if (!creds) {
-    process.stderr.write(
-      "✗ no credentials. Run `oma bridge setup` first.\n",
-    );
-    process.exit(2);
+    // Non-interactive self-pair: when the daemon is launched in a headless
+    // context (k8s pod, CI) it has no browser to complete the OAuth click.
+    // The chart (or the operator) injects a multi-use pairing code via
+    // OMA_PAIRING_CODE + OMA_PAIRING_STATE; if both are present we redeem
+    // them against /agents/runtime/exchange, persist the resulting v2
+    // credentials, and continue startup. This is the k8s-pairing track
+    // (Track 2) — see packages/cli/src/bridge/lib/pair.ts.
+    const pairingCode = process.env.OMA_PAIRING_CODE;
+    const pairingState = process.env.OMA_PAIRING_STATE;
+    if (pairingCode && pairingState) {
+      const serverUrl = process.env.OMA_SERVER_URL ?? "https://app.oma.duyet.net";
+      log.step(`no credentials — redeeming pairing code against ${serverUrl}`);
+      const machineId = process.env.OMA_MACHINE_ID ?? (await getOrCreateMachineId());
+      try {
+        creds = await pairNonInteractive({
+          serverUrl,
+          pairingCode,
+          pairingState,
+          hostname: process.env.OMA_HOSTNAME ?? hostname(),
+          os: osTag(),
+          machineId,
+          version: PKG_VERSION,
+        });
+      } catch (e) {
+        process.stderr.write(
+          `✗ pairing failed: ${e instanceof Error ? e.message : String(e)}\n`,
+        );
+        process.exit(2);
+      }
+      await writeCreds(creds);
+      log.ok(`credentials written via pairing  ${c.dim(paths().credsFile)}  (runtime ${creds.runtimeId.slice(0, 8)}…)`);
+    } else {
+      process.stderr.write(
+        "✗ no credentials. Run `oma bridge setup` first, or set " +
+          "OMA_PAIRING_CODE + OMA_PAIRING_STATE to self-pair non-interactively.\n",
+      );
+      process.exit(2);
+    }
   }
 
   const profile = currentProfile();

@@ -2597,6 +2597,19 @@ async function main() {
         await runDaemon();
         return;
       }
+      case "pair": {
+        // Non-interactive pairing (k8s / CI). Reads --server-url (or
+        // OMA_SERVER_URL) plus --code/--state (or OMA_PAIRING_CODE/_STATE),
+        // redeems them against /agents/runtime/exchange, writes creds, exits.
+        const serverUrl = flag(args, "--server-url") ?? process.env.OMA_SERVER_URL ?? "https://app.oma.duyet.net";
+        const { runPair } = await import("./bridge/commands/pair.js");
+        await runPair({
+          serverUrl,
+          code: flag(args, "--code"),
+          state: flag(args, "--state"),
+        });
+        return;
+      }
       case "start":
       case "stop":
       case "restart": {
@@ -2641,6 +2654,8 @@ async function main() {
           "oma bridge — pair a local ACP agent with OMA\n\n" +
           "  oma bridge setup [--server-url=…] [--no-service] [--force] [--yes]\n" +
           "                                       Pair + install service + start daemon\n" +
+          "  oma bridge pair [--server-url=…] [--code=…] [--state=…]\n" +
+          "                                       Non-interactive pairing (k8s / CI)\n" +
           "  oma bridge status                    Creds + service kind + probe server\n" +
           "  oma bridge start                     Start the installed daemon service\n" +
           "  oma bridge stop                      Stop the daemon (disconnects the machine)\n" +
