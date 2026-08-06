@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { XCircleIcon, SettingsIcon, TerminalIcon, TimerIcon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  PlusIcon,
+  SettingsIcon,
+  TerminalIcon,
+  TimerIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useApi } from "../lib/api";
 import { formatQueryError, useApiQuery } from "../lib/useApiQuery";
@@ -9,19 +15,25 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Modal } from "../components/Modal";
-import { RowActionsMenu } from "../components/RowActionsMenu";
 import { ProviderMark } from "../components/ProviderMark";
 import { RuntimesIcon } from "../components/icons";
 import { ConnectMachineDialog } from "../components/ConnectMachineInstructions";
 import { CopyButton } from "../components/CopyButton";
-import { CopyBlock } from "../components/CopyBlock";
 import { RegisterK8sClusterDialog } from "../components/RegisterK8sClusterDialog";
 import { AddSandboxProviderDialog } from "./AddSandboxProviderDialog";
 import { cn, rowActivateKeyDown } from "@/lib/utils";
 import { useConfirm } from "@/hooks/useConfirm";
 import {
-  partitionByAvailability,
   providerAvailabilityView,
   runtimeLabel,
 } from "../lib/providerAvailability";
@@ -317,78 +329,19 @@ function AvailabilityNote({ p }: { p: HostingType }) {
   );
 }
 
-// Section header used for every top-level and sub-section on this page.
-// Accepts an optional `icon` (rendered when present) and optional `dotColor`
-// (rendered when present) so the same component covers both the top-level
-// "Sandbox providers" / "Connected machines" headers and the Online/Offline
-// sub-headers.
-function SectionHeader({
-  title,
-  count,
-  icon,
-  dotColor,
-}: {
-  title: string;
-  count: number;
-  icon?: ReactNode;
-  dotColor?: string;
-}) {
-  return (
-    <div className="flex items-center gap-2 mb-3">
-      {icon ? (
-        <span className="size-4 text-fg-subtle shrink-0">{icon}</span>
-      ) : dotColor ? (
-        <span className={cn("w-2 h-2 rounded-full shrink-0", dotColor)} />
-      ) : null}
-      <h3 className="text-sm font-semibold text-fg">{title}</h3>
-      {count > 0 && (
-        <Badge variant="outline" className="text-[10px] font-mono">{count}</Badge>
-      )}
-    </div>
-  );
+/**
+ * Whether a sandbox provider belongs on the Online tab.
+ * Healthy → online. Usable with no probe (or N/A health) → online — e.g.
+ * Cloudflare Sandbox often has no live probe. Unhealthy / not_configured /
+ * unavailable → offline so operators see what still needs setup.
+ */
+function isProviderOnline(p: HostingType): boolean {
+  const availability = providerAvailabilityView(p.availability);
+  if (!availability.usable) return false;
+  const status = p.health?.status;
+  if (status === "unhealthy" || status === "not_configured") return false;
+  return true;
 }
-
-// Renders a titled group of MachineCard entries. Shared by the Online and
-// Offline sub-sections so the two .map blocks don't duplicate the grid + card
-// props.
-function MachineGrid({
-  title,
-  machines,
-  dotColor,
-  onRevoke,
-  onOpenDetail,
-  copied,
-  onCopy,
-}: {
-  title: string;
-  machines: Runtime[];
-  dotColor: string;
-  onRevoke: (id: string) => void;
-  onOpenDetail: (r: Runtime) => void;
-  copied: string | null;
-  onCopy: (text: string, key: string) => void;
-}) {
-  return (
-    <section>
-      <SectionHeader title={title} count={machines.length} dotColor={dotColor} />
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {machines.map((r) => (
-          <MachineCard
-            key={r.id}
-            r={r}
-            onRevoke={onRevoke}
-            onOpenDetail={onOpenDetail}
-            copied={copied}
-            onCopy={onCopy}
-          />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-// `CopyBlock` (multi-line command copy button) lives in components/CopyBlock.tsx
-// and is shared with the register-k8s-cluster dialog.
 
 // Provider grid card — scannable summary + primary CTA only. Capabilities,
 // capacity gauges, external flag, last-checked clock, and full ids live in
@@ -439,10 +392,19 @@ function ProviderCard({ p, onSetup, onRemove, onOpenDetail, onOpenSandboxTab }: 
         <p className="text-[11px] text-fg-muted leading-relaxed line-clamp-2">{p.description}</p>
 
         <div className="flex flex-wrap gap-1">
-          {p.type === "system" ? (
-            <Badge variant="outline" className="text-[10px]">System</Badge>
-          ) : (
-            <Badge variant="secondary" className="text-[10px]">BYOK</Badge>
+          <Badge
+            variant={p.type === "system" ? "outline" : "secondary"}
+            className="text-[10px] gap-1"
+          >
+            <ProviderMark
+              id={p.provider || p.id}
+              colored={status === "healthy"}
+              className="size-2.5 shrink-0"
+            />
+            {p.type === "system" ? "System" : "BYOK"}
+          </Badge>
+          {p.external && (
+            <Badge variant="outline" className="text-[10px]">External</Badge>
           )}
           {availability.badge && (
             <Badge
@@ -1163,17 +1125,15 @@ function SetupProviderModal({
 export function RuntimesList() {
   const { api } = useApi();
   const navigate = useNavigate();
-  // Each "Add" entry button opens its own dedicated dialog — no shared tabbed
-  // modal. The tabs were the bug (close/reopen kept the stale tab); one dialog
-  // per setup kind sidesteps the sync issue entirely.
+  // Single "Add" dropdown lists every setup path — connect machine, register
+  // BYOK provider, register k8s cluster, open browser-vm tab. Dedicated
+  // dialogs stay separate so close/reopen never restores a stale tab.
   const [connectOpen, setConnectOpen] = useState(false);
   const [addProviderOpen, setAddProviderOpen] = useState(false);
   const [setupProvider, setSetupProvider] = useState<HostingType | null>(null);
   const [registerK8sOpen, setRegisterK8sOpen] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
-  // Click-through detail dialogs — one card at a time (providers and machines
-  // never both open at once, but each has its own state so their content
-  // components stay simple).
+  const [tab, setTab] = useState<"online" | "offline">("online");
   const [detailProvider, setDetailProvider] = useState<HostingType | null>(null);
   const [detailMachine, setDetailMachine] = useState<Runtime | null>(null);
   const confirm = useConfirm();
@@ -1191,26 +1151,15 @@ export function RuntimesList() {
     setTimeout(() => setCopied(null), 1600);
   };
 
-  // Browser VM's "runtime" is a paired browser tab, not a CLI daemon — so
-  // instead of showing setup instructions, mint a one-time pairing code
-  // (same endpoint + state semantics as ConnectRuntime.tsx, just generated
-  // client-side since there's no loopback CLI to originate it here) and
-  // open the host page directly. `api()` already toasts unauthenticated /
-  // network failures, so a thrown error needs no further handling here.
   const openBrowserVmTab = useCallback(async () => {
     await openSandboxTab(api);
   }, [api]);
 
   const [providers, setProviders] = useState<HostingType[]>([]);
-  // Which deployment answered — Cloudflare and self-host Node support
-  // different provider sets, so the page says which one it's describing.
   const [deploymentRuntime, setDeploymentRuntime] = useState<string | null>(null);
   const [providersLoading, setProvidersLoading] = useState(true);
   const [providersError, setProvidersError] = useState<string | null>(null);
 
-  // `isBackground` suppresses the loading skeleton for the periodic
-  // health/capacity refresh so the cards don't flash every 30s — only the
-  // initial load (and manual retries) show the skeleton state.
   const loadProviders = useCallback(async (isBackground = false) => {
     if (!isBackground) setProvidersLoading(true);
     setProvidersError(null);
@@ -1276,43 +1225,34 @@ export function RuntimesList() {
     } catch { /* ignore */ }
   };
 
-  // Providers this deployment genuinely can't run are kept, not dropped —
-  // they move into their own section so the main grid stays scannable while
-  // the "why not" stays one click away.
-  const { usable: usableProviders, unavailableProviders } = useMemo(
-    () => {
-      const { usable, unavailable } = partitionByAvailability(providers, (p) => p.availability);
-      return { usable, unavailableProviders: unavailable };
-    },
-    [providers],
-  );
   const deploymentLabel = runtimeLabel(deploymentRuntime);
 
-  // Split usable providers into BYOK (user-added via the API) and system
-  // (built-in, env-gated). The two get their own sections so an operator
-  // can tell at a glance which providers they configured vs which shipped
-  // with the deployment.
-  const { byokProviders, systemProviders } = useMemo(
-    () => {
-      const byok: HostingType[] = [];
-      const system: HostingType[] = [];
-      for (const p of usableProviders) (p.type === "byok" ? byok : system).push(p);
-      return { byokProviders: byok, systemProviders: system };
-    },
-    [usableProviders],
-  );
+  // One flat list: machines + providers, split only by Online / Offline.
+  // No "Your machines" vs "Built-in providers" sections.
+  const { onlineProviders, offlineProviders } = useMemo(() => {
+    const online: HostingType[] = [];
+    const offline: HostingType[] = [];
+    for (const p of providers) {
+      (isProviderOnline(p) ? online : offline).push(p);
+    }
+    return { onlineProviders: online, offlineProviders: offline };
+  }, [providers]);
 
-  // Partition machines into online (green dot, colored icon) and offline
-  // (gray dot, grayscale icon).
-  const { online: onlineMachines, offline: offlineMachines } = useMemo(
-    () => {
-      const online: Runtime[] = [];
-      const offline: Runtime[] = [];
-      for (const r of runtimes) (r.status === "online" ? online : offline).push(r);
-      return { online, offline };
-    },
-    [runtimes],
-  );
+  const { onlineMachines, offlineMachines } = useMemo(() => {
+    const online: Runtime[] = [];
+    const offline: Runtime[] = [];
+    for (const r of runtimes) (r.status === "online" ? online : offline).push(r);
+    return { onlineMachines: online, offlineMachines: offline };
+  }, [runtimes]);
+
+  const onlineCount = onlineMachines.length + onlineProviders.length;
+  const offlineCount = offlineMachines.length + offlineProviders.length;
+
+  // Prefer the tab that has something to show on first paint.
+  useEffect(() => {
+    if (providersLoading || runtimesLoading) return;
+    if (onlineCount === 0 && offlineCount > 0) setTab("offline");
+  }, [providersLoading, runtimesLoading, onlineCount, offlineCount]);
 
   const loading = providersLoading || runtimesLoading;
   const isEmpty =
@@ -1322,9 +1262,6 @@ export function RuntimesList() {
     providers.length === 0 &&
     runtimes.length === 0;
 
-  // Provider-specific setup routing (C8). K8s family → the register-cluster
-  // dialog; everything else → the branching SetupProviderModal (which
-  // itself dispatches subprocess / BYOK / env-gated).
   const handleSetup = useCallback((p: HostingType) => {
     if (isK8sProvider(p)) {
       setRegisterK8sOpen(true);
@@ -1333,69 +1270,149 @@ export function RuntimesList() {
     }
   }, []);
 
+  function renderGrid(machines: Runtime[], providerList: HostingType[], emptyLabel: string) {
+    if (machines.length === 0 && providerList.length === 0) {
+      return (
+        <div className="rounded-lg border border-dashed border-border bg-bg-surface/40 px-4 py-10 text-center">
+          <p className="text-sm text-fg-muted">{emptyLabel}</p>
+        </div>
+      );
+    }
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {machines.map((r) => (
+          <MachineCard
+            key={r.id}
+            r={r}
+            onRevoke={(id) => void remove(id)}
+            onOpenDetail={setDetailMachine}
+            copied={copied}
+            onCopy={copy}
+          />
+        ))}
+        {providerList.map((p) => (
+          <ProviderCard
+            key={p.id}
+            p={p}
+            onSetup={handleSetup}
+            onRemove={removeProvider}
+            onOpenDetail={setDetailProvider}
+            onOpenSandboxTab={() => void openBrowserVmTab()}
+          />
+        ))}
+      </div>
+    );
+  }
+
   return (
-    <div role="main" aria-label="Sandbox providers" className="-m-3 p-4 space-y-8">
-      {/* (a) Header — single H1, one-sentence subtitle, deployment pill, and
-          one "Add" button per setup kind. Each opens a distinct dedicated
-          dialog (connect machine / register provider / register k8s cluster)
-          instead of the old single tabbed modal — the tabs were the bug. */}
+    <div role="main" aria-label="Sandbox providers" className="-m-3 p-4 space-y-6">
       <section>
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div className="space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-lg font-semibold text-fg">Runtimes</h1>
               {deploymentLabel && (
-                <Badge variant="outline" className="text-[10px] font-mono">
+                <Badge variant="outline" className="text-[10px] font-mono gap-1">
+                  <ProviderMark
+                    id={deploymentRuntime === "node" ? "subprocess" : "cloud"}
+                    colored
+                    className="size-3 shrink-0"
+                  />
                   {deploymentLabel}
+                </Badge>
+              )}
+              {!loading && onlineCount > 0 && (
+                <Badge variant="secondary" className="text-[10px] gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                  {onlineCount} online
                 </Badge>
               )}
             </div>
             <p className="text-sm text-fg-subtle max-w-2xl">
-              Sandbox providers and paired machines for this deployment.
-              Connect a laptop, register BYOK capacity, or install the
-              bridge daemon on Kubernetes.
+              Everything that can host a sandbox — managed providers, BYOK backends,
+              and paired machines — in one list. Filter by online or offline.
             </p>
           </div>
-          <div className="flex items-center gap-2 shrink-0 flex-wrap">
-            <Button
-              size="sm"
-              onClick={() => setConnectOpen(true)}
-              className="gap-1.5"
-            >
-              <TerminalIcon className="size-3.5 shrink-0" />
-              Connect machine
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setAddProviderOpen(true)}
-              className="gap-1.5"
-            >
-              <SettingsIcon className="size-3.5 shrink-0" />
-              Register provider
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setRegisterK8sOpen(true)}
-              className="gap-1.5"
-            >
-              <RuntimesIcon className="size-3.5 shrink-0" />
-              Register k8s cluster
-            </Button>
-          </div>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" className="gap-1.5 shrink-0">
+                <PlusIcon className="size-3.5 shrink-0" />
+                Add
+                <ChevronDownIcon className="size-3.5 shrink-0 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-64">
+              <DropdownMenuLabel className="text-[11px] uppercase tracking-wider text-fg-subtle font-medium">
+                Add a runtime
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="gap-2.5 py-2"
+                onClick={() => setConnectOpen(true)}
+              >
+                <span className="flex size-7 items-center justify-center rounded-md bg-bg-surface border border-border shrink-0">
+                  <TerminalIcon className="size-3.5 text-fg" />
+                </span>
+                <span className="flex flex-col min-w-0">
+                  <span className="text-sm font-medium">Connect machine</span>
+                  <span className="text-[11px] text-fg-muted truncate">
+                    Pair a laptop via <span className="font-mono">oma bridge</span>
+                  </span>
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="gap-2.5 py-2"
+                onClick={() => setAddProviderOpen(true)}
+              >
+                <span className="flex size-7 items-center justify-center rounded-md bg-bg-surface border border-border shrink-0">
+                  <ProviderMark id="e2b" colored className="size-3.5" />
+                </span>
+                <span className="flex flex-col min-w-0">
+                  <span className="text-sm font-medium">Register provider</span>
+                  <span className="text-[11px] text-fg-muted truncate">
+                    E2B, Daytona, BoxRun, OpenShell, …
+                  </span>
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="gap-2.5 py-2"
+                onClick={() => setRegisterK8sOpen(true)}
+              >
+                <span className="flex size-7 items-center justify-center rounded-md bg-bg-surface border border-border shrink-0">
+                  <ProviderMark id="k8s" colored className="size-3.5" />
+                </span>
+                <span className="flex flex-col min-w-0">
+                  <span className="text-sm font-medium">Register k8s cluster</span>
+                  <span className="text-[11px] text-fg-muted truncate">
+                    Install bridge-daemon in-cluster
+                  </span>
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="gap-2.5 py-2"
+                onClick={() => void openBrowserVmTab()}
+              >
+                <span className="flex size-7 items-center justify-center rounded-md bg-bg-surface border border-border shrink-0">
+                  <ProviderMark id="browser-vm" colored className="size-3.5" />
+                </span>
+                <span className="flex flex-col min-w-0">
+                  <span className="text-sm font-medium">Open sandbox tab</span>
+                  <span className="text-[11px] text-fg-muted truncate">
+                    Browser VM (WASM) host tab
+                  </span>
+                </span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </section>
 
-      {/* How providers are used — compact, scannable. */}
       <div className="rounded-md border border-border bg-bg-surface/50 px-3 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <p className="text-xs text-fg-muted leading-relaxed">
-          <span className="text-fg">Environment</span> → picks a sandbox
-          provider · <span className="text-fg">Session</span> → picks that
-          environment. K8s clusters pair as{" "}
-          <code className="font-mono text-[10px] bg-bg px-1 rounded">subprocess</code>{" "}
-          machines via{" "}
-          <code className="font-mono text-[10px] bg-bg px-1 rounded">oma-bridge-daemon</code>.
+          <span className="text-fg font-medium">Environment</span> picks a sandbox
+          provider · <span className="text-fg font-medium">Session</span> picks that
+          environment.
         </p>
         <Button
           size="sm"
@@ -1432,117 +1449,53 @@ export function RuntimesList() {
       )}
 
       {isEmpty && (
-        <div className="rounded-lg border border-border bg-bg-surface p-4 text-sm text-fg-muted">
-          No sandbox providers or machines yet.{" "}
-          <span className="text-fg">Connect machine</span>,{" "}
-          <span className="text-fg">Register provider</span>, or{" "}
-          <span className="text-fg">Register k8s cluster</span> to get started.
+        <div className="rounded-lg border border-border bg-bg-surface p-6 text-center space-y-2">
+          <p className="text-sm text-fg-muted">
+            No runtimes yet. Use <span className="text-fg font-medium">Add</span> to
+            connect a machine, register a provider, or open a browser sandbox tab.
+          </p>
         </div>
       )}
 
-      {/* (c) Your machines — online-first. Machines are computers paired via
-          the bridge daemon (oma bridge daemon), surfaced as the subprocess
-          sandbox provider's relay targets. */}
-      {!loading && runtimes.length > 0 && (
-        <div className="space-y-4">
-          <SectionHeader title="Your machines" count={runtimes.length} icon={<TerminalIcon className="size-4" />} />
+      {!loading && !isEmpty && (
+        <Tabs
+          value={tab}
+          onValueChange={(v) => setTab(v === "offline" ? "offline" : "online")}
+        >
+          <TabsList variant="line" className="w-full sm:w-auto">
+            <TabsTrigger value="online" className="gap-2 px-4">
+              <span className="w-2 h-2 rounded-full bg-success shrink-0" />
+              Online
+              <Badge variant="outline" className="text-[10px] font-mono tabular-nums">
+                {onlineCount}
+              </Badge>
+            </TabsTrigger>
+            <TabsTrigger value="offline" className="gap-2 px-4">
+              <span className="w-2 h-2 rounded-full bg-fg-subtle shrink-0" />
+              Offline
+              <Badge variant="outline" className="text-[10px] font-mono tabular-nums">
+                {offlineCount}
+              </Badge>
+            </TabsTrigger>
+          </TabsList>
 
-          {onlineMachines.length > 0 && (
-            <MachineGrid
-              title="Online"
-              machines={onlineMachines}
-              dotColor="bg-success"
-              onRevoke={(id) => void remove(id)}
-              onOpenDetail={setDetailMachine}
-              copied={copied}
-              onCopy={copy}
-            />
-          )}
-
-          {offlineMachines.length > 0 && (
-            <MachineGrid
-              title="Offline"
-              machines={offlineMachines}
-              dotColor="bg-fg-subtle"
-              onRevoke={(id) => void remove(id)}
-              onOpenDetail={setDetailMachine}
-              copied={copied}
-              onCopy={copy}
-            />
-          )}
-        </div>
+          <TabsContent value="online" className="mt-4">
+            {renderGrid(
+              onlineMachines,
+              onlineProviders,
+              "Nothing online yet — connect a machine or wait for a provider health check.",
+            )}
+          </TabsContent>
+          <TabsContent value="offline" className="mt-4">
+            {renderGrid(
+              offlineMachines,
+              offlineProviders,
+              "Nothing offline. Healthy providers and online machines live on the Online tab.",
+            )}
+          </TabsContent>
+        </Tabs>
       )}
 
-      {/* (d) Configured providers — BYOK the user added via the API or the
-          Add → Register a provider dialog. */}
-      {!loading && byokProviders.length > 0 && (
-        <div className="space-y-4">
-          <SectionHeader title="Configured providers" count={byokProviders.length} icon={<SettingsIcon className="size-4" />} />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {byokProviders.map((p) => (
-              <ProviderCard
-                key={p.id}
-                p={p}
-                onSetup={handleSetup}
-                onRemove={removeProvider}
-                onOpenDetail={setDetailProvider}
-                onOpenSandboxTab={() => void openBrowserVmTab()}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* (e) Built-in providers — system providers shipped with this build.
-          The four K8s ids (k8s, k8s-bridge, k8s-remote, openshell) route
-          their Set-up action to the register-cluster dialog via
-          handleSetup; everything else routes to the env-var setup modal. */}
-      {!loading && systemProviders.length > 0 && (
-        <div className="space-y-4">
-          <SectionHeader title="Built-in providers" count={systemProviders.length} icon={<RuntimesIcon className="size-4" />} />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {systemProviders.map((p) => (
-              <ProviderCard
-                key={p.id}
-                p={p}
-                onSetup={handleSetup}
-                onRemove={removeProvider}
-                onOpenDetail={setDetailProvider}
-                onOpenSandboxTab={() => void openBrowserVmTab()}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* (f) Available on other deployments — providers this build ships but
-          this deployment can't run. Collapsed so the main grid stays
-          scannable; the "why not" stays one click away. */}
-      {!loading && unavailableProviders.length > 0 && (
-        <details className="rounded-lg border border-border bg-bg-surface/50">
-          <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-fg select-none">
-            Available on other deployments ({unavailableProviders.length})
-          </summary>
-          <div className="px-4 pb-4">
-            <p className="text-xs text-fg-muted mb-3 leading-relaxed">
-              These sandbox providers exist in this build but can&rsquo;t run
-              {deploymentLabel ? ` on the ${deploymentLabel.toLowerCase()}` : " here"}.
-              Each card explains why.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {unavailableProviders.map((p) => (
-                <ProviderCard key={p.id} p={p} onOpenDetail={setDetailProvider} />
-              ))}
-            </div>
-          </div>
-        </details>
-      )}
-
-      {/* Footer: ONE Kubernetes docs link (C5+C12). The ~200-line inline
-          walkthrough that used to live here was self-contradicting and
-          pointed at the WRONG chart (oma-k8s-bridge). The correct
-          register-cluster flow is the "Add → Register k8s cluster" dialog,
-          which installs oma-bridge-daemon — the bridge daemon. */}
       <p className="text-xs text-fg-subtle">
         Sandboxes on Kubernetes? See{" "}
         <a
@@ -1564,8 +1517,6 @@ export function RuntimesList() {
         .
       </p>
 
-      {/* Provider registration help — the env-var reference. Kept (C5 says
-          only the K8s walkthrough goes). */}
       <details className="rounded-lg border border-border bg-bg-surface/50">
         <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-fg select-none hover:text-fg">
           <span className="inline-flex items-center gap-2">
@@ -1587,34 +1538,22 @@ export function RuntimesList() {
               </div>
             ))}
           </div>
-          <p>
-            For BYOK (bring-your-own-key) providers, register via the API:
-          </p>
-          <div className="bg-bg border border-border rounded-lg p-3 font-mono text-xs whitespace-pre overflow-x-auto">
-            <div className="text-fg select-all">{"curl -X POST /v1/sandbox_providers \\\n  -H \"x-api-key: $KEY\" \\\n  -d '{\"name\":\"My K8s\",\"type\":\"k8s\",\"config\":{\"base_url\":\"https://...\"}}'"}</div>
-          </div>
+          <p>For BYOK providers, use <span className="text-fg">Add → Register provider</span>.</p>
           <p className="text-xs text-fg-subtle">
-            The full provider API is documented at{" "}
+            Docs:{" "}
             <a href="https://docs.oma.duyet.net/build/sandbox-providers" target="_blank" rel="noreferrer" className="underline hover:text-brand">
               docs.oma.duyet.net/build/sandbox-providers
             </a>
-            .
           </p>
         </div>
       </details>
 
-      {/* Provider-specific setup dialog (C8). Branches by provider type —
-          see SetupProviderModal above. */}
       <SetupProviderModal
         provider={setupProvider}
         onClose={() => setSetupProvider(null)}
         onOpenAddK8s={() => setRegisterK8sOpen(true)}
         onOpenAddProvider={() => setAddProviderOpen(true)}
       />
-
-      {/* Click-through detail dialogs for a provider / machine card. Mirror the
-          card's own actions (Set up / Remove / Revoke) plus a "use in an
-          environment" next step. */}
       <ProviderDetailDialog
         provider={detailProvider}
         onClose={() => setDetailProvider(null)}
@@ -1631,9 +1570,6 @@ export function RuntimesList() {
         copied={copied}
         onCopy={copy}
       />
-
-      {/* Each "Add" entry opens a dedicated dialog for that setup kind. No
-          shared tabbed modal — the tabs were the bug. */}
       <ConnectMachineDialog
         open={connectOpen}
         onClose={() => setConnectOpen(false)}
@@ -1645,10 +1581,6 @@ export function RuntimesList() {
         onClose={() => setAddProviderOpen(false)}
         onCreated={() => void loadProviders()}
       />
-
-      {/* Standalone register-k8s dialog — opened from the footer link, a K8s
-          provider card's Set up, or the Add dialog's third tab (which
-          embeds the same form inline). */}
       <RegisterK8sClusterDialog
         open={registerK8sOpen}
         onClose={() => setRegisterK8sOpen(false)}
