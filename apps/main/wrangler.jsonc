@@ -261,9 +261,14 @@
       ],
       "limits": { "cpu_ms": 300000 },
       "observability": { "enabled": true },
-      "analytics_engine_datasets": [
-        { "binding": "ANALYTICS", "dataset": "oma_events" }
-      ],
+      // Analytics Engine is account-gated. When AE is disabled on the CF
+      // account, any analytics_engine_datasets entry fails deploy with
+      // code 10089. recordEvent() already no-ops without ANALYTICS — re-add
+      // the binding after enabling AE in the dashboard:
+      //   https://dash.cloudflare.com/<account>/workers/analytics-engine
+      // "analytics_engine_datasets": [
+      //   { "binding": "ANALYTICS", "dataset": "oma_events" }
+      // ],
       "ratelimits": [
         { "name": "RL_AUTH_IP",         "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } },
         { "name": "RL_AUTH_SEND_IP",    "namespace_id": "1002", "simple": { "limit": 5,  "period": 60 } },
