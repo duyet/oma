@@ -12,9 +12,9 @@
 #   D1  (2): oma-auth          — all tenant + control-plane data
 #            oma-integrations  — linear/github/slack tables
 #   KV  (1): CONFIG_KV
-#   R2  (4): managed-agents-files, managed-agents-memory,
-#            managed-agents-workspace, managed-agents-backups
-#   Que (2): managed-agents-memory-events, managed-agents-memory-events-dlq
+#   R2  (4): oma-managed-agents-files, oma-managed-agents-memory,
+#            oma-managed-agents-workspace, oma-managed-agents-backups
+#   Que (2): oma-managed-agents-memory-events, oma-managed-agents-memory-events-dlq
 #
 # Migrations (fresh deploy — do NOT run stamp-baseline-existing-deploy.sh):
 #   apps/main/migrations              → oma-auth  (tenant/auth schema, INCLUDING
@@ -297,15 +297,16 @@ else
   ok "CONFIG_KV → $CONFIG_KV_ID (new)"
 fi
 
-# R2 buckets (union of all three env.production overlays).
-create_r2 "managed-agents-files"
-create_r2 "managed-agents-memory"
-create_r2 "managed-agents-workspace"
-create_r2 "managed-agents-backups"
+# R2 buckets (union of all three env.production overlays). Names must match
+# apps/{main,agent}/wrangler.jsonc env.production (oma- prefix rebrand).
+create_r2 "oma-managed-agents-files"
+create_r2 "oma-managed-agents-memory"
+create_r2 "oma-managed-agents-workspace"
+create_r2 "oma-managed-agents-backups"
 
-# Queues.
-create_queue "managed-agents-memory-events"
-create_queue "managed-agents-memory-events-dlq"
+# Queues (same oma- prefix as wrangler.jsonc queue consumers).
+create_queue "oma-managed-agents-memory-events"
+create_queue "oma-managed-agents-memory-events-dlq"
 
 # ── 2. patch env.production overlays with resolved ids ───────────────────
 say "2. Patch env.production overlays with resolved resource ids"
@@ -487,9 +488,9 @@ if [ "$DO_DEPLOY" = "1" ]; then
 
   # ── 6. wire R2 → memory-events queue (post-deploy) ────────────────────
   say "6. Wire R2 memory bucket → memory-events queue"
-  npx wrangler r2 bucket notification create managed-agents-memory \
+  npx wrangler r2 bucket notification create oma-managed-agents-memory \
     --event-type object-create object-delete \
-    --queue managed-agents-memory-events 2>&1 | tail -3 \
+    --queue oma-managed-agents-memory-events 2>&1 | tail -3 \
     || warn "R2 notification setup failed — wire manually once the queue consumer exists (see cmd below)"
 
   if [ "$DEPLOY_FAILED" = "1" ]; then
@@ -498,9 +499,9 @@ if [ "$DO_DEPLOY" = "1" ]; then
 else
   warn "5. Skipping deploy (--no-deploy)"
   warn "After deploying, wire the R2 notification:"
-  warn "  npx wrangler r2 bucket notification create managed-agents-memory \\"
+  warn "  npx wrangler r2 bucket notification create oma-managed-agents-memory \\"
   warn "    --event-type object-create object-delete \\"
-  warn "    --queue managed-agents-memory-events"
+  warn "    --queue oma-managed-agents-memory-events"
 fi
 
 # ── done ─────────────────────────────────────────────────────────────────
