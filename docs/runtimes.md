@@ -5,6 +5,11 @@ independent on purpose — mixing them (e.g. Grok model + claude-agent-sdk
 harness would be nonsensical, but Grok model + default harness + any
 sandbox image is fine) is a config change, not a code change.
 
+**Sandbox selection policy:** the sandbox is chosen at **session launch**
+(via environment), with an optional agent default — never mid-turn by the
+model. Full rule + resolution order:
+[sandbox-runtime-selection.md](./sandbox-runtime-selection.md).
+
 | Choice | Config field | Where it runs |
 |---|---|---|
 | **Harness** (model loop) | `agent.harness` | Platform (`apps/agent` for CF, `apps/main-node` for self-host — the self-host Node.js server, same control-plane API as `apps/main`) |
