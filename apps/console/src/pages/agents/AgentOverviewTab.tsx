@@ -6,6 +6,8 @@ import { useApiQuery } from "../../lib/useApiQuery";
 import { RuntimeKindBadge, agentRuntimeKind } from "../../lib/runtime-kind";
 import { ModelName } from "../../lib/model-provider";
 import { GitHubIcon, LinearIcon, SlackIcon } from "../../components/icons";
+import { ProviderMark } from "../../components/ProviderMark";
+import { DEFAULT_ENV_METADATA_KEY } from "./browser-env";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -126,6 +128,7 @@ export function AgentOverviewTab() {
               : undefined
           }
         />
+        <DefaultSandboxRow metadata={displayAgent.metadata} />
         <span className="text-fg-muted">Harness</span>
         <span className="inline-flex items-center gap-2 flex-wrap">
           <span>{harnessLabel(displayAgent._oma?.harness)}</span>
@@ -312,6 +315,68 @@ export function AgentOverviewTab() {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Default sandbox for new sessions — agent.metadata.default_environment_id.
+ * Launch-time selection still wins if the user picks another env (see
+ * docs/sandbox-runtime-selection.md).
+ */
+function DefaultSandboxRow({
+  metadata,
+}: {
+  metadata?: Record<string, unknown> | null;
+}) {
+  const defaultEnvId =
+    typeof metadata?.[DEFAULT_ENV_METADATA_KEY] === "string"
+      ? (metadata[DEFAULT_ENV_METADATA_KEY] as string)
+      : "";
+  const { data: env } = useApiQuery<{
+    id: string;
+    name: string;
+    config?: { sandbox_provider?: string; type?: string };
+  }>(defaultEnvId ? `/v1/environments/${defaultEnvId}` : null);
+
+  return (
+    <>
+      <span className="text-fg-muted">Default sandbox</span>
+      <span className="text-sm">
+        {defaultEnvId ? (
+          <span className="inline-flex items-center gap-2 flex-wrap min-w-0">
+            {env && (
+              <ProviderMark
+                id={env.config?.sandbox_provider || env.config?.type || "cloud"}
+                colored
+                className="size-3.5 shrink-0"
+              />
+            )}
+            <Link
+              to={`/environments/${defaultEnvId}`}
+              className="text-fg hover:underline truncate max-w-[220px]"
+              title={defaultEnvId}
+            >
+              {env?.name ?? defaultEnvId}
+            </Link>
+            <span className="text-[10px] font-mono text-fg-subtle truncate max-w-[140px]">
+              {defaultEnvId}
+            </span>
+            {env && (
+              <span className="text-[10px] text-fg-subtle">
+                {env.config?.sandbox_provider || env.config?.type || "cloud"}
+              </span>
+            )}
+          </span>
+        ) : (
+          <span className="text-fg-muted">
+            None — pick an environment when starting a session.{" "}
+            <Link to="/environments" className="underline hover:no-underline">
+              Environments
+            </Link>
+          </span>
+        )}
+      </span>
+    </>
   );
 }
 

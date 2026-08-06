@@ -31,6 +31,9 @@ function makeApp(service: SessionService, initCalls: SessionInitParams[]) {
       name: "Test Agent",
       model: "claude-sonnet-4-6",
       version: 1,
+      metadata: agentId === "agent_with_default"
+        ? { default_environment_id: "env_from_agent" }
+        : {},
     }),
   };
   const router = {
@@ -44,7 +47,14 @@ function makeApp(service: SessionService, initCalls: SessionInitParams[]) {
     buildSessionRoutes({
       services: { sessions: service, agents } as unknown as RouteServices,
       router,
-      loadEnvironment: async () => ({ type: "cloud" }) as never,
+      loadEnvironment: async ({ environmentId }) =>
+        ({
+          id: environmentId,
+          name: "Env",
+          type: "environment",
+          config: { type: "cloud" },
+          created_at: new Date(BASE).toISOString(),
+        }) as never,
     }),
   );
   return app;
@@ -111,3 +121,41 @@ describe("POST /v1/sessions metadata pass-through (issue #252)", () => {
     }
   });
 });
+
+describe("POST /v1/sessions environment resolution (sandbox-runtime-selection)", () => {
+  it("uses agent.metadata.default_environment_id when body omits environment_id", async () => {
+    const { service } = createInMemorySessionService({ clock: new ManualClock(BASE) });
+    const initCalls: SessionInitParams[] = [];
+    const app = makeApp(service, initCalls);
+
+    const res = await postSession(app as never, { agent: "agent_with_default" });
+    expect(res.status).toBe(201);
+    expect(initCalls).toHaveLength(1);
+    expect(initCalls[0].environmentId).toBe("env_from_agent");
+  });
+
+  it("body.environment_id still wins over the agent default", async () => {
+    const { service } = createInMemorySessionService({ clock: new ManualClock(BASE) });
+    const initCalls: SessionInitParams[] = [];
+    const app = makeApp(service, initCalls);
+
+    const res = await postSession(app as never, {
+      agent: "agent_with_default",
+      environment_id: "env_explicit",
+    });
+    expect(res.status).toBe(201);
+    expect(initCalls[0].environmentId).toBe("env_explicit");
+  });
+
+  it("returns 400 when neither body nor agent default supplies an environment", async () => {
+    const { service } = createInMemorySessionService({ clock: new ManualClock(BASE) });
+    const app = makeApp(service, []);
+
+    const res = await postSession(app as never, { agent: "agent_1" });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string; hint?: string };
+    expect(body.error).toBe("environment_id is required");
+    expect(body.hint).toMatch(/default_environment_id/);
+  });
+});
+

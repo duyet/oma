@@ -172,18 +172,20 @@ Copy: “Where tools run is chosen when the session starts (environment). Change
 
 ---
 
-## Gaps vs this design (follow-ups)
+## Implementation status
 
-Already largely implemented: env on session create, Console preference helper, browser-vm default env, sandbox prompt block, sub-agent dedicated env.
-
-Optional polish (not required for the rule to hold):
-
-| Gap | Notes |
+| Item | Status |
 |---|---|
-| Server-side default env | If create omits `environment_id`, API could resolve `metadata.default_environment_id` instead of only clients doing it |
-| Validate default still exists | On agent update / session create, 422 if preferred env archived or wrong tenant |
-| Session create API docs | Spell out preference order in `docs/api-reference.md` / OpenAPI description |
-| Agent detail “Default sandbox” | Explicit field in Console (not only buried in runtime-kind flow) |
+| Launch-time env on session create | Done |
+| Console preference prefill | Done (`preferredEnvironmentId`) |
+| Sandbox facts in system prompt | Done (`buildSandboxEnvironmentGuidance`) |
+| Server-side `default_environment_id` when body omits env | Done (`resolveSessionEnvironmentId`) |
+| Validate default on agent create/update | Done (`validateDefaultEnvironmentMetadata`) |
+| Refuse archived env at session create | Done |
+| Agent overview “Default sandbox” | Done |
+| New session copy | Done |
+
+Preference order is enforced in `packages/http-routes/src/sessions/resolve-environment.ts`.
 
 ---
 
