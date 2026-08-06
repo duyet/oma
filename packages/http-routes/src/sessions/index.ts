@@ -38,6 +38,7 @@ import {
 } from "@duyet/oma-sessions-store";
 import type { SessionRouter, SessionInitParams } from "@duyet/oma-session-runtime";
 import type { RouteServicesArg } from "../types";
+import { resolveSessionEnvironmentId } from "./resolve-environment";
 import { redactMcpServers } from "../mcp-server-redaction";
 import { resolveServices } from "../types";
 import { federatedListBody } from "../federation-fanout";
@@ -409,14 +410,24 @@ export function buildSessionRoutes(deps: SessionRoutesDeps) {
     const agentRow = await services.agents.get({ tenantId: t, agentId });
     if (!agentRow) return c.json({ error: "Agent not found" }, 404);
 
-    // environment_id is always required — every session runs against an
-    // environment record now (cloud sandbox or local ACP runtime; see
-    // EnvironmentConfig.config.kind in AGENTS.md). The old "local-runtime
-    // agents don't need one" carve-out is gone: local-ness moved off the
-    // agent (removed `AgentConfig.runtime_binding`) onto the environment.
-    const envId = body.environment_id ?? wrappedEnv;
+    // Environment resolution (docs/sandbox-runtime-selection.md):
+    //   1. body.environment_id / body.environment
+    //   2. agent.metadata.default_environment_id
+    //   3. else 400 — never invent a provider without an environment row
+    const envResolved = resolveSessionEnvironmentId({
+      bodyEnvironmentId: body.environment_id ?? wrappedEnv,
+      agentMetadata: (agentRow as { metadata?: Record<string, unknown> }).metadata,
+    });
+    const envId = envResolved.environmentId;
     if (!envId) {
-      return c.json({ error: "environment_id is required" }, 400);
+      return c.json(
+        {
+          error: "environment_id is required",
+          hint:
+            "Pass environment_id on the request, or set agent.metadata.default_environment_id",
+        },
+        400,
+      );
     }
 
     const { tenant_id: _atid, ...agentSnapshot } = agentRow;
@@ -424,7 +435,37 @@ export function buildSessionRoutes(deps: SessionRoutesDeps) {
       ? await deps.loadEnvironment({ tenantId: t, environmentId: envId })
       : null;
     if (!envSnap) {
+      if (envResolved.source === "agent_default") {
+        return c.json(
+          {
+            error:
+              "agent.metadata.default_environment_id points to a missing or inaccessible environment",
+            environment_id: envId,
+          },
+          422,
+        );
+      }
       return c.json({ error: "Environment not found" }, 404);
+    }
+    // Prefer services.environments when present so we can refuse archived envs
+    // even if loadEnvironment still returns a snapshot for them.
+    if (services.environments) {
+      const envRow = await services.environments.get({
+        tenantId: t,
+        environmentId: envId,
+      });
+      if (envRow?.archived_at) {
+        return c.json(
+          {
+            error:
+              envResolved.source === "agent_default"
+                ? "agent.metadata.default_environment_id points to an archived environment"
+                : "Environment is archived",
+            environment_id: envId,
+          },
+          422,
+        );
+      }
     }
     const isLocalRuntime = envSnap.config?.kind === "local";
 

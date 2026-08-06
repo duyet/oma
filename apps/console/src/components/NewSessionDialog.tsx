@@ -60,13 +60,18 @@ export function NewSessionDialog({
   }, [open, singleEnvironmentId]);
 
   const needsEnvironment = !isLocalRuntime && !hasNoEnvironments;
-  const canSubmit = isLocalRuntime || !!environmentId;
+  // Agent default (metadata.default_environment_id) lets the server resolve
+  // the env when the picker is empty — docs/sandbox-runtime-selection.md.
+  const agentDefaultEnv = preferredEnvironmentId(agentMetadata, null);
+  const canSubmit = isLocalRuntime || !!environmentId || !!agentDefaultEnv;
 
   const submit = async () => {
     if (!canSubmit) return;
     setCreating(true);
     try {
       const body: Record<string, unknown> = { agent: agentId };
+      // Prefer explicit picker value; otherwise omit and let the API use
+      // agent.metadata.default_environment_id (server-side resolution).
       if (!isLocalRuntime && environmentId) body.environment_id = environmentId;
       const session = await api<{ id: string }>("/v1/sessions", {
         method: "POST",
@@ -112,7 +117,20 @@ export function NewSessionDialog({
     >
       <div className="space-y-4">
         {needsEnvironment && (
-          <EnvironmentPicker value={environmentId} onChange={setEnvironmentId} />
+          <div className="space-y-1.5">
+            <EnvironmentPicker value={environmentId} onChange={setEnvironmentId} />
+            <p className="text-[11px] text-fg-subtle leading-relaxed">
+              Where tools run is chosen when the session starts. Change the agent&rsquo;s
+              default sandbox for next time, or pick another environment here.
+              {agentDefaultEnv && !environmentId ? (
+                <>
+                  {" "}
+                  Using agent default{" "}
+                  <code className="font-mono text-[10px]">{agentDefaultEnv}</code>.
+                </>
+              ) : null}
+            </p>
+          </div>
         )}
         {!isLocalRuntime && hasNoEnvironments && (
           <div className="rounded-lg border border-border bg-bg-surface px-3 py-2 text-sm text-fg-muted">

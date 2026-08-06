@@ -29,6 +29,7 @@ import { parseAnalyticsRange } from "../analytics";
 import { federatedListBody } from "../federation-fanout";
 import type { FederationCryptoDep, FederatedRow } from "../federation-fanout";
 import { redactMcpServers, reconcileMcpServerTokens } from "../mcp-server-redaction";
+import { validateDefaultEnvironmentMetadata } from "../sessions/resolve-environment";
 
 interface Vars {
   Variables: { tenant_id: string; user_id?: string };
@@ -290,6 +291,18 @@ export function buildAgentRoutes(deps: AgentRoutesDeps) {
       }
     }
 
+    // Soft default sandbox for session create (docs/sandbox-runtime-selection.md).
+    const defaultEnvCheck = await validateDefaultEnvironmentMetadata({
+      tenantId,
+      metadata: body.metadata,
+      getEnvironment: services.environments
+        ? (opts) => services.environments!.get(opts)
+        : undefined,
+    });
+    if (!defaultEnvCheck.ok) {
+      return c.json({ error: defaultEnvCheck.error }, defaultEnvCheck.status);
+    }
+
     const row = await services.agents.create({
       tenantId,
       input: {
@@ -519,6 +532,19 @@ export function buildAgentRoutes(deps: AgentRoutesDeps) {
       if (aux !== undefined) {
         const ar = await deps.validateModel(tenantId, aux);
         if (!ar.valid) return c.json({ error: `aux_model: ${ar.error}` }, 400);
+      }
+    }
+
+    if (body.metadata !== undefined) {
+      const defaultEnvCheck = await validateDefaultEnvironmentMetadata({
+        tenantId,
+        metadata: body.metadata,
+        getEnvironment: services.environments
+          ? (opts) => services.environments!.get(opts)
+          : undefined,
+      });
+      if (!defaultEnvCheck.ok) {
+        return c.json({ error: defaultEnvCheck.error }, defaultEnvCheck.status);
       }
     }
 
