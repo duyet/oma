@@ -1,11 +1,11 @@
 /**
  * Rich harness picker for the agent form — selectable cards instead of a bare
  * `<select>`. Writes the same `form.harness` value the old dropdown wrote (no
- * API change); the Local card delegates to the dialog's Cloud/Local control.
+ * API change). Local / browser runtimes are chosen via the Agent runtime
+ * control above — this picker only covers cloud harnesses.
  */
 import {
   CLOUD_HARNESS_OPTIONS,
-  LOCAL_HARNESS_OPTIONS,
   legacyHarnessOption,
   type CloudHarnessId,
   type HarnessOption,
@@ -14,8 +14,6 @@ import {
 interface HarnessPickerProps {
   value: string;
   onChange: (id: CloudHarnessId) => void;
-  /** Invoked when the user picks a local/CLI runtime card. */
-  onSelectLocal: () => void;
 }
 
 function HarnessCard({
@@ -68,7 +66,7 @@ function HarnessCard({
   );
 }
 
-export function HarnessPicker({ value, onChange, onSelectLocal }: HarnessPickerProps) {
+export function HarnessPicker({ value, onChange }: HarnessPickerProps) {
   // An agent created before the picker was narrowed keeps its harness; it is
   // shown as a read-only card so saving the form can't silently rewrite it.
   const legacy = CLOUD_HARNESS_OPTIONS.some((o) => o.id === value)
@@ -79,8 +77,8 @@ export function HarnessPicker({ value, onChange, onSelectLocal }: HarnessPickerP
     <div>
       <label className="text-sm font-medium text-fg block mb-1">Harness</label>
       <p className="text-xs text-fg-subtle mb-2">
-        What drives this agent&apos;s loop, and where it can run. Pick this first — it decides how
-        the model field below is used and which features (MCP, providers) apply.
+        What drives this agent&apos;s loop. Pick this first — it decides how the model field below
+        is used and which features (MCP, providers) apply.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Harness">
         {CLOUD_HARNESS_OPTIONS.map((o) => (
@@ -100,14 +98,6 @@ export function HarnessPicker({ value, onChange, onSelectLocal }: HarnessPickerP
           ))}
         </ul>
       )}
-      <div className="mt-3">
-        <p className="text-xs font-medium text-fg-muted mb-1">On your own machine</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {LOCAL_HARNESS_OPTIONS.map((o) => (
-            <HarnessCard key={o.id} option={o} selected={false} onClick={onSelectLocal} />
-          ))}
-        </div>
-      </div>
     </div>
   );
 }

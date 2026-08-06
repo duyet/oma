@@ -1408,7 +1408,6 @@ export function BasicTab({
             <HarnessPicker
               value={form.harness}
               onChange={(id) => setForm({ ...form, harness: id })}
-              onSelectLocal={selectLocal}
             />
             {modelCards.length === 0 ? (
               <p className="text-xs text-fg-subtle bg-bg-surface px-3 py-2 rounded-lg">

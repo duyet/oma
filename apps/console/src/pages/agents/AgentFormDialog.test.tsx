@@ -58,7 +58,8 @@ describe("<BasicTab /> harness picker", () => {
     render(<Harness />);
     expect(screen.getByRole("radio", { name: "OMA Standard" })).toBeTruthy();
     expect(screen.getByRole("radio", { name: "Claude Agent SDK" })).toBeTruthy();
-    expect(screen.getByRole("radio", { name: "ACP Runtime" })).toBeTruthy();
+    // Local ACP is chosen via Agent runtime → Local, not a harness card.
+    expect(screen.queryByRole("radio", { name: "ACP Runtime" })).toBeNull();
     for (const gone of ["Long-running", "Poolside"]) {
       expect(screen.queryByRole("radio", { name: gone })).toBeNull();
     }
@@ -111,12 +112,12 @@ describe("<BasicTab /> harness picker", () => {
     expect(screen.getByRole("radio", { name: "OMA Standard" })).toBeTruthy();
   });
 
-  it("the local runtime card switches the form to the Local machine flow", async () => {
+  it("the Local agent-runtime mode switches the form to the local machine flow", async () => {
     const user = userEvent.setup();
     render(<Harness />);
 
-    await user.click(screen.getByRole("radio", { name: "ACP Runtime" }));
-    // Local mode replaces the cloud block with the connect-a-machine state.
+    await user.click(screen.getByRole("radio", { name: /Local/ }));
+    // Local mode replaces the cloud harness block with the connect-a-machine state.
     expect(screen.queryByRole("radio", { name: "OMA Standard" })).toBeNull();
     expect(screen.getByText(/No runtimes registered/i)).toBeTruthy();
   });

@@ -7,10 +7,8 @@
  * `registerHarness()` (apps/agent/src/index.ts for the Cloudflare deployment;
  * apps/main-node/src/index.ts additionally serves "claude-agent-sdk").
  *
- * `acp-proxy` is listed for orientation only — the dialog selects it through
- * the Cloud/Local segmented control (a runtime binding *is* the selection),
- * so its card flips the form into Local mode rather than writing
- * `_oma.harness` directly.
+ * `acp-proxy` is selected via Agent runtime → Local (a runtime binding *is*
+ * the selection), not via the harness card grid.
  *
  * Keep this file as the single source of labels/descriptions used by the
  * picker, RuntimeInfo, and the agent overview so wording never drifts.
