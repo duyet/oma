@@ -33,8 +33,31 @@ A **browser VM** inverts the economics:
 
 The tradeoff is that a browser tab is a **hostile execution host**: it can't
 be reached directly by the control plane, it can't open raw TCP sockets, it
-dies when the user navigates away, and it needs special HTTP headers to run
-threads. The entire design is shaped by working around those four facts.
+dies when the user **closes** the tab (backgrounding is fine — see below), and
+it needs special HTTP headers to run threads. The entire design is shaped by
+working around those facts.
+
+### Exec / shell vs SSH
+
+| Path | Supported? | Notes |
+|---|---|---|
+| Agent `bash` / file tools | **Yes** | Relayed as `sandbox.op` → serial-console `exec` inside the WASM VM |
+| Guest shell on `/sandbox-tab` | **Yes** | Same `engine.exec()` path as the agent — one command per round-trip |
+| **SSH** (`ssh user@host`) | **No** | No inbound TCP into the tab; no SSH daemon is exposed |
+
+### Background tab
+
+The host page is built to keep serving while the tab is **backgrounded**
+(another tab focused, window minimized):
+
+- WebSocket stay open; heartbeats use both a main-thread timer and a dedicated
+  worker (less throttled when hidden)
+- `sandbox.op` / guest shell exec still run — only the UI monitor poll pauses
+- Wake Lock is requested when supported (helps mobile browsers)
+- Closing the tab or quitting the browser still tears the sandbox down
+
+Browsers may still throttle timers after long idle; if an agent reports the
+tab offline, focus the sandbox tab once to re-arm the relay.
 
 ---
 

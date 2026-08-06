@@ -167,6 +167,9 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
     font-size: 10px; font-weight: 600; font-family: var(--mon-mono); }
   .badge.ok { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
   .badge.err { background: color-mix(in srgb, var(--err) 16%, transparent); color: var(--err); }
+  .badge.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+  .badge.bg { background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--warn);
+    align-self: center; flex-shrink: 0; }
   #activity { font-family: var(--mon-mono); font-size: 11.5px; line-height: 1.9;
     max-height: 260px; overflow-y: auto; }
   #activity .ln { display: flex; gap: 8px; white-space: pre; }
@@ -198,10 +201,11 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
 
   <div class="banner" id="banner">
     <span class="dot" id="d-overall"></span>
-    <div>
+    <div style="flex:1;min-width:0">
       <div class="bt" id="banner-title">Starting up…</div>
       <div class="bd" id="banner-detail">Registering this tab and booting the VM engine.</div>
     </div>
+    <span class="badge" id="bg-badge" hidden title="Timers may be throttled; keep the browser process alive">Background</span>
   </div>
 
   <div class="card">
@@ -209,6 +213,26 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
     <div class="row"><span class="k">Relay socket</span><span class="dot" id="d-ws"></span><span class="v" id="s-ws">—</span></div>
     <div class="row"><span class="k">VM engine</span><span class="dot" id="d-vm"></span><span class="v" id="s-vm">—</span></div>
     <div class="row"><span class="k">Runtime id</span><span class="v" id="s-rid">—</span></div>
+    <div class="row"><span class="k">Tab mode</span><span class="dot" id="d-bg"></span><span class="v" id="s-bg">foreground</span></div>
+  </div>
+
+  <div class="card">
+    <div class="mon-title">How to use this sandbox</div>
+    <p style="margin:0 0 8px;font-size:13px;color:var(--muted);line-height:1.55">
+      <strong style="color:var(--fg)">Exec / shell</strong> — agents run commands via the normal
+      <code>bash</code> tool (relayed here as <code>sandbox.op</code>). You can also type commands in the
+      <strong>Guest shell</strong> below — same engine, same serial console.
+    </p>
+    <p style="margin:0 0 8px;font-size:13px;color:var(--muted);line-height:1.55">
+      <strong style="color:var(--fg)">No SSH</strong> — browser-vm has no inbound TCP. There is no
+      <code>ssh user@…</code> path; use the agent tools or the guest shell on this page.
+    </p>
+    <p style="margin:0;font-size:13px;color:var(--muted);line-height:1.55">
+      <strong style="color:var(--fg)">Background tab</strong> — leave this tab open in the background
+      while you work elsewhere. The relay keeps serving ops and heartbeats. Closing the tab (or
+      the browser) takes the sandbox offline. Browsers may throttle timers after long idle —
+      switch back here if the agent reports the tab disconnected.
+    </p>
   </div>
 
   <div class="card" id="engine-setup" hidden>
@@ -247,12 +271,15 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
   </div>
 
   <div class="mon-card">
-    <div class="mon-title">Terminal</div>
+    <div class="mon-title">Guest shell <span style="font-weight:400;color:var(--muted);text-transform:none">— exec into the VM (not SSH)</span></div>
+    <p style="margin:0 0 10px;font-size:12px;color:var(--muted);line-height:1.5">
+      Runs the same <code>exec</code> path the agent uses. One command per line; no interactive TTY / password prompts.
+    </p>
     <div class="term-out" id="term-out">not connected — VM must be ready</div>
     <div class="term-in">
       <span class="prompt">$</span>
-      <input id="term-in" type="text" placeholder="exec a command in the guest…" autocomplete="off" disabled />
-      <button id="term-run" disabled>Run</button>
+      <input id="term-in" type="text" placeholder="e.g. uname -a · ls /workspace · cat /etc/os-release" autocomplete="off" disabled />
+      <button id="term-run" disabled>Exec</button>
     </div>
   </div>
 
@@ -276,8 +303,9 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
   const $ = (id) => document.getElementById(id);
   const sysState = { reg: "pending", ws: "pending", vm: "pending" };
   function setStatus(which, cls, text) {
-    $("d-" + which).className = "dot" + (cls ? " " + cls : "");
-    $("s-" + which).textContent = text;
+    const dot = $("d-" + which), span = $("s-" + which);
+    if (dot) dot.className = "dot" + (cls ? " " + cls : "");
+    if (span) span.textContent = text;
     if (which in sysState) { sysState[which] = cls || "pending"; renderBanner(); }
   }
   // One headline verdict so a broken tab never *looks* fine while the agent
@@ -286,7 +314,7 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
     err: ["Not serving sandbox ops", "Fix the problem below — agent sessions targeting this tab will fail."],
     warn: ["Getting ready…", "This tab cannot serve sandbox ops until every row below is green."],
     pending: ["Starting up…", "Registering this tab and booting the VM engine."],
-    ok: ["Serving sandbox ops", "Keep this tab open. Closing it takes the sandbox offline."],
+    ok: ["Serving sandbox ops", "You can leave this tab in the background. Closing it takes the sandbox offline."],
   };
   function renderBanner() {
     const s = [sysState.reg, sysState.ws, sysState.vm];
@@ -297,7 +325,25 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
     $("banner").className = "banner is-" + (worst === "pending" ? "warn" : worst);
     $("d-overall").className = "dot " + (worst === "pending" ? "warn" : worst);
     $("banner-title").textContent = copy[0];
-    $("banner-detail").textContent = copy[1];
+    let detail = copy[1];
+    if (document.hidden && worst === "ok") {
+      detail = "Tab is backgrounded — still serving ops. Browsers may throttle timers after long idle.";
+    }
+    $("banner-detail").textContent = detail;
+    const bgBadge = $("bg-badge");
+    if (bgBadge) {
+      bgBadge.hidden = !document.hidden;
+      bgBadge.className = "badge bg";
+    }
+    updateBackgroundStatus();
+  }
+  function updateBackgroundStatus() {
+    if (!$("s-bg")) return;
+    if (document.hidden) {
+      setStatus("bg", "warn", "background — ops + heartbeats continue");
+    } else {
+      setStatus("bg", "ok", "foreground");
+    }
   }
   function logLine(text, cls) {
     const el = document.createElement("div");
@@ -539,8 +585,9 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
     renderMonitor();
   }
 
-  // ── Terminal: a direct exec() REPL against the same engine the relay
-  // uses — a local convenience, not a separate sandbox op.
+  // ── Guest shell: direct exec() against the same engine the agent relay
+  // uses. This is NOT SSH (no inbound TCP / no interactive PTY) — one
+  // command per round-trip over the serial console, same as bash tool.
   let terminalReady = false;
   function initTerminal() {
     if (terminalReady) return;
@@ -551,19 +598,31 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
     const history = []; let histIdx = -1;
     function printLn(text, cls) {
       const el = document.createElement("div");
-      if (cls) el.style.color = "var(--" + cls + ")";
+      if (cls === "err") el.style.color = "var(--err)";
+      else if (cls === "muted") el.style.color = "var(--muted)";
+      else if (cls === "ok") el.style.color = "var(--ok)";
       el.textContent = text;
       out.appendChild(el);
       out.scrollTop = out.scrollHeight;
     }
+    printLn("# guest shell ready — same exec path as agent bash tools", "muted");
+    printLn("# not SSH: no interactive programs (ssh, vim, password prompts)", "muted");
     async function run() {
       const cmd = input.value.trim();
       if (!cmd) return;
+      if (cmd === "help" || cmd === "?") {
+        printLn("Commands run via engine.exec() — e.g. uname -a, ls /workspace, cat file");
+        printLn("Agent sessions use this same VM over the RuntimeRoom relay.");
+        input.value = "";
+        return;
+      }
       history.push(cmd); histIdx = history.length;
       input.value = ""; input.disabled = true; btn.disabled = true;
       printLn("$ " + cmd);
       try {
-        const r = await engine.exec(cmd, 30000);
+        // Background tab is fine — exec still runs on the WASM VM; only UI
+        // monitor polling pauses while hidden.
+        const r = await engine.exec(cmd, 120000);
         if (r.stdout) printLn(r.stdout.replace(/\\n$/, ""));
         if (r.stderr) printLn(r.stderr.replace(/\\n$/, ""), "err");
         if (r.exit_code !== 0) printLn("[exit " + r.exit_code + "]", "muted");
@@ -994,14 +1053,51 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
   let engineError = null;
   let vmReady = false;
   let hbTimer = null;
+  let hbWorker = null;
   let reconnectTimer = null;
   let wsAttempt = 0;
   let currentRecord = null;
+  let wakeLock = null;
   const MAX_PAIRING_ATTEMPTS = 5;
 
   function stopSocketTimers() {
     if (hbTimer) { clearInterval(hbTimer); hbTimer = null; }
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    if (hbWorker) {
+      try { hbWorker.terminate(); } catch { /* already */ }
+      hbWorker = null;
+    }
+  }
+
+  // Heartbeats must keep firing while the tab is backgrounded so
+  // pickOnlineRuntimeId still sees this runtime. Main-thread setInterval is
+  // heavily throttled in hidden tabs; a dedicated worker is throttled less
+  // aggressively in Chromium, so we run both and dedupe by only sending when
+  // the socket is open.
+  function startHeartbeat(socket) {
+    if (hbTimer) clearInterval(hbTimer);
+    if (hbWorker) { try { hbWorker.terminate(); } catch { /* */ } hbWorker = null; }
+    const ping = () => {
+      if (!ws || ws !== socket || socket.readyState !== WebSocket.OPEN) return;
+      try { socket.send(JSON.stringify({ type: "ping" })); } catch { /* closing */ }
+    };
+    hbTimer = setInterval(ping, HEARTBEAT_MS);
+    try {
+      const src = "setInterval(function(){postMessage(1)}," + HEARTBEAT_MS + ")";
+      hbWorker = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
+      hbWorker.onmessage = ping;
+    } catch (e) {
+      logLine("heartbeat worker unavailable — main-thread timer only: " + (e.message || e), "err");
+    }
+  }
+
+  async function requestWakeLock() {
+    try {
+      if (!navigator.wakeLock || !navigator.wakeLock.request) return;
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { wakeLock = null; });
+      logLine("wake lock held — helps keep the tab from sleeping on mobile");
+    } catch { /* permission / unsupported — optional */ }
   }
 
   function connect(record) {
@@ -1022,10 +1118,8 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
         type: "hello", agents: [], version: VERSION,
         hostname: "browser:" + location.hostname, os: "browser",
       }));
-      if (hbTimer) clearInterval(hbTimer);
-      hbTimer = setInterval(() => {
-        try { socket.send(JSON.stringify({ type: "ping" })); } catch { /* closing */ }
-      }, HEARTBEAT_MS);
+      startHeartbeat(socket);
+      void requestWakeLock();
     };
     socket.onmessage = (ev) => {
       let msg;
@@ -1056,6 +1150,10 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
   // A frozen (bfcache) or offline tab never runs its reconnect timer, so it
   // silently stops being a sandbox host while still looking fine on screen.
   // Re-arm on every signal that the tab is live and reachable again.
+  //
+  // Important: backgrounding (document.hidden) must NOT tear down the socket
+  // or the engine — agent exec continues while the user works in another tab.
+  // Only a real pagehide / freeze should force a clean close.
   function ensureConnected() {
     if (!currentRecord) return;
     if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return;
@@ -1063,17 +1161,41 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
     stopSocketTimers();
     connect(currentRecord);
   }
-  window.addEventListener("pageshow", (ev) => { if (ev.persisted) ensureConnected(); });
+  function sendImmediatePing() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    try { ws.send(JSON.stringify({ type: "ping" })); } catch { /* */ }
+  }
+  window.addEventListener("pageshow", (ev) => {
+    if (ev.persisted) ensureConnected();
+    renderBanner();
+    void requestWakeLock();
+  });
   window.addEventListener("online", ensureConnected);
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) return;
+    renderBanner();
+    if (document.hidden) {
+      // Still serving — just refresh liveness so we don't look dead after
+      // the browser throttles timers for a while.
+      sendImmediatePing();
+      return;
+    }
+    // Back to foreground: re-arm socket, wake lock, and guest poll.
     ensureConnected();
+    sendImmediatePing();
+    void requestWakeLock();
     void pollGuest();
   });
-  // Hand the relay a clean close on navigate-away so it stops routing ops
-  // here instead of waiting out the heartbeat window.
-  window.addEventListener("pagehide", () => {
+  // Hand the relay a clean close only when the document is really going
+  // away (navigate / close). Hiding the tab is not a close.
+  window.addEventListener("pagehide", (ev) => {
+    // bfcache: page may come back — don't destroy the engine, but the WS
+    // will be dead after freeze; pageshow reconnects.
+    if (ev.persisted) {
+      stopSocketTimers();
+      return;
+    }
     stopSocketTimers();
+    try { wakeLock && wakeLock.release(); } catch { /* */ }
     try { ws && ws.close(1001, "sandbox tab closing"); } catch { /* already */ }
   });
 

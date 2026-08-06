@@ -57,6 +57,18 @@ describe("browser-vm host page", () => {
     expect(html).toContain("bios/seabios.bin");
   });
 
+  it("documents exec (not SSH) and keeps the relay alive while backgrounded", async () => {
+    const html = await fetchPage();
+    expect(html).toContain("No SSH");
+    expect(html).toContain("Guest shell");
+    expect(html).toContain("startHeartbeat");
+    expect(html).toContain("new Worker");
+    expect(html).toContain("wakeLock");
+    // Backgrounding must not tear down the socket — only pagehide does.
+    expect(html).toContain("sendImmediatePing");
+    expect(html).toMatch(/visibilitychange[\s\S]*document\.hidden/);
+  });
+
   it("emits a syntactically valid inline script", async () => {
     const script = inlineScript(await fetchPage());
     // `new Function` compiles without executing — a syntax error throws.
