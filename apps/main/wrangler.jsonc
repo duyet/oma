@@ -134,9 +134,11 @@
   // automatically on first write — no dashboard pre-step needed. Query via
   // Cloudflare's SQL API or the Grafana plugin. Schema convention lives in
   // packages/shared/src/metrics.ts (column positions are load-bearing).
-  "analytics_engine_datasets": [
-    { "binding": "ANALYTICS", "dataset": "oma_events" }
-  ],
+  // Top-level AE binding also commented out — not inherited by env.production
+  // and currently fails deploy when AE is disabled on the account (10089).
+  // "analytics_engine_datasets": [
+  //   { "binding": "ANALYTICS", "dataset": "oma_events" }
+  // ],
 
   // Cross-isolate rate limiting via CF Workers Rate Limiting binding.
   // Replaces a per-isolate Map limiter that under-counted N×isolate.
