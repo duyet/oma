@@ -74,6 +74,54 @@ describe("<EnvironmentsList />", () => {
     expect(screen.getByText("Provider default")).toBeInTheDocument();
   });
 
+  it("only lists ready hosting types in the create dialog (drops needs_config / unavailable)", async () => {
+    server.use(
+      http.get("/v1/environments", () => HttpResponse.json({ data: [] })),
+      http.get("/v1/hosting_types", () =>
+        HttpResponse.json({
+          data: [
+            {
+              id: "cloud",
+              label: "Cloudflare Sandbox",
+              availability: { state: "available", reason: "ok" },
+            },
+            {
+              id: "subprocess",
+              label: "Local (subprocess)",
+              availability: { state: "available", reason: "bridge" },
+            },
+            {
+              id: "boxrun",
+              label: "BoxRun",
+              availability: { state: "needs_config", reason: "Set BOXRUN_URL", missing_env: ["BOXRUN_URL"] },
+            },
+            {
+              id: "k8s",
+              label: "Kubernetes",
+              availability: { state: "unavailable", reason: "Node-only" },
+            },
+          ],
+        }),
+      ),
+    );
+    renderPage();
+    await waitFor(() => expect(screen.getByText("No environments yet")).toBeInTheDocument());
+
+    await userEvent.click(screen.getAllByRole("button", { name: "+ Add environment" })[0]);
+    await waitFor(() => expect(screen.getByText("Add Environment")).toBeInTheDocument());
+
+    // Hosting Type is the first combobox (Instance Type may also render for cloud).
+    const comboboxes = screen.getAllByRole("combobox");
+    await userEvent.click(comboboxes[0]);
+
+    await waitFor(() => {
+      expect(screen.getByRole("option", { name: "Cloudflare Sandbox" })).toBeInTheDocument();
+    });
+    expect(screen.getByRole("option", { name: "Local (subprocess)" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "BoxRun" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Kubernetes" })).not.toBeInTheDocument();
+  });
+
   // Issue #182 — a failed list fetch must render a distinct error state
   // with a Retry action, never the "Nothing here yet" empty-state copy.
   it("shows an error state with Retry instead of the empty state when the fetch fails", async () => {

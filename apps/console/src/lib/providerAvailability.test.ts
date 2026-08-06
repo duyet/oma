@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  filterReadyProviders,
+  isProviderReady,
   partitionByAvailability,
   providerAvailabilityView,
   runtimeLabel,
@@ -62,5 +64,27 @@ describe("runtimeLabel", () => {
     expect(runtimeLabel("node")).toBe("Self-host Node runtime");
     expect(runtimeLabel(undefined)).toBeNull();
     expect(runtimeLabel("something-else")).toBeNull();
+  });
+});
+
+describe("isProviderReady / filterReadyProviders", () => {
+  it("only treats availability.state === available as ready for env selection", () => {
+    expect(isProviderReady(undefined)).toBe(true);
+    expect(isProviderReady({ state: "available", reason: "ok" })).toBe(true);
+    expect(isProviderReady({ state: "needs_config", reason: "secret" })).toBe(false);
+    expect(isProviderReady({ state: "unavailable", reason: "node only" })).toBe(false);
+  });
+
+  it("drops needs_config and unavailable from the environment picker list", () => {
+    const items = [
+      { id: "cloud", availability: { state: "available" as const, reason: "ok" } },
+      { id: "boxrun", availability: { state: "needs_config" as const, reason: "secret" } },
+      { id: "k8s", availability: { state: "unavailable" as const, reason: "node only" } },
+      { id: "legacy", availability: undefined },
+    ];
+    expect(filterReadyProviders(items, (i) => i.availability).map((i) => i.id)).toEqual([
+      "cloud",
+      "legacy",
+    ]);
   });
 });

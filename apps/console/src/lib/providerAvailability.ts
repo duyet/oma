@@ -80,6 +80,28 @@ export function partitionByAvailability<T>(
   return { usable, unavailable };
 }
 
+/**
+ * True when an environment may select this provider today — not merely
+ * "usable after more config". The Environments create dialog only offers
+ * these; `needs_config` / `unavailable` stay on the Runtimes page for setup.
+ *
+ * Missing `availability` (older backends) counts as ready so the picker
+ * degrades open instead of empty.
+ */
+export function isProviderReady(
+  availability?: ProviderAvailability | null,
+): boolean {
+  return providerAvailabilityView(availability).state === "available";
+}
+
+/** Keep only providers ready for environment selection (see isProviderReady). */
+export function filterReadyProviders<T>(
+  items: T[],
+  getAvailability: (item: T) => ProviderAvailability | null | undefined,
+): T[] {
+  return items.filter((item) => isProviderReady(getAvailability(item)));
+}
+
 /** Human label for the deployment runtime reported alongside the list. */
 export function runtimeLabel(runtime?: string | null): string | null {
   if (runtime === "cloudflare") return "Cloudflare deployment";
