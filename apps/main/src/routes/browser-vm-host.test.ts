@@ -45,6 +45,18 @@ describe("browser-vm host page", () => {
     }
   });
 
+  it("ships CORS-safe public defaults so Open sandbox tab boots without a setup form", async () => {
+    const html = await fetchPage();
+    // Without these, a freshly paired tab pairs but fails every op with
+    // "no VM image configured". Defaults must be CORP-friendly CDNs.
+    expect(html).toContain("DEFAULT_V86_LIB");
+    expect(html).toContain("cdn.jsdelivr.net/npm/v86@");
+    expect(html).toContain("DEFAULT_V86_IMAGE");
+    expect(html).toContain("cdn.jsdelivr.net/gh/copy/images");
+    expect(html).toContain("DEFAULT_V86_BIOS");
+    expect(html).toContain("bios/seabios.bin");
+  });
+
   it("emits a syntactically valid inline script", async () => {
     const script = inlineScript(await fetchPage());
     // `new Function` compiles without executing — a syntax error throws.

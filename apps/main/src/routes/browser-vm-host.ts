@@ -213,14 +213,12 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
 
   <div class="card" id="engine-setup" hidden>
     <div class="mon-title">VM image</div>
-    <div class="warnbox" style="margin-bottom:12px">No VM image configured, so sandbox ops fail fast instead of hanging.
-    Point this tab at a <code>libv86.js</code> build and a v86 image (an <code>.iso</code> cdrom, or a
-    <code>.bin</code>/<code>.bin.zst</code> saved state). Both must be CORS-accessible — this page is
-    cross-origin isolated.</div>
+    <div class="warnbox" style="margin-bottom:12px">Override the default public demo image if needed. Assets must be CORS-accessible
+    (and CORP-friendly) — this page is cross-origin isolated. Pass <code>?lib=&amp;image=</code> to skip this form.</div>
     <label class="field"><span>libv86.js URL</span>
-      <input id="cfg-lib" type="url" spellcheck="false" autocomplete="off" placeholder="https://example.com/v86/libv86.js" /></label>
+      <input id="cfg-lib" type="url" spellcheck="false" autocomplete="off" placeholder="https://cdn.jsdelivr.net/npm/v86@0.5.44/build/libv86.js" /></label>
     <label class="field"><span>Image URL (.iso, .bin or .bin.zst)</span>
-      <input id="cfg-image" type="url" spellcheck="false" autocomplete="off" placeholder="https://example.com/v86/linux.iso" /></label>
+      <input id="cfg-image" type="url" spellcheck="false" autocomplete="off" placeholder="https://cdn.jsdelivr.net/gh/copy/images@master/linux.iso" /></label>
     <button class="btn" id="cfg-save">Boot VM</button>
   </div>
 
@@ -636,6 +634,16 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
     return new TextDecoder("utf-8").decode(bytes);
   }
 
+  // Public defaults (CORS + CORP so they load under COEP require-corp).
+  // Query params win, then localStorage, then these — so "Open sandbox tab"
+  // with only a pairing code still boots a working VM instead of pairing
+  // and failing every op with "no VM image configured".
+  const DEFAULT_V86_LIB = "https://cdn.jsdelivr.net/npm/v86@0.5.44/build/libv86.js";
+  const DEFAULT_V86_IMAGE = "https://cdn.jsdelivr.net/gh/copy/images@master/linux.iso";
+  // BIOS blobs live on the copy/v86 repo; the npm package ships only lib + wasm.
+  const DEFAULT_V86_BIOS = "https://cdn.jsdelivr.net/gh/copy/v86@master/bios/seabios.bin";
+  const DEFAULT_V86_VGA_BIOS = "https://cdn.jsdelivr.net/gh/copy/v86@master/bios/vgabios.bin";
+
   // v86 engine: boots a Linux image and drives the serial console. Commands
   // are wrapped in sentinel markers; file content crosses the console as
   // base64 so binary-ish text survives the TTY.
@@ -683,6 +691,8 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
         wasm_path: base + "v86.wasm",
         memory_size: 128 * 1024 * 1024,
         vga_memory_size: 4 * 1024 * 1024,
+        bios: { url: DEFAULT_V86_BIOS },
+        vga_bios: { url: DEFAULT_V86_VGA_BIOS },
         screen_container: document.getElementById("v86-screen"),
         autostart: true,
         disable_keyboard: true,
@@ -863,15 +873,14 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
   }
 
   // Engine config: query params win (a deliberate deep link), otherwise the
-  // last values entered in the setup card. The Console's "Open sandbox tab"
-  // action passes only the pairing code, so without a persisted config the
-  // tab would pair and then be unable to serve a single op.
+  // last values entered in the setup card, otherwise the public defaults.
+  // DEFAULT_V86_* are declared above the V86Engine class.
   function readEngineConfig() {
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(LS_ENGINE_KEY) || "null"); } catch { /* corrupt */ }
     return {
-      lib: qs.get("lib") || (saved && saved.lib) || "",
-      image: qs.get("image") || (saved && saved.image) || "",
+      lib: qs.get("lib") || (saved && saved.lib) || DEFAULT_V86_LIB,
+      image: qs.get("image") || (saved && saved.image) || DEFAULT_V86_IMAGE,
     };
   }
   function saveEngineConfig(cfg) {

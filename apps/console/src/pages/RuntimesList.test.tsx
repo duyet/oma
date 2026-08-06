@@ -157,8 +157,9 @@ describe("<RuntimesList /> provider availability", () => {
     renderPage();
 
     await waitFor(() => expect(screen.getByText("Cloudflare Sandbox")).toBeInTheDocument());
-    expect(screen.getByText("Available on other deployments (1)")).toBeInTheDocument();
-    expect(screen.getByText("Kubernetes")).toBeInTheDocument();
+    // Unavailable providers land on the Offline tab in the unified list.
+    await userEvent.click(screen.getByRole("tab", { name: /Offline/i }));
+    await waitFor(() => expect(screen.getByText("Kubernetes")).toBeInTheDocument());
     expect(
       screen.getByText("Kubernetes is Node-only — use the self-host Node runtime instead."),
     ).toBeInTheDocument();
@@ -249,13 +250,11 @@ describe("<RuntimesList /> provider availability", () => {
   });
 });
 
-// Regression test for the "Add" entry restructure (issue: tabs on the Add
-// dialog were broken — close/reopen kept the stale tab). The fix replaced the
-// single tabbed AddRuntimeDialog with one button per setup kind, each opening
-// its own dedicated modal. This locks in: three distinct buttons, each wired to
-// the right dialog.
-describe("<RuntimesList /> Add entry buttons", () => {
-  it("renders one button per setup kind and each opens its own dialog", async () => {
+// Add is a single dropdown that lists every setup path (connect machine,
+// register provider, register k8s, open browser tab) — no separate header
+// buttons and no Your machines / Built-in providers section split.
+describe("<RuntimesList /> Add menu + Online/Offline tabs", () => {
+  it("opens setup dialogs from the Add dropdown and shows Online/Offline tabs", async () => {
     server.use(
       http.get("/v1/hosting_types", () =>
         HttpResponse.json({ runtime: "cloudflare", data: [provider()] }),
@@ -265,22 +264,29 @@ describe("<RuntimesList /> Add entry buttons", () => {
 
     renderPage();
 
-    // Header renders the three dedicated entry buttons.
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Connect machine" })).toBeInTheDocument(),
-    );
-    expect(screen.getByRole("button", { name: "Register provider" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Register k8s cluster" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: /Add/i })).toBeInTheDocument());
+    expect(screen.getByRole("tab", { name: /Online/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Offline/i })).toBeInTheDocument();
+    // Unified list — no section headers for machines vs built-in.
+    expect(screen.queryByText("Your machines")).not.toBeInTheDocument();
+    expect(screen.queryByText("Built-in providers")).not.toBeInTheDocument();
 
-    // Connect machine → ConnectMachineDialog
-    await userEvent.click(screen.getByRole("button", { name: "Connect machine" }));
+    await userEvent.click(screen.getByRole("button", { name: /Add/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("menuitem", { name: /Connect machine/i })).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("menuitem", { name: /Register provider/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /Register k8s cluster/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /Open sandbox tab/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("menuitem", { name: /Connect machine/i }));
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: "Connect a machine" })).toBeInTheDocument(),
     );
     await userEvent.click(screen.getByRole("button", { name: "Done" }));
 
-    // Register provider → AddSandboxProviderDialog
-    await userEvent.click(screen.getByRole("button", { name: "Register provider" }));
+    await userEvent.click(screen.getByRole("button", { name: /Add/i }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: /Register provider/i }));
     await waitFor(() =>
       expect(
         screen.getByRole("heading", { name: "Register a sandbox provider" }),
@@ -288,8 +294,8 @@ describe("<RuntimesList /> Add entry buttons", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
-    // Register k8s cluster → RegisterK8sClusterDialog
-    await userEvent.click(screen.getByRole("button", { name: "Register k8s cluster" }));
+    await userEvent.click(screen.getByRole("button", { name: /Add/i }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: /Register k8s cluster/i }));
     await waitFor(() =>
       expect(
         screen.getByRole("heading", { name: "Register a Kubernetes cluster" }),

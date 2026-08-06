@@ -297,14 +297,14 @@ points:
   still fails with the no-tab message, the chat shows an inline "Open sandbox
   tab & retry" prompt that reopens the tab and re-sends the last message.
 
-**VM image configuration.** The pairing code is all the Console passes, so the
-tab asks for the engine assets itself: when no image is configured it shows a
-setup card for the `libv86.js` URL and the image URL (an `.iso` cdrom, or a
-`.bin`/`.bin.zst` saved state), persists them in `localStorage`, and reloads.
-`?lib=&image=` query params still work and take precedence. Both assets must be
-CORS-accessible because the page is cross-origin isolated. Until an image is
-configured the tab reports `no image configured` and every sandbox op fails
-fast with that message rather than hanging.
+**VM image configuration.** The host page boots with **public defaults** so
+"Open sandbox tab" works without a setup form: `libv86.js` + `v86.wasm` from
+jsDelivr (`npm/v86`), a demo Linux ISO from `cdn.jsdelivr.net/gh/copy/images`,
+and seabios/vgabios from `cdn.jsdelivr.net/gh/copy/v86` (all CORS + CORP so they
+load under COEP). Query params (`?lib=&image=`) win, then `localStorage`, then
+those defaults. Operators can still open the setup card to override. Custom
+assets must be CORS-accessible (and CORP-friendly) because the page is
+cross-origin isolated.
 
 **Serial-console framing constraints.** The v86 driver talks to the guest over
 one serial line, which forces three rules the engine encodes:
