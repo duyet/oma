@@ -14,6 +14,10 @@ import { FacetedFilter } from "../components/FacetedFilter";
 import { FilterChip, CreatedFilterChip } from "../components/FilterChip";
 import { RowActionsMenu } from "../components/RowActionsMenu";
 import { friendlyHostingDescription } from "../lib/hostingTypes";
+import {
+  filterReadyProviders,
+  type ProviderAvailability,
+} from "../lib/providerAvailability";
 
 interface Env {
   id: string;
@@ -43,13 +47,13 @@ interface HostingType {
   id: string;
   label: string;
   description?: string;
+  /** From /v1/hosting_types — gates the create-dialog picker. */
+  availability?: ProviderAvailability | null;
 }
 
-// Fallback when the host doesn't expose /v1/hosting_types (e.g. the
-// Cloudflare host, which only supports the managed Cloudflare Sandbox). Keeps
-// the picker showing the single Cloudflare Sandbox option so nothing
-// regresses there. The id stays "cloud" on the wire (backend stores
-// config.type === "cloud" for the managed sandbox) — only the label changes.
+// Fallback when the host doesn't expose /v1/hosting_types (e.g. older CF
+// builds without the route). Single Cloudflare Sandbox option; id stays
+// "cloud" on the wire (backend stores config.type === "cloud").
 const CLOUDFLARE_SANDBOX_ONLY: HostingType[] = [
   { id: "cloud", label: "Cloudflare Sandbox", description: "Managed sandbox, built in." },
 ];
@@ -93,11 +97,11 @@ export function EnvironmentsList() {
   const [envVarRows, setEnvVarRows] = useState<EnvVarRow[]>([]);
   const confirm = useConfirm();
 
-  // Hosting types are host-dependent: self-hosted (main-node) advertises the
-  // full sandbox-provider list at /v1/hosting_types; the Cloudflare host has
-  // no such route (404) → we fall back to Cloudflare Sandbox only. This is
-  // the feature gate that keeps non-cloud options from appearing on a host
-  // that would silently ignore them.
+  // Hosting types from /v1/hosting_types include every provider this build
+  // ships (plus unseeded diagnostics). The create dialog only offers
+  // providers that are ready now (`availability.state === "available"`) —
+  // needs_config / unavailable stay on Settings › Sandbox Runtimes.
+  // 404 / empty → Cloudflare Sandbox only.
   const [hostingTypes, setHostingTypes] = useState<HostingType[]>(CLOUDFLARE_SANDBOX_ONLY);
   useEffect(() => {
     let cancelled = false;
@@ -105,20 +109,29 @@ export function EnvironmentsList() {
       try {
         const res = await api<{ data: HostingType[] }>("/v1/hosting_types");
         if (!cancelled && Array.isArray(res.data) && res.data.length > 0) {
-          // Drop entries with an empty id — Radix Select throws
-          // "A <Select.Item /> must have a value prop that is not an empty
-          // string" if such an entry is rendered, which crashes the page.
+          // Drop empty ids — Radix Select crashes on value="".
           const cleaned = res.data.filter((t) => !!t.id && t.id.trim().length > 0);
-          setHostingTypes(cleaned);
+          const ready = filterReadyProviders(cleaned, (t) => t.availability);
+          // Never leave the picker empty; fall back to the CF default.
+          setHostingTypes(ready.length > 0 ? ready : CLOUDFLARE_SANDBOX_ONLY);
         }
       } catch {
-        // 404 on the CF host (or any failure) → keep Cloudflare Sandbox only.
+        // 404 / failure → keep Cloudflare Sandbox only.
       }
     })();
     return () => {
       cancelled = true;
     };
   }, [api]);
+
+  // Keep form.type aligned with the filtered list once it loads (default
+  // "cloud" may not be in the ready set on some deployments).
+  useEffect(() => {
+    if (hostingTypes.length === 0) return;
+    if (!hostingTypes.some((t) => t.id === form.type)) {
+      setForm((f) => ({ ...f, type: hostingTypes[0].id, instanceType: "" }));
+    }
+  }, [hostingTypes, form.type]);
 
   const selectedType = hostingTypes.find((t) => t.id === form.type) ?? hostingTypes[0];
 
