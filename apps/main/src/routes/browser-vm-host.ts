@@ -44,6 +44,17 @@ import type { Env } from "@duyet/oma-shared";
 
 const browserVmHostRoutes = new Hono<{ Bindings: Env }>();
 
+/**
+ * Hosts allowed for the same-origin asset proxy. COEP require-corp blocks
+ * cross-origin assets that lack CORP even when CORS ACAO is `*`; i.copy.sh
+ * (v86's public buildroot images) is in that boat. The host page therefore
+ * loads default images through this proxy so they are same-origin.
+ */
+const ASSET_PROXY_HOSTS = new Set([
+  "i.copy.sh",
+  "cdn.jsdelivr.net",
+]);
+
 browserVmHostRoutes.get("/", (c) => {
   return c.html(HOST_PAGE_HTML, 200, {
     "Cross-Origin-Opener-Policy": "same-origin",
@@ -52,7 +63,94 @@ browserVmHostRoutes.get("/", (c) => {
   });
 });
 
+// GET /sandbox-tab/asset?url=https://… — stream an allowlisted remote asset
+// with same-origin CORP so COEP pages can load v86 images that the upstream
+// CDN serves without Cross-Origin-Resource-Policy.
+browserVmHostRoutes.get("/asset", async (c) => {
+  const raw = c.req.query("url");
+  if (!raw) return c.text("missing url", 400);
+  let target: URL;
+  try {
+    target = new URL(raw);
+  } catch {
+    return c.text("invalid url", 400);
+  }
+  if (target.protocol !== "https:") return c.text("https only", 400);
+  if (!ASSET_PROXY_HOSTS.has(target.hostname)) {
+    return c.text("host not allowlisted", 403);
+  }
+  // Range requests are not needed for v86's full-file load path; keep this
+  // simple and stream the body through so large bzimages stay under Worker
+  // memory limits.
+  let upstream: Response;
+  try {
+    upstream = await fetch(target.toString(), {
+      headers: { Accept: "application/octet-stream,*/*" },
+    });
+  } catch (e) {
+    return c.text(
+      "upstream fetch failed: " + (e instanceof Error ? e.message : String(e)),
+      502,
+    );
+  }
+  if (!upstream.ok || !upstream.body) {
+    return c.text("upstream " + upstream.status, 502);
+  }
+  const headers = new Headers();
+  headers.set(
+    "content-type",
+    upstream.headers.get("content-type") || "application/octet-stream",
+  );
+  const len = upstream.headers.get("content-length");
+  if (len) headers.set("content-length", len);
+  headers.set("cache-control", "public, max-age=86400, immutable");
+  headers.set("cross-origin-resource-policy", "same-origin");
+  // Expose length so the page's HEAD/size probe can read it when the asset
+  // is fetched same-origin from the diagnostics panel.
+  headers.set("access-control-expose-headers", "content-length");
+  return new Response(upstream.body, { status: 200, headers });
+});
+
 export default browserVmHostRoutes;
+
+/** Pure helper exported for unit tests (mirrors the page-side classifier). */
+export function classifyV86Media(url: string): "bzimage" | "iso" | "state" | "hda" | "unknown" {
+  const u = String(url || "").toLowerCase();
+  // Compressed v86 save states are almost always `.bin.zst`.
+  if (/\.bin\.zst$/i.test(u)) return "state";
+  // Explicit state markers before generic .bin (which is usually a kernel).
+  if (/(?:^|[/_-])(?:v86)?state(?:[/_.-]|$)/i.test(u) || /initial[_-]?state/i.test(u)) {
+    return "state";
+  }
+  // Kernel bzImage — serial.html boots these with console on serial0.
+  if (
+    /bzimage/i.test(u) ||
+    /vmlinu[xz]/i.test(u) ||
+    /\/kernel(?:\.bin)?(?:$|[?#])/i.test(u)
+  ) {
+    return "bzimage";
+  }
+  if (/\.iso(?:\.gz)?(?:$|[?#])/i.test(u)) return "iso";
+  if (/\.(?:img|raw|qcow2|vhd|vmdk)(?:\.gz)?(?:$|[?#])/i.test(u)) return "hda";
+  // Bare `.bin` is ambiguous; for browser-vm we treat it as a kernel (the
+  // historical bug was treating every .bin as initial_state and never
+  // reaching a shell). Operators with a real state file should name it
+  // `*.bin.zst` or put `state` in the path.
+  if (/\.bin(?:$|[?#])/i.test(u)) return "bzimage";
+  return "unknown";
+}
+
+/** True when a saved engine config still points at the pre-fix broken default. */
+export function isLegacyDefaultImage(url: string): boolean {
+  const u = String(url || "");
+  return /cdn\.jsdelivr\.net\/gh\/copy\/images@[^/]+\/linux\.iso/i.test(u)
+    || /copy\/images.*\/linux\.iso/i.test(u);
+}
+
+/** Build a same-origin proxy URL for an allowlisted remote asset. */
+export function proxiedAssetUrl(absoluteUrl: string): string {
+  return "/sandbox-tab/asset?url=" + encodeURIComponent(absoluteUrl);
+}
 
 // ── The page ────────────────────────────────────────────────────────────
 //
@@ -211,14 +309,32 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
     <div class="row"><span class="k">Runtime id</span><span class="v" id="s-rid">—</span></div>
   </div>
 
-  <div class="card" id="engine-setup" hidden>
+  <div class="card" id="image-diag">
     <div class="mon-title">VM image</div>
-    <div class="warnbox" style="margin-bottom:12px">Override the default public demo image if needed. Assets must be CORS-accessible
-    (and CORP-friendly) — this page is cross-origin isolated. Pass <code>?lib=&amp;image=</code> to skip this form.</div>
+    <div class="row"><span class="k">URL</span><span class="v" id="img-url">—</span></div>
+    <div class="row"><span class="k">Media kind</span><span class="v" id="img-kind">—</span></div>
+    <div class="row"><span class="k">Size</span><span class="v" id="img-size">—</span></div>
+    <div class="row"><span class="k">Download</span><span class="v" id="img-dl">—</span></div>
+    <div class="row"><span class="k">Cache</span><span class="v" id="img-cache">—</span></div>
+    <div class="row"><span class="k">Boot phase</span><span class="v" id="img-phase">—</span></div>
+    <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
+      <button class="btn" id="btn-self-test" disabled>Self-test</button>
+      <button class="btn ghost" id="btn-show-setup" type="button">Change image…</button>
+      <span class="v" id="self-test-status" style="flex:1">—</span>
+    </div>
+  </div>
+
+  <div class="card" id="engine-setup" hidden>
+    <div class="mon-title">Custom VM image</div>
+    <div class="warnbox" style="margin-bottom:12px">Override the default serial-ready buildroot kernel if needed. Assets must be
+    CORS-accessible (and CORP-friendly) — this page is cross-origin isolated. Prefer a
+    <code>bzimage</code> / <code>buildroot-bzimage*.bin</code> with serial console; plain
+    <code>linux.iso</code> demos often never reach a serial shell. Pass
+    <code>?lib=&amp;image=</code> to skip this form.</div>
     <label class="field"><span>libv86.js URL</span>
       <input id="cfg-lib" type="url" spellcheck="false" autocomplete="off" placeholder="https://cdn.jsdelivr.net/npm/v86@0.5.44/build/libv86.js" /></label>
-    <label class="field"><span>Image URL (.iso, .bin or .bin.zst)</span>
-      <input id="cfg-image" type="url" spellcheck="false" autocomplete="off" placeholder="https://cdn.jsdelivr.net/gh/copy/images@master/linux.iso" /></label>
+    <label class="field"><span>Image URL (bzimage .bin, .iso, or .bin.zst state)</span>
+      <input id="cfg-image" type="url" spellcheck="false" autocomplete="off" placeholder="https://i.copy.sh/buildroot-bzimage68.bin" /></label>
     <button class="btn" id="cfg-save">Boot VM</button>
   </div>
 
@@ -269,7 +385,7 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
   const LS_KEY = "oma.browserVm.runtime";
   const LS_ENGINE_KEY = "oma.browserVm.engine";
   const HEARTBEAT_MS = 25000;
-  const VERSION = "browser-vm-host/1";
+  const VERSION = "browser-vm-host/2";
   const PAGE_LOADED_AT = Date.now();
 
   // ── tiny UI helpers ──────────────────────────────────────────────────
@@ -634,15 +750,176 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
     return new TextDecoder("utf-8").decode(bytes);
   }
 
-  // Public defaults (CORS + CORP so they load under COEP require-corp).
-  // Query params win, then localStorage, then these — so "Open sandbox tab"
-  // with only a pairing code still boots a working VM instead of pairing
-  // and failing every op with "no VM image configured".
+  // Public defaults. The demo ISO (linux.iso) does NOT expose a usable
+  // serial shell — every op then fails with "VM did not reach a shell
+  // within 180s". Use the same buildroot bzimage v86's serial.html example
+  // boots. Image bytes go through the same-origin /sandbox-tab/asset proxy
+  // because i.copy.sh serves CORS but no CORP, which COEP require-corp
+  // rejects for direct cross-origin loads.
   const DEFAULT_V86_LIB = "https://cdn.jsdelivr.net/npm/v86@0.5.44/build/libv86.js";
-  const DEFAULT_V86_IMAGE = "https://cdn.jsdelivr.net/gh/copy/images@master/linux.iso";
+  const DEFAULT_V86_IMAGE_REMOTE = "https://i.copy.sh/buildroot-bzimage68.bin";
+  const DEFAULT_V86_IMAGE = "/sandbox-tab/asset?url=" + encodeURIComponent(DEFAULT_V86_IMAGE_REMOTE);
   // BIOS blobs live on the copy/v86 repo; the npm package ships only lib + wasm.
+  // jsDelivr ships CORP: cross-origin, so they load under COEP directly.
   const DEFAULT_V86_BIOS = "https://cdn.jsdelivr.net/gh/copy/v86@master/bios/seabios.bin";
   const DEFAULT_V86_VGA_BIOS = "https://cdn.jsdelivr.net/gh/copy/v86@master/bios/vgabios.bin";
+  // Bump when the default image changes so stale localStorage engine
+  // configs that pin the broken linux.iso are migrated on next load.
+  const ENGINE_CONFIG_VERSION = 2;
+  // Match v86/examples/serial.html — serial-ready buildroot kernels.
+  const DEFAULT_BZIMAGE_CMDLINE = "tsc=reliable mitigations=off random.trust_cpu=on console=ttyS0";
+
+  // PURE_HELPERS_START — unit-tested via extraction from the inline script.
+  // Classify a guest media URL into the v86 option shape we should use.
+  // Critical: do NOT treat every .bin as initial_state (that was the
+  // pre-fix bug for buildroot-bzimage*.bin kernels).
+  function classifyV86Media(url) {
+    const u = String(url || "").toLowerCase();
+    if (/\\.bin\\.zst(?:$|[?#])/i.test(u)) return "state";
+    if (/(?:^|[/_-])(?:v86)?state(?:[/_.-]|$)/i.test(u) || /initial[_-]?state/i.test(u)) return "state";
+    if (/bzimage/i.test(u) || /vmlinu[xz]/i.test(u) || /\\/kernel(?:\\.bin)?(?:$|[?#])/i.test(u)) return "bzimage";
+    if (/\\.iso(?:\\.gz)?(?:$|[?#])/i.test(u)) return "iso";
+    if (/\\.(?:img|raw|qcow2|vhd|vmdk)(?:\\.gz)?(?:$|[?#])/i.test(u)) return "hda";
+    if (/\\.bin(?:$|[?#])/i.test(u)) return "bzimage";
+    return "unknown";
+  }
+  function isLegacyDefaultImage(url) {
+    const u = String(url || "");
+    return /cdn\\.jsdelivr\\.net\\/gh\\/copy\\/images@[^/]+\\/linux\\.iso/i.test(u)
+      || /copy\\/images.*\\/linux\\.iso/i.test(u);
+  }
+  function resolveImageUrlForFetch(url) {
+    // Absolute remote images on hosts we proxy stay as-is when already
+    // same-origin (path starts with /sandbox-tab/asset). Bare remote
+    // buildroot URLs get proxied so COEP can load them.
+    const u = String(url || "");
+    if (!u || u.startsWith("/") || u.startsWith(location.origin + "/")) return u;
+    try {
+      const parsed = new URL(u, location.href);
+      if (parsed.hostname === "i.copy.sh") {
+        return "/sandbox-tab/asset?url=" + encodeURIComponent(parsed.href);
+      }
+    } catch { /* keep original */ }
+    return u;
+  }
+  function buildV86BootOptions(imageUrl, libBase, biosUrl, vgaBiosUrl) {
+    const kind = classifyV86Media(imageUrl);
+    const opts = {
+      wasm_path: libBase + "v86.wasm",
+      memory_size: 128 * 1024 * 1024,
+      vga_memory_size: 4 * 1024 * 1024,
+      bios: { url: biosUrl },
+      vga_bios: { url: vgaBiosUrl },
+      screen_container: document.getElementById("v86-screen"),
+      autostart: true,
+      disable_keyboard: true,
+      disable_mouse: true,
+      media_kind: kind,
+    };
+    if (kind === "state") {
+      opts.initial_state = { url: imageUrl };
+    } else if (kind === "bzimage") {
+      // Serial-ready path used by v86/examples/serial.html.
+      opts.bzimage = { url: imageUrl, async: false };
+      opts.filesystem = {};
+      opts.cmdline = DEFAULT_BZIMAGE_CMDLINE;
+    } else if (kind === "hda") {
+      opts.hda = { url: imageUrl, async: true };
+    } else {
+      // iso + unknown fall back to cdrom (best effort; many demo ISOs have
+      // no serial console and will hit the 180s shell timeout loud).
+      opts.cdrom = { url: imageUrl };
+    }
+    return opts;
+  }
+  // PURE_HELPERS_END
+
+  // Image diagnostics panel — size / download / cache / boot phase.
+  const imageDiag = {
+    url: "",
+    kind: "—",
+    sizeBytes: null,
+    loadedBytes: null,
+    phase: "idle",
+    cache: "unknown",
+    lastFile: "",
+  };
+  function setBootPhase(phase, detail) {
+    imageDiag.phase = phase;
+    const el = $("img-phase");
+    if (el) el.textContent = detail ? phase + " — " + detail : phase;
+  }
+  function renderImageDiag() {
+    if ($("img-url")) $("img-url").textContent = imageDiag.url || "—";
+    if ($("img-kind")) $("img-kind").textContent = imageDiag.kind || "—";
+    const sizeTxt = imageDiag.sizeBytes != null
+      ? fmtBytes(imageDiag.sizeBytes)
+        + (imageDiag.loadedBytes != null && imageDiag.loadedBytes < imageDiag.sizeBytes
+          ? " (" + fmtBytes(imageDiag.loadedBytes) + " loaded)"
+          : "")
+      : (imageDiag.loadedBytes != null ? fmtBytes(imageDiag.loadedBytes) + " loaded" : "—");
+    if ($("img-size")) $("img-size").textContent = sizeTxt;
+    if ($("img-dl")) {
+      if (imageDiag.sizeBytes && imageDiag.loadedBytes != null) {
+        const pct = Math.min(100, Math.round(100 * imageDiag.loadedBytes / imageDiag.sizeBytes));
+        $("img-dl").textContent = pct + "%"
+          + (imageDiag.lastFile ? " · " + imageDiag.lastFile : "");
+      } else if (imageDiag.phase === "ready") {
+        $("img-dl").textContent = "complete";
+      } else {
+        $("img-dl").textContent = imageDiag.phase === "downloading" ? "in progress…" : "—";
+      }
+    }
+    if ($("img-cache")) $("img-cache").textContent = imageDiag.cache;
+  }
+  async function probeImageMeta(url) {
+    imageDiag.url = url;
+    imageDiag.kind = classifyV86Media(url);
+    imageDiag.sizeBytes = null;
+    imageDiag.loadedBytes = null;
+    imageDiag.cache = "probing…";
+    renderImageDiag();
+    try {
+      // Prefer HEAD; some CDNs only answer GET. Abort quickly.
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 8000);
+      let res = await fetch(url, { method: "HEAD", mode: "cors", signal: ctrl.signal }).catch(() => null);
+      if (!res || !res.ok || !res.headers.get("content-length")) {
+        res = await fetch(url, { method: "GET", mode: "cors", headers: { Range: "bytes=0-0" }, signal: ctrl.signal }).catch(() => null);
+      }
+      clearTimeout(t);
+      if (res && res.ok) {
+        const cl = res.headers.get("content-length");
+        const cr = res.headers.get("content-range"); // bytes 0-0/TOTAL
+        if (cl) imageDiag.sizeBytes = parseInt(cl, 10);
+        else if (cr) {
+          const m = cr.match(/\\/(\\d+)\\s*$/);
+          if (m) imageDiag.sizeBytes = parseInt(m[1], 10);
+        }
+        // Resource Timing: transferSize === 0 with decodedBodySize > 0 ⇒ disk cache.
+        try {
+          const entries = performance.getEntriesByName(new URL(url, location.href).href, "resource");
+          const last = entries[entries.length - 1];
+          if (last && "transferSize" in last) {
+            imageDiag.cache = last.transferSize === 0 && last.decodedBodySize > 0
+              ? "cached (browser)"
+              : (last.transferSize > 0 ? "network (" + fmtBytes(last.transferSize) + ")" : "unknown");
+          } else {
+            imageDiag.cache = res.headers.get("cf-cache-status")
+              || res.headers.get("x-cache")
+              || "fetched";
+          }
+        } catch {
+          imageDiag.cache = "fetched";
+        }
+      } else {
+        imageDiag.cache = "probe failed";
+      }
+    } catch (e) {
+      imageDiag.cache = "probe error: " + (e.message || e);
+    }
+    renderImageDiag();
+  }
 
   // v86 engine: boots a Linux image and drives the serial console. Commands
   // are wrapped in sentinel markers; file content crosses the console as
@@ -656,7 +933,7 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
   class V86Engine {
     constructor(libUrl, imageUrl) {
       this.libUrl = libUrl;
-      this.imageUrl = imageUrl;
+      this.imageUrl = resolveImageUrlForFetch(imageUrl);
       this.emulator = null;
       this.serialBuf = "";
       this.serialBase = 0; // absolute stream index of serialBuf[0]
@@ -677,6 +954,7 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
     readFile(path) { return this.enqueue(() => this.readFileRaw(path)); }
     writeFile(path, content) { return this.enqueue(() => this.writeFileRaw(path, content)); }
     async boot() {
+      setBootPhase("loading-lib", this.libUrl);
       await new Promise((resolve, reject) => {
         const s = document.createElement("script");
         s.src = this.libUrl;
@@ -686,21 +964,39 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
         document.head.appendChild(s);
       });
       const base = this.libUrl.replace(/[^/]*$/, "");
-      const isState = /\\.bin(\\.zst)?$|state/i.test(this.imageUrl);
-      const opts = {
-        wasm_path: base + "v86.wasm",
-        memory_size: 128 * 1024 * 1024,
-        vga_memory_size: 4 * 1024 * 1024,
-        bios: { url: DEFAULT_V86_BIOS },
-        vga_bios: { url: DEFAULT_V86_VGA_BIOS },
-        screen_container: document.getElementById("v86-screen"),
-        autostart: true,
-        disable_keyboard: true,
-        disable_mouse: true,
-      };
-      if (isState) opts.initial_state = { url: this.imageUrl };
-      else opts.cdrom = { url: this.imageUrl };
+      void probeImageMeta(this.imageUrl);
+      setBootPhase("downloading", "fetching guest image + BIOS");
+      const opts = buildV86BootOptions(
+        this.imageUrl, base, DEFAULT_V86_BIOS, DEFAULT_V86_VGA_BIOS,
+      );
+      imageDiag.kind = opts.media_kind;
+      delete opts.media_kind;
+      renderImageDiag();
+      logLine("v86 media kind: " + imageDiag.kind + " · " + this.imageUrl);
       this.emulator = new window.V86(opts);
+      this.emulator.add_listener("download-progress", (e) => {
+        try {
+          imageDiag.phase = "downloading";
+          if (e && typeof e.loaded === "number") imageDiag.loadedBytes = e.loaded;
+          if (e && typeof e.total === "number" && e.total > 0) imageDiag.sizeBytes = e.total;
+          if (e && e.file_name) imageDiag.lastFile = String(e.file_name).split("/").pop();
+          // Heuristic cache signal from a complete tiny transfer.
+          if (e && e.total > 0 && e.loaded === e.total && e.total > 1024 * 1024) {
+            // leave cache as probed unless still unknown
+          }
+          renderImageDiag();
+          setBootPhase("downloading",
+            (imageDiag.lastFile || "asset") + " " +
+            (imageDiag.sizeBytes
+              ? Math.min(100, Math.round(100 * (imageDiag.loadedBytes || 0) / imageDiag.sizeBytes)) + "%"
+              : fmtBytes(imageDiag.loadedBytes || 0)));
+        } catch { /* UI only */ }
+      });
+      this.emulator.add_listener("download-error", (e) => {
+        const name = (e && e.file_name) || "asset";
+        logLine("download error: " + name, "err");
+        setBootPhase("download-failed", String(name));
+      });
       this.emulator.add_listener("serial0-output-byte", (byte) => {
         this.serialBuf += String.fromCharCode(byte);
         if (this.serialBuf.length > 4 * 1024 * 1024) {
@@ -713,16 +1009,22 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
       // Wait for a shell: poke enter until a marker round-trips. The marker
       // is emitted split (see shSplit) so a login prompt echoing our
       // keystrokes can't be mistaken for a working shell.
+      setBootPhase("waiting-for-shell", "serial console (up to 180s)");
+      setStatus("vm", "warn", "waiting for guest shell…");
       const bootMarker = "__oma_boot_" + rnd() + "_";
       const deadline = Date.now() + 180000;
       for (;;) {
-        if (Date.now() > deadline) throw new Error("VM did not reach a shell within 180s");
+        if (Date.now() > deadline) {
+          setBootPhase("failed", "VM did not reach a shell within 180s");
+          throw new Error("VM did not reach a shell within 180s");
+        }
         try {
           this.emulator.serial0_send("\\n");
           await this.rawRoundTrip(emit(bootMarker), bootMarker, 5000);
           break;
         } catch { /* still booting */ }
       }
+      setBootPhase("configuring", "stty + /workspace");
       const ready = "__oma_ready_" + rnd() + "_";
       await this.rawRoundTrip(
         "stty -echo 2>/dev/null; mkdir -p /workspace; cd /workspace; " + emit(ready),
@@ -738,6 +1040,10 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
         ready, 15000,
       ).catch(() => "");
       this.hasBase64 = probeOut.indexOf(probe) !== -1;
+      setBootPhase("ready", imageDiag.kind);
+      imageDiag.cache = imageDiag.cache === "probing…" || imageDiag.cache === "unknown"
+        ? "ready" : imageDiag.cache;
+      renderImageDiag();
     }
     rawRoundTrip(cmd, marker, timeoutMs) {
       if (this.destroyed) return Promise.reject(new Error("VM has been destroyed"));
@@ -875,16 +1181,31 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
   // Engine config: query params win (a deliberate deep link), otherwise the
   // last values entered in the setup card, otherwise the public defaults.
   // DEFAULT_V86_* are declared above the V86Engine class.
+  //
+  // ENGINE_CONFIG_VERSION migrates operators who still have the pre-fix
+  // linux.iso default cached in localStorage (that image never reaches a
+  // serial shell). Explicit ?image= and intentionally saved non-legacy
+  // URLs are left alone.
   function readEngineConfig() {
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(LS_ENGINE_KEY) || "null"); } catch { /* corrupt */ }
-    return {
-      lib: qs.get("lib") || (saved && saved.lib) || DEFAULT_V86_LIB,
-      image: qs.get("image") || (saved && saved.image) || DEFAULT_V86_IMAGE,
-    };
+    if (saved && (saved.v !== ENGINE_CONFIG_VERSION || isLegacyDefaultImage(saved.image))) {
+      logLine("migrating stored engine config (legacy image or stale version)");
+      try { localStorage.removeItem(LS_ENGINE_KEY); } catch { /* private mode */ }
+      saved = null;
+    }
+    const image = qs.get("image") || (saved && saved.image) || DEFAULT_V86_IMAGE;
+    const lib = qs.get("lib") || (saved && saved.lib) || DEFAULT_V86_LIB;
+    return { lib, image };
   }
   function saveEngineConfig(cfg) {
-    try { localStorage.setItem(LS_ENGINE_KEY, JSON.stringify(cfg)); } catch { /* private mode */ }
+    try {
+      localStorage.setItem(LS_ENGINE_KEY, JSON.stringify({
+        v: ENGINE_CONFIG_VERSION,
+        lib: cfg.lib,
+        image: cfg.image,
+      }));
+    } catch { /* private mode */ }
   }
 
   const ENGINES = {
@@ -1163,6 +1484,45 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
     }
   }
 
+  // ── Self-test: real guest exec after boot (not just agent-driven ops) ─
+  async function runSelfTest() {
+    const status = $("self-test-status");
+    const btn = $("btn-self-test");
+    if (!engine || !vmReady) {
+      if (status) status.textContent = "fail: VM not ready";
+      logLine("self-test skipped: VM not ready", "err");
+      return false;
+    }
+    if (btn) btn.disabled = true;
+    if (status) status.textContent = "running…";
+    logLine("self-test: exec true", "op");
+    try {
+      const r1 = await engine.exec("true", 30000);
+      if (r1.exit_code !== 0) {
+        throw new Error("true exited " + r1.exit_code + (r1.stderr ? ": " + r1.stderr : ""));
+      }
+      logLine("self-test: exec echo oma-self-test-ok", "op");
+      const r2 = await engine.exec("echo oma-self-test-ok", 30000);
+      if (r2.exit_code !== 0) {
+        throw new Error("echo exited " + r2.exit_code);
+      }
+      const out = String(r2.stdout || "");
+      if (out.indexOf("oma-self-test-ok") === -1) {
+        throw new Error("echo output missing marker (got " + JSON.stringify(out.slice(0, 80)) + ")");
+      }
+      if (status) status.textContent = "pass — guest exec ok";
+      logLine("self-test passed", "op");
+      return true;
+    } catch (e) {
+      const msg = e && e.message ? e.message : String(e);
+      if (status) status.textContent = "fail: " + msg;
+      logLine("self-test failed: " + msg, "err");
+      return false;
+    } finally {
+      if (btn) btn.disabled = !vmReady;
+    }
+  }
+
   // ── boot sequence ────────────────────────────────────────────────────
   function bootEngine(engineName) {
     const factory = ENGINES[engineName];
@@ -1173,14 +1533,19 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
       $("cfg-image").value = cfg.image;
       $("engine-setup").hidden = false;
       setStatus("vm", "err", engineName + " — no image configured");
+      setBootPhase("failed", "no image configured");
       renderMonitor();
       return;
     }
-    $("engine-setup").hidden = true;
+    const cfg = readEngineConfig();
+    imageDiag.url = resolveImageUrlForFetch(cfg.image);
+    imageDiag.kind = classifyV86Media(imageDiag.url);
+    setBootPhase("starting", engineName);
+    renderImageDiag();
     setStatus("vm", "warn", engineName + " booting…");
     engineReady = engine.boot()
       .then(() => opfsRestore(engine))
-      .then(() => {
+      .then(async () => {
         vmReady = true;
         setStatus("vm", "ok", engineName + " ready");
         logLine("VM ready");
@@ -1190,10 +1555,15 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
         monitor.bootAt = Date.now();
         startMonitorPolling();
         initTerminal();
+        if ($("btn-self-test")) $("btn-self-test").disabled = false;
+        // Auto self-test once so the activity log proves the guest shell
+        // without waiting for an agent session.
+        await runSelfTest();
       })
       .catch((e) => {
         engineError = e.message || String(e);
         setStatus("vm", "err", "boot failed: " + engineError);
+        setBootPhase("failed", engineError);
         logLine("VM boot failed: " + engineError, "err");
         renderMonitor();
         throw e;
@@ -1219,6 +1589,18 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
       // fresh load rather than hot-swapping engines under in-flight ops.
       location.reload();
     });
+    if ($("btn-show-setup")) {
+      $("btn-show-setup").addEventListener("click", () => {
+        const cfg = readEngineConfig();
+        $("cfg-lib").value = cfg.lib;
+        $("cfg-image").value = cfg.image;
+        $("engine-setup").hidden = false;
+        $("cfg-image").focus();
+      });
+    }
+    if ($("btn-self-test")) {
+      $("btn-self-test").addEventListener("click", () => { void runSelfTest(); });
+    }
     bootEngine(engineName);
     try {
       const record = await register();
