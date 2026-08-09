@@ -51,6 +51,11 @@ const CODE_TTL_SECONDS = 5 * 60;
 const PAIRING_TTL_DEFAULT_HOURS = 24;
 const PAIRING_TTL_MAX_HOURS = 24 * 7;
 
+/** runtime_tenants.agent_api_key_id sentinel for browser-vm tabs — no real
+ *  oma_* key is minted (tabs don't spawn ACP children). Matches __legacy__
+ *  revoke semantics. */
+const BROWSER_VM_API_KEY_SENTINEL = "__browser_vm__";
+
 function generateCode(): string {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
@@ -359,11 +364,7 @@ runtimeDaemonRoutes.post("/exchange", async (c) => {
     .bind(tokenId, runtimeId, tokenHash, row.user_id, now)
     .run();
 
-  // Authorize this runtime for every tenant the user belongs to. Mint a
-  // fresh `oma_*` per (runtime, tenant) so the daemon can hand the right
-  // key to each spawned ACP child. /exchange always re-mints (it's the
-  // first-touch path; legacy backfill rows get replaced; an unusual
-  // re-registration with an existing real id also gets rotated).
+  // Authorize this runtime for every tenant the user belongs to.
   const memberships = await c.env.MAIN_DB
     .prepare(`SELECT tenant_id, role FROM "membership" WHERE user_id = ?`)
     .bind(row.user_id)
@@ -376,6 +377,35 @@ runtimeDaemonRoutes.post("/exchange", async (c) => {
     membershipRows.push({ tenant_id: row.tenant_id, role: "owner" });
   }
 
+  // browser-vm tabs only need sk_machine_* (D1 runtime_tokens) + a
+  // runtime_tenants row for relay auth. They never spawn ACP children, so
+  // minting an oma_* key (3 CONFIG_KV puts per membership) is pure waste —
+  // and fails loudly when the account hits the free-tier daily KV write
+  // budget ("KV put() limit exceeded for the day"). Sentinel matches
+  // __legacy__ semantics in revokeAgentApiKey.
+  if (kind === "browser-vm") {
+    for (const m of membershipRows) {
+      await c.env.MAIN_DB
+        .prepare(
+          `INSERT INTO "runtime_tenants" (runtime_id, tenant_id, agent_api_key_id, created_at, revoked_at)
+           VALUES (?, ?, ?, ?, NULL)
+           ON CONFLICT (runtime_id, tenant_id)
+           DO UPDATE SET agent_api_key_id = excluded.agent_api_key_id, revoked_at = NULL`,
+        )
+        .bind(runtimeId, m.tenant_id, BROWSER_VM_API_KEY_SENTINEL, now)
+        .run();
+    }
+    return c.json({
+      runtime_id: runtimeId,
+      token: tokenPlain,
+      agent_api_key: null,
+    });
+  }
+
+  // Daemon path: mint a fresh `oma_*` per (runtime, tenant) so the daemon
+  // can hand the right key to each spawned ACP child. /exchange always
+  // re-mints (it's the first-touch path; legacy backfill rows get replaced;
+  // an unusual re-registration with an existing real id also gets rotated).
   const mintedKeys = new Map<string, string>(); // tenant_id → plaintext oma_*
   for (const m of membershipRows) {
     const { plain, id: apiKeyId } = await issueAgentApiKey(
@@ -523,10 +553,25 @@ runtimeDaemonRoutes.post("/:id/refresh", async (c) => {
   }
 
   const runtime = await c.env.MAIN_DB
-    .prepare(`SELECT hostname FROM "runtimes" WHERE id = ?`)
+    .prepare(`SELECT hostname, kind FROM "runtimes" WHERE id = ?`)
     .bind(ok.runtime_id)
-    .first<{ hostname: string }>();
+    .first<{ hostname: string; kind: string | null }>();
   if (!runtime) return c.json({ error: "runtime not found" }, 404);
+
+  // browser-vm tabs never use oma_* keys; rotating here would only burn KV.
+  if (runtime.kind === "browser-vm") {
+    return c.json({
+      runtime_id: ok.runtime_id,
+      tenants: [] as Array<{
+        id: string;
+        name: string;
+        role: string;
+        agent_api_key: string;
+      }>,
+      added: [] as string[],
+      revoked: [] as string[],
+    });
+  }
 
   const memberships = await c.env.MAIN_DB
     .prepare(`SELECT tenant_id, role FROM "membership" WHERE user_id = ?`)
@@ -652,8 +697,8 @@ runtimeDaemonRoutes.post("/:id/refresh", async (c) => {
  * `runtime_tenants` is still authoritative.
  */
 async function revokeAgentApiKey(kv: KvStore, apiKeyId: string): Promise<void> {
-  if (!apiKeyId || apiKeyId === "__legacy__") {
-    // Legacy backfill sentinel — no real key was stored, nothing to revoke.
+  if (!apiKeyId || apiKeyId === "__legacy__" || apiKeyId === BROWSER_VM_API_KEY_SENTINEL) {
+    // Sentinel rows — no real key was stored in KV, nothing to revoke.
     return;
   }
   const raw = await kv.get(`akid:${apiKeyId}`);

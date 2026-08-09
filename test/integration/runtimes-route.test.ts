@@ -749,4 +749,58 @@ describe("POST /agents/runtime/exchange — kind branching (k8s pairing codes)",
     expect(rAgain.status).toBe(400);
     expect((await rAgain.json()).error.message).toMatch(/already used/);
   });
+
+  it("browser-vm kind registers without minting an agent_api_key (D1-only)", async () => {
+    // Browser tabs only need sk_machine_* + runtime_tenants. Minting an
+    // oma_* key burns CONFIG_KV writes and fails when the free-tier daily
+    // put budget is exhausted — the host page never uses agent_api_key.
+    const uid = `u_bvm_${Math.random().toString(36).slice(2, 8)}`;
+    const tenantId = `tn_bvm_${Math.random().toString(36).slice(2, 6)}`;
+    const { code, state } = await seedConnectCode({
+      userId: uid,
+      tenantId,
+      kind: "browser_oauth",
+    });
+    const machine = `browser-vm-${Math.random().toString(36).slice(2, 6)}`;
+
+    const res = await api("/agents/runtime/exchange", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        code,
+        state,
+        machine_id: machine,
+        hostname: "browser:app.example",
+        os: "browser",
+        version: "browser-vm-host/1",
+        kind: "browser-vm",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json() as {
+      runtime_id: string;
+      token: string;
+      agent_api_key: string | null;
+    };
+    expect(body.runtime_id).toBeTruthy();
+    expect(body.token.startsWith("sk_machine_")).toBe(true);
+    expect(body.agent_api_key).toBeNull();
+
+    const rt = await env.AUTH_DB
+      .prepare(`SELECT kind FROM "runtimes" WHERE id = ?`)
+      .bind(body.runtime_id)
+      .first<{ kind: string }>();
+    expect(rt?.kind).toBe("browser-vm");
+
+    const tenants = await env.AUTH_DB
+      .prepare(
+        `SELECT tenant_id, agent_api_key_id FROM "runtime_tenants"
+         WHERE runtime_id = ? AND revoked_at IS NULL`,
+      )
+      .bind(body.runtime_id)
+      .all<{ tenant_id: string; agent_api_key_id: string }>();
+    expect(tenants.results?.length).toBeGreaterThanOrEqual(1);
+    expect(tenants.results?.every((r) => r.agent_api_key_id === "__browser_vm__")).toBe(true);
+    expect(tenants.results?.some((r) => r.tenant_id === tenantId)).toBe(true);
+  });
 });

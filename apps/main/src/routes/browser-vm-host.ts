@@ -940,9 +940,9 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
     const stored = readStoredRuntime();
     const code = qs.get("code"), state = qs.get("state");
     // A fresh pairing code is an explicit re-pair from the Console and wins
-    // over a stored token: the stored one may have been revoked, and
-    // preferring it left the tab reconnect-looping against a dead token with
-    // no way out short of clearing site data.
+    // over a stored token when exchange succeeds: the stored one may have
+    // been revoked, and preferring it left the tab reconnect-looping against
+    // a dead token with no way out short of clearing site data.
     if (!code || !state) {
       if (stored && stored.token) {
         setStatus("reg", "ok", "registered (stored token)");
@@ -968,7 +968,18 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
     });
     if (!res.ok) {
       const body = await res.text();
-      setStatus("reg", "err", "exchange failed: " + body.slice(0, 200));
+      const brief = body.slice(0, 200);
+      // Fall back to a previously stored token when re-pair fails (e.g. KV
+      // write budget exhausted). A dead stored token still fails WS attach
+      // and clears itself after MAX_PAIRING_ATTEMPTS.
+      if (stored && stored.token) {
+        logLine("exchange failed, using stored token: " + brief, "err");
+        setStatus("reg", "ok", "registered (stored token; re-pair failed)");
+        $("s-rid").textContent = stored.runtime_id;
+        history.replaceState(null, "", location.pathname + keepEngineParams());
+        return stored;
+      }
+      setStatus("reg", "err", "exchange failed: " + brief);
       throw new Error("exchange failed");
     }
     const data = await res.json();
