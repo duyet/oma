@@ -306,6 +306,15 @@ those defaults. Operators can still open the setup card to override. Custom
 assets must be CORS-accessible (and CORP-friendly) because the page is
 cross-origin isolated.
 
+**Registration is D1-only.** `POST /agents/runtime/exchange` with
+`kind: "browser-vm"` creates the `runtimes` + `runtime_tokens` rows and a
+`runtime_tenants` authorization row, but does **not** mint an `oma_*` agent
+API key (tabs never spawn ACP children). That path does no CONFIG_KV writes,
+so pairing still works when the free-tier daily KV write budget is exhausted.
+If a re-pair exchange fails for any reason and the tab already has a stored
+runtime token in `localStorage`, it falls back to that token instead of
+staying unpaired.
+
 **Serial-console framing constraints.** The v86 driver talks to the guest over
 one serial line, which forces three rules the engine encodes:
 

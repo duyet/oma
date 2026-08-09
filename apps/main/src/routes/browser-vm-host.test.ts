@@ -43,6 +43,10 @@ describe("browser-vm host page", () => {
     for (const op of ["exec", "readFile", "writeFile", "setEnvVars", "destroy"]) {
       expect(html).toContain(`"${op}"`);
     }
+    // When re-pair fails (e.g. KV write budget), fall back to a previously
+    // stored token instead of bricking a still-valid pairing.
+    expect(html).toContain("using stored token");
+    expect(html).toContain("registered (stored token; re-pair failed)");
   });
 
   it("ships CORS-safe public defaults so Open sandbox tab boots without a setup form", async () => {
