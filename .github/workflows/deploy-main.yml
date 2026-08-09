@@ -79,16 +79,39 @@ jobs:
           workingDirectory: apps/main
           command: d1 migrations apply oma-auth --remote --env production
 
-      - name: Deploy to Cloudflare Workers
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: apps/main
-          command: deploy --env production
+      # Use Gradual Deployments (versions upload → versions deploy) instead of
+      # `wrangler deploy`. Plain `deploy` also syncs cron triggers and fails
+      # with CF API code 10072 when the account is already at the Workers Free
+      # limit of 5 cron triggers/account — even when env.production omits
+      # `triggers`. Version upload/deploy ships the script + assets without
+      # touching schedules; live cron config is left as-is (re-sync with
+      # `wrangler triggers deploy` after Workers Paid if needed).
+      - name: Deploy Worker version (skip cron trigger sync)
+        working-directory: apps/main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          OUT=$(npx wrangler versions upload --env production 2>&1 | tee /dev/stderr)
+          VID=$(printf '%s\n' "$OUT" | sed -n 's/^Worker Version ID: //p' | tail -1 | tr -d '[:space:]')
+          if [ -z "$VID" ]; then
+            echo "failed to parse Worker Version ID from upload output" >&2
+            exit 1
+          fi
+          echo "Deploying version $VID @ 100%"
+          npx wrangler versions deploy "${VID}@100" --env production --yes \
+            --message "ci ${GITHUB_SHA}"
 
       - name: Post-deploy health check
-        run: curl -fsS --retry 5 --retry-delay 10 --max-time 15 https://app.oma.duyet.net/health
+        run: |
+          curl -fsS --retry 5 --retry-delay 10 --max-time 15 https://app.oma.duyet.net/health
+          # Confirm the browser-vm host page is the fixed serial-ready build
+          # (not a stale cache of the pre-fix linux.iso defaults).
+          curl -fsS --retry 3 --max-time 20 https://app.oma.duyet.net/sandbox-tab \
+            | grep -q 'buildroot-bzimage68.bin'
+          curl -fsS --retry 3 --max-time 20 https://app.oma.duyet.net/sandbox-tab \
+            | grep -q 'btn-self-test'
 
       - name: Healthchecks — success
         if: success() && vars.HEALTHCHECKS_IO_URL != ''
