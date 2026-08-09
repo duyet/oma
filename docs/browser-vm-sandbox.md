@@ -298,13 +298,31 @@ points:
   tab & retry" prompt that reopens the tab and re-sends the last message.
 
 **VM image configuration.** The host page boots with **public defaults** so
-"Open sandbox tab" works without a setup form: `libv86.js` + `v86.wasm` from
-jsDelivr (`npm/v86`), a demo Linux ISO from `cdn.jsdelivr.net/gh/copy/images`,
-and seabios/vgabios from `cdn.jsdelivr.net/gh/copy/v86` (all CORS + CORP so they
-load under COEP). Query params (`?lib=&image=`) win, then `localStorage`, then
-those defaults. Operators can still open the setup card to override. Custom
-assets must be CORS-accessible (and CORP-friendly) because the page is
-cross-origin isolated.
+"Open sandbox tab" works without a setup form:
+
+| Asset | Default |
+|---|---|
+| `libv86.js` + `v86.wasm` | jsDelivr `npm/v86` (CORS + CORP) |
+| Guest kernel | v86 buildroot **bzimage** (`https://i.copy.sh/buildroot-bzimage68.bin`) — the same serial-ready image `v86/examples/serial.html` uses, with `cmdline` including `console=ttyS0` |
+| BIOS | seabios/vgabios from `cdn.jsdelivr.net/gh/copy/v86` (CORS + CORP) |
+
+The buildroot image is loaded through a **same-origin asset proxy**
+(`GET /sandbox-tab/asset?url=…`, allowlisted hosts only) because `i.copy.sh`
+serves CORS but no `Cross-Origin-Resource-Policy`, which COEP `require-corp`
+rejects for direct cross-origin loads. Query params (`?lib=&image=`) win, then
+`localStorage`, then those defaults. A stored config that still pins the old
+non-serial `linux.iso` demo is migrated automatically (that ISO never reaches a
+serial shell and used to fail every op with `VM did not reach a shell within
+180s`). Media kind is classified from the URL: `bzimage` / bare `.bin` →
+kernel, `.iso` → cdrom, `.bin.zst` or `state` in the path → `initial_state`
+(the pre-fix path wrongly treated every `.bin` as a save-state).
+
+The tab UI also shows **image diagnostics** (URL, media kind, size, download
+progress, cache/probe status, boot phase) and an in-tab **Self-test** button
+that runs a real guest `exec` (`true` + `echo`) after boot — not only
+agent-driven ops. Operators can still open **Change image…** to override.
+Custom assets must be CORS-accessible (and CORP-friendly, or served via the
+asset proxy for allowlisted hosts) because the page is cross-origin isolated.
 
 **Registration is D1-only.** `POST /agents/runtime/exchange` with
 `kind: "browser-vm"` creates the `runtimes` + `runtime_tokens` rows and a
