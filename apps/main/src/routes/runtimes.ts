@@ -553,10 +553,25 @@ runtimeDaemonRoutes.post("/:id/refresh", async (c) => {
   }
 
   const runtime = await c.env.MAIN_DB
-    .prepare(`SELECT hostname FROM "runtimes" WHERE id = ?`)
+    .prepare(`SELECT hostname, kind FROM "runtimes" WHERE id = ?`)
     .bind(ok.runtime_id)
-    .first<{ hostname: string }>();
+    .first<{ hostname: string; kind: string | null }>();
   if (!runtime) return c.json({ error: "runtime not found" }, 404);
+
+  // browser-vm tabs never use oma_* keys; rotating here would only burn KV.
+  if (runtime.kind === "browser-vm") {
+    return c.json({
+      runtime_id: ok.runtime_id,
+      tenants: [] as Array<{
+        id: string;
+        name: string;
+        role: string;
+        agent_api_key: string;
+      }>,
+      added: [] as string[],
+      revoked: [] as string[],
+    });
+  }
 
   const memberships = await c.env.MAIN_DB
     .prepare(`SELECT tenant_id, role FROM "membership" WHERE user_id = ?`)
