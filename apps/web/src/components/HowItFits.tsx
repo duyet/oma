@@ -141,12 +141,10 @@ export default function HowItFits() {
     {
       number: "1",
       name: "Configure",
-      accent: "sky",
       cards: [
         {
           key: "api-key",
           icon: <KeyRoundIcon className={iconSm} strokeWidth={2} />,
-          accent: "sky",
           title: "API key",
           badges: ["cli"],
           onActivate: () =>
@@ -175,7 +173,6 @@ export default function HowItFits() {
         {
           key: "model",
           icon: <CpuIcon className={iconSm} strokeWidth={2} />,
-          accent: "violet",
           title: "Model card",
           badges: ["claude-sonnet-4-6"],
           onActivate: () =>
@@ -203,7 +200,6 @@ export default function HowItFits() {
         {
           key: "cli",
           icon: <TerminalIcon className={iconSm} strokeWidth={2} />,
-          accent: "slate",
           title: "CLI",
           badges: ["oma bridge"],
           onActivate: () =>
@@ -234,13 +230,11 @@ export default function HowItFits() {
     {
       number: "2",
       name: "Compose",
-      accent: "brand",
       wide: true,
       cards: [
         {
           key: "agent",
           icon: <BotIcon className={iconHero} strokeWidth={2} />,
-          accent: "brand",
           title: "Agent",
           badges: ["support-bot"],
           hero: true,
@@ -271,7 +265,6 @@ export default function HowItFits() {
         {
           key: "skills",
           icon: <ZapIcon className={iconSm} strokeWidth={2} />,
-          accent: "amber",
           title: "Skills",
           badges: ["xlsx", "pdf", "pptx", "html", "report", "data-analysis"],
           onActivate: () =>
@@ -298,7 +291,6 @@ export default function HowItFits() {
         {
           key: "mcp",
           icon: <PlugIcon className={iconSm} strokeWidth={2} />,
-          accent: "sky",
           title: "MCP servers",
           note: "External tools the agent can call",
           providerMarks: ["github", "firecrawl", "linear"],
@@ -331,7 +323,6 @@ export default function HowItFits() {
         {
           key: "subagents",
           icon: <GitBranchIcon className={iconSm} strokeWidth={2} />,
-          accent: "violet",
           title: "Sub-agents",
           note: "Delegate to other agents",
           dashed: true,
@@ -361,7 +352,6 @@ export default function HowItFits() {
           {
             key: "memory",
             icon: <DatabaseIcon className={iconSm} strokeWidth={2} />,
-            accent: "emerald",
             title: "Memory",
             note: "Notes it keeps",
             dashed: true,
@@ -389,7 +379,6 @@ export default function HowItFits() {
           {
             key: "files",
             icon: <FileTextIcon className={iconSm} strokeWidth={2} />,
-            accent: "slate",
             title: "Files",
             note: "Data to mount",
             dashed: true,
@@ -420,7 +409,6 @@ export default function HowItFits() {
     {
       number: "3",
       name: "Run",
-      accent: "emerald",
       chain: true,
       chainLabels: ["+ agent =", "runs inside"],
       cards: [
@@ -428,7 +416,6 @@ export default function HowItFits() {
           {
             key: "environment",
             icon: <ServerIcon className={iconSm} strokeWidth={2} />,
-            accent: "emerald",
             title: "Environment",
             badges: ["cloudflare"],
             onActivate: () =>
@@ -462,7 +449,6 @@ export default function HowItFits() {
           {
             key: "vaults",
             icon: <LockIcon className={iconSm} strokeWidth={2} />,
-            accent: "amber",
             title: "Keys (Vault)",
             badges: ["prod-secrets"],
             providerMarks: ["github", "firecrawl", "slack", "linear"],
@@ -491,7 +477,6 @@ export default function HowItFits() {
         {
           key: "session",
           icon: <MessagesSquareIcon className={iconSm} strokeWidth={2} />,
-          accent: "sky",
           title: "Session",
           note: "One conversation or task — streamed, resumable event log.",
           onActivate: () =>
@@ -521,7 +506,6 @@ export default function HowItFits() {
         {
           key: "sandbox",
           icon: <BoxIcon className={iconSm} strokeWidth={2} />,
-          accent: "emerald",
           title: "Sandbox",
           note: "Set by your environment.",
           providerMarks: sandboxProviderIds,
@@ -561,13 +545,11 @@ export default function HowItFits() {
     {
       number: "4",
       name: "Reach",
-      accent: "violet",
       optional: true,
       cards: [
         {
           key: "triggers",
           icon: <ClockIcon className={iconSm} strokeWidth={2} />,
-          accent: "rose",
           title: "Triggers",
           note: "Manual · schedule · webhook",
           dashed: true,
@@ -596,7 +578,6 @@ export default function HowItFits() {
         {
           key: "channels",
           icon: <MessageCircleIcon className={iconSm} strokeWidth={2} />,
-          accent: "sky",
           title: "Channels",
           providerMarks: ["telegram", "slack", "github", "linear"],
           dashed: true,
@@ -631,7 +612,6 @@ export default function HowItFits() {
         {
           key: "publications",
           icon: <GlobeIcon className={iconSm} strokeWidth={2} />,
-          accent: "violet",
           title: "Publications",
           note: "Public chat page or widget",
           dashed: true,
