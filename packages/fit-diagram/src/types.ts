@@ -2,6 +2,16 @@ import type { ReactNode } from "react";
 
 export type FitCardStatus = "ready" | "attention" | "empty";
 
+/** Tinted icon chip on a card. Resolves via theme tokens so light/dark both read. */
+export type FitAccent =
+  | "brand"
+  | "sky"
+  | "emerald"
+  | "violet"
+  | "rose"
+  | "amber"
+  | "slate";
+
 /** A provider mark in a card's avatar-group. A bare string renders colored
  *  (active); the object form can mark it inactive for a grayed-out look. */
 export type FitProviderMark = string | { id: string; active?: boolean };
@@ -10,6 +20,8 @@ export interface FitCard {
   /** Stable identity within a step — used as the React key. */
   key: string;
   icon?: ReactNode;
+  /** Icon-chip tint. Defaults to brand for hero cards, slate otherwise. */
+  accent?: FitAccent;
   /** Component TYPE — "Model card", "Environment", … never an instance name. */
   title: string;
   /** Real instance names shown as badges (capped at 3 + "+N"). */
@@ -56,6 +68,8 @@ export interface FitStep {
   chainLabels?: string[];
   /** Extra width share on wide layouts. */
   wide?: boolean;
+  /** Soft column accent — tints the step header number + panel edge. */
+  accent?: FitAccent;
 }
 
 export interface FitFormulaRow {

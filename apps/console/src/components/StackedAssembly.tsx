@@ -311,11 +311,13 @@ export function StackedAssembly({
   const configure: FitStep = {
     number: "1",
     name: "Configure",
+    accent: "sky",
     done: modelCards.length > 0,
     cards: [
       {
         key: "api-key",
         icon: <ApiKeysIcon className="w-4 h-4" />,
+        accent: "sky",
         title: "API key",
         status: countStatus(apiKeys.length),
         badges: apiKeys.map((k) => k.name),
@@ -333,6 +335,7 @@ export function StackedAssembly({
       {
         key: "model",
         icon: <ModelCardsIcon className="w-4 h-4" />,
+        accent: "violet",
         title: "Model card",
         status: countStatus(modelCards.length),
         badges: modelCards.map((m) => m.model_id),
@@ -350,6 +353,7 @@ export function StackedAssembly({
       {
         key: "integrations",
         icon: <MessageCircleIcon className="w-4 h-4" />,
+        accent: "slate",
         title: "Integrations",
         status: countStatus(channels.length),
         badges: channels,
@@ -370,6 +374,7 @@ export function StackedAssembly({
   const compose: FitStep = {
     number: "2",
     name: "Compose",
+    accent: "brand",
     done: agentReady,
     wide: true,
     cards: [
@@ -377,6 +382,7 @@ export function StackedAssembly({
         key: "agent",
         hero: true,
         icon: <AgentIcon className="w-5 h-5" />,
+        accent: "brand",
         title: "Agent",
         status: agentReady ? "ready" : "empty",
         badges: agents.map((a) => a.name),
@@ -402,6 +408,7 @@ export function StackedAssembly({
       {
         key: "skills",
         icon: <SkillsIcon className="w-4 h-4" />,
+        accent: "amber",
         title: "Skills",
         status: countStatus(skills.length),
         badges: skills.map((s) => s.name),
@@ -422,6 +429,7 @@ export function StackedAssembly({
         {
           key: "memory",
           icon: <MemoryIcon className="w-4 h-4" />,
+          accent: "emerald",
           title: "Memory",
           status: countStatus(memoryStores.length),
           badges: memoryStores.map((m) => m.name),
@@ -439,6 +447,7 @@ export function StackedAssembly({
         {
           key: "files",
           icon: <FilesIcon className="w-4 h-4" />,
+          accent: "slate",
           title: "Files",
           status: countStatus(files.length),
           badges: files.map((f) => f.filename),
@@ -460,6 +469,7 @@ export function StackedAssembly({
   const run: FitStep = {
     number: "3",
     name: "Run",
+    accent: "emerald",
     done: sessions.length > 0,
     chain: true,
     // Completes the formula in place: env + vaults (+ the agent arriving
@@ -473,6 +483,7 @@ export function StackedAssembly({
         {
           key: "env",
           icon: <EnvIcon className="w-4 h-4" />,
+          accent: "emerald",
           title: "Environment",
           status: envStatus,
           badges: envs.map((e) => e.name),
@@ -490,6 +501,7 @@ export function StackedAssembly({
         {
           key: "vaults",
           icon: <VaultIcon className="w-4 h-4" />,
+          accent: "amber",
           title: "Keys (Vault)",
           status: countStatus(vaults.length),
           badges: vaults.map((v) => v.name),
@@ -508,6 +520,7 @@ export function StackedAssembly({
       {
         key: "session",
         icon: <SessionsIcon className="w-4 h-4" />,
+        accent: "sky",
         title: "Session",
         status: countStatus(sessions.length),
         badges: [],
@@ -526,6 +539,7 @@ export function StackedAssembly({
       {
         key: "runtime",
         icon: <RuntimesIcon className="w-4 h-4" />,
+        accent: "emerald",
         title: "Sandbox",
         status: envStatus,
         badges: providers,
@@ -554,12 +568,14 @@ export function StackedAssembly({
   const reach: FitStep = {
     number: "4",
     name: "Reach",
+    accent: "violet",
     optional: true,
     done: channels.length > 0 || pubs.length > 0,
     cards: [
       {
         key: "channels",
         icon: <MessageCircleIcon className="w-4 h-4" />,
+        accent: "sky",
         title: "Channels",
         status: countStatus(channels.length),
         badges: channels,
@@ -577,6 +593,7 @@ export function StackedAssembly({
       {
         key: "publications",
         icon: <GlobeIcon className="w-4 h-4" />,
+        accent: "violet",
         title: "Publications",
         status: countStatus(pubs.length),
         badges: pubs.map((p) => p.title),

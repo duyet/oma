@@ -113,9 +113,9 @@ for (const [name, src] of [
 if (!base.includes("Try hosted") || !footer.includes("Try hosted") || !index.includes("Try hosted")) {
   fail("Base/Footer/index must expose \"Try hosted\" CTA label");
 }
-// How it fits is the hero: Configure · compose · run · reach must lead the page.
-if (!index.includes("Configure · compose · run · reach") || !index.includes("HowItFits")) {
-  fail("landing hero must be How it fits (Configure · compose · run · reach + HowItFits)");
+// Hero leads with HowItFits diagram + product pitch (no "Configure · compose" billboard).
+if (!index.includes("HowItFits") || !index.includes("self-hosted agent platform")) {
+  fail("landing hero must include HowItFits + product pitch");
 }
 // HowItFits must appear before the product pitch section id.
 const fitsPos = index.indexOf("<HowItFits");

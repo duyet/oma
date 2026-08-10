@@ -17,7 +17,7 @@ import { Fragment, useCallback, useRef, useState } from "react";
 import { ArrowDownIcon, ArrowRightIcon, CheckIcon, ChevronsLeftIcon, ChevronsRightIcon } from "lucide-react";
 import { cn } from "./cn";
 import { ProviderMark } from "./ProviderMark";
-import type { FitCard, FitFormulaRow, FitProviderMark, FitRow, FitStep } from "./types";
+import type { FitAccent, FitCard, FitFormulaRow, FitProviderMark, FitRow, FitStep } from "./types";
 
 const BADGE_CAP = 3;
 
@@ -25,6 +25,28 @@ const DOT_CLASS: Record<NonNullable<FitCard["status"]>, string> = {
   ready: "bg-success",
   attention: "bg-warning",
   empty: "border border-border bg-transparent",
+};
+
+/** Icon-chip + step-number colors. Uses brand/blue/green tokens + Tailwind
+ *  hues that stay readable on both light and dark surfaces. */
+const ACCENT_CHIP: Record<FitAccent, string> = {
+  brand: "border-brand/25 bg-brand/10 text-brand",
+  amber: "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  sky: "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  emerald: "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  violet: "border-violet-500/25 bg-violet-500/10 text-violet-700 dark:text-violet-300",
+  rose: "border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-300",
+  slate: "border-border bg-bg-surface text-fg-muted",
+};
+
+const ACCENT_PANEL: Record<FitAccent, string> = {
+  brand: "border-brand/30 shadow-[inset_3px_0_0_0_color-mix(in_oklch,var(--color-brand)_55%,transparent)]",
+  amber: "border-amber-500/25 shadow-[inset_3px_0_0_0_rgb(245_158_11_/_0.55)]",
+  sky: "border-sky-500/25 shadow-[inset_3px_0_0_0_rgb(14_165_233_/_0.55)]",
+  emerald: "border-emerald-500/25 shadow-[inset_3px_0_0_0_rgb(16_185_129_/_0.55)]",
+  violet: "border-violet-500/25 shadow-[inset_3px_0_0_0_rgb(139_92_246_/_0.55)]",
+  rose: "border-rose-500/25 shadow-[inset_3px_0_0_0_rgb(244_63_94_/_0.5)]",
+  slate: "",
 };
 
 function StatusDot({ status, dashed }: { status?: FitCard["status"]; dashed?: boolean }) {
@@ -87,6 +109,7 @@ function ProviderMarkGroup({ marks }: { marks: FitProviderMark[] }) {
 function FitCardView({ card }: { card: FitCard }) {
   const empty = card.status === "empty";
   const badges = card.badges ?? [];
+  const accent: FitAccent = card.accent ?? (card.hero ? "brand" : "slate");
   return (
     <button
       type="button"
@@ -98,42 +121,62 @@ function FitCardView({ card }: { card: FitCard }) {
       aria-haspopup={card.description ? "dialog" : undefined}
       onClick={card.onActivate}
       className={cn(
-        "group relative w-full text-left rounded-md border px-3.5 py-3 cursor-pointer select-none",
-        "active:translate-y-px transition-[color,background-color,border-color,transform,opacity] duration-[var(--dur-quick)] ease-[var(--ease-soft)]",
+        "group relative w-full text-left rounded-lg border px-3 py-2.5 cursor-pointer select-none",
+        "shadow-sm shadow-black/[0.03] dark:shadow-black/20",
+        "active:translate-y-px transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-[var(--dur-quick)] ease-[var(--ease-soft)]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50",
         card.dashed || empty
-          ? "border-dashed border-border bg-bg opacity-70 hover:opacity-100 hover:border-border-strong"
+          ? "border-dashed border-border bg-bg/70 opacity-80 hover:opacity-100 hover:border-border-strong hover:bg-bg"
           : card.hero
-            ? "border-brand/50 bg-brand/5 hover:border-brand"
-            : "border-border bg-bg hover:border-border-strong hover:bg-bg-surface/40",
+            ? "border-brand/45 bg-gradient-to-br from-brand/10 via-bg to-bg hover:border-brand hover:shadow-md hover:shadow-brand/10"
+            : "border-border/80 bg-bg hover:border-border-strong hover:bg-bg-surface/50 hover:shadow-md",
       )}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2.5">
         {card.icon && (
-          <span className={cn("shrink-0", card.hero ? "text-brand" : "text-fg-subtle")}>
+          <span
+            className={cn(
+              "flex size-7 shrink-0 items-center justify-center rounded-md border transition-colors",
+              ACCENT_CHIP[accent],
+              card.hero && "size-8 rounded-lg",
+            )}
+            aria-hidden="true"
+          >
             {card.icon}
           </span>
         )}
         <span
           className={cn(
             "flex-1 min-w-0 truncate text-fg",
-            card.hero ? "text-[15px] font-semibold" : "text-[13px] font-medium",
+            card.hero ? "text-[15px] font-semibold tracking-tight" : "text-[13px] font-medium",
           )}
         >
           {card.title}
         </span>
         <StatusDot status={card.status} dashed={card.dashed} />
       </div>
-      {card.note && <div className="mt-1 text-[11px] leading-snug text-fg-muted">{card.note}</div>}
+      {card.note && (
+        <div className={cn("mt-1.5 text-[11px] leading-snug text-fg-muted", card.icon && "pl-[2.375rem]")}>
+          {card.note}
+        </div>
+      )}
       {!card.note && card.description && !card.badges ? (
-        <div className="mt-1 text-[11px] leading-snug text-fg-muted">{card.description}</div>
+        <div className={cn("mt-1.5 text-[11px] leading-snug text-fg-muted", card.icon && "pl-[2.375rem]")}>
+          {card.description}
+        </div>
       ) : empty && card.emptyCta ? (
-        <div className="mt-1 text-[11px] leading-snug text-fg-muted">{card.emptyCta}</div>
+        <div className={cn("mt-1.5 text-[11px] leading-snug text-fg-muted", card.icon && "pl-[2.375rem]")}>
+          {card.emptyCta}
+        </div>
       ) : badges.length > 0 ? (
-        <InstanceBadges names={badges} />
+        <div className={cn(card.icon && "pl-[2.375rem]")}>
+          <InstanceBadges names={badges} />
+        </div>
       ) : null}
       {card.providerMarks && card.providerMarks.length > 0 && (
-        <ProviderMarkGroup marks={card.providerMarks} />
+        <div className={cn(card.icon && "pl-[2.375rem]")}>
+          <ProviderMarkGroup marks={card.providerMarks} />
+        </div>
       )}
     </button>
   );
@@ -142,7 +185,7 @@ function FitCardView({ card }: { card: FitCard }) {
 /** The `agent = model + skills + mcp` composition rule, stated outright. */
 export function FitFormula({ rows }: { rows: FitFormulaRow[] }) {
   return (
-    <div className="mb-5 rounded-md border border-border bg-bg-surface px-3.5 py-2.5">
+    <div className="mb-5 rounded-xl border border-border bg-bg-surface/80 px-3.5 py-2.5 shadow-sm dark:bg-bg-surface/60">
       <div className="flex flex-col gap-1 font-mono text-[12px] leading-relaxed">
         {rows.map((r) => (
           <div key={r.lhs} data-testid={`formula-${r.lhs}`} className="flex items-baseline gap-1.5">
@@ -165,8 +208,10 @@ export function FitFormula({ rows }: { rows: FitFormulaRow[] }) {
 
 function FlowPointer() {
   return (
-    <div className="flex shrink-0 items-center justify-center self-center px-0.5 text-fg-subtle" aria-hidden="true">
-      <ArrowRightIcon className="h-3.5 w-3.5" />
+    <div className="flex shrink-0 items-center justify-center self-center px-1 text-fg-subtle" aria-hidden="true">
+      <span className="flex size-6 items-center justify-center rounded-full border border-border bg-bg-surface text-fg-muted shadow-sm">
+        <ArrowRightIcon className="h-3 w-3" />
+      </span>
     </div>
   );
 }
@@ -174,13 +219,23 @@ function FlowPointer() {
 const rowKey = (row: FitRow) => (Array.isArray(row) ? row.map((c) => c.key).join("+") : row.key);
 
 function StepHeader({ step, onCollapse }: { step: FitStep; onCollapse?: () => void }) {
+  const accent: FitAccent = step.accent ?? "slate";
   return (
-    <div className="mb-2.5 flex items-center gap-1.5">
-      <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-fg-subtle">
-        {step.number} · {step.name}
+    <div className="mb-3 flex items-center gap-2">
+      <span
+        className={cn(
+          "flex h-5 min-w-5 items-center justify-center rounded-md border px-1 font-mono text-[10px] font-semibold tabular-nums",
+          ACCENT_CHIP[accent],
+        )}
+        aria-hidden="true"
+      >
+        {step.number}
+      </span>
+      <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-fg-muted">
+        {step.name}
       </span>
       {step.optional && (
-        <span className="rounded-full border border-border px-1.5 py-px text-[9px] uppercase tracking-[0.08em] text-fg-subtle">
+        <span className="rounded-full border border-border bg-bg/60 px-1.5 py-px text-[9px] uppercase tracking-[0.08em] text-fg-subtle">
           optional
         </span>
       )}
@@ -194,7 +249,7 @@ function StepHeader({ step, onCollapse }: { step: FitStep; onCollapse?: () => vo
           type="button"
           onClick={onCollapse}
           aria-label={`Collapse ${step.name}`}
-          className="ml-auto flex h-5 w-5 items-center justify-center rounded text-fg-subtle transition-colors hover:bg-bg-surface hover:text-fg"
+          className="ml-auto flex h-5 w-5 items-center justify-center rounded-md text-fg-subtle transition-colors hover:bg-bg hover:text-fg"
         >
           <ChevronsLeftIcon className="h-3.5 w-3.5" />
         </button>
@@ -232,12 +287,15 @@ function ExpandedStepPanel({
     [onHeight],
   );
 
+  const accent: FitAccent = step.accent ?? "slate";
   return (
-    // Open panels get a solid border; only collapsed rails stay dashed.
+    // Open panels get a solid border + soft accent edge; collapsed rails stay dashed.
     <div
       ref={panelRef}
       className={cn(
-        "flex h-full min-w-0 flex-1 flex-col rounded-lg border border-border bg-bg-surface p-3",
+        "flex h-full min-w-0 flex-1 flex-col rounded-xl border bg-bg-surface/90 p-3 backdrop-blur-[2px]",
+        "dark:bg-bg-surface/70",
+        accent !== "slate" ? ACCENT_PANEL[accent] : "border-border",
         step.wide && "flex-[1.2]",
       )}
     >
@@ -299,11 +357,22 @@ function StepPanel({
           onClick={() => onToggle(true)}
           aria-label={`Expand step ${step.number} — ${step.name}`}
           aria-expanded="false"
-          className="fit-rise flex h-full w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border/70 bg-bg-surface px-1.5 py-3 text-fg-subtle transition-colors hover:border-border-strong hover:text-fg"
+          className={cn(
+            "fit-rise flex h-full w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-bg-surface px-1.5 py-3 text-fg-subtle transition-colors hover:border-border-strong hover:text-fg",
+            step.accent && step.accent !== "slate" ? ACCENT_PANEL[step.accent] : "border-border/70",
+          )}
         >
+          <span
+            className={cn(
+              "flex size-5 items-center justify-center rounded-md border font-mono text-[10px] font-semibold",
+              ACCENT_CHIP[step.accent ?? "slate"],
+            )}
+          >
+            {step.number}
+          </span>
           <ChevronsRightIcon className="h-3.5 w-3.5" />
           <span className="font-mono text-[10px] uppercase tracking-[0.12em]" style={{ writingMode: "vertical-rl" }}>
-            {step.number} · {step.name}
+            {step.name}
           </span>
           {step.done && (
             <span className="flex h-4 w-4 items-center justify-center rounded-full bg-success/15 text-success">

@@ -83,10 +83,23 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
          JS-disabled visitors from staring at invisible sections. -->
     <script is:inline>
       document.documentElement.classList.add("js");
-      const t = localStorage.getItem("theme");
-      if (t === "dark" || (!t && matchMedia("(prefers-color-scheme: dark)").matches)) {
-        document.documentElement.classList.add("dark");
-      }
+      // Auto dark mode: follow system when no manual override is stored.
+      // Manual "light"/"dark" from the toggle wins until the user clears it.
+      (function () {
+        var media = window.matchMedia("(prefers-color-scheme: dark)");
+        function apply() {
+          var t = localStorage.getItem("theme");
+          var dark = t === "dark" || (t !== "light" && media.matches);
+          document.documentElement.classList.toggle("dark", dark);
+        }
+        apply();
+        // Live-follow OS theme changes when preference is still automatic.
+        if (typeof media.addEventListener === "function") {
+          media.addEventListener("change", function () {
+            if (!localStorage.getItem("theme")) apply();
+          });
+        }
+      })();
     </script>
 
     <!-- Brand fonts are self-hosted via @fontsource-variable/geist +

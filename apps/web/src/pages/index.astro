@@ -72,39 +72,22 @@ const explore = [
   keywords="open managed agents, oma agent platform, self host ai agent, any llm provider agent platform, byok ai agent, claude agent sdk, mcp server host, ai agent cloudflare workers, self host claude code, claude code skills, claude managed agents alternative, claude tag alternative, open source claude tag"
   schemas={schemas}
 >
-  {/* Hero — How it fits is the product mental model and leads the page.
-      The assembly diagram stays at a locked height when columns collapse,
-      so the pitch + CTAs below never jump. */}
+  {/* Hero — assembly diagram leads; pitch + CTAs sit under it. */}
   <section
     class:list={[container, "pt-8 pb-12 sm:pt-10 sm:pb-16 lg:pt-12 lg:pb-20"]}
-    aria-labelledby="how-it-fits-heading"
+    aria-label="Product overview"
   >
-    <header class="mb-5 max-w-3xl sm:mb-6">
-      <p class={eyebrow}>How it fits</p>
-      <h1
-        id="how-it-fits-heading"
-        class="mt-3 text-balance text-[1.6rem] font-semibold tracking-tighter text-[var(--color-fg)] sm:text-[2.1rem]"
-      >
-        Configure · compose · run · reach
-      </h1>
-      <p class={sectionIntro}>
-        Four steps from API key to a live agent. Click any card for a short
-        explanation and links.
-      </p>
-    </header>
-
     <div class="overflow-x-clip lg:-mx-12 xl:-mx-24">
       <HowItFits />
     </div>
 
-    {/* Compact pitch under the diagram — value prop + CTAs without competing
-        as a second billboard hero. */}
+    {/* Compact pitch under the diagram — value prop + CTAs. */}
     <div class="mt-10 max-w-3xl border-t border-border pt-8 sm:mt-12 sm:pt-10">
-      <p
+      <h1
         class="text-balance text-lg font-semibold tracking-tight text-[var(--color-fg)] sm:text-xl"
       >
         The self-hosted agent platform for any LLM provider and any sandbox
-      </p>
+      </h1>
       <p
         class="mt-3 max-w-xl text-pretty text-sm leading-relaxed text-[var(--color-fg-muted)] sm:text-base"
       >
