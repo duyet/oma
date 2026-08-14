@@ -16,9 +16,10 @@ describe("tickIntegrationsViaBinding", () => {
       INTEGRATIONS_INTERNAL_SECRET: "s3cret",
     } as unknown as Env);
     expect(fetch).toHaveBeenCalledTimes(1);
-    const [url, init] = fetch.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe(`http://gateway${INTEGRATIONS_CRON_TICK_PATH}`);
-    expect(init.method).toBe("POST");
-    expect((init.headers as Record<string, string>)["x-internal-secret"]).toBe("s3cret");
+    const call = fetch.mock.calls[0];
+    expect(call?.[0]).toBe(`http://gateway${INTEGRATIONS_CRON_TICK_PATH}`);
+    const init = call?.[1] as RequestInit | undefined;
+    expect(init?.method).toBe("POST");
+    expect((init?.headers as Record<string, string> | undefined)?.["x-internal-secret"]).toBe("s3cret");
   });
 });
