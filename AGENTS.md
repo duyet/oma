@@ -1261,7 +1261,7 @@ Grok Build is a first-class overlay id (`grok-build`; aliases `grok`,
 }
 ```
 
-The daemon spawns `grok agent stdio`. Model override is best-effort
+The daemon spawns `grok --no-auto-update agent stdio`. Model override is best-effort
 (`session/set_model`); Grok ids in the Console picker are the official
 xAI slugs (`grok-4.6`, `grok-4.5`, `grok-4.3`, `grok-build-0.1`). This
 is independent of the cloud Model Card path (`provider: "oai-compatible"`,

@@ -151,7 +151,7 @@ export const OMA_OVERLAY_AGENTS: KnownAgentEntry[] = [
   {
     id: "grok-build",
     label: "Grok Build",
-    spec: { command: "grok", args: ["agent", "stdio"] },
+    spec: { command: "grok", args: ["--no-auto-update", "agent", "stdio"] },
     aliases: ["grok", "grok-cli", "xai-grok"],
     featured: true,
     install: { kind: "npm", package: "@xai-official/grok" },

@@ -89,7 +89,8 @@ Grok as a **local ACP child** is a different path from the Model Card
 above. Pair a machine (`oma bridge setup`), install
 [Grok Build](https://x.ai/cli) (`npm install -g @xai-official/grok`),
 and bind the agent to `acp_agent_id: "grok-build"`. The daemon spawns
-`grok agent stdio`. Overlay aliases `grok` / `grok-cli` / `xai-grok`
+`grok --no-auto-update agent stdio` so a mid-turn CLI self-update cannot
+kill the ACP child. Overlay aliases `grok` / `grok-cli` / `xai-grok`
 canonicalize to `grok-build`. The Console model-override picker then
 offers official xAI ids (`grok-4.6`, `grok-4.5`, `grok-4.3`,
 `grok-build-0.1`) instead of Claude ids. See

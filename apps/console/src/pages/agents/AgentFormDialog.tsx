@@ -158,14 +158,19 @@ const ANTHROPIC_SKILLS = [
 // model-card concept of its own — we only offer ids the selected agent
 // actually speaks (issue #183: no invented ids; issue #380: do not
 // show Claude ids on a Grok/Codex/Gemini child).
-const CLAUDE_ACP_MODEL_OPTIONS = [
+interface AcpModelOption {
+  value: string;
+  label: string;
+}
+
+const CLAUDE_ACP_MODEL_OPTIONS: AcpModelOption[] = [
   { value: "claude-sonnet-4-6", label: "Claude Sonnet 4-6" },
   { value: "claude-haiku-4-5", label: "Claude Haiku 4-5" },
 ];
 
 // Official xAI text/coding ids from https://docs.x.ai/developers/models
 // (retrieved 2026-08-14). Do not invent slugs.
-const GROK_ACP_MODEL_OPTIONS = [
+const GROK_ACP_MODEL_OPTIONS: AcpModelOption[] = [
   { value: "grok-4.6", label: "Grok 4.6" },
   { value: "grok-4.5", label: "Grok 4.5" },
   { value: "grok-4.3", label: "Grok 4.3" },
@@ -175,11 +180,25 @@ const GROK_ACP_MODEL_OPTIONS = [
 /** Per-agent model-override list. Unknown / other ACP agents get an
  *  empty list so the picker stays on "Use daemon default" rather than
  *  offering Claude ids that the child will silently ignore. */
-export function acpModelOptionsFor(acpAgentId: string): Array<{ value: string; label: string }> {
+export function acpModelOptionsFor(acpAgentId: string): AcpModelOption[] {
   const canonical = resolveKnownAgent(acpAgentId)?.id ?? acpAgentId;
   if (canonical === "grok-build") return GROK_ACP_MODEL_OPTIONS;
   if (canonical === "claude-acp") return CLAUDE_ACP_MODEL_OPTIONS;
   return [];
+}
+
+/** Keep a model override only when the next ACP child actually speaks it.
+ *  Used by every runtime/agent transition so a Grok id never serializes
+ *  onto a Claude child (and vice versa). */
+export function acpBindingFor(
+  form: Pick<FormState, "acpModel">,
+  acpAgentId: string,
+): { acpAgentId: string; acpModel: string } {
+  const allowed = new Set(acpModelOptionsFor(acpAgentId).map((o) => o.value));
+  return {
+    acpAgentId,
+    acpModel: allowed.has(form.acpModel) ? form.acpModel : "",
+  };
 }
 
 // Reasoning-effort override for local ACP agents. No canonical "reasoning"
@@ -1301,10 +1320,11 @@ export function BasicTab({
     // the common case is one click. If none are registered, still flip to
     // Local and show the connect-a-machine empty-state below.
     const rt = onlineRuntimes[0] ?? runtimes[0];
+    const nextAgent = rt?.agents?.[0]?.id ?? form.acpAgentId;
     setForm({
       ...form,
       browserEnvId: "",
-      ...(rt ? { runtimeId: rt.id, acpAgentId: rt.agents?.[0]?.id ?? form.acpAgentId } : {}),
+      ...(rt ? { runtimeId: rt.id, ...acpBindingFor(form, nextAgent) } : {}),
     });
   };
   const selectBrowser = () => {
@@ -1543,12 +1563,10 @@ export function BasicTab({
                       // child does not speak (Claude id on Grok, etc.).
                       const first = runtimes.find((r) => r.id === v)?.agents?.[0]?.id;
                       const nextAgent = first ?? form.acpAgentId;
-                      const allowed = new Set(acpModelOptionsFor(nextAgent).map((o) => o.value));
                       setForm({
                         ...form,
                         runtimeId: v,
-                        acpAgentId: nextAgent,
-                        acpModel: allowed.has(form.acpModel) ? form.acpModel : "",
+                        ...acpBindingFor(form, nextAgent),
                       });
                     }}
                     placeholder="Select a machine..."
@@ -1611,12 +1629,10 @@ function AcpAgentPicker({
       <Select
         value={form.acpAgentId}
         onValueChange={(v) => {
-          const allowed = new Set(acpModelOptionsFor(v).map((o) => o.value));
           setForm({
             ...form,
-            acpAgentId: v,
             localSkillBlocklist: [],
-            acpModel: allowed.has(form.acpModel) ? form.acpModel : "",
+            ...acpBindingFor(form, v),
           });
         }}
       >

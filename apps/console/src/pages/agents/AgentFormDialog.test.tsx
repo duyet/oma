@@ -8,6 +8,7 @@ import { server } from "../../mocks/server";
 import {
   BasicTab,
   INITIAL_FORM,
+  acpBindingFor,
   acpModelOptionsFor,
   formToConfig,
   type FormState,
@@ -154,6 +155,20 @@ describe("acpModelOptionsFor", () => {
     expect(acpModelOptionsFor("codex-acp")).toEqual([]);
     expect(acpModelOptionsFor("gemini")).toEqual([]);
     expect(acpModelOptionsFor("not-a-real-agent")).toEqual([]);
+  });
+
+  it("drops a Grok override when the next child is Claude (Cloud → Local)", () => {
+    expect(acpBindingFor({ acpModel: "grok-4.5" }, "claude-acp")).toEqual({
+      acpAgentId: "claude-acp",
+      acpModel: "",
+    });
+  });
+
+  it("keeps a Grok override when staying on Grok Build", () => {
+    expect(acpBindingFor({ acpModel: "grok-4.6" }, "grok-build")).toEqual({
+      acpAgentId: "grok-build",
+      acpModel: "grok-4.6",
+    });
   });
 
   it("formToConfig writes a Grok local binding with the grok-4.6 override", () => {

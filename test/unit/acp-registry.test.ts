@@ -34,7 +34,7 @@ describe("OMA_OVERLAY_AGENTS (browser-safe overlay over the official ACP registr
     const grok = OMA_OVERLAY_AGENTS.find((e) => e.id === "grok-build");
     expect(grok?.featured).toBe(true);
     expect(grok?.spec.command).toBe("grok");
-    expect(grok?.spec.args).toEqual(["agent", "stdio"]);
+    expect(grok?.spec.args).toEqual(["--no-auto-update", "agent", "stdio"]);
     expect(grok?.install).toEqual({ kind: "npm", package: "@xai-official/grok" });
   });
 

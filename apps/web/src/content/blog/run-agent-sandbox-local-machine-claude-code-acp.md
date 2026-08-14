@@ -23,7 +23,7 @@ work, and it's worth being precise about which one you want:
 |---|---|---|
 | What runs locally | Tool execution only (`bash`, `read`, `write`, `edit`, `glob`, `grep`) | The entire agent loop — Claude Code, Codex, Grok Build, … |
 | What still runs on the platform | The model loop (`generateText` against your model/vault) | Nothing — OMA just relays session events |
-| Model auth | Platform's model resolution (vault / Model Card / env fallback) | Your local `claude` CLI's own auth |
+| Model auth | Platform's model resolution (vault / Model Card / env fallback) | The local ACP child's own auth |
 | Agent config | `environment.config.sandbox_provider: "subprocess"` | `agent.harness: "acp-proxy"` + `runtime_binding` |
 | Works with any harness/model | Yes | Any detected ACP child — Claude Code (`claude-acp`), Codex (`codex-acp`), Grok Build (`grok-build`), … |
 

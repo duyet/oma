@@ -21,9 +21,10 @@ agent config change — no different harness, no different sandbox image.
   The default harness's model loop is provider-agnostic; only the wire
   format changes.
 - **Not the local ACP path.** To run xAI's **Grok Build** CLI on a paired
-  machine instead of the in-process loop, bind `acp_agent_id: "grok-build"`
-  (`oma bridge setup` + `npm install -g @xai-official/grok`). See
-  [`docs/runtimes.md`](../../docs/runtimes.md#local-grok-build-acp).
+  machine instead of the in-process loop: `oma bridge setup`,
+  `npm install -g @xai-official/grok`, then bind
+  `harness: "acp-proxy"` + `runtime_binding: { runtime_id, acp_agent_id: "grok-build", model: "grok-4.6" }`.
+  See [`docs/runtimes.md`](../../docs/runtimes.md#local-grok-build-acp).
 - **Same sandbox image as any other coding agent** — see
   [`docker/coding-agent-openai-compat`](../../docker/coding-agent-openai-compat)
   and [`docs/runtimes.md`](../../docs/runtimes.md) for why a Grok agent
