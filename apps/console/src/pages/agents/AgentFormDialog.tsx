@@ -154,15 +154,52 @@ const ANTHROPIC_SKILLS = [
   { id: "docx", label: "Word (docx)" },
 ];
 
-// Model override for local ACP agents. Mirrors the two built-in Anthropic
-// defaults AgentBuilder.tsx offers before any model cards exist (issue
-// #183: no invented model ids) — a local ACP child has no OMA model-card
-// concept of its own, so this list intentionally stays to the same two
-// known-good ids rather than growing a second source of truth.
-const ACP_MODEL_OPTIONS = [
+// Model override for local ACP agents. A local ACP child has no OMA
+// model-card concept of its own — we only offer ids the selected agent
+// actually speaks (issue #183: no invented ids; issue #380: do not
+// show Claude ids on a Grok/Codex/Gemini child).
+interface AcpModelOption {
+  value: string;
+  label: string;
+}
+
+const CLAUDE_ACP_MODEL_OPTIONS: AcpModelOption[] = [
   { value: "claude-sonnet-4-6", label: "Claude Sonnet 4-6" },
   { value: "claude-haiku-4-5", label: "Claude Haiku 4-5" },
 ];
+
+// Official xAI text/coding ids from https://docs.x.ai/developers/models
+// (retrieved 2026-08-14). Do not invent slugs.
+const GROK_ACP_MODEL_OPTIONS: AcpModelOption[] = [
+  { value: "grok-4.6", label: "Grok 4.6" },
+  { value: "grok-4.5", label: "Grok 4.5" },
+  { value: "grok-4.3", label: "Grok 4.3" },
+  { value: "grok-build-0.1", label: "Grok Build 0.1" },
+];
+
+/** Per-agent model-override list. Unknown / other ACP agents get an
+ *  empty list so the picker stays on "Use daemon default" rather than
+ *  offering Claude ids that the child will silently ignore. */
+export function acpModelOptionsFor(acpAgentId: string): AcpModelOption[] {
+  const canonical = resolveKnownAgent(acpAgentId)?.id ?? acpAgentId;
+  if (canonical === "grok-build") return GROK_ACP_MODEL_OPTIONS;
+  if (canonical === "claude-acp") return CLAUDE_ACP_MODEL_OPTIONS;
+  return [];
+}
+
+/** Keep a model override only when the next ACP child actually speaks it.
+ *  Used by every runtime/agent transition so a Grok id never serializes
+ *  onto a Claude child (and vice versa). */
+export function acpBindingFor(
+  form: Pick<FormState, "acpModel">,
+  acpAgentId: string,
+): { acpAgentId: string; acpModel: string } {
+  const allowed = new Set(acpModelOptionsFor(acpAgentId).map((o) => o.value));
+  return {
+    acpAgentId,
+    acpModel: allowed.has(form.acpModel) ? form.acpModel : "",
+  };
+}
 
 // Reasoning-effort override for local ACP agents. No canonical "reasoning"
 // field exists elsewhere in OMA today — this mirrors the OpenAI/Codex
@@ -1283,10 +1320,11 @@ export function BasicTab({
     // the common case is one click. If none are registered, still flip to
     // Local and show the connect-a-machine empty-state below.
     const rt = onlineRuntimes[0] ?? runtimes[0];
+    const nextAgent = rt?.agents?.[0]?.id ?? form.acpAgentId;
     setForm({
       ...form,
       browserEnvId: "",
-      ...(rt ? { runtimeId: rt.id, acpAgentId: rt.agents?.[0]?.id ?? form.acpAgentId } : {}),
+      ...(rt ? { runtimeId: rt.id, ...acpBindingFor(form, nextAgent) } : {}),
     });
   };
   const selectBrowser = () => {
@@ -1521,12 +1559,14 @@ export function BasicTab({
                     onValueChange={(v) => {
                       // Auto-pick the first detected ACP agent on the chosen
                       // runtime — user doesn't have to know what strings the
-                      // daemon emits.
+                      // daemon emits. Drop a model override that the new
+                      // child does not speak (Claude id on Grok, etc.).
                       const first = runtimes.find((r) => r.id === v)?.agents?.[0]?.id;
+                      const nextAgent = first ?? form.acpAgentId;
                       setForm({
                         ...form,
                         runtimeId: v,
-                        acpAgentId: first ?? form.acpAgentId,
+                        ...acpBindingFor(form, nextAgent),
                       });
                     }}
                     placeholder="Select a machine..."
@@ -1566,10 +1606,11 @@ function AcpAgentPicker({
   inputCls: string;
 }) {
   const detectedAgents = runtimes.find((r) => r.id === form.runtimeId)?.agents ?? [];
-  // OMA promotes 4 agents as "first class" in the UI (overlay's
-  // `featured` flag). Featured-detected render on top so the common
-  // case is one click. Anything not detected by the daemon is
-  // intentionally hidden — users must install via cli first.
+  // OMA promotes featured overlay agents as "first class" in the UI
+  // (claude-acp, codex-acp, grok-build, hermes, openclaw). Featured-
+  // detected render on top so the common case is one click. Anything
+  // not detected by the daemon is intentionally hidden — users must
+  // install via cli first.
   const featuredIds = new Set(KNOWN_ACP_AGENTS.filter((e) => e.featured).map((e) => e.id));
   const featuredDetected = detectedAgents.filter((a) => featuredIds.has(a.id));
   const otherDetected = detectedAgents.filter((a) => !featuredIds.has(a.id));
@@ -1587,9 +1628,13 @@ function AcpAgentPicker({
       <label className="text-xs text-fg-subtle block mb-1">ACP agent on this machine</label>
       <Select
         value={form.acpAgentId}
-        onValueChange={(v) =>
-          setForm({ ...form, acpAgentId: v, localSkillBlocklist: [] })
-        }
+        onValueChange={(v) => {
+          setForm({
+            ...form,
+            localSkillBlocklist: [],
+            ...acpBindingFor(form, v),
+          });
+        }}
       >
         {featuredDetected.length > 0 && (
           <SelectGroup>
@@ -1631,7 +1676,7 @@ function AcpAgentPicker({
             }
           >
             <SelectOption value="__default__">Use daemon default</SelectOption>
-            {ACP_MODEL_OPTIONS.map((o) => (
+            {acpModelOptionsFor(form.acpAgentId).map((o) => (
               <SelectOption key={o.value} value={o.value}>
                 {o.label}
               </SelectOption>

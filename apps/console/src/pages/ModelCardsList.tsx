@@ -629,7 +629,7 @@ const COMPAT_PRESETS: Array<{
   base_url: string;
   model: string;
 }> = [
-  { id: "xai", label: "xAI Grok", base_url: "https://api.x.ai/v1", model: "grok-4" },
+  { id: "xai", label: "xAI Grok", base_url: "https://api.x.ai/v1", model: "grok-4.6" },
   { id: "deepseek", label: "DeepSeek", base_url: "https://api.deepseek.com/v1", model: "deepseek-chat" },
   { id: "groq", label: "Groq", base_url: "https://api.groq.com/openai/v1", model: "llama-3.3-70b-versatile" },
   { id: "together", label: "Together", base_url: "https://api.together.xyz/v1", model: "meta-llama/Llama-3.3-70B-Instruct-Turbo" },

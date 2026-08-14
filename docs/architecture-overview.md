@@ -117,7 +117,7 @@ open-managed-agents/
 1. **每个 Environment 一个 `agent` Worker**：因为 Container 镜像随 environment 的 `packages.{pip,npm,apt,…}` 变化。`apps/main` 通过 `services` binding（`SANDBOX_sandbox_<envid>`）路由 sessions 到正确的 worker，并由 `apps/agent/src/index.ts` 内的薄路由把请求转给对应的 `SessionDO`。
 2. **Console 同源**：`apps/console/dist` 通过 `assets` binding 由 `apps/main` 直接提供，路由优先级 `run_worker_first` 显式列出 API 路径，其余走 SPA fallback。
 3. **Integrations 单独一 Worker**：因为它要承载来自第三方平台的 webhook（高频、签名验签），与 API 隔离能独立扩缩 / 限流。
-4. **RuntimeRoom DO**：成对配对 `oma bridge daemon` 和 SessionDO 的 ACP 代理 harness——把 agent loop 委派到用户本地 Claude Code / Codex（详见 §5.3）。
+4. **RuntimeRoom DO**：成对配对 `oma bridge daemon` 和 SessionDO 的 ACP 代理 harness——把 agent loop 委派到用户本地 Claude Code / Codex / Grok Build（详见 §5.3）。
 
 ### 3.2 Cloudflare 资源矩阵
 
@@ -339,7 +339,7 @@ apps/integrations (HTTP 网关)
 | [`packages/sdk`](packages/sdk) `@getoma/sdk` | 业务集成方（Node/Bun/Deno/Browser/Workers） | typed REST + SSE，三类流（text/thinking/tool_input）通过 correlation id 收敛到 canonical event；提供 `chat` / `chatComplete` / `tail` 三档抽象 |
 | [`packages/cli`](packages/cli) `oma` | 终端用户 / agent 自己 | `oma agents/sessions/memory/linear/bridge/...`；其中 `bridge daemon` 以 launchd plist 在用户 Mac 启动，并维持到 `apps/main` 的 WS 长连接 |
 | [`packages/cf-billing`](packages/cf-billing) | 平台运营 | 把 token 用量翻成 CF Workers 计费抽象 |
-| [`packages/acp-runtime`](packages/acp-runtime) | 本地 daemon | 实现 [Agent Client Protocol](https://github.com/anthropics/agent-client-protocol)；侦测本机 Claude Code/Codex 等是否安装并暴露给 daemon |
+| [`packages/acp-runtime`](packages/acp-runtime) | 本地 daemon | 实现 [Agent Client Protocol](https://github.com/anthropics/agent-client-protocol)；侦测本机 Claude Code / Codex / Grok Build 等是否安装并暴露给 daemon |
 
 ### 5.7 RL 自训练子系统：`rl/`
 

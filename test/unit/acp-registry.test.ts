@@ -23,11 +23,19 @@ describe("OMA_OVERLAY_AGENTS (browser-safe overlay over the official ACP registr
     expect(KNOWN_ACP_AGENTS).toBe(OMA_OVERLAY_AGENTS);
   });
 
-  it("includes the canonical ids OMA needs (claude-acp, codex-acp, gemini, opencode, hermes, openclaw)", () => {
+  it("includes the canonical ids OMA needs (claude-acp, codex-acp, grok-build, gemini, opencode, hermes, openclaw)", () => {
     const ids = new Set(OMA_OVERLAY_AGENTS.map((e) => e.id));
-    for (const id of ["claude-acp", "codex-acp", "gemini", "opencode", "hermes", "openclaw"]) {
+    for (const id of ["claude-acp", "codex-acp", "grok-build", "gemini", "opencode", "hermes", "openclaw"]) {
       expect(ids.has(id), `missing overlay entry: ${id}`).toBe(true);
     }
+  });
+
+  it("features Grok Build next to Claude and Codex", () => {
+    const grok = OMA_OVERLAY_AGENTS.find((e) => e.id === "grok-build");
+    expect(grok?.featured).toBe(true);
+    expect(grok?.spec.command).toBe("grok");
+    expect(grok?.spec.args).toEqual(["--no-auto-update", "agent", "stdio"]);
+    expect(grok?.install).toEqual({ kind: "npm", package: "@xai-official/grok" });
   });
 
   it("ids are unique slugs", () => {
@@ -101,6 +109,7 @@ describe("resolveKnownAgent (overlay-only sync resolver)", () => {
     expect(resolveKnownAgent("claude-acp")?.id).toBe("claude-acp");
     expect(resolveKnownAgent("opencode")?.id).toBe("opencode");
     expect(resolveKnownAgent("hermes")?.id).toBe("hermes");
+    expect(resolveKnownAgent("grok-build")?.id).toBe("grok-build");
   });
 
   it("resolves legacy aliases to the current canonical entry", () => {
@@ -108,6 +117,9 @@ describe("resolveKnownAgent (overlay-only sync resolver)", () => {
     expect(resolveKnownAgent("claude-code-acp")?.id).toBe("claude-acp");
     expect(resolveKnownAgent("codex-cli")?.id).toBe("codex-acp");
     expect(resolveKnownAgent("gemini-cli")?.id).toBe("gemini");
+    expect(resolveKnownAgent("grok")?.id).toBe("grok-build");
+    expect(resolveKnownAgent("grok-cli")?.id).toBe("grok-build");
+    expect(resolveKnownAgent("xai-grok")?.id).toBe("grok-build");
   });
 
   it("returns null for unknown ids", () => {

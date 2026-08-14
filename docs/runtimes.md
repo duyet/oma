@@ -32,7 +32,7 @@ Registered in `apps/agent/src/index.ts` (Cloudflare) and additionally in
 | Harness | `agent.harness` | Runs on | Notes |
 |---|---|---|---|
 | Default | `"default"` (or omitted) | CF + self-host | In-process `generateText`/`streamText` loop over `ai-sdk`. |
-| ACP proxy | `"acp-proxy"` | CF + self-host | Bridges an Agent Client Protocol server. |
+| ACP proxy | `"acp-proxy"` | CF + self-host | Bridges an Agent Client Protocol server on a paired machine (`oma bridge daemon`). First-class overlay ids: `claude-acp`, `codex-acp`, `grok-build`, plus whatever the live ACP registry detects. |
 | Long-running | `"long-running"` | CF + self-host | Default loop + periodic `agent.status` heartbeats. |
 | Poolside | `"poolside"` | CF + self-host | Default loop against a [poolside.ai](https://poolside.ai) model (`laguna`/`malibu`) over plain OpenAI-compatible `/chat/completions` — pure `fetch`, no Node builtins. Requires `POOLSIDE_API_KEY`; defaults `agent.model` to `poolside/laguna-s-2.1`. See [`AGENTS.md` § Poolside models](../AGENTS.md#poolside-models-harness-poolside). |
 | Claude Agent SDK | `"claude-agent-sdk"` | **self-host only** | Spawns Claude Code's CLI as a native subprocess via `@anthropic-ai/claude-agent-sdk`. Requires `child_process` + a real filesystem — unavailable inside a Cloudflare Workers isolate, so it's wired into `apps/main-node`'s harness router only, never the CF worker registry. Self-host server image template: `examples/oma-server-claude-agent-sdk/` (`oma-server-claude-agent-sdk:dev`). Console offers it next to **OMA Standard** (`default`) with a Self-host-only badge. |
@@ -80,7 +80,21 @@ xAI Grok is just another `"oai-compatible"` Model Card pointed at
 `https://api.x.ai/v1`. See [`examples/grok-coding-agent`](../examples/grok-coding-agent)
 for a full working example, side-by-side with
 [`examples/coding-agent`](../examples/coding-agent) (Claude, default
-provider fallback).
+provider fallback). The Model Card preset in the Console defaults to
+`grok-4.6` (current xAI flagship).
+
+### Local Grok Build (ACP)
+
+Grok as a **local ACP child** is a different path from the Model Card
+above. Pair a machine (`oma bridge setup`), install
+[Grok Build](https://x.ai/cli) (`npm install -g @xai-official/grok`),
+and bind the agent to `acp_agent_id: "grok-build"`. The daemon spawns
+`grok --no-auto-update agent stdio` so a mid-turn CLI self-update cannot
+kill the ACP child. Overlay aliases `grok` / `grok-cli` / `xai-grok`
+canonicalize to `grok-build`. The Console model-override picker then
+offers official xAI ids (`grok-4.6`, `grok-4.5`, `grok-4.3`,
+`grok-build-0.1`) instead of Claude ids. See
+[`AGENTS.md` § Local ACP Runtime](../AGENTS.md#local-acp-runtime-harness-acp-proxy).
 
 ## Sandbox image matrix (`docker/`)
 

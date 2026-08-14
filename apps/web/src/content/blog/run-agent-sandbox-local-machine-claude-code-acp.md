@@ -21,11 +21,11 @@ work, and it's worth being precise about which one you want:
 
 | | Sandbox provider (`subprocess`) | ACP proxy harness (`acp-proxy`) |
 |---|---|---|
-| What runs locally | Tool execution only (`bash`, `read`, `write`, `edit`, `glob`, `grep`) | The entire agent loop — Claude Code itself |
+| What runs locally | Tool execution only (`bash`, `read`, `write`, `edit`, `glob`, `grep`) | The entire agent loop — Claude Code, Codex, Grok Build, … |
 | What still runs on the platform | The model loop (`generateText` against your model/vault) | Nothing — OMA just relays session events |
-| Model auth | Platform's model resolution (vault / Model Card / env fallback) | Your local `claude` CLI's own auth |
+| Model auth | Platform's model resolution (vault / Model Card / env fallback) | The local ACP child's own auth |
 | Agent config | `environment.config.sandbox_provider: "subprocess"` | `agent.harness: "acp-proxy"` + `runtime_binding` |
-| Works with any harness/model | Yes | No — only Claude Code via `claude-agent-acp` |
+| Works with any harness/model | Yes | Any detected ACP child — Claude Code (`claude-acp`), Codex (`codex-acp`), Grok Build (`grok-build`), … |
 
 You can use either on its own, or both together. This post covers the
 one-time pairing, then each path.
@@ -186,9 +186,12 @@ doesn't control:
 - **Memory-store and session-outputs mounts aren't wired** for either
   path. If an agent depends on `/mnt/memory/<store>/`, don't route it
   through `subprocess` or `acp-proxy` yet.
-- **`acp-proxy` only supports Claude Code today** via `claude-acp` —
-  the ACP registry has other agent ids (Codex, Gemini, OpenCode, ...)
-  but this post only covers the one OMA ships day-one support for.
+- **`acp-proxy` is not Claude-only.** The overlay first-class ids are
+  `claude-acp`, `codex-acp`, `grok-build`, `hermes`, and `openclaw`;
+  anything else the daemon detects from the live ACP registry also
+  appears in the Console. This post still walks through Claude Code
+  because that was the day-one path; Grok Build is the same binding
+  with `acp_agent_id: "grok-build"` and `model: "grok-4.6"`.
 - **If no daemon is online**, the first operation on either path fails
   loudly with a `session.error` rather than silently falling back to a
   cloud sandbox — that's intentional, so you're never surprised about
