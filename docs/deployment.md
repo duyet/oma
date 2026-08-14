@@ -273,7 +273,7 @@ each with its own bindings, deployed via `wrangler deploy`.
 | Auth | `better-auth` on D1, email + password + Google/GitHub OAuth + email OTP. Email via CF Email Workers (`SEND_EMAIL` binding) |
 | Vault credential injection | `MAIN_MCP.outboundForward` RPC. agent's container HTTPS goes through main worker via `outboundByHost` callback. Zero-trust: agent never sees secret |
 | Memory mount | R2-FUSE via `@cloudflare/sandbox` `mountBucket()`. R2 Event Notifications → `managed-agents-memory-events` queue → consumer in main worker → D1 audit |
-| Cron | `* * * * *` cron in main worker (env-image build poll, base-snapshot maintenance) |
+| Cron | One shared `* * * * *` on the main worker (eval / memory / schedules / integrations Linear+Telegram sweeps). Hosted prod omits extra wrangler triggers — Workers Free is 5 crons per account (CF 10072). Integrations rides main via `POST /internal/cron/tick`. |
 | Queue | `managed-agents-memory-events` + DLQ; queue consumer in main worker reflects R2 events to D1 |
 | Console UI | static assets served by main worker's `ASSETS` binding (`apps/console/dist`); SPA fallback for client-side routing |
 | Browser tool | `@cloudflare/playwright` against the agent worker's `BROWSER` binding |
@@ -331,7 +331,7 @@ npx wrangler login
 | Auth | better-auth + sqlite (own file) | better-auth + D1 local sim | better-auth + D1 + Email Workers + OAuth |
 | Vault inject | oma-vault sidecar (mockttp MITM) | MAIN_MCP.outboundForward RPC | MAIN_MCP.outboundForward RPC |
 | Memory mount | symlink to LocalFsBlobStore + chokidar | R2 sim + mountBucket(localBucket:true) | R2 + s3fs + R2 Events → Queue → D1 |
-| Cron | TODO (node-cron) | wrangler dev `--test-scheduled` | CF cron `* * * * *` |
+| Cron | TODO (node-cron) | wrangler dev `--test-scheduled` | One shared CF cron `* * * * *` on main (integrations ticks over the service binding) |
 | Queue | none (chokidar replaces it) | wrangler queue sim | CF Queues + DLQ |
 | Browser tool | not supported | wrangler dev BROWSER sim (limited) | @cloudflare/playwright |
 | Email | nodemailer (set SMTP_HOST/PORT/USER/PASS) — null sender mounts no email-bearing better-auth flows | wrangler dev SEND_EMAIL sim | CF Email Workers |

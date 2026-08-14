@@ -7,19 +7,13 @@ import slackPublications from "./routes/slack/publications";
 import slackSetupPage from "./routes/slack/setup-page";
 import githubManifest from "./routes/github/manifest";
 import telegramWebhook from "./routes/telegram/webhook";
-import { telegramChatStore, telegramIdleTimeoutMs } from "./routes/telegram/wire";
-import { sweepIdleTelegramChats } from "@duyet/oma-telegram";
 import { buildProviders } from "./providers";
 import { buildContainer } from "./wire";
 import { CfInstallBridge } from "./cf-install-bridge";
 import { webhookRateLimitMiddleware, shouldDropForTenantRateLimit } from "./webhook-rate-limit";
-import { linearDispatchTick } from "@duyet/oma-scheduler/jobs/linear-dispatch";
-import { getLogger } from "@duyet/oma-observability";
-import { pingHealthchecks } from "@duyet/oma-shared";
+import { authorizeInternalTick, runIntegrationsTick } from "./cron-tick";
 import { buildIntegrationsGatewayRoutes } from "@duyet/oma-http-routes";
 import { buildUnifiedOAuthRoutes, buildUnifiedProvidersFromEnv } from "./oauth-unified";
-
-const log = getLogger("apps.integrations");
 
 // Integrations gateway worker: receives 3rd-party webhooks (Linear + GitHub +
 // Slack), runs OAuth/install flows for installations, and hosts the MCP servers
@@ -52,6 +46,17 @@ function providerApiUrl(provider: string): string {
 const app = new Hono<{ Bindings: Env }>();
 
 app.get("/health", (c) => c.json({ status: "ok" }));
+
+// Shared-cron fan-in from apps/main. Hosted prod does not declare its
+// own wrangler trigger (Workers Free 5-cron cap). Main's minute tick
+// POSTs here over the INTEGRATIONS service binding.
+app.post("/internal/cron/tick", async (c) => {
+  if (!authorizeInternalTick(c.req.raw, c.env.INTEGRATIONS_INTERNAL_SECRET)) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+  runIntegrationsTick(c.env, c.executionCtx);
+  return c.json({ ok: true }, 202);
+});
 
 // Defense-in-depth: /admin/* endpoints never existed (or were intentionally
 // removed). Prod env always 404. Staging env requires TEMP_DEBUG_TOKEN
@@ -193,56 +198,16 @@ app.use("*", async (c, next) => {
 });
 
 /**
- * Cron entry point — same as before. Linear dispatch sweep.
+ * Cron entry point — same tick as POST /internal/cron/tick. Kept for
+ * wrangler-dev / self-host / staging, which still declare a trigger.
+ * Hosted prod omits the trigger and is driven by main's minute cron.
  */
 async function scheduled(
   controller: ScheduledController,
   env: Env,
   ctx: ExecutionContext,
 ): Promise<void> {
-  // Ping healthchecks.io start (fire-and-forget)
-  pingHealthchecks(env, "start", "linear-dispatch tick started").catch(() => {});
-
-  const tick = linearDispatchTick({
-    resolveSweeper: async () => {
-      const { linear } = buildProviders(env);
-      return linear;
-    },
-  });
-  ctx.waitUntil(
-    tick()
-      .then(() => {
-        // Ping healthchecks.io success (fire-and-forget)
-        pingHealthchecks(env, "success", "linear-dispatch tick completed").catch(() => {});
-      })
-      .catch((err) => {
-        log.error(
-          { err, op: "linear-dispatch-cron.fatal", cron: controller.cron },
-          "linear-dispatch tick failed",
-        );
-        // Ping healthchecks.io failure (fire-and-forget)
-        const msg = err instanceof Error ? err.message : String(err);
-        pingHealthchecks(env, "fail", `linear-dispatch tick failed: ${msg}`).catch(() => {});
-      }),
-  );
-
-  // Telegram auto-idle sweep — pauses chat sandboxes idle for
-  // TELEGRAM_IDLE_TIMEOUT_MS (default 5min, see issue #103). No-op when the
-  // bot isn't configured. Uses the same MAIN-service-binding SessionCreator
-  // as session create/resume — no public HTTP hop.
-  if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_AGENT_ID) {
-    const container = buildContainer(env);
-    ctx.waitUntil(
-      sweepIdleTelegramChats({
-        store: telegramChatStore,
-        pause: (userId, sessionId) => container.sessions.pause(userId, sessionId),
-        now: () => Date.now(),
-        idleTimeoutMs: telegramIdleTimeoutMs(env),
-      }).catch((err) => {
-        log.error({ err, op: "telegram-idle-sweep.fatal", cron: controller.cron }, "telegram idle sweep failed");
-      }),
-    );
-  }
+  runIntegrationsTick(env, ctx, controller.cron);
 }
 
 export default {

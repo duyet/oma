@@ -291,6 +291,8 @@
       // free ceiling (other workers share the budget). Live worker already
       // has its schedules; re-add after Workers Paid:
       // "triggers": { "crons": ["* * * * *", "0 */6 * * *"] }
+      // Integrations does not declare a prod cron — main's minute tick
+      // fans out to POST /internal/cron/tick over the service binding.
     },
     "staging": {
       "name": "oma-managed-agents-staging",

@@ -54,13 +54,34 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Deploy to Cloudflare Workers
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: apps/integrations
-          command: deploy --env production
+      # Use Gradual Deployments (versions upload → versions deploy) instead of
+      # `wrangler deploy`. Plain `deploy` also syncs cron triggers and fails
+      # with CF API code 10072 when the account is already at the Workers Free
+      # limit of 5 cron triggers/account — even when env.production omits
+      # `triggers`. Version upload/deploy ships the script without touching
+      # schedules. Integrations sweeps ride main's existing minute cron via
+      # POST /internal/cron/tick (see apps/main scheduled()).
+      - name: Deploy Worker version (skip cron trigger sync)
+        working-directory: apps/integrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          OUT=$(npx wrangler versions upload --env production 2>&1 | tee /dev/stderr)
+          VID=$(printf '%s\n' "$OUT" | sed -n 's/^Worker Version ID: //p' | tail -1 | tr -d '[:space:]')
+          if [ -z "$VID" ]; then
+            echo "failed to parse Worker Version ID from upload output" >&2
+            exit 1
+          fi
+          echo "Deploying version $VID @ 100%"
+          npx wrangler versions deploy "${VID}@100" --env production --yes \
+            --message "ci ${GITHUB_SHA}"
+
+      - name: Post-deploy health check
+        run: |
+          curl -fsS --retry 5 --retry-delay 10 --max-time 15 \
+            https://integrations.oma.duyet.net/health
 
       - name: Healthchecks — success
         if: success() && vars.HEALTHCHECKS_IO_URL != ''
