@@ -209,11 +209,11 @@ export interface HarnessContext {
 
   /**
    * Platform-augmented system prompt: agent.system + platform guidance
-   * (authenticatedCommandGuidance + loopStopGuidance).
-   * Skill/memory/appendable_prompt content is NOT here — that's injected as
-   * <system-reminder> user.message events via onSessionInit (default behavior).
-   * Use this directly to inherit platform defaults; ignore and use
-   * `rawSystemPrompt` if you want to take full control.
+   * (authenticatedCommandGuidance + loopStopGuidance + sessionOutputsGuidance)
+   * + sandbox environment facts (provider, paths, networking, packages) when
+   * a session environment is bound + skill/memory/appendable content as
+   * `<source>` blocks. Use this directly to inherit platform defaults; ignore
+   * and use `rawSystemPrompt` if you want to take full control.
    */
   systemPrompt: string;
 

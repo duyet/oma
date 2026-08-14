@@ -5784,7 +5784,15 @@ export class SessionDO extends DurableObject<Env> {
     // includes every skill / memory_prompt / appendable_prompt we
     // discovered, and so the byte sequence is stable across the cache
     // prefix (turn N + 1 reuses the same prompt as turn N).
-    const systemPrompt = composeSystemPrompt(rawSystemPrompt, platformReminders);
+    // Sandbox/environment facts (provider, paths, networking, packages) are
+    // inlined into the system prompt so the model knows which host it is on
+    // without a separate tool call. Bound at session create → stable for the
+    // prompt-cache prefix for the life of the session.
+    const systemPrompt = composeSystemPrompt(
+      rawSystemPrompt,
+      platformReminders,
+      resolvedEnvConfig,
+    );
 
     // Single write path for the primary runtime's broadcast AND
     // reportStatus (a thin wrapper that builds the agent.status event

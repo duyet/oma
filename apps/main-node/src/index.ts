@@ -65,7 +65,10 @@ import { ClaudeAgentSdkHarness } from "@duyet/oma-agent/harness/claude-agent-sdk
 import { PoolsideHarness } from "@duyet/oma-agent/harness/poolside-loop";
 import { buildTools } from "@duyet/oma-agent/harness/tools";
 import { resolveModel } from "@duyet/oma-agent/harness/provider";
-import { composeSystemPrompt } from "@duyet/oma-agent/harness/platform-guidance";
+import {
+  composeSystemPrompt,
+  type SandboxEnvInfo,
+} from "@duyet/oma-agent/harness/platform-guidance";
 import type { HarnessContext } from "@duyet/oma-agent/harness/interface";
 import { nodeToMarkdown } from "@duyet/oma-markdown/adapters/node";
 import { buildNodeMcpBinding } from "./mcp-proxy";
@@ -1034,13 +1037,42 @@ const sessionRegistry = new SessionRegistry({
     });
     await runtime.refreshHistory();
     const rawSystemPrompt = input.agent.system ?? "";
+    // Load the session's environment so the system prompt carries the same
+    // sandbox facts as the Cloudflare SessionDO path (provider, paths,
+    // networking). Best-effort — a missing env just omits the block.
+    let sandboxEnv: SandboxEnvInfo | null = null;
+    try {
+      const row = await sql
+        .prepare(`SELECT tenant_id, environment_id FROM sessions WHERE id = ?`)
+        .bind(input.sessionId)
+        .first<{ tenant_id: string; environment_id: string | null }>();
+      if (row?.environment_id) {
+        const envRow = await environmentsService.get({
+          tenantId: row.tenant_id,
+          environmentId: row.environment_id,
+        });
+        if (envRow) {
+          sandboxEnv = {
+            id: envRow.id,
+            name: envRow.name,
+            description: envRow.description ?? undefined,
+            config: envRow.config,
+          };
+        }
+      }
+    } catch (err) {
+      logger.warn(
+        { err, op: "main-node.harness.sandbox_env_prompt", session_id: input.sessionId },
+        "failed to load environment for system prompt; continuing without sandbox block",
+      );
+    }
     return {
       agent: input.agent,
       userMessage: input.userMessage,
       session_id: input.sessionId,
       tools: input.tools as HarnessContext["tools"],
       model: input.model,
-      systemPrompt: composeSystemPrompt(rawSystemPrompt),
+      systemPrompt: composeSystemPrompt(rawSystemPrompt, undefined, sandboxEnv),
       rawSystemPrompt,
       env: {
         ANTHROPIC_API_KEY: apiKey,
