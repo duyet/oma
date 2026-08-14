@@ -6,6 +6,9 @@ import { formatDuration, formatRelative, shortenId } from "../../lib/format";
 import type { Event } from "../../lib/events";
 import { RuntimeKindBadge, agentRuntimeKind } from "../../lib/runtime-kind";
 import { ModelName } from "../../lib/model-provider";
+import { Button } from "@/components/ui/button";
+import { BrowserVmDetailDialog } from "../../lib/browser-vm/BrowserVmDetailDialog";
+import { browserVmStatusMeta, useBrowserVm } from "../../lib/browser-vm/BrowserVmProvider";
 import {
   estimateCostUsd,
   formatEstCostUsd,
@@ -554,6 +557,60 @@ function ToolsTab({ analytics }: { analytics: SessionAnalytics }) {
   );
 }
 
+/** Live embedded browser-vm status card, rendered on the Sandbox tab only
+ *  when the session's environment runs on the browser-vm provider. Shares
+ *  the app-wide `BrowserVmProvider` context, so it reflects the same
+ *  hidden iframe every other status surface (RuntimesList) does. */
+function BrowserVmStatusSection() {
+  const { status, runtimeId, engine, ops, start } = useBrowserVm();
+  const [detailOpen, setDetailOpen] = useState(false);
+  const { label, tone } = browserVmStatusMeta(status);
+  const needsStart = status === "off" || status === "offline" || status === "error";
+  const recentOps = ops.slice(-3).reverse();
+
+  return (
+    <Section title="Browser VM">
+      <div className="rounded-md bg-bg-surface/60 px-3 py-2.5 space-y-2">
+        <div className="flex items-center gap-2">
+          <Dot tone={tone === "ok" ? "ok" : tone === "off" ? "off" : "warn"} />
+          <span className="text-sm font-medium text-fg">{label}</span>
+          {engine && <span className="ml-auto text-[10px] font-mono text-fg-subtle">{engine}</span>}
+        </div>
+        {runtimeId && (
+          <Row label="Runtime ID" value={runtimeId} mono />
+        )}
+        {recentOps.length > 0 && (
+          <div className="space-y-0.5 pt-1">
+            {recentOps.map((o, i) => (
+              <div key={`${o.ts}-${i}`} className="text-[11px] font-mono text-fg-subtle flex gap-1.5">
+                <span
+                  className={
+                    o.phase === "error" ? "text-danger" : o.phase === "done" ? "text-success" : ""
+                  }
+                >
+                  {o.phase}
+                </span>
+                <span className="truncate">{o.op}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2 pt-1">
+          {needsStart && (
+            <Button size="sm" variant="secondary" onClick={() => void start()}>
+              Start VM
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" onClick={() => setDetailOpen(true)}>
+            Details
+          </Button>
+        </div>
+      </div>
+      <BrowserVmDetailDialog open={detailOpen} onClose={() => setDetailOpen(false)} />
+    </Section>
+  );
+}
+
 function SandboxTab({
   meta,
   environment,
@@ -569,9 +626,11 @@ function SandboxTab({
   const packages = environment?.config?.packages ?? {};
   const packageEntries = Object.entries(packages).filter(([, v]) => (v ?? []).length > 0);
   const activeSeconds = meta.sandboxUsage?.active_seconds;
+  const isBrowserVm = provider.id === "browser-vm";
 
   return (
     <div className="space-y-5">
+      {isBrowserVm && <BrowserVmStatusSection />}
       <Section title="Provider">
         <div className="rounded-md bg-bg-surface/60 px-3 py-2.5 space-y-1">
           <div className="flex items-center gap-2">

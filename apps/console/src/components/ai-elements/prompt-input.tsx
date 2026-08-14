@@ -66,6 +66,7 @@ import type {
 import {
   Children,
   createContext,
+  Fragment,
   useCallback,
   useContext,
   useEffect,
@@ -275,6 +276,8 @@ export const PromptInputProvider = ({
         mediaType: file.type,
         type: "file" as const,
         url: URL.createObjectURL(file),
+        // Keep the original File for upload paths that need bytes.
+        file,
       })),
     ]);
   }, []);
@@ -610,7 +613,7 @@ export const PromptInput = ({
             message: "Too many files. Some were not added.",
           });
         }
-        const next: (FileUIPart & { id: string })[] = [];
+        const next: (FileUIPart & { id: string; file?: File })[] = [];
         for (const file of capped) {
           next.push({
             filename: file.name,
@@ -618,6 +621,8 @@ export const PromptInput = ({
             mediaType: file.type,
             type: "file",
             url: URL.createObjectURL(file),
+            // Keep the original File for upload paths that need bytes.
+            file,
           });
         }
         return [...prev, ...next];
@@ -921,7 +926,18 @@ export const PromptInput = ({
         ref={formRef}
         {...props}
       >
-        <InputGroup className="overflow-hidden">{children}</InputGroup>
+        <InputGroup
+          className={cn(
+            "h-auto overflow-hidden rounded-xl border-border/80 bg-bg-surface shadow-sm",
+            "transition-[border-color,box-shadow] duration-[var(--dur-quick)] ease-[var(--ease-soft)]",
+            "dark:bg-bg-surface/50 dark:border-border",
+            "has-[[data-slot=input-group-control]:focus-visible]:border-ring",
+            "has-[[data-slot=input-group-control]:focus-visible]:ring-3",
+            "has-[[data-slot=input-group-control]:focus-visible]:ring-ring/40",
+          )}
+        >
+          {children}
+        </InputGroup>
       </form>
     </>
   );
@@ -1055,7 +1071,11 @@ export const PromptInputTextarea = ({
 
   return (
     <InputGroupTextarea
-      className={cn("field-sizing-content max-h-48 min-h-16", className)}
+      className={cn(
+        // Auto-grow via field-sizing; cap at ~8 lines (text-sm / leading-5).
+        "field-sizing-content max-h-40 min-h-[52px] px-3.5 pt-3 pb-1 text-sm leading-5",
+        className,
+      )}
       name="message"
       onCompositionEnd={handleCompositionEnd}
       onCompositionStart={handleCompositionStart}
@@ -1065,6 +1085,89 @@ export const PromptInputTextarea = ({
       {...props}
       {...controlledProps}
     />
+  );
+};
+
+// ============================================================================
+// Attachment chips (image thumbnails above the toolbar)
+// ============================================================================
+
+export type PromptInputAttachmentsProps = HTMLAttributes<HTMLDivElement> & {
+  children: (attachment: FileUIPart & { id: string }) => ReactNode;
+};
+
+/** Renders a row of attachment chips when files are present; otherwise null. */
+export const PromptInputAttachments = ({
+  children,
+  className,
+  ...props
+}: PromptInputAttachmentsProps) => {
+  const attachments = usePromptInputAttachments();
+  if (attachments.files.length === 0) return null;
+  return (
+    <div
+      className={cn(
+        "order-first flex w-full flex-wrap gap-2 px-3 pt-3",
+        className,
+      )}
+      {...props}
+    >
+      {attachments.files.map((file) => (
+        <Fragment key={file.id}>{children(file)}</Fragment>
+      ))}
+    </div>
+  );
+};
+
+export type PromptInputAttachmentProps = HTMLAttributes<HTMLDivElement> & {
+  data: FileUIPart & { id: string };
+};
+
+/** Removable image (or file) chip — thumbnail for images, filename pill otherwise. */
+export const PromptInputAttachment = ({
+  data,
+  className,
+  ...props
+}: PromptInputAttachmentProps) => {
+  const attachments = usePromptInputAttachments();
+  const isImage = Boolean(data.mediaType?.startsWith("image/") && data.url);
+
+  return (
+    <div
+      className={cn(
+        "group/att relative flex items-center gap-1.5 overflow-hidden rounded-lg border border-border bg-bg-surface",
+        isImage ? "size-14 p-0" : "max-w-[12rem] px-2 py-1.5 text-xs text-fg-muted",
+        className,
+      )}
+      {...props}
+    >
+      {isImage ? (
+        <img
+          src={data.url}
+          alt={data.filename || "Attached image"}
+          className="size-full object-cover"
+        />
+      ) : (
+        <span className="truncate" title={data.filename}>
+          {data.filename || "File"}
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={() => attachments.remove(data.id)}
+        aria-label={`Remove ${data.filename || "attachment"}`}
+        className={cn(
+          "absolute flex size-5 items-center justify-center rounded-full",
+          "bg-fg/80 text-bg shadow-sm transition-opacity",
+          "hover:bg-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          isImage
+            ? "top-0.5 right-0.5 opacity-0 group-hover/att:opacity-100 focus-visible:opacity-100"
+            : "right-1 opacity-70 hover:opacity-100",
+        )}
+      >
+        <XIcon className="size-3" />
+      </button>
+    </div>
   );
 };
 

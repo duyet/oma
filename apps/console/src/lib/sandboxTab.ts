@@ -75,8 +75,52 @@ export async function isBrowserVmEnvironment(
 let openedTab: Window | null = null;
 let openedAt = 0;
 
-/** A tab we opened recently that hasn't been closed — don't open another. */
+/**
+ * Live status of the embedded browser-vm iframe, mirrored from
+ * `BrowserVmProvider` (src/lib/browser-vm) via the child's `oma-bvm:status`
+ * postMessage protocol. `"off"` means no provider is registered yet, or the
+ * VM hasn't been started.
+ */
+export type BrowserVmControllerStatus =
+  | "off"
+  | "pairing"
+  | "booting"
+  | "online"
+  | "error"
+  | "offline";
+
+export interface BrowserVmController {
+  /** Idempotent — no-ops if a boot is already pairing/booting/online. */
+  start: () => Promise<void>;
+  getStatus: () => BrowserVmControllerStatus;
+}
+
+let controller: BrowserVmController | null = null;
+
+/**
+ * Registration seam for `BrowserVmProvider` (src/lib/browser-vm). It
+ * registers itself on mount (once, at the app root, so it persists across
+ * route changes) and unregisters on unmount. While a controller is
+ * registered, `openSandboxTab` / `ensureSandboxTabForEnvironment` route
+ * through the embedded hidden iframe instead of `window.open` — no
+ * provider registered (e.g. these module functions used outside the app
+ * shell, or in tests that don't mount it) falls back to the legacy new-tab
+ * behavior unchanged.
+ */
+export function registerBrowserVmController(c: BrowserVmController | null): void {
+  controller = c;
+}
+
+/**
+ * A tab we opened recently that hasn't been closed — don't open another.
+ * When a `BrowserVmController` is registered, defer to its live status
+ * instead of the legacy window-handle heuristic.
+ */
 function hasPendingTab(): boolean {
+  if (controller) {
+    const status = controller.getStatus();
+    return status === "pairing" || status === "booting" || status === "online";
+  }
   if (!openedTab) return false;
   if (openedTab.closed) {
     openedTab = null;
@@ -92,13 +136,31 @@ export function resetSandboxTabDedupe(): void {
 }
 
 /**
- * Mint a one-time pairing code and open `/sandbox-tab` in a new tab.
- * Same code/state semantics as ConnectRuntime.tsx — the browser tab is a
- * runtime like any other, it just has no loopback CLI to originate the code.
+ * Mint a one-time pairing code and connect a browser-vm sandbox.
+ *
+ * Default behavior routes through the registered `BrowserVmController`
+ * (the hidden embedded iframe) when one is mounted — the common case, since
+ * `BrowserVmProvider` mounts once at the app root. Pass `{ newTab: true }`
+ * to force the legacy behavior of opening `/sandbox-tab` in a new browser
+ * tab regardless — used by the explicit "Open sandbox tab" affordances that
+ * intentionally keep the old debug-tab experience.
+ *
+ * Same code/state semantics as ConnectRuntime.tsx either way — the browser
+ * tab (or embedded iframe) is a runtime like any other, it just has no
+ * loopback CLI to originate the code.
  */
 export async function openSandboxTab(
   api: <T>(path: string, init?: RequestInit) => Promise<T>,
+  opts?: { newTab?: boolean },
 ): Promise<boolean> {
+  if (!opts?.newTab && controller) {
+    try {
+      await controller.start();
+      return true;
+    } catch {
+      return false;
+    }
+  }
   try {
     const state = crypto.randomUUID().replace(/-/g, "");
     const { code } = await api<{ code: string; expires_at: number }>(

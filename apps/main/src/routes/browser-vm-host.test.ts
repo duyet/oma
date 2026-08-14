@@ -3,6 +3,12 @@ import browserVmHostRoutes, {
   classifyV86Media,
   isLegacyDefaultImage,
   proxiedAssetUrl,
+  parseCpuTicks,
+  cpuPctFromSamples,
+  parseMeminfoKb,
+  parseUptimeSeconds,
+  parseBusyboxPs,
+  parseStatsSnapshot,
 } from "./browser-vm-host";
 
 /**
@@ -165,6 +171,35 @@ describe("browser-vm host page", () => {
     });
   });
 
+  describe("embedded mode (oma-bvm protocol)", () => {
+    it("wires the embedded flag, chrome-hiding CSS, and the postMessage protocol", async () => {
+      const html = await fetchPage();
+      expect(html).toContain('qs.get("embedded") === "1"');
+      expect(html).toContain('document.body.classList.add("embedded")');
+      expect(html).toContain("body.embedded main { display: none; }");
+      expect(html).not.toContain("window.focus()");
+      for (const type of [
+        "oma-bvm:status",
+        "oma-bvm:log",
+        "oma-bvm:op",
+        "oma-bvm:stats",
+        "oma-bvm:stats-request",
+        "oma-bvm:shell",
+        "oma-bvm:shell-output",
+        "oma-bvm:hello",
+      ]) {
+        expect(html).toContain(type);
+      }
+      // Both directions verify same-origin before trusting a message.
+      expect(html).toContain("ev.origin !== location.origin");
+      expect(html).toContain("window.parent.postMessage(data, location.origin)");
+      // Stats/shell run through the same serialized engine.exec queue as
+      // relayed sandbox ops — never a bypass.
+      expect(html).toContain("async function handleStatsRequest()");
+      expect(html).toContain("async function handleShellRequest(req)");
+    });
+  });
+
   describe("asset proxy", () => {
     it("rejects missing, invalid, non-https, and non-allowlisted hosts", async () => {
       expect((await browserVmHostRoutes.request("/asset")).status).toBe(400);
@@ -177,6 +212,86 @@ describe("browser-vm host page", () => {
           "/asset?url=" + encodeURIComponent("https://evil.example/x.bin"),
         )).status,
       ).toBe(403);
+    });
+  });
+
+  describe("embedded stats parsing (exported pure helpers)", () => {
+    it("computes cpu_pct from two /proc/stat ticks samples", () => {
+      const prev = parseCpuTicks("cpu  100 0 100 800 0 0 0 0 0 0");
+      const cur = parseCpuTicks("cpu  110 0 110 810 0 0 0 0 0 0");
+      expect(prev).toEqual({ total: 1000, idle: 800 });
+      // total +30, idle +10 -> 20/30 busy = 66.7%
+      expect(cpuPctFromSamples(prev, cur)).toBeCloseTo((20 / 30) * 100, 5);
+    });
+
+    it("is defensive: null/missing/non-increasing samples never throw", () => {
+      expect(parseCpuTicks("not a cpu line")).toBeNull();
+      expect(parseCpuTicks("")).toBeNull();
+      expect(cpuPctFromSamples(null, null)).toBeNull();
+      expect(cpuPctFromSamples({ total: 100, idle: 50 }, { total: 100, idle: 50 })).toBeNull();
+    });
+
+    it("parses /proc/meminfo total + used kb, tolerating MemFree fallback", () => {
+      expect(parseMeminfoKb("MemTotal:  1024000 kB\nMemAvailable: 512000 kB\n"))
+        .toEqual({ totalKb: 1024000, usedKb: 512000 });
+      expect(parseMeminfoKb("MemTotal:  1024000 kB\nMemFree: 200000 kB\n"))
+        .toEqual({ totalKb: 1024000, usedKb: 824000 });
+      expect(parseMeminfoKb("garbage")).toBeNull();
+    });
+
+    it("parses /proc/uptime, tolerating malformed input", () => {
+      expect(parseUptimeSeconds("12345.67 9999.00\n")).toBeCloseTo(12345.67, 2);
+      expect(parseUptimeSeconds("")).toBeNull();
+      expect(parseUptimeSeconds("not a number")).toBeNull();
+    });
+
+    it("parses busybox and procps-flavored ps output into {pid, comm}", () => {
+      const busybox = "  PID USER     TIME  COMMAND\n    1 root      0:00 init\n   42 root      0:01 sh\n";
+      expect(parseBusyboxPs(busybox)).toEqual([
+        { pid: "1", comm: "init" },
+        { pid: "42", comm: "sh" },
+      ]);
+      expect(parseBusyboxPs("")).toEqual([]);
+      expect(parseBusyboxPs("not even ps output")).toEqual([]);
+    });
+
+    it("assembles a full stats snapshot from the marker-delimited guest exec output", () => {
+      const stdout = [
+        "cpu  100 0 100 800 0 0 0 0 0 0",
+        "---S1---",
+        "cpu  110 0 110 810 0 0 0 0 0 0",
+        "---S2---",
+        "MemTotal:  1024000 kB",
+        "MemAvailable: 512000 kB",
+        "---MEM---",
+        "12345.67 9999.00",
+        "---UP---",
+        "  PID USER     TIME  COMMAND",
+        "    1 root      0:00 init",
+      ].join("\n");
+      const snap = parseStatsSnapshot(stdout);
+      expect(snap.cpu_pct).toBeCloseTo((20 / 30) * 100, 5);
+      expect(snap.mem_total_kb).toBe(1024000);
+      expect(snap.mem_used_kb).toBe(512000);
+      expect(snap.uptime_s).toBeCloseTo(12345.67, 2);
+      expect(snap.processes).toEqual([{ pid: "1", comm: "init" }]);
+    });
+
+    it("returns null/empty fields rather than throwing when the guest isn't booted", () => {
+      expect(parseStatsSnapshot("")).toEqual({
+        cpu_pct: null,
+        mem_used_kb: null,
+        mem_total_kb: null,
+        uptime_s: null,
+        processes: [],
+      });
+      expect(parseStatsSnapshot("garbage with no markers at all")).toEqual({
+        cpu_pct: null,
+        mem_used_kb: null,
+        mem_total_kb: null,
+        uptime_s: null,
+        processes: [],
+      });
     });
   });
 

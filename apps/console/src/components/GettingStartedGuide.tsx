@@ -12,12 +12,10 @@
 // multi-step tour dialog rather than inline, so the panel stays four rows tall.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { useQuery } from "@tanstack/react-query";
 import { CheckIcon, ArrowRightIcon, XIcon, SparklesIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useApiQuery } from "../lib/useApiQuery";
-import { IntegrationsApi } from "../integrations/api/client";
 import { Modal } from "./Modal";
 import { AgentIcon, SessionsIcon, EnvIcon, VaultIcon } from "./icons";
 
@@ -98,7 +96,9 @@ interface GuideStep {
 }
 
 /** Tour copy — the long-form version of each checklist row. Kept next to the
- *  steps so the two can't drift, but rendered only inside the dialog. */
+ *  steps so the two can't drift, but rendered only inside the dialog.
+ *  Order matches the checklist: agent → environment → vault → session
+ *  (cloud sessions need an environment before they can run). */
 const TOUR_STEPS: {
   id: string;
   title: string;
@@ -119,22 +119,11 @@ const TOUR_STEPS: {
     illustration: <AgentArt />,
   },
   {
-    id: "session",
-    title: "2 · Start a session",
-    paragraphs: [
-      "A session is one conversation with an agent. It owns an append-only event log, so it can be streamed live, replayed, and resumed after a crash.",
-      "Every tool the agent calls runs inside the session's sandbox — an isolated container with its own /workspace.",
-    ],
-    to: "/sessions",
-    ctaLabel: "Open sessions",
-    illustration: <SessionArt />,
-  },
-  {
     id: "environment",
-    title: "3 · Shape the sandbox",
+    title: "2 · Shape the sandbox",
     paragraphs: [
-      "An environment declares what the sandbox has: packages to install, which hosts it may reach, and which sandbox provider runs it.",
-      "One environment is reusable across every agent and session — most teams need two or three, not one per agent.",
+      "An environment declares what the sandbox has: packages to install, which hosts it may reach, and which sandbox provider runs it (Cloudflare Containers, k3s, bridge daemon, …).",
+      "Cloud sessions require an environment at create time — set one up before your first run. One environment is reusable across agents.",
     ],
     to: "/environments",
     ctaLabel: "Open environments",
@@ -142,14 +131,25 @@ const TOUR_STEPS: {
   },
   {
     id: "vault",
-    title: "4 · Add credentials safely",
+    title: "3 · Add credentials safely",
     paragraphs: [
       "Vault credentials never enter the sandbox. An outbound proxy matches the request host and injects the auth header on the way out, so the agent can call an API it can never read the token for.",
-      "The same vaults back the integrations — connect GitHub, Slack, Linear or Telegram and your agent gains a channel to be talked to from.",
+      "Attach vaults when you start a session so MCP servers and git hosts authenticate. Channel integrations (GitHub, Slack, …) are separate — they live under Integrations.",
     ],
     to: "/vaults",
     ctaLabel: "Open vaults",
     illustration: <VaultArt />,
+  },
+  {
+    id: "session",
+    title: "4 · Start a session",
+    paragraphs: [
+      "A session is one conversation with an agent. It owns an append-only event log, so it can be streamed live, replayed, and resumed after a crash.",
+      "Every tool the agent calls runs inside the session's sandbox — an isolated container with its own /workspace. Pick environment + vaults on create.",
+    ],
+    to: "/sessions?new=1",
+    ctaLabel: "Start a session",
+    illustration: <SessionArt />,
   },
 ];
 
@@ -168,29 +168,14 @@ export function GettingStartedGuide() {
   const sessionsQuery = useApiQuery<{ data: { id: string }[] }>("/v1/sessions", {
     limit: "5",
   });
-  const integrationsQuery = useQuery({
-    queryKey: ["dashboard-integration-counts"],
-    queryFn: async () => {
-      const integrations = new IntegrationsApi();
-      const [linear, github, slack] = await Promise.all([
-        integrations.linear.listInstallations().catch(() => []),
-        integrations.github.listInstallations().catch(() => []),
-        integrations.slack.listInstallations().catch(() => []),
-      ]);
-      return [
-        ...linear.map(() => "Linear"),
-        ...github.map(() => "GitHub"),
-        ...slack.map(() => "Slack"),
-      ];
-    },
-    staleTime: 30_000,
-  });
 
   const stats = statsQuery.data;
   const hasSessions =
     (stats?.sessions ?? 0) > 0 || (sessionsQuery.data?.data.length ?? 0) > 0;
-  const integrationCount = integrationsQuery.data?.length ?? 0;
 
+  // Order: agent → environment → vault → session. Cloud sessions need an
+  // environment at create time; vaults are optional but must not complete
+  // solely via channel integrations (those don't inject outbound creds).
   const steps: GuideStep[] = useMemo(
     () => [
       {
@@ -203,18 +188,9 @@ export function GettingStartedGuide() {
         icon: AgentIcon,
       },
       {
-        id: "session",
-        title: "Start a session",
-        body: "Talk to the agent — every turn runs in its own sandbox.",
-        cta: "Sessions",
-        to: "/sessions",
-        done: hasSessions,
-        icon: SessionsIcon,
-      },
-      {
         id: "environment",
         title: "Shape the sandbox",
-        body: "An environment sets the packages, networking and provider.",
+        body: "An environment sets packages, networking, and provider (CF, k3s, …).",
         cta: "Environments",
         to: "/environments",
         done: (stats?.environments ?? 0) > 0,
@@ -222,15 +198,24 @@ export function GettingStartedGuide() {
       },
       {
         id: "vault",
-        title: "Connect credentials & channels",
-        body: "Vaults inject tokens outside the sandbox; integrations add a channel.",
+        title: "Add credentials safely",
+        body: "Vaults inject tokens at the network layer — never into the sandbox.",
         cta: "Vaults",
         to: "/vaults",
-        done: (stats?.vaults ?? 0) > 0 || integrationCount > 0,
+        done: (stats?.vaults ?? 0) > 0,
         icon: VaultIcon,
       },
+      {
+        id: "session",
+        title: "Start a session",
+        body: "Talk to the agent with env + vaults attached — tools run in the sandbox.",
+        cta: "New session",
+        to: "/sessions?new=1",
+        done: hasSessions,
+        icon: SessionsIcon,
+      },
     ],
-    [stats?.agents, stats?.environments, stats?.vaults, hasSessions, integrationCount],
+    [stats?.agents, stats?.environments, stats?.vaults, hasSessions],
   );
 
   const doneCount = steps.filter((s) => s.done).length;
@@ -285,14 +270,19 @@ export function GettingStartedGuide() {
               <p className="mt-0.5 text-[13px] text-fg-muted">
                 {allDone
                   ? "Every setup step is done. Dismiss this panel anytime — you can keep working from Overview."
-                  : "Four steps to a working agent. Steps tick off automatically as you create things."}
+                  : "Four steps in dependency order: agent, sandbox, credentials, then a session. Steps tick off as you create things."}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {!allDone && (
-                <Button variant="outline" size="sm" onClick={() => setTourOpen(true)}>
-                  Take the tour
-                </Button>
+                <>
+                  <Button variant="secondary" size="sm" onClick={() => nav("/launch")}>
+                    Launch wizard
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setTourOpen(true)}>
+                    Take the tour
+                  </Button>
+                </>
               )}
               {allDone ? (
                 <Button variant="secondary" size="sm" onClick={dismiss}>

@@ -39,6 +39,8 @@ import {
 } from "../lib/providerAvailability";
 import type { ProviderAvailability } from "../lib/providerAvailability";
 import { openSandboxTab } from "../lib/sandboxTab";
+import { BrowserVmDetailDialog } from "../lib/browser-vm/BrowserVmDetailDialog";
+import { browserVmStatusMeta, useBrowserVm } from "../lib/browser-vm/BrowserVmProvider";
 
 interface LocalSkill {
   id: string;
@@ -354,6 +356,11 @@ function ProviderCard({ p, onSetup, onRemove, onOpenDetail, onOpenSandboxTab }: 
   const isBrowserVm = p.provider === "browser-vm";
   const availability = providerAvailabilityView(p.availability);
   const clickable = !!onOpenDetail;
+  const browserVm = useBrowserVm();
+  const [vmDetailOpen, setVmDetailOpen] = useState(false);
+  const vmStatusMeta = browserVmStatusMeta(browserVm.status);
+  const vmNeedsStart =
+    browserVm.status === "off" || browserVm.status === "offline" || browserVm.status === "error";
 
   return (
     <Card
@@ -452,23 +459,61 @@ function ProviderCard({ p, onSetup, onRemove, onOpenDetail, onOpenSandboxTab }: 
             </p>
           )}
 
-          {/* Browser VM → open a pairing tab (not a CLI setup flow). Keep the
-              CTA on the card so first-run doesn't require opening details. */}
-          {isBrowserVm && onOpenSandboxTab && availability.usable && (
+          {/* Browser VM → live embedded-VM status + Start/Details, with the
+              legacy pairing-tab button kept as a secondary escape hatch. */}
+          {isBrowserVm && availability.usable && (
             <div className="flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
               {status === "not_configured" && health?.reason && (
                 <p className="text-[11px] text-fg-muted leading-relaxed">
                   {health.reason}
                 </p>
               )}
-              <Button
-                size="sm"
-                variant="secondary"
-                className="w-full"
-                onClick={onOpenSandboxTab}
-              >
-                Open sandbox tab
-              </Button>
+              <div className="flex items-center gap-1.5 text-[11px] text-fg-subtle">
+                <span
+                  className={cn(
+                    "w-1.5 h-1.5 rounded-full",
+                    vmStatusMeta.tone === "ok"
+                      ? "bg-success"
+                      : vmStatusMeta.tone === "error"
+                        ? "bg-destructive"
+                        : vmStatusMeta.tone === "warn"
+                          ? "bg-warning"
+                          : "bg-fg-subtle",
+                  )}
+                />
+                Embedded VM: {vmStatusMeta.label}
+              </div>
+              <div className="flex gap-2">
+                {vmNeedsStart && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="flex-1"
+                    onClick={() => void browserVm.start()}
+                  >
+                    Start VM
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="flex-1"
+                  onClick={() => setVmDetailOpen(true)}
+                >
+                  Details
+                </Button>
+              </div>
+              {onOpenSandboxTab && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="w-full text-fg-subtle"
+                  onClick={onOpenSandboxTab}
+                >
+                  Open sandbox tab
+                </Button>
+              )}
+              <BrowserVmDetailDialog open={vmDetailOpen} onClose={() => setVmDetailOpen(false)} />
             </div>
           )}
 
@@ -796,133 +841,178 @@ function ProviderDetailDialog({
   onUseInEnvironment: () => void;
   onOpenSandboxTab: () => void;
 }) {
+  const browserVm = useBrowserVm();
+  const [vmDetailOpen, setVmDetailOpen] = useState(false);
   if (!provider) return null;
   const p = provider;
   const health = p.health;
   const { dot: healthDot, label: healthLabel, status } = providerHealth(p);
   const isBrowserVm = p.provider === "browser-vm";
   const availability = providerAvailabilityView(p.availability);
+  const vmStatusMeta = browserVmStatusMeta(browserVm.status);
+  const vmNeedsStart =
+    browserVm.status === "off" || browserVm.status === "offline" || browserVm.status === "error";
   return (
-    <Modal
-      open
-      onClose={onClose}
-      title={p.label}
-      subtitle={p.id}
-      maxWidth="max-w-2xl"
-      footer={
-        <>
-          <Button variant="ghost" onClick={onClose}>
-            Close
-          </Button>
-          {isBrowserVm && availability.usable && (
-            <Button variant="secondary" onClick={onOpenSandboxTab}>
-              Open sandbox tab
+    <>
+      <Modal
+        open
+        onClose={onClose}
+        title={p.label}
+        subtitle={p.id}
+        maxWidth="max-w-2xl"
+        footer={
+          <>
+            <Button variant="ghost" onClick={onClose}>
+              Close
             </Button>
-          )}
-          {status === "not_configured" && !isBrowserVm && availability.usable && (
-            <Button
-              variant="secondary"
-              onClick={() => {
-                onClose();
-                onSetup(p);
-              }}
-            >
-              Set up
-            </Button>
-          )}
-          {p.type === "byok" && (
-            <Button
-              variant="ghost"
-              className="text-destructive hover:text-destructive"
-              onClick={() => {
-                onClose();
-                onRemove(p);
-              }}
-            >
-              Remove provider
-            </Button>
-          )}
-        </>
-      }
-    >
-      <div className="space-y-4 text-sm">
-        <p className="text-fg-muted leading-relaxed">{p.description}</p>
-
-        <DetailRow label="Provider ID">
-          <span className="font-mono text-xs" title={p.id}>
-            {p.id}
-          </span>
-        </DetailRow>
-        <DetailRow label="Kind">
-          {p.type === "system" ? "System provider" : "BYOK (bring your own key)"}
-        </DetailRow>
-        <DetailRow label="Provider">
-          <span className="font-mono text-xs">{p.provider}</span>
-        </DetailRow>
-        <DetailRow label="External">
-          {p.external ? "Yes — off-host service" : "No — runs on this host"}
-        </DetailRow>
-        <DetailRow label="Availability">
-          {availability.state === "unavailable"
-            ? "Not available on this deployment"
-            : availability.state === "needs_config"
-              ? "Supported — needs configuration"
-              : "Available"}
-        </DetailRow>
-        <AvailabilityNote p={p} />
-        <DetailRow label="Health">
-          <span className="inline-flex items-center gap-1.5">
-            <span className={cn("w-2 h-2 rounded-full", healthDot)} />
-            {healthLabel}
-            {status === "healthy" && health && (
-              <span className="text-fg-subtle ml-1">· {formatLatency(health.latency_ms)}</span>
+            {isBrowserVm && availability.usable && (
+              <>
+                {vmNeedsStart && (
+                  <Button variant="secondary" onClick={() => void browserVm.start()}>
+                    Start VM
+                  </Button>
+                )}
+                <Button variant="secondary" onClick={() => setVmDetailOpen(true)}>
+                  Details
+                </Button>
+                <Button variant="ghost" onClick={onOpenSandboxTab}>
+                  Open sandbox tab
+                </Button>
+              </>
             )}
-          </span>
-        </DetailRow>
-        {status === "healthy" && health?.last_checked && (
-          <DetailRow label="Last checked">
-            <span className="font-mono text-xs">
-              {new Date(health.last_checked).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+            {status === "not_configured" && !isBrowserVm && availability.usable && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  onClose();
+                  onSetup(p);
+                }}
+              >
+                Set up
+              </Button>
+            )}
+            {p.type === "byok" && (
+              <Button
+                variant="ghost"
+                className="text-destructive hover:text-destructive"
+                onClick={() => {
+                  onClose();
+                  onRemove(p);
+                }}
+              >
+                Remove provider
+              </Button>
+            )}
+          </>
+        }
+      >
+        <div className="space-y-4 text-sm">
+          <p className="text-fg-muted leading-relaxed">{p.description}</p>
+
+          {isBrowserVm && (
+            <DetailRow label="Embedded VM">
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  className={cn(
+                    "w-1.5 h-1.5 rounded-full",
+                    vmStatusMeta.tone === "ok"
+                      ? "bg-success"
+                      : vmStatusMeta.tone === "error"
+                        ? "bg-destructive"
+                        : vmStatusMeta.tone === "warn"
+                          ? "bg-warning"
+                          : "bg-fg-subtle",
+                  )}
+                />
+                {vmStatusMeta.label}
+                {browserVm.runtimeId && (
+                  <span className="text-fg-subtle font-mono text-xs ml-1">
+                    ({browserVm.runtimeId})
+                  </span>
+                )}
+              </span>
+            </DetailRow>
+          )}
+
+          <DetailRow label="Provider ID">
+            <span className="font-mono text-xs" title={p.id}>
+              {p.id}
             </span>
           </DetailRow>
-        )}
-        {status === "unhealthy" && health?.reason && (
-          <p className="text-[12px] text-destructive leading-relaxed rounded-md bg-destructive/10 px-2 py-1.5">
-            {health.reason}
-          </p>
-        )}
-        {status === "not_configured" && health?.reason && (
-          <p className="text-[12px] text-fg-muted leading-relaxed">{health.reason}</p>
-        )}
+          <DetailRow label="Kind">
+            {p.type === "system" ? "System provider" : "BYOK (bring your own key)"}
+          </DetailRow>
+          <DetailRow label="Provider">
+            <span className="font-mono text-xs">{p.provider}</span>
+          </DetailRow>
+          <DetailRow label="External">
+            {p.external ? "Yes — off-host service" : "No — runs on this host"}
+          </DetailRow>
+          <DetailRow label="Availability">
+            {availability.state === "unavailable"
+              ? "Not available on this deployment"
+              : availability.state === "needs_config"
+                ? "Supported — needs configuration"
+                : "Available"}
+          </DetailRow>
+          <AvailabilityNote p={p} />
+          <DetailRow label="Health">
+            <span className="inline-flex items-center gap-1.5">
+              <span className={cn("w-2 h-2 rounded-full", healthDot)} />
+              {healthLabel}
+              {status === "healthy" && health && (
+                <span className="text-fg-subtle ml-1">· {formatLatency(health.latency_ms)}</span>
+              )}
+            </span>
+          </DetailRow>
+          {status === "healthy" && health?.last_checked && (
+            <DetailRow label="Last checked">
+              <span className="font-mono text-xs">
+                {new Date(health.last_checked).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+            </DetailRow>
+          )}
+          {status === "unhealthy" && health?.reason && (
+            <p className="text-[12px] text-destructive leading-relaxed rounded-md bg-destructive/10 px-2 py-1.5">
+              {health.reason}
+            </p>
+          )}
+          {status === "not_configured" && health?.reason && (
+            <p className="text-[12px] text-fg-muted leading-relaxed">{health.reason}</p>
+          )}
 
-        <div>
-          <div className="text-xs text-fg-subtle mb-1">Capabilities</div>
-          {p.capabilities.length === 0 ? (
-            <p className="text-xs text-fg-muted">None reported.</p>
-          ) : (
-            <div className="flex flex-wrap gap-1">
-              {p.capabilities.map((cap) => (
-                <Badge key={cap} variant="secondary" className="text-[10px]">
-                  {CAP_DISPLAY[cap] ?? cap}
-                </Badge>
-              ))}
+          <div>
+            <div className="text-xs text-fg-subtle mb-1">Capabilities</div>
+            {p.capabilities.length === 0 ? (
+              <p className="text-xs text-fg-muted">None reported.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1">
+                {p.capabilities.map((cap) => (
+                  <Badge key={cap} variant="secondary" className="text-[10px]">
+                    {CAP_DISPLAY[cap] ?? cap}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {status === "healthy" && health?.capacity && (
+            <div>
+              <div className="text-xs text-fg-subtle mb-1.5">Capacity</div>
+              <CapacityGauges capacity={health.capacity} />
             </div>
           )}
+
+          <UseInEnvironmentSection providerId={p.id} onGo={onUseInEnvironment} />
         </div>
-
-        {status === "healthy" && health?.capacity && (
-          <div>
-            <div className="text-xs text-fg-subtle mb-1.5">Capacity</div>
-            <CapacityGauges capacity={health.capacity} />
-          </div>
-        )}
-
-        <UseInEnvironmentSection providerId={p.id} onGo={onUseInEnvironment} />
-      </div>
-    </Modal>
+      </Modal>
+      {isBrowserVm && (
+        <BrowserVmDetailDialog open={vmDetailOpen} onClose={() => setVmDetailOpen(false)} />
+      )}
+    </>
   );
 }
 
@@ -1151,8 +1241,12 @@ export function RuntimesList() {
     setTimeout(() => setCopied(null), 1600);
   };
 
+  // Explicit "Open sandbox tab" affordance — always the legacy new-tab
+  // behavior, kept as a secondary escape hatch alongside the embedded
+  // provider's Start VM / Details actions (see ProviderCard/
+  // ProviderDetailDialog below).
   const openBrowserVmTab = useCallback(async () => {
-    await openSandboxTab(api);
+    await openSandboxTab(api, { newTab: true });
   }, [api]);
 
   const [providers, setProviders] = useState<HostingType[]>([]);

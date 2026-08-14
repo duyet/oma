@@ -16,10 +16,12 @@ import {
   INITIAL_FORM,
   McpTab,
   SkillsTab,
+  syncRepoEnvironment,
   ToolsTab,
   type AgentFormDialogProps,
   type FormState,
 } from "./AgentFormDialog";
+import { DEFAULT_ENV_METADATA_KEY, isValidRepoUrl } from "./browser-env";
 
 /** Map an API agent record back into the config shape `configToForm`
  *  understands (the same shape the create dialog's YAML/JSON paste mode
@@ -106,6 +108,37 @@ export function AgentEditDialog({ open, onClose, agent, onSaved }: AgentEditDial
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, agent.id, agent.version]);
 
+  // configToForm only hydrates repoEnvId (an id, read straight off
+  // metadata) — the URL/branch text fields live on the environment record
+  // itself, so fetch it once we know which environment to look at.
+  useEffect(() => {
+    if (!open) return;
+    const envId = form.repoEnvId;
+    if (!envId) return;
+    let cancelled = false;
+    api<{ config?: { git_repo?: { url?: string; branch?: string } } }>(
+      `/v1/environments/${envId}`,
+    )
+      .then((env) => {
+        if (cancelled) return;
+        const repo = env.config?.git_repo;
+        if (!repo?.url) return;
+        setForm((f) =>
+          f.repoEnvId === envId
+            ? { ...f, repoUrl: repo.url ?? "", repoBranch: repo.branch ?? "" }
+            : f,
+        );
+      })
+      .catch(() => {
+        // Best-effort prefill only — an unreachable/deleted environment
+        // just leaves the repo fields blank, same as a fresh agent.
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, form.repoEnvId]);
+
   const save = async () => {
     setError("");
     let metadata: Record<string, unknown>;
@@ -122,7 +155,12 @@ export function AgentEditDialog({ open, onClose, agent, onSaved }: AgentEditDial
 
     setSaving(true);
     try {
-      const payload = formToConfig(form);
+      // Repo mode: mint or patch the environment carrying `config.git_repo`
+      // before building the payload — an API call `formToConfig` (pure)
+      // can't make itself. No-ops when repoUrl is empty.
+      const resolvedForm = await syncRepoEnvironment(api, form);
+      if (resolvedForm.repoEnvId !== form.repoEnvId) setForm(resolvedForm);
+      const payload = formToConfig(resolvedForm);
       // Edit semantics differ from create: absent fields mean "keep", so
       // clearing a field needs an explicit value. Send the full state.
       payload.version = agent.version;
@@ -133,7 +171,9 @@ export function AgentEditDialog({ open, onClose, agent, onSaved }: AgentEditDial
       payload.multiagent = form.callableAgents.length
         ? { type: "coordinator", agents: form.callableAgents }
         : null;
-      payload.metadata = metadata;
+      payload.metadata = resolvedForm.repoEnvId
+        ? { ...metadata, [DEFAULT_ENV_METADATA_KEY]: resolvedForm.repoEnvId }
+        : metadata;
       payload.enable_general_subagent = form.enableGeneralSubagent;
       const oma = (payload._oma ?? {}) as Record<string, unknown>;
       if (!oma.harness) oma.harness = form.harness;
@@ -218,7 +258,10 @@ export function AgentEditDialog({ open, onClose, agent, onSaved }: AgentEditDial
             <Button variant="ghost" onClick={onClose} disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={save} disabled={saving || !form.name}>
+            <Button
+              onClick={save}
+              disabled={saving || !form.name || !isValidRepoUrl(form.repoUrl)}
+            >
               {saving ? "Saving…" : "Save Changes"}
             </Button>
           </div>

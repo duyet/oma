@@ -137,6 +137,7 @@ const navGroups: NavGroup[] = [
     label: "Workspace",
     items: [
       { to: "/", label: "Overview", icon: DashboardIcon, end: true },
+      { to: "/launch", label: "Launch", icon: CircleCheckBigIcon, end: true },
       {
         to: "/agents",
         label: "Agents",

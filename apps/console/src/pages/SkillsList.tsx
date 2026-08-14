@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import { TrashIcon } from "lucide-react";
 import { useApi } from "../lib/api";
 import { formatQueryError, useApiQuery } from "../lib/useApiQuery";
@@ -76,6 +77,10 @@ function isZipFile(file: File): boolean {
 export function SkillsList() {
   const { api } = useApi();
   const confirm = useConfirm();
+  const nav = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  /** After a successful upload, navigate here if set (agent form "Create one"). */
+  const returnTo = searchParams.get("return");
 
   /* Server-driven filter state. `source` flows into skillsParams below
    * → useApiQuery reruns when params change → list reflects exactly
@@ -103,6 +108,22 @@ export function SkillsList() {
 
   /* create dialog */
   const [showCreate, setShowCreate] = useState(false);
+
+  // Deep-link from agent Skills tab: `/skills?new=1&return=/agents/new`
+  useEffect(() => {
+    const wantNew =
+      searchParams.get("new") === "1" || searchParams.get("new") === "true";
+    if (!wantNew || showCreate) return;
+    setShowCreate(true);
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev);
+        sp.delete("new");
+        return sp;
+      },
+      { replace: true },
+    );
+  }, [searchParams, showCreate, setSearchParams]);
   const [createTitle, setCreateTitle] = useState("");
   const [createZip, setCreateZip] = useState<File | null>(null);
   const [createUploading, setCreateUploading] = useState(false);
@@ -169,6 +190,10 @@ export function SkillsList() {
       setShowCreate(false);
       resetCreate();
       load();
+      // Return to agent create/edit when the user came from a Skills tab link.
+      if (returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//")) {
+        nav(returnTo);
+      }
     } catch (e: any) {
       setCreateError(e?.message || "Upload failed");
     } finally {

@@ -35,6 +35,10 @@ describe("<NewSessionDialog />", () => {
       http.get("/v1/environments/env_1", () =>
         HttpResponse.json({ id: "env_1", name: "Default" }),
       ),
+      http.get("/v1/vaults", () => HttpResponse.json({ data: [] })),
+      http.get("/v1/agents/agt_1", () =>
+        HttpResponse.json({ id: "agt_1", mcp_servers: [] }),
+      ),
     );
     let createBody: unknown = null;
     let eventsBody: unknown = null;
@@ -73,7 +77,13 @@ describe("<NewSessionDialog />", () => {
   });
 
   it("shows a CTA instead of a picker when the tenant has no environments", async () => {
-    server.use(http.get("/v1/environments", () => HttpResponse.json({ data: [] })));
+    server.use(
+      http.get("/v1/environments", () => HttpResponse.json({ data: [] })),
+      http.get("/v1/vaults", () => HttpResponse.json({ data: [] })),
+      http.get("/v1/agents/agt_1", () =>
+        HttpResponse.json({ id: "agt_1", mcp_servers: [] }),
+      ),
+    );
 
     renderDialog();
 
@@ -83,11 +93,63 @@ describe("<NewSessionDialog />", () => {
     expect(screen.getByRole("button", { name: "Create session" })).toBeDisabled();
   });
 
+  it("includes selected vault_ids in the create body", async () => {
+    server.use(
+      http.get("/v1/environments", () =>
+        HttpResponse.json({ data: [{ id: "env_1", name: "Default" }] }),
+      ),
+      http.get("/v1/environments/env_1", () =>
+        HttpResponse.json({ id: "env_1", name: "Default" }),
+      ),
+      http.get("/v1/vaults", () =>
+        HttpResponse.json({
+          data: [{ id: "vlt_1", name: "Prod" }],
+          // limit=1 probe still returns data so the vaults section shows
+        }),
+      ),
+      http.get("/v1/vaults/vlt_1/credentials", () => HttpResponse.json({ data: [] })),
+      http.get("/v1/agents/agt_1", () =>
+        HttpResponse.json({
+          id: "agt_1",
+          mcp_servers: [{ name: "github", url: "https://api.github.com/mcp" }],
+        }),
+      ),
+    );
+    let createBody: Record<string, unknown> | null = null;
+    server.use(
+      http.post("/v1/sessions", async ({ request }) => {
+        createBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ id: "sess_1" });
+      }),
+    );
+
+    renderDialog();
+    await waitFor(() => expect(screen.getByText(/Default/)).toBeInTheDocument());
+    // VaultsPicker uses combobox "Add vault..."
+    const addVault = await screen.findByText(/add vault/i);
+    await userEvent.click(addVault);
+    const option = await screen.findByText(/Prod/);
+    await userEvent.click(option);
+
+    await userEvent.click(screen.getByRole("button", { name: "Create session" }));
+    await waitFor(() =>
+      expect(createBody).toEqual({
+        agent: "agt_1",
+        environment_id: "env_1",
+        vault_ids: ["vlt_1"],
+      }),
+    );
+  });
+
   it("skips the environment step entirely for local-runtime agents", async () => {
     server.use(
       // Fetched by useDefaultEnvironment regardless of isLocalRuntime, but
       // never surfaced in the UI or sent on create for a local-runtime agent.
       http.get("/v1/environments", () => HttpResponse.json({ data: [] })),
+      http.get("/v1/vaults", () => HttpResponse.json({ data: [] })),
+      http.get("/v1/agents/agt_1", () =>
+        HttpResponse.json({ id: "agt_1", mcp_servers: [] }),
+      ),
       http.post("/v1/sessions", async ({ request }) => {
         const body = await request.json();
         expect(body).toEqual({ agent: "agt_1" });

@@ -16,6 +16,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import "@fontsource-variable/jetbrains-mono";
 import "./index.css";
 import { AuthProvider } from "./lib/auth";
+import { BrowserVmProvider } from "./lib/browser-vm/BrowserVmProvider";
 import { ConfirmProvider } from "./hooks/useConfirm";
 import { Toaster } from "./components/ui/sonner";
 import { AppShell } from "./components/AppShell";
@@ -24,6 +25,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { queryClient } from "./lib/query-client";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
+import { LaunchWizard } from "./pages/LaunchWizard";
 import { AgentsList } from "./pages/AgentsList";
 import { AgentDetail } from "./pages/AgentDetail";
 import { AgentOverviewTab } from "./pages/agents/AgentOverviewTab";
@@ -145,6 +147,9 @@ const SETTINGS_HUB: HubConfig = {
 
 const protectedRoutes: RouteObject[] = [
   { index: true, element: <Dashboard />, handle: { crumb: "Overview" } },
+  // Guided first-run path (audit Option B) — composes existing create
+  // surfaces; same control plane on CF Workers and self-host k3s.
+  { path: "launch", element: <LaunchWizard />, handle: { crumb: "Launch" } },
   // Nested route groups so detail pages publish a proper hierarchy
   // through `useMatches()` — `/agents/:id` resolves to
   // [agents-parent, agents/:id], so AppBreadcrumb renders
@@ -412,9 +417,14 @@ createRoot(document.getElementById("root")!).render(
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <ConfirmProvider>
-            <Suspense fallback={null}>
-              <RouterProvider router={router} />
-            </Suspense>
+            {/* Mounted above the router so the hidden sandbox iframe
+                persists across route changes instead of remounting (and
+                losing its paired VM) on every navigation. */}
+            <BrowserVmProvider>
+              <Suspense fallback={null}>
+                <RouterProvider router={router} />
+              </Suspense>
+            </BrowserVmProvider>
           </ConfirmProvider>
         </AuthProvider>
         <Toaster />

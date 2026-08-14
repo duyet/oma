@@ -464,6 +464,17 @@ proxy's vault-credential fallback resolves a token for the host — like
 explicit repo resources, `credential_id` isn't yet wired into the clone
 auth path.
 
+**Console:** the agent create/edit form's Basic tab has an optional
+**Repository** field (Cloud runtime mode only) — a URL + branch that, on
+save, mints or patches a dedicated environment carrying `config.git_repo`
+and points the agent at it via `metadata.default_environment_id` (the same
+field Browser-runtime agents use for their browser-vm environment; the two
+are mutually exclusive per agent). No new backend routes — it reuses
+`POST`/`PUT /v1/environments` and the existing default-environment
+resolution session-create already does. See `syncRepoEnvironment` and
+`repoEnvironmentBody` in `apps/console/src/pages/agents/AgentFormDialog.tsx`
+/ `browser-env.ts`.
+
 ### Sandbox Provider on the Cloudflare Deployment
 
 An environment's `config.sandbox_provider` (or legacy `config.type`) selects

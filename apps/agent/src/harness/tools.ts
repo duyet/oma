@@ -239,6 +239,95 @@ function safe<T>(fn: (args: T) => Promise<ToolResultValue>): (args: T) => Promis
   };
 }
 
+type WebSearchResultItem = { title: string; url: string; description: string };
+type WebSearchOutcome =
+  | { ok: true; results: WebSearchResultItem[] }
+  | { ok: false; error: string };
+
+/** One DuckDuckGo lite-HTML search attempt. Does not retry — see
+ *  `searchDuckDuckGoWithRetry` for the retry/backoff wrapper. */
+async function searchDuckDuckGoOnce(query: string, count: number): Promise<WebSearchOutcome> {
+  // Step 1: Get VQD token from DuckDuckGo
+  const vqdRes = await fetch(`https://duckduckgo.com/?${new URLSearchParams({ q: query, ia: "web" })}`);
+  if (!vqdRes.ok) return { ok: false, error: `DuckDuckGo error: ${vqdRes.status}` };
+  const vqdText = await vqdRes.text();
+  const vqd = /vqd=['"](\d+-\d+(?:-\d+)?)['"]/?.exec(vqdText)?.[1];
+  if (!vqd) return { ok: false, error: "DuckDuckGo: failed to get search token" };
+
+  // Step 2: Fetch search results
+  const params = new URLSearchParams({
+    q: query, l: "en-us", kl: "wt-wt", s: "0", dl: "en",
+    ct: "US", ss_mkt: "us", vqd, sp: "1", bpa: "1",
+  });
+  const searchRes = await fetch(`https://links.duckduckgo.com/d.js?${params}`);
+  if (!searchRes.ok) return { ok: false, error: `DuckDuckGo search error: ${searchRes.status}` };
+  const body = await searchRes.text();
+
+  if (body.includes("DDG.deep.anomalyDetectionBlock"))
+    return { ok: false, error: "DuckDuckGo rate limited. Try again in a moment." };
+
+  // Step 3: Parse results from JSONP-like response
+  const match = /DDG\.pageLayout\.load\('d',(\[.+?\])\);DDG\.duckbar\.load/.exec(body);
+  if (!match) return { ok: false, error: "DuckDuckGo: no results found" };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const raw = JSON.parse(match[1].replace(/\t/g, "    ")) as any[];
+  const results = raw
+    .filter((r) => r.u && !("n" in r))
+    .slice(0, count)
+    .map((r) => ({
+      title: r.t,
+      url: r.u,
+      description: (r.a || "").replace(/<\/?b>/g, ""),
+    }));
+
+  return { ok: true, results };
+}
+
+const DDG_RETRY_DELAYS_MS = [500, 1500]; // 2 retries, exponential-ish backoff
+
+/** Retries a rate-limited DuckDuckGo search with exponential backoff + jitter
+ *  before giving up. Only "rate limited" errors are retried — other errors
+ *  (network failure, no results, bad token) fail fast. */
+async function searchDuckDuckGoWithRetry(query: string, count: number): Promise<WebSearchOutcome> {
+  let last: WebSearchOutcome = { ok: false, error: "DuckDuckGo: no results found" };
+  for (let attempt = 0; attempt <= DDG_RETRY_DELAYS_MS.length; attempt++) {
+    last = await searchDuckDuckGoOnce(query, count);
+    if (last.ok || !last.error.includes("rate limited")) return last;
+    if (attempt < DDG_RETRY_DELAYS_MS.length) {
+      const base = DDG_RETRY_DELAYS_MS[attempt];
+      const jitter = base * 0.3 * Math.random();
+      await new Promise((resolve) => setTimeout(resolve, base + jitter));
+    }
+  }
+  return last;
+}
+
+async function searchTavily(query: string, count: number, apiKey: string): Promise<WebSearchOutcome> {
+  try {
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: apiKey, query, max_results: count }),
+    });
+    if (!res.ok) return { ok: false, error: `Tavily error: ${res.status}` };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = (await res.json()) as any;
+    if (!Array.isArray(data.results)) return { ok: false, error: "Tavily: unexpected response shape" };
+    return {
+      ok: true,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      results: data.results.map((r: any) => ({
+        title: r.title,
+        url: r.url,
+        description: r.content,
+      })),
+    };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 /**
  * Run `fn` over `items` with at most `limit` in flight at once (worker-pool
  * style — no external dependency). Used by call_agents_parallel to enforce
@@ -315,6 +404,56 @@ async function fetchFollowingRedirects(
     assertPublicUrl(nextUrl, { allowPrivate });
     hopUrl = nextUrl;
   }
+}
+
+const WEB_FETCH_RETRY_DELAYS_MS = [500, 1500]; // 2 retries, same cadence as DDG search
+
+/** True for transient upstream failures worth a retry — rate limiting (429)
+ *  and server errors (5xx). 4xx other than 429 is the caller's fault
+ *  (bad URL, auth, not found) and retrying won't help. */
+function isRetryableStatus(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
+/** True for transient network-level failures (timeout, DNS blip, connection
+ *  reset) — as opposed to a deliberate SsrfBlockedError guard rejection,
+ *  which must never be retried since the target is disallowed regardless. */
+function isRetryableFetchError(err: unknown): boolean {
+  return !(err instanceof SsrfBlockedError);
+}
+
+/**
+ * Wraps `fetchFollowingRedirects` with retry + exponential backoff + jitter
+ * on transient upstream failures (429/5xx responses, or network-level
+ * errors like timeouts/DNS blips) before giving up. A non-retryable outcome
+ * (SsrfBlockedError, or a non-retryable HTTP status) returns/throws
+ * immediately on the first attempt — same as before this wrapper existed.
+ */
+async function fetchFollowingRedirectsWithRetry(
+  startUrl: string,
+  allowPrivate: boolean,
+  signal: AbortSignal,
+): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= WEB_FETCH_RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      const r = await fetchFollowingRedirects(startUrl, allowPrivate, signal);
+      if (r.ok || !isRetryableStatus(r.status) || attempt === WEB_FETCH_RETRY_DELAYS_MS.length) {
+        return r;
+      }
+    } catch (err) {
+      if (!isRetryableFetchError(err) || attempt === WEB_FETCH_RETRY_DELAYS_MS.length) {
+        throw err;
+      }
+      lastErr = err;
+    }
+    const base = WEB_FETCH_RETRY_DELAYS_MS[attempt];
+    const jitter = base * 0.3 * Math.random();
+    await new Promise((resolve) => setTimeout(resolve, base + jitter));
+  }
+  // Unreachable in practice (the loop above always returns or throws on its
+  // last iteration), but keeps the function's return type honest.
+  throw lastErr;
 }
 
 /** File extensions that Read returns as IMAGE content blocks (Claude/GPT-4o/Grok native). */
@@ -1058,7 +1197,7 @@ export async function buildTools(
         let isRaw = false;
         if (env?.toMarkdown) {
           try {
-            const r = await fetchFollowingRedirects(url, allowPrivate, AbortSignal.timeout(20_000));
+            const r = await fetchFollowingRedirectsWithRetry(url, allowPrivate, AbortSignal.timeout(20_000));
             if (r.ok) {
               const buf = await r.arrayBuffer();
               const ct = r.headers.get("content-type") || "text/html";
@@ -1268,7 +1407,11 @@ export async function buildTools(
   if (toolTypes.has("web_search_20250305")) {
     tools.web_search = anthropic.tools.webSearch_20250305();
   } else if (toolTypes.has("web_search_ddg") || enabled.has("web_search")) {
-    // DuckDuckGo — default web search, free, no API key
+    // DuckDuckGo — default web search, free, no API key. Retries with
+    // exponential backoff + jitter on transient rate limiting, then falls
+    // back to Tavily (if TAVILY_API_KEY is configured) instead of surfacing
+    // the rate-limit error straight to the model.
+    const tavilyKey = env?.TAVILY_API_KEY;
     tools.web_search = tool({
       description:
         "Search the web using DuckDuckGo. Returns titles, URLs, and descriptions.",
@@ -1278,41 +1421,16 @@ export async function buildTools(
       }),
       execute: safe(async ({ query, max_results }) => {
         const count = max_results || 5;
-        // Step 1: Get VQD token from DuckDuckGo
-        const vqdRes = await fetch(`https://duckduckgo.com/?${new URLSearchParams({ q: query, ia: "web" })}`);
-        if (!vqdRes.ok) return `DuckDuckGo error: ${vqdRes.status}`;
-        const vqdText = await vqdRes.text();
-        const vqd = /vqd=['"](\d+-\d+(?:-\d+)?)['"]/?.exec(vqdText)?.[1];
-        if (!vqd) return "DuckDuckGo: failed to get search token";
+        const ddgResult = await searchDuckDuckGoWithRetry(query, count);
+        if (ddgResult.ok) return JSON.stringify(ddgResult.results);
 
-        // Step 2: Fetch search results
-        const params = new URLSearchParams({
-          q: query, l: "en-us", kl: "wt-wt", s: "0", dl: "en",
-          ct: "US", ss_mkt: "us", vqd, sp: "1", bpa: "1",
-        });
-        const searchRes = await fetch(`https://links.duckduckgo.com/d.js?${params}`);
-        if (!searchRes.ok) return `DuckDuckGo search error: ${searchRes.status}`;
-        const body = await searchRes.text();
+        if (tavilyKey) {
+          const tavilyResult = await searchTavily(query, count, tavilyKey);
+          if (tavilyResult.ok) return JSON.stringify(tavilyResult.results);
+          return `DuckDuckGo rate limited and Tavily fallback failed: ${tavilyResult.error}`;
+        }
 
-        if (body.includes("DDG.deep.anomalyDetectionBlock"))
-          return "DuckDuckGo rate limited. Try again in a moment.";
-
-        // Step 3: Parse results from JSONP-like response
-        const match = /DDG\.pageLayout\.load\('d',(\[.+?\])\);DDG\.duckbar\.load/.exec(body);
-        if (!match) return "DuckDuckGo: no results found";
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const raw = JSON.parse(match[1].replace(/\t/g, "    ")) as any[];
-        const results = raw
-          .filter((r) => r.u && !("n" in r))
-          .slice(0, count)
-          .map((r) => ({
-            title: r.t,
-            url: r.u,
-            description: (r.a || "").replace(/<\/?b>/g, ""),
-          }));
-
-        return JSON.stringify(results);
+        return ddgResult.error;
       }),
     });
   }
@@ -1329,25 +1447,8 @@ export async function buildTools(
       execute: safe(async ({ query, max_results }) => {
         if (!tavilyKey)
           return "web_search unavailable: TAVILY_API_KEY not configured";
-        const res = await fetch("https://api.tavily.com/search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            api_key: tavilyKey,
-            query,
-            max_results: max_results || 5,
-          }),
-        });
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const data = (await res.json()) as any;
-        return JSON.stringify(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          data.results?.map((r: any) => ({
-            title: r.title,
-            url: r.url,
-            snippet: r.content,
-          })) || data
-        );
+        const result = await searchTavily(query, max_results || 5, tavilyKey);
+        return result.ok ? JSON.stringify(result.results) : `Tavily search error: ${result.error}`;
       }),
     });
   }
