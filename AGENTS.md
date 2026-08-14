@@ -1688,7 +1688,11 @@ runtime. The CRUD routes are one shared implementation
 (`packages/http-routes/src/schedules/index.ts`).
 
 **Deployment topology:** Cloudflare fires the tick from wrangler
-`triggers.crons` (the platform invokes `scheduled()` per minute). The self-host
+`triggers.crons` (the platform invokes `scheduled()` per minute). Hosted
+prod on Workers Free shares **one** minute cron on the main worker —
+integrations Linear dispatch + Telegram idle sweep ride it via
+`POST /internal/cron/tick` over the service binding (a second wrangler
+trigger fails deploy with CF API 10072). The self-host
 Node runtime (`docker compose` or k8s) fires **in-process** on a `setInterval`
 cadence started at server boot — no external k8s `CronJob` resource is needed.
 Running **multiple Node replicas is safe**: the schedule jobs claim each due

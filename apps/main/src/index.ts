@@ -99,6 +99,7 @@ import mcpProxyRoutes, {
 } from "./routes/mcp-proxy";
 import { resolveGithubCredentials } from "./lib/github-creds";
 import { buildCfScheduler } from "./lib/cf-scheduler-jobs";
+import { tickIntegrationsViaBinding } from "./lib/integrations-cron-tick";
 import { buildCfMemoryQueue, dispatchCfMemoryQueueBatch } from "./lib/cf-queue-handlers";
 import {
   SandboxProviderRegistry,
@@ -1216,6 +1217,15 @@ export default {
             op: `cron.${job.name}.failed`,
             ...errFields(err),
           });
+        }),
+      );
+    }
+    // One cron shared: hosted integrations no longer declares its own
+    // wrangler trigger (Workers Free 5-cron cap). Ride this minute tick.
+    if (controller.cron === "* * * * *") {
+      ctx.waitUntil(
+        tickIntegrationsViaBinding(env).catch((err) => {
+          logError({ op: "cron.integrations_tick", err }, "integrations cron fan-out failed");
         }),
       );
     }

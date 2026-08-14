@@ -44,11 +44,12 @@
 
   "observability": { "enabled": true },
 
-  // Linear dispatch sweep — runs every minute. The sweep itself is cheap
-  // (a handful of D1 queries + Linear GraphQL fetches per due rule), but
-  // each rule's `poll_interval_seconds` field gates real work, so most
-  // ticks are no-ops. Bumping to */1 for tight feedback during evaluation;
-  // can relax to */5 later if it ever becomes a noisy-neighbor problem.
+  // Linear dispatch sweep — runs every minute on wrangler-dev / self-host
+  // / staging. Hosted prod omits this trigger (Workers Free 5-cron cap)
+  // and is driven by the main worker's existing minute cron via
+  // POST /internal/cron/tick. The sweep itself is cheap (a handful of D1
+  // queries + Linear GraphQL fetches per due rule); each rule's
+  // `poll_interval_seconds` field gates real work, so most ticks are no-ops.
   "triggers": {
     "crons": ["* * * * *"]
   },
@@ -93,9 +94,12 @@
         { "binding": "MAIN", "service": "oma-managed-agents" }
       ],
       "observability": { "enabled": true },
-      "triggers": {
-        "crons": ["* * * * *"]
-      },
+      // Free plan allows 5 cron triggers per *account*. This worker's
+      // Linear + Telegram sweeps ride the main worker's existing
+      // `* * * * *` via POST /internal/cron/tick (service binding).
+      // Declaring another trigger here fails deploy with CF API 10072.
+      // Re-add after Workers Paid if you want a dedicated trigger:
+      // "triggers": { "crons": ["* * * * *"] }
       "ratelimits": [
         { "name": "RL_WEBHOOK_IP",     "namespace_id": "3001", "simple": { "limit": 30, "period": 10 } },
         { "name": "RL_WEBHOOK_TENANT", "namespace_id": "3003", "simple": { "limit": 60, "period": 60 } }
