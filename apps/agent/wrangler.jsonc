@@ -127,7 +127,9 @@
     }
   ],
 
-  "limits": { "cpu_ms": 300000 },
+  // cpu_ms is Workers Paid only (deploy 100328). Do not set it at the
+  // top level — wrangler env overlays inherit it and Free production
+  // then fails even when env.production omits `limits`.
   "observability": { "enabled": true },
 
   "analytics_engine_datasets": [
