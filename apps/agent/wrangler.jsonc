@@ -176,22 +176,19 @@
         { "name": "SEND_EMAIL" }
       ],
       "ai": { "binding": "AI" },
-      "worker_loaders": [
-        { "binding": "LOADER" }
-      ],
       "vars": {
         "MEMORY_BUCKET_NAME": "oma-managed-agents-memory",
         "WORKSPACE_BUCKET_NAME": "oma-managed-agents-workspace",
         "BACKUP_BUCKET_NAME": "oma-managed-agents-backups",
         "CLOUDFLARE_ACCOUNT_ID": "23050adb6c92e313643a29e1ba64c88a"
       },
-      // R2 / AE / cpu_ms omitted. This account cannot enable Analytics
-      // Engine (CF disabled it; dashboard toggle is gone). Declaring AE
-      // fails deploy with 10089. recordEvent() already no-ops when
-      // ANALYTICS is unset. Same for R2 (10042) and cpu_ms (100328).
-      // Re-add R2 / cpu_ms if those entitlements return. Do not re-add
-      // analytics_engine_datasets unless CF restores AE on this account.
-      "browser": { "binding": "BROWSER" },
+      // Paid-only / disabled-on-this-account bindings stay off production:
+      //   ANALYTICS — CF disabled AE (10089); recordEvent() no-ops
+      //   worker_loaders LOADER — Dynamic Workers needs Paid (10195)
+      //   BROWSER — Browser Rendering is a paid add-on
+      //   R2 / cpu_ms — 10042 / 100328
+      // run_dynamic_worker and browser tools are omitted from buildTools()
+      // when those bindings are absent.
       "observability": { "enabled": true },
     },
     "staging": {
