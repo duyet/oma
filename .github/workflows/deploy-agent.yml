@@ -54,13 +54,26 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Deploy to Cloudflare Workers
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: apps/agent
-          command: deploy --env production
+      # versions upload → versions deploy, same as main/integrations.
+      # Plain `wrangler deploy` also syncs bindings/schedules and fails
+      # on this Free-capped account (AE 10089, cron 10072). Version
+      # upload ships the script without rewriting account-level extras.
+      - name: Deploy Worker version
+        working-directory: apps/agent
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          OUT=$(npx wrangler versions upload --env production 2>&1 | tee /dev/stderr)
+          VID=$(printf '%s\n' "$OUT" | sed -n 's/^Worker Version ID: //p' | tail -1 | tr -d '[:space:]')
+          if [ -z "$VID" ]; then
+            echo "failed to parse Worker Version ID from upload output" >&2
+            exit 1
+          fi
+          echo "Deploying version $VID @ 100%"
+          npx wrangler versions deploy "${VID}@100" --env production --yes \
+            --message "ci ${GITHUB_SHA}"
 
       # No post-deploy /health curl here: this worker (oma-sandbox-default)
       # has no custom-domain route — apps/agent/wrangler.jsonc sets no

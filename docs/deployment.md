@@ -277,7 +277,7 @@ each with its own bindings, deployed via `wrangler deploy`.
 | Queue | `managed-agents-memory-events` + DLQ; queue consumer in main worker reflects R2 events to D1 |
 | Console UI | static assets served by main worker's `ASSETS` binding (`apps/console/dist`); SPA fallback for client-side routing |
 | Browser tool | `@cloudflare/playwright` against the agent worker's `BROWSER` binding |
-| Observability | Analytics Engine — `oma_events` dataset; `pino` JSON logs to `wrangler tail` |
+| Observability | `wrangler tail` / Workers Logs. Analytics Engine is **not** bound on hosted prod — CF disabled AE on this account (deploy 10089). `recordEvent()` no-ops without the binding. |
 | Rate limiting | CF Workers Rate Limiting binding (`ratelimits`) — OTP / auth abuse |
 
 ### Deploy
@@ -338,7 +338,7 @@ npx wrangler login
 | Console | embedded in main-node image, served by `serveStatic` on `:8787` (or `vite dev` proxy mode for live-reload) | served by main worker ASSETS | served by main worker ASSETS |
 | Rate limit | in-process token bucket via `@duyet/oma-rate-limit/adapters/memory` (5-bucket bundle) | wrangler dev ratelimits sim | CF Rate Limiting binding |
 | HTTP routes (CRUD) | `@duyet/oma-http-routes` mount factories | (CF mounts existing per-app files; package mount migration is staged) | (same) |
-| Observability | stdout (pino) | wrangler tail stdout | Analytics Engine + wrangler tail |
+| Observability | stdout (pino) | wrangler tail stdout | wrangler tail / Workers Logs (`recordEvent` no-ops; AE disabled on this account) |
 | Start cmd | `docker compose up` | `pnpm dev` | n/a (run-as-deployed) |
 | Deploy cmd | `docker compose up -d` | n/a (dev only) | `./scripts/setup-cf.sh` |
 | Multi-tenant | better-auth + tenant/membership tables | better-auth + tenant/membership tables | better-auth + tenant/membership tables + shard router |

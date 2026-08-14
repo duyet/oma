@@ -185,18 +185,14 @@
         "BACKUP_BUCKET_NAME": "oma-managed-agents-backups",
         "CLOUDFLARE_ACCOUNT_ID": "23050adb6c92e313643a29e1ba64c88a"
       },
-      "r2_buckets": [
-        { "binding": "WORKSPACE_BUCKET", "bucket_name": "oma-managed-agents-workspace" },
-        { "binding": "FILES_BUCKET", "bucket_name": "oma-managed-agents-files" },
-        { "binding": "BACKUP_BUCKET", "bucket_name": "oma-managed-agents-backups" },
-        { "binding": "MEMORY_BUCKET", "bucket_name": "oma-managed-agents-memory" }
-      ],
+      // R2 / AE / cpu_ms omitted. This account cannot enable Analytics
+      // Engine (CF disabled it; dashboard toggle is gone). Declaring AE
+      // fails deploy with 10089. recordEvent() already no-ops when
+      // ANALYTICS is unset. Same for R2 (10042) and cpu_ms (100328).
+      // Re-add R2 / cpu_ms if those entitlements return. Do not re-add
+      // analytics_engine_datasets unless CF restores AE on this account.
       "browser": { "binding": "BROWSER" },
-      "limits": { "cpu_ms": 300000 },
       "observability": { "enabled": true },
-      "analytics_engine_datasets": [
-        { "binding": "ANALYTICS", "dataset": "oma_events" }
-      ]
     },
     "staging": {
       "name": "oma-sandbox-default-staging",
@@ -254,9 +250,7 @@
       "browser": { "binding": "BROWSER" },
       "limits": { "cpu_ms": 300000 },
       "observability": { "enabled": true },
-      "analytics_engine_datasets": [
-        { "binding": "ANALYTICS", "dataset": "oma_events_staging" }
-      ]
+      // Same account as prod — AE is disabled (10089). Do not bind.
     }
   }
 }

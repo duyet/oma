@@ -223,18 +223,15 @@
       "kv_namespaces": [
         { "binding": "CONFIG_KV", "id": "6adfd1b06ee6493981b4b818d3dd81ae" }
       ],
-      // R2 / AE / memory-event queues are intentionally omitted from
-      // env.production until the account re-enables R2 (CF API code 10042 —
-      // "Please enable R2 through the Cloudflare Dashboard"). Live
-      // oma-managed-agents already runs without FILES_BUCKET / MEMORY_BUCKET /
-      // ANALYTICS / queue consumers (verified via Workers Scripts settings
-      // API). Declaring them here fails every `wrangler deploy --env
-      // production` at bucket validation before the script uploads. Code
-      // paths fail open without the bindings (files/memory/metrics no-op).
-      // Re-add after enabling R2:
+      // R2 / AE / memory-event queues are omitted from env.production.
+      // Analytics Engine is disabled on this account (CF removed the
+      // dashboard toggle; declaring it fails deploy with 10089). R2 is
+      // 10042. Live oma-managed-agents already runs without FILES_BUCKET /
+      // MEMORY_BUCKET / ANALYTICS / queue consumers. recordEvent() and
+      // file/memory paths fail open. Do not re-add ANALYTICS unless CF
+      // restores AE. R2/queues can come back if those entitlements return:
       //   r2_buckets: FILES_BUCKET → oma-managed-agents-files,
       //               MEMORY_BUCKET → oma-managed-agents-memory
-      //   analytics_engine_datasets: ANALYTICS → oma_events
       //   queues.consumers: oma-managed-agents-memory-events (+ dlq)
       // Single-D1 launch layout (no sharding — zero users yet, sharding is
       // premature). MAIN_DB holds all tenant + control-plane data; the router

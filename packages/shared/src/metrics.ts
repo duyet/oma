@@ -1,9 +1,13 @@
 // Analytics Engine writer for OMA error/event metrics.
 //
-// AE is wider but cheaper than Logpush — datasets give you SQL queries +
-// Grafana dashboards over high-cardinality dims (op, tenant_id, error_name)
-// without paying per-byte log storage. Use AE for things you might want to
-// alert on; use logError() for things you need to read in narrative form.
+// Hosted prod on this account does **not** bind ANALYTICS — Cloudflare
+// disabled AE (deploy fails with 10089; the dashboard toggle is gone).
+// Callers must keep using recordEvent(); it is a no-op when the binding
+// is missing. Use logError() for anything you need to read in wrangler
+// tail / Workers Logs.
+//
+// When AE is available (self-host Paid, or if CF restores it): datasets
+// give SQL queries over high-cardinality dims (op, tenant_id, error_name).
 //
 // Wire (per worker that needs it):
 //   wrangler.jsonc:
