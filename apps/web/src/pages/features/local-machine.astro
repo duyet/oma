@@ -16,7 +16,7 @@ const faqItems = [
   {
     question: "Can I run Claude Code locally through it?",
     answer:
-      "Yes — local ACP agents such as Claude Code run against the paired machine the same way sandbox ops do, streamed back over the same RuntimeRoom connection.",
+      "Yes — local ACP agents such as Claude Code, Codex, and Grok Build run against the paired machine the same way sandbox ops do, streamed back over the same RuntimeRoom connection.",
   },
   {
     question: "Does it need open ports or firewall changes?",
@@ -42,7 +42,7 @@ const schemas = [
 
 <Base
   title="Connect Your Local Machine | Open Managed Agents"
-  description="Pair a laptop, workstation, or homelab box with your OMA deployment with one command. Run sandboxes and local Claude Code agents on your own hardware, outbound-only, no open ports."
+  description="Pair a laptop, workstation, or homelab box with your OMA deployment with one command. Run sandboxes and local Claude Code, Codex, or Grok Build agents on your own hardware, outbound-only, no open ports."
   canonical="/features/local-machine/"
   keywords="local machine bridge, oma bridge, self-hosted agent runtime, run claude code locally, outbound websocket agent, byo hardware agent sandbox"
   schemas={schemas}
@@ -60,7 +60,7 @@ const schemas = [
           <p class="text-lg text-[var(--color-fg-muted)] leading-relaxed">
             The control plane stays on OMA — sessions, event logs, and
             history live where they always do. But the sandbox and any local
-            ACP agent (Claude Code and friends) can run on hardware you
+            ACP agent (Claude Code, Codex, Grok Build) can run on hardware you
             already own, paired with one command and no inbound ports.
           </p>
           <div class="mt-8 flex flex-wrap gap-3">

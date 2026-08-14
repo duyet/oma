@@ -6,6 +6,7 @@ describe("modelProvider", () => {
   it("reads the gateway `provider/model` prefix", () => {
     expect(modelProvider("anthropic/claude-sonnet-4-6").id).toBe("anthropic");
     expect(modelProvider("openai/gpt-5").id).toBe("openai");
+    expect(modelProvider("xai/grok-4.6").id).toBe("xai");
     expect(modelProvider("poolside/laguna-s-2.1").id).toBe("poolside");
   });
 
@@ -13,6 +14,8 @@ describe("modelProvider", () => {
     expect(modelProvider("claude-sonnet-4-6").id).toBe("anthropic");
     expect(modelProvider("gpt-5").id).toBe("openai");
     expect(modelProvider("o3-mini").id).toBe("openai");
+    expect(modelProvider("grok-4.6").id).toBe("xai");
+    expect(modelProvider("grok-build-0.1").id).toBe("xai");
   });
 
   it("attributes an unresolved AnyRouter alias to AnyRouter", () => {

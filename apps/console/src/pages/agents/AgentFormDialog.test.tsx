@@ -5,7 +5,13 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../../mocks/server";
-import { BasicTab, INITIAL_FORM, formToConfig, type FormState } from "./AgentFormDialog";
+import {
+  BasicTab,
+  INITIAL_FORM,
+  acpModelOptionsFor,
+  formToConfig,
+  type FormState,
+} from "./AgentFormDialog";
 
 /** BasicTab loads the environment list for the Browser runtime mode, so it
  *  needs a query client the same way the session dialogs' tests do. */
@@ -120,5 +126,50 @@ describe("<BasicTab /> harness picker", () => {
     // Local mode replaces the cloud harness block with the connect-a-machine state.
     expect(screen.queryByRole("radio", { name: "OMA Standard" })).toBeNull();
     expect(screen.getByText(/No runtimes registered/i)).toBeTruthy();
+  });
+});
+
+describe("acpModelOptionsFor", () => {
+  it("offers official xAI ids for Grok Build (and its aliases)", () => {
+    for (const id of ["grok-build", "grok", "grok-cli", "xai-grok"]) {
+      expect(acpModelOptionsFor(id).map((o) => o.value)).toEqual([
+        "grok-4.6",
+        "grok-4.5",
+        "grok-4.3",
+        "grok-build-0.1",
+      ]);
+    }
+  });
+
+  it("keeps the two known-good Claude ids for claude-acp and legacy aliases", () => {
+    for (const id of ["claude-acp", "claude-agent-acp", "claude-code-acp"]) {
+      expect(acpModelOptionsFor(id).map((o) => o.value)).toEqual([
+        "claude-sonnet-4-6",
+        "claude-haiku-4-5",
+      ]);
+    }
+  });
+
+  it("returns no override ids for other ACP agents so the picker stays on daemon default", () => {
+    expect(acpModelOptionsFor("codex-acp")).toEqual([]);
+    expect(acpModelOptionsFor("gemini")).toEqual([]);
+    expect(acpModelOptionsFor("not-a-real-agent")).toEqual([]);
+  });
+
+  it("formToConfig writes a Grok local binding with the grok-4.6 override", () => {
+    const form: FormState = {
+      ...INITIAL_FORM,
+      runtimeId: "rt_1",
+      acpAgentId: "grok-build",
+      acpModel: "grok-4.6",
+    };
+    expect(formToConfig(form)._oma).toEqual({
+      harness: "acp-proxy",
+      runtime_binding: {
+        runtime_id: "rt_1",
+        acp_agent_id: "grok-build",
+        model: "grok-4.6",
+      },
+    });
   });
 });

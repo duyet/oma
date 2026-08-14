@@ -9,7 +9,7 @@
 import { Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 
-export type ModelProviderId = "anthropic" | "openai" | "poolside" | "anyrouter" | "unknown";
+export type ModelProviderId = "anthropic" | "openai" | "xai" | "poolside" | "anyrouter" | "unknown";
 
 export interface ModelProviderInfo {
   id: ModelProviderId;
@@ -63,6 +63,15 @@ function PoolsideMark({ className }: { className?: string }) {
   );
 }
 
+/** xAI — a crossed X that reads at badge size next to grok-* handles. */
+function XaiMark({ className }: { className?: string }) {
+  return (
+    <Mark className={className}>
+      <path d="M4.2 4h4.1L12 10.1 15.7 4h4.1l-6.1 9.2L20.5 20h-4.2L12 13.8 7.7 20H3.5l6.8-6.8L4.2 4Z" />
+    </Mark>
+  );
+}
+
 /** AnyRouter — a router: one input fanning out to several upstreams. */
 function AnyRouterMark({ className }: { className?: string }) {
   return (
@@ -77,6 +86,7 @@ function AnyRouterMark({ className }: { className?: string }) {
 const MARKS: Record<ModelProviderId, (p: { className?: string }) => ReactNode> = {
   anthropic: AnthropicMark,
   openai: OpenAiMark,
+  xai: XaiMark,
   poolside: PoolsideMark,
   anyrouter: AnyRouterMark,
   unknown: ({ className }) => (
@@ -96,11 +106,13 @@ export function modelProvider(modelId: string | undefined | null): ModelProvider
   const prefix = id.includes("/") ? id.slice(0, id.indexOf("/")) : "";
   if (prefix === "anthropic") return { id: "anthropic", name: "Anthropic" };
   if (prefix === "openai") return { id: "openai", name: "OpenAI" };
+  if (prefix === "xai") return { id: "xai", name: "xAI" };
   if (prefix === "poolside") return { id: "poolside", name: "poolside" };
   if (prefix === "anyrouter") return { id: "anyrouter", name: "AnyRouter" };
 
   // Bare handles, and the alias `anyrouter` with no slash.
   if (id.startsWith("claude")) return { id: "anthropic", name: "Anthropic" };
+  if (id.startsWith("grok")) return { id: "xai", name: "xAI" };
   if (id.startsWith("gpt") || id.startsWith("o1") || id.startsWith("o3")) {
     return { id: "openai", name: "OpenAI" };
   }

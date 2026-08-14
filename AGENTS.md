@@ -1230,9 +1230,9 @@ this harness — drive that through `acp-proxy` + a local runtime binding.
 ### Local ACP Runtime (`harness: "acp-proxy"`)
 
 Instead of running in OMA's cloud sandbox, an agent can delegate its whole
-loop to an ACP-compatible child (Claude Code, Codex, …) running on a user's
-own machine via `oma bridge daemon`. Set `harness: "acp-proxy"` and
-`runtime_binding`:
+loop to an ACP-compatible child (Claude Code, Codex, Grok Build, …) running
+on a user's own machine via `oma bridge daemon`. Set `harness: "acp-proxy"`
+and `runtime_binding`:
 
 ```json
 {
@@ -1245,6 +1245,27 @@ own machine via `oma bridge daemon`. Set `harness: "acp-proxy"` and
   }
 }
 ```
+
+Grok Build is a first-class overlay id (`grok-build`; aliases `grok`,
+`grok-cli`, `xai-grok`). Install with `npm install -g @xai-official/grok`
+(or https://x.ai/cli), pair the machine, then bind:
+
+```json
+{
+  "harness": "acp-proxy",
+  "runtime_binding": {
+    "runtime_id": "rt_xxx",
+    "acp_agent_id": "grok-build",
+    "model": "grok-4.6"
+  }
+}
+```
+
+The daemon spawns `grok agent stdio`. Model override is best-effort
+(`session/set_model`); Grok ids in the Console picker are the official
+xAI slugs (`grok-4.6`, `grok-4.5`, `grok-4.3`, `grok-build-0.1`). This
+is independent of the cloud Model Card path (`provider: "oai-compatible"`,
+`https://api.x.ai/v1`) used by the default harness.
 
 `AcpProxyHarness` forwards `model` / `reasoning_effort` on `session.start` to
 the daemon, which applies them **best-effort** against the spawned ACP child

@@ -48,9 +48,9 @@ export interface KnownAgentEntry {
    */
   aliases?: string[];
   /**
-   * UI signal: this agent is one of the four OMA promotes as "first
-   * class" in the Console (claude-acp, codex-acp, openclaw, hermes as
-   * of v0.3.x). Featured agents render in the dropdown's first group;
+   * UI signal: this agent is one of the five OMA promotes as "first
+   * class" in the Console (claude-acp, codex-acp, grok-build, openclaw,
+   * hermes). Featured agents render in the dropdown's first group;
    * other detected agents render below. Set by overlay only — official
    * entries are never featured-by-default.
    */
@@ -140,6 +140,23 @@ export const OMA_OVERLAY_AGENTS: KnownAgentEntry[] = [
     wraps: "codex",
     installHint: "download from https://github.com/zed-industries/codex-acp/releases and place on PATH",
     homepage: "https://github.com/zed-industries/codex-acp",
+  },
+  // grok-build: official ACP registry id. xAI's Grok Build CLI speaks
+  // ACP natively (`grok agent stdio`); it is not a wrapper around a
+  // second binary. Overlay lists it so a cold daemon (no live registry
+  // fetch) and the Console (overlay-only) still resolve the id, show
+  // an install hint, and feature it next to Claude / Codex. Official
+  // registry ships the same id with an npx distribution; overlay spec
+  // wins and prefers the bare `grok` binary for faster spawn.
+  {
+    id: "grok-build",
+    label: "Grok Build",
+    spec: { command: "grok", args: ["agent", "stdio"] },
+    aliases: ["grok", "grok-cli", "xai-grok"],
+    featured: true,
+    install: { kind: "npm", package: "@xai-official/grok" },
+    installHint: "npm install -g @xai-official/grok   # or https://x.ai/cli",
+    homepage: "https://x.ai/cli",
   },
   // gemini: official id is `gemini`. Pre-registry OMA had `gemini-cli`.
   {
