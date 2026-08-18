@@ -16,11 +16,11 @@ const schemas = [
   canonical="/stats/"
   schemas={schemas}
 >
-  <section class="max-w-5xl mx-auto px-4 py-16 md:py-24">
+  <section class="max-w-5xl mx-auto px-4 py-10 md:py-12">
     <p class="text-sm font-mono uppercase tracking-wider text-[var(--color-fg-subtle)] mb-4">
       Stats
     </p>
-    <h1 class="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-3">
+    <h1 class="font-display text-3xl sm:text-4xl font-bold tracking-tight mb-3">
       Platform stats
     </h1>
     <p class="text-lg text-[var(--color-fg-muted)] leading-relaxed mb-4 max-w-2xl">
@@ -30,13 +30,13 @@ const schemas = [
       <span class="stats-skeleton">Loading…</span>
     </p>
 
-    <div id="stats-error" class="hidden border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-surface)] p-6 text-sm text-[var(--color-fg-muted)] mb-10">
+    <div id="stats-error" class="hidden border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-surface)] p-4 text-sm text-[var(--color-fg-muted)] mb-10">
       Stats unavailable right now — please check back later.
     </div>
 
     <div id="stats-content" class="hidden">
       <!-- Counter tiles inside the same dithered brand frame as the hero diagram -->
-      <div class="relative overflow-hidden rounded-2xl p-4 md:p-6 mb-14">
+      <div class="relative overflow-hidden rounded-md p-3 md:p-4 mb-8">
         <div
           class="pointer-events-none absolute inset-0"
           aria-hidden="true"
@@ -44,12 +44,12 @@ const schemas = [
         ></div>
         <div class="relative grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
           <div class="stat-tile">
-            <div class="font-mono text-3xl md:text-4xl font-bold tabular-nums" data-stat="agents-total">—</div>
+            <div class="font-mono text-2xl md:text-3xl font-bold tabular-nums" data-stat="agents-total">—</div>
             <div class="stat-label">Agents</div>
             <div class="stat-sub"><span data-stat="agents-active">—</span> active</div>
           </div>
           <div class="stat-tile">
-            <div class="font-mono text-3xl md:text-4xl font-bold tabular-nums" data-stat="sessions-total">—</div>
+            <div class="font-mono text-2xl md:text-3xl font-bold tabular-nums" data-stat="sessions-total">—</div>
             <div class="stat-label">Sessions</div>
             <div class="stat-sub">
               <span class="stats-pulse" aria-hidden="true"></span>
@@ -57,14 +57,14 @@ const schemas = [
             </div>
           </div>
           <div class="stat-tile">
-            <div class="font-mono text-3xl md:text-4xl font-bold tabular-nums" data-stat="tasks-total">—</div>
+            <div class="font-mono text-2xl md:text-3xl font-bold tabular-nums" data-stat="tasks-total">—</div>
             <div class="stat-label">Scheduled work</div>
             <div class="stat-sub">
               <span data-stat="tasks-deployments">—</span> deployments · <span data-stat="tasks-schedules">—</span> schedules
             </div>
           </div>
           <div class="stat-tile">
-            <div class="font-mono text-3xl md:text-4xl font-bold tabular-nums" data-stat="cli-total">—</div>
+            <div class="font-mono text-2xl md:text-3xl font-bold tabular-nums" data-stat="cli-total">—</div>
             <div class="stat-label">CLI commands</div>
             <div class="stat-sub">anonymous, opt-out</div>
           </div>
@@ -72,13 +72,13 @@ const schemas = [
       </div>
 
       <!-- CLI commands by name -->
-      <div class="mb-14">
+      <div class="mb-8">
         <h2 class="font-display text-2xl font-bold mb-5">CLI commands by name</h2>
         <div id="stats-by-command" class="space-y-2"></div>
       </div>
 
       <!-- Platform breakdown -->
-      <div class="mb-14">
+      <div class="mb-8">
         <h2 class="font-display text-2xl font-bold mb-5">Platform breakdown</h2>
         <div id="stats-by-platform" class="space-y-2"></div>
       </div>
@@ -90,7 +90,7 @@ const schemas = [
           Anonymous, opt-out aggregates reported by running OMA control planes — no names, ids, or content.
         </p>
 
-        <div class="relative overflow-hidden rounded-2xl p-4 md:p-6 mb-10">
+        <div class="relative overflow-hidden rounded-md p-3 md:p-4 mb-8">
           <div
             class="pointer-events-none absolute inset-0"
             aria-hidden="true"
@@ -98,22 +98,22 @@ const schemas = [
           ></div>
           <div class="relative grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
             <div class="stat-tile">
-              <div class="font-mono text-3xl md:text-4xl font-bold tabular-nums" data-stat="installs-total">—</div>
+              <div class="font-mono text-2xl md:text-3xl font-bold tabular-nums" data-stat="installs-total">—</div>
               <div class="stat-label">Installs</div>
               <div class="stat-sub"><span data-stat="installs-active">—</span> active (7d)</div>
             </div>
             <div class="stat-tile">
-              <div class="font-mono text-3xl md:text-4xl font-bold tabular-nums" data-stat="installs-sessions">—</div>
+              <div class="font-mono text-2xl md:text-3xl font-bold tabular-nums" data-stat="installs-sessions">—</div>
               <div class="stat-label">Sessions reported</div>
               <div class="stat-sub">across all installs</div>
             </div>
             <div class="stat-tile">
-              <div class="font-mono text-3xl md:text-4xl font-bold tabular-nums" data-stat="installs-duration">—</div>
+              <div class="font-mono text-2xl md:text-3xl font-bold tabular-nums" data-stat="installs-duration">—</div>
               <div class="stat-label">Avg session</div>
               <div class="stat-sub">mean duration</div>
             </div>
             <div class="stat-tile">
-              <div class="font-mono text-3xl md:text-4xl font-bold tabular-nums" data-stat="installs-deployments">—</div>
+              <div class="font-mono text-2xl md:text-3xl font-bold tabular-nums" data-stat="installs-deployments">—</div>
               <div class="stat-label">Deployment kinds</div>
               <div class="stat-sub">mostly <span data-stat="installs-deployments-top">—</span></div>
             </div>

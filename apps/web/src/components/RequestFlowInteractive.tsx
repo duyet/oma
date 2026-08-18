@@ -158,9 +158,9 @@ export default function RequestFlowInteractive() {
         }
         .wf-panel-body {
           margin-top: 0.6rem; max-width: 38rem; margin-left: auto; margin-right: auto;
-          border: 1px solid var(--color-border); border-radius: 0.75rem;
+          border: 1px solid var(--color-border); border-radius: 0.375rem;
           background: color-mix(in srgb, var(--color-brand) 4%, var(--color-card));
-          padding: 1rem 1.25rem; font-size: 0.82rem; line-height: 1.6; color: var(--color-fg-muted);
+          padding: 0.75rem 0.9rem; font-size: 0.82rem; line-height: 1.6; color: var(--color-fg-muted);
         }
         @media (prefers-reduced-motion: no-preference) {
           .wf-panel-body { transition: opacity 120ms ease, transform 120ms ease; }
@@ -170,7 +170,8 @@ export default function RequestFlowInteractive() {
         .wf-step.is-active .arch-node-glyph,
         .wf-node-btn:hover .arch-node-glyph {
           border-color: var(--color-brand);
-          box-shadow: 0 1px 2px rgba(24, 24, 27, 0.05), 0 0 0 3px color-mix(in srgb, var(--color-brand) 35%, transparent);
+          outline: 1px solid color-mix(in srgb, var(--color-brand) 55%, transparent);
+          outline-offset: 2px;
         }
         .wf-node-btn {
           background: none; border: 0; margin: 0; cursor: pointer;

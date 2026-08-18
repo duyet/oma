@@ -22,13 +22,13 @@ const { title, accent } = Astro.props;
 <div
   data-lift
   class:list={[
-    "rounded-lg p-6 transition-colors duration-150",
+    "rounded-md p-4 transition-colors duration-150",
     accent
       ? "border-2 border-[var(--color-brand)]"
       : "border border-[var(--color-border)] hover:border-[var(--color-border-strong)]",
   ]}
 >
-  <h3 class="font-display font-semibold text-lg mb-2 tracking-tight">{title}</h3>
+  <h3 class="font-display font-semibold text-base mb-1.5 tracking-tight">{title}</h3>
   <p class="text-[var(--color-fg-muted)] text-sm leading-relaxed">
     <slot />
   </p>

@@ -50,22 +50,22 @@ const columns: { heading: string; links: { label: string; href: string; external
 ];
 ---
 
-<footer class="border-t border-[var(--color-border)] mt-20">
-  <div class="max-w-5xl mx-auto px-4 py-12">
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-8">
+<footer class="border-t border-[var(--color-border)] mt-12">
+  <div class="max-w-5xl mx-auto px-4 py-8">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-6">
       {
         columns.map((col) => (
           <nav aria-label={col.heading}>
-            <h2 class="font-mono text-[11px] uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
+            <h2 class="font-mono text-[11px] uppercase tracking-widest text-[var(--color-fg-subtle)] mb-1">
               {col.heading}
             </h2>
-            <ul class="flex flex-col gap-1 text-sm text-[var(--color-fg-muted)]">
+            <ul class="flex flex-col text-sm text-[var(--color-fg-muted)]">
               {col.links.map((link) => (
                 <li>
                   <a
                     href={link.href}
                     {...(link.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-                    class="inline-block py-1 hover:text-[var(--color-fg)] transition-colors"
+                    class="inline-flex items-center min-h-11 hover:text-[var(--color-fg)] transition-colors"
                   >
                     {link.label}
                   </a>
@@ -77,7 +77,7 @@ const columns: { heading: string; links: { label: string; href: string; external
       }
     </div>
 
-    <div class="mt-10 pt-6 border-t border-[var(--color-border)] flex items-center gap-2 text-sm text-[var(--color-fg-muted)]">
+    <div class="mt-6 pt-4 border-t border-[var(--color-border)] flex items-center gap-2 text-sm text-[var(--color-fg-muted)]">
       <Logo size={18} class="text-[var(--color-brand)]" />
       <span>© {new Date().getFullYear()} Open Managed Agents. Apache 2.0 licensed.</span>
     </div>

@@ -21,7 +21,7 @@ const { href, date, title, description } = Astro.props;
 <a
   href={href}
   data-lift
-  class="block border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-brand)] transition-colors duration-150 no-underline"
+  class="block border border-[var(--color-border)] rounded-md p-4 hover:border-[var(--color-brand)] transition-colors duration-150 no-underline"
 >
   <div class="text-xs text-[var(--color-fg-subtle)] mb-2">{date}</div>
   <h3 class="font-semibold text-base mb-2 text-[var(--color-fg)]">{title}</h3>

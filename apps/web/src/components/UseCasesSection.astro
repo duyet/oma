@@ -6,14 +6,14 @@ import UseCasesInteractive from "./UseCasesInteractive.tsx";
 import Icon from "./Icon.astro";
 ---
 
-<section class="max-w-5xl mx-auto px-4 py-16 md:py-20" data-reveal id="use-cases">
-  <p class="flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
+<section class="max-w-5xl mx-auto px-4 py-10 md:py-12" data-reveal id="use-cases">
+  <p class="flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-2">
     <Icon name="workflow" size={14} class="text-[var(--color-brand)]" /> Workflows
   </p>
-  <h2 class="font-display text-3xl md:text-4xl font-bold mb-4 text-center tracking-tight">
+  <h2 class="font-display text-2xl md:text-3xl font-bold mb-3 text-center tracking-tight">
     Built for Real Workflows
   </h2>
-  <p class="text-center text-[var(--color-fg-muted)] max-w-2xl mx-auto mb-12 leading-relaxed">
+  <p class="text-center text-[var(--color-fg-muted)] max-w-2xl mx-auto mb-8 leading-relaxed">
     Ship code, run production, answer customers, work a Slack thread. Pick a
     workflow to watch it run.
   </p>
@@ -22,10 +22,10 @@ import Icon from "./Icon.astro";
 
   <!-- Companion grid: use cases where a crisp card reads clearer than an
        animated trace. Same shadcn-clean card language as the rest of the site. -->
-  <div class="grid sm:grid-cols-2 gap-5 mt-6">
+  <div class="grid sm:grid-cols-2 gap-3 mt-4">
     <article
       data-lift
-      class="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-6 hover:border-[var(--color-border-strong)]"
+      class="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-4 hover:border-[var(--color-border-strong)]"
     >
       <div class="w-10 h-10 rounded-lg bg-[var(--color-brand-subtle)] flex items-center justify-center mb-3 shrink-0 text-[var(--color-brand)]">
         <Icon name="globe" size={20} />
@@ -41,7 +41,7 @@ import Icon from "./Icon.astro";
 
     <article
       data-lift
-      class="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-6 hover:border-[var(--color-border-strong)]"
+      class="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-4 hover:border-[var(--color-border-strong)]"
     >
       <div class="w-10 h-10 rounded-lg bg-[var(--color-brand-subtle)] flex items-center justify-center mb-3 shrink-0 text-[var(--color-brand)]">
         <Icon name="calendar" size={20} />
@@ -54,10 +54,10 @@ import Icon from "./Icon.astro";
     </article>
   </div>
 
-  <div class="mt-12 text-center">
+  <div class="mt-8 text-center">
     <a
       href="https://docs.oma.duyet.net/quickstart"
-      class="inline-flex items-center justify-center rounded-2xl border border-transparent text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px disabled:pointer-events-none disabled:opacity-50 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 bg-primary text-primary-foreground hover:bg-primary/80 h-9 gap-1.5 px-4 font-display no-underline hover:no-underline"
+      class="inline-flex items-center justify-center min-h-11 rounded-md border border-transparent text-sm font-medium whitespace-nowrap transition-colors select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 bg-primary text-primary-foreground hover:bg-primary/80 gap-1.5 px-4 font-display no-underline hover:no-underline"
     >
       Get Started <Icon name="arrowRight" size={16} />
     </a>

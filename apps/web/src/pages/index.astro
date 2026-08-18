@@ -19,9 +19,9 @@ const schemas = [softwareApplicationSchema()];
 // (0.625rem → rounded-md); previously each anchor carried a 400-char inline
 // copy of these, which drifted between call sites.
 const btnPrimary =
-  "inline-flex h-11 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground no-underline transition-colors hover:bg-primary/90 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 [&_svg]:shrink-0 sm:h-9 sm:w-auto";
+  "inline-flex min-h-11 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground no-underline transition-colors hover:bg-primary/90 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 [&_svg]:shrink-0 sm:w-auto";
 const btnOutline =
-  "inline-flex h-11 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground no-underline transition-colors hover:bg-muted hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 [&_svg]:shrink-0 sm:h-9 sm:w-auto";
+  "inline-flex min-h-11 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground no-underline transition-colors hover:bg-muted hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 [&_svg]:shrink-0 sm:w-auto";
 
 // Section frame — the page is white throughout and sections are separated by a
 // hairline top border. Padding is deliberately tighter than the previous
@@ -74,7 +74,7 @@ const explore = [
 >
   {/* Hero — assembly diagram leads; pitch + CTAs sit under it. */}
   <section
-    class:list={[container, "pt-8 pb-12 sm:pt-10 sm:pb-16 lg:pt-12 lg:pb-20"]}
+    class:list={[container, "pt-6 pb-8 sm:pt-8 sm:pb-10"]}
     aria-label="Product overview"
   >
     <div class="overflow-x-clip lg:-mx-12 xl:-mx-24">
@@ -82,7 +82,7 @@ const explore = [
     </div>
 
     {/* Compact pitch under the diagram — value prop + CTAs. */}
-    <div class="mt-10 max-w-3xl border-t border-border pt-8 sm:mt-12 sm:pt-10">
+    <div class="mt-8 max-w-3xl border-t border-border pt-6 sm:mt-8 sm:pt-8">
       <h1
         class="text-balance text-lg font-semibold tracking-tight text-[var(--color-fg)] sm:text-xl"
       >
@@ -146,7 +146,7 @@ const explore = [
           concepts.map((c) => (
             <article
               data-lift
-              class="rounded-xl border border-border bg-[var(--color-card)] p-5"
+              class="rounded-md border border-border bg-[var(--color-card)] p-4"
             >
               <h3 class="text-lg font-semibold tracking-tight text-[var(--color-fg)]">
                 {c.name}
@@ -246,7 +246,7 @@ const explore = [
             <a
               href={e.href}
               data-lift
-              class="block rounded-xl border border-border bg-[var(--color-card)] p-5 no-underline hover:no-underline"
+              class="block rounded-md border border-border bg-[var(--color-card)] p-4 no-underline hover:no-underline"
             >
               <div class="mb-2 flex items-center gap-2.5">
                 <Icon name={e.icon} size={18} class="text-[var(--color-brand)]" />

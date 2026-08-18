@@ -3,7 +3,7 @@
 // Compact 3-up card row consistent with the rest of the landing sections.
 import Icon from "./Icon.astro";
 
-const blocks = [
+const blocks: { name: string; icon: "book" | "globe" | "box"; body: string }[] = [
   {
     name: "Skills",
     icon: "book",
@@ -47,7 +47,7 @@ const blocks = [
         blocks.map((b) => (
           <article
             data-lift
-            class="rounded-xl border border-border bg-[var(--color-card)] p-5"
+            class="rounded-md border border-border bg-[var(--color-card)] p-4"
           >
             <div class="mb-3 flex items-center gap-2.5">
               <div

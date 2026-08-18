@@ -58,11 +58,11 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
   keywords="open managed agents brand, oma logo, brand guidelines, design tokens, oma identity"
 >
   <!-- Header -->
-  <section class="max-w-5xl mx-auto px-4 pt-16 pb-10 md:pt-20">
+  <section class="max-w-5xl mx-auto px-4 pt-8 pb-6 md:pt-10">
     <p class="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
       <Icon name="layers" size={14} class="text-[var(--color-brand)]" /> Brand
     </p>
-    <h1 class="font-display text-4xl md:text-5xl font-bold tracking-tight leading-[1.07] mb-4">
+    <h1 class="font-display text-3xl md:text-4xl font-bold tracking-tight leading-[1.07] mb-3">
       The oma identity
     </h1>
     <p class="text-lg text-[var(--color-fg-muted)] leading-relaxed max-w-2xl">
@@ -75,7 +75,7 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
 
   <!-- Logo -->
   <section class="border-t border-[var(--color-border)]" id="logo">
-    <div class="max-w-5xl mx-auto px-4 py-14">
+    <div class="max-w-5xl mx-auto px-4 py-8">
       <h2 class="font-display text-2xl font-bold tracking-tight mb-2">Logo</h2>
       <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed max-w-2xl mb-8">
         A rounded-square <strong class="text-[var(--color-fg)] font-semibold">frame</strong>
@@ -162,7 +162,7 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
 
       <!-- Small / favicon form + lockup -->
       <div class="grid sm:grid-cols-2 gap-4 mt-4">
-        <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 flex items-center gap-6">
+        <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 flex items-center gap-6">
           <div class="flex items-end gap-3 text-[var(--color-brand)]">
             <Logo size={16} class="block" />
             <Logo size={24} class="block" />
@@ -170,7 +170,7 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
           </div>
           <span class="text-xs font-mono text-[var(--color-fg-subtle)]">favicon sizes · 16 / 24 / 32px</span>
         </div>
-        <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 flex items-center gap-6">
+        <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 flex items-center gap-6">
           <a href="/" class="flex items-center gap-2" aria-label="oma lockup">
             <Logo size={26} class="text-[var(--color-brand)]" />
             <span class="font-mono font-bold tracking-tight text-[var(--color-fg)]">oma</span>
@@ -184,14 +184,14 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
         <a
           href="/logo.svg"
           download
-          class="inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-2xl border border-border bg-background text-sm font-medium whitespace-nowrap transition-all select-none no-underline hover:no-underline hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px dark:bg-transparent dark:hover:bg-input/30 [&_svg:not([class*='size-'])]:size-4"
+          class="inline-flex items-center justify-center gap-1.5 min-h-11 px-3 rounded-md border border-border bg-background text-sm font-medium whitespace-nowrap transition-all select-none no-underline hover:no-underline hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px dark:bg-transparent dark:hover:bg-input/30 [&_svg:not([class*='size-'])]:size-4"
         >
           <Icon name="download" size={15} /> logo.svg
         </a>
         <a
           href="/og-default.svg"
           download
-          class="inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-2xl border border-border bg-background text-sm font-medium whitespace-nowrap transition-all select-none no-underline hover:no-underline hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px dark:bg-transparent dark:hover:bg-input/30 [&_svg:not([class*='size-'])]:size-4"
+          class="inline-flex items-center justify-center gap-1.5 min-h-11 px-3 rounded-md border border-border bg-background text-sm font-medium whitespace-nowrap transition-all select-none no-underline hover:no-underline hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px dark:bg-transparent dark:hover:bg-input/30 [&_svg:not([class*='size-'])]:size-4"
         >
           <Icon name="download" size={15} /> og-default.svg
         </a>
@@ -201,8 +201,8 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
 
   <!-- Mascot -->
   <section class="border-t border-[var(--color-border)] bg-[var(--color-bg-surface)]" id="mascot">
-    <div class="max-w-5xl mx-auto px-4 py-14 flex flex-col sm:flex-row items-center gap-8">
-      <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-8 shrink-0">
+    <div class="max-w-5xl mx-auto px-4 py-8 flex flex-col sm:flex-row items-center gap-6">
+      <div class="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-4 shrink-0">
         <PixelAgent size={96} class="block" />
       </div>
       <div>
@@ -220,7 +220,7 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
 
   <!-- Color -->
   <section class="border-t border-[var(--color-border)]" id="color">
-    <div class="max-w-5xl mx-auto px-4 py-14">
+    <div class="max-w-5xl mx-auto px-4 py-8">
       <h2 class="font-display text-2xl font-bold tracking-tight mb-2">Color</h2>
       <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed max-w-2xl mb-8">
         Every color is a CSS custom property in
@@ -260,7 +260,7 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
 
   <!-- Typography -->
   <section class="border-t border-[var(--color-border)] bg-[var(--color-bg-surface)]" id="type">
-    <div class="max-w-5xl mx-auto px-4 py-14">
+    <div class="max-w-5xl mx-auto px-4 py-8">
       <h2 class="font-display text-2xl font-bold tracking-tight mb-2">Typography</h2>
       <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed max-w-2xl mb-8">
         <strong class="text-[var(--color-fg)] font-semibold">Inter Variable</strong> for
@@ -308,9 +308,9 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
 
   <!-- Usage -->
   <section class="border-t border-[var(--color-border)]" id="usage">
-    <div class="max-w-5xl mx-auto px-4 py-14">
+    <div class="max-w-5xl mx-auto px-4 py-8">
       <h2 class="font-display text-2xl font-bold tracking-tight mb-8">Usage</h2>
-      <div class="grid md:grid-cols-2 gap-8">
+      <div class="grid md:grid-cols-2 gap-4">
         <div>
           <h3 class="flex items-center gap-2 font-display text-base font-semibold tracking-tight mb-4">
             <Icon name="check" size={18} class="text-[var(--color-green)]" /> Do

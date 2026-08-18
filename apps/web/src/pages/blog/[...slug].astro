@@ -79,7 +79,7 @@ const schemas = [
   schemas={schemas}
   keywords={post.data.tags.join(", ")}
 >
-  <article class="max-w-3xl mx-auto px-4 py-12">
+  <article class="max-w-3xl mx-auto px-4 py-8">
     <!-- Breadcrumb (visible — supports the JSON-LD above) -->
     <nav aria-label="Breadcrumb" class="text-xs text-[var(--color-fg-subtle)] mb-6">
       <ol class="flex gap-2">
@@ -93,7 +93,7 @@ const schemas = [
       </ol>
     </nav>
 
-    <header class="mb-10">
+    <header class="mb-6">
       <div class="text-xs text-[var(--color-fg-subtle)] uppercase tracking-wider mb-2">
         <time datetime={post.data.publishedAt.toISOString()}>
           {formatDate(post.data.publishedAt)}
@@ -106,8 +106,8 @@ const schemas = [
           </span>
         )}
       </div>
-      <h1 class="font-display text-4xl font-bold tracking-tight mb-3">{post.data.title}</h1>
-      <p class="text-lg text-[var(--color-fg-muted)]">{post.data.description}</p>
+      <h1 class="font-display text-3xl font-bold tracking-tight mb-2">{post.data.title}</h1>
+      <p class="text-base text-[var(--color-fg-muted)]">{post.data.description}</p>
       {post.data.tags.length > 0 && (
         <div class="mt-4 flex gap-2 flex-wrap" aria-label="Tags">
           {post.data.tags.map((t) => (
@@ -121,7 +121,7 @@ const schemas = [
 
     {showPrivateK8sDiagram && (
       <aside
-        class="mb-10 not-prose rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 sm:p-5"
+        class="mb-10 not-prose rounded-md border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 sm:p-5"
         aria-label="Architecture diagram"
       >
         <p class="mb-3 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--color-brand)]">
@@ -147,13 +147,13 @@ const schemas = [
     </div>
 
     {related.length > 0 && (
-      <aside class="mt-16 pt-8 border-t border-[var(--color-border)]" aria-labelledby="related-heading">
+      <aside class="mt-10 pt-6 border-t border-[var(--color-border)]" aria-labelledby="related-heading">
         <h2 id="related-heading" class="font-display text-xl font-semibold mb-5">Related posts</h2>
         <div class="grid sm:grid-cols-3 gap-4">
           {related.map((r) => (
             <a
               href={`/blog/${r.id}/`}
-              class="block border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-brand)] transition-colors no-underline"
+              class="block border border-[var(--color-border)] rounded-md p-3 hover:border-[var(--color-brand)] transition-colors no-underline"
             >
               <div class="text-xs text-[var(--color-fg-subtle)] mb-1">
                 {formatDate(r.data.publishedAt)}

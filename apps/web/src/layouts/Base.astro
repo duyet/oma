@@ -61,8 +61,8 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
 
     <!-- Color scheme — let browsers pick chrome that matches our theme. -->
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#818cf8" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#c2782c" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#8a531d" media="(prefers-color-scheme: dark)" />
 
     <!-- Favicons + manifest. SVG primary; PNG fallbacks for Safari /
          Android home screen. The PNG set is generated from
@@ -102,10 +102,8 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
       })();
     </script>
 
-    <!-- Brand fonts are self-hosted via @fontsource-variable/geist +
-         @fontsource-variable/geist-mono (imported in global.css) — Geist,
-         the same family Cursor.com ships. No external font request, so we
-         drop the Google Fonts <link> that the old Poppins/Lora setup used. -->
+    <!-- Brand fonts are self-hosted via fontsource (Inter, Instrument Serif,
+         JetBrains Mono — imported in global.css). No external font request. -->
 
     <!-- Open Graph -->
     <meta property="og:title" content={fullTitle} />
@@ -158,10 +156,10 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
       class="sticky top-0 z-40 border-b border-transparent"
       data-site-header
     >
-      <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+      <div class="max-w-5xl mx-auto px-4 h-12 flex items-center justify-between gap-3">
         <a
           href="/"
-          class="flex items-center gap-2 py-1.5 group"
+          class="flex items-center gap-2 min-h-11 py-1.5 group"
           aria-label="Open Managed Agents — home"
         >
           <Logo size={26} class="text-[var(--color-brand)]" />
@@ -177,7 +175,7 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
             <a
               href="/how-it-works/"
               aria-haspopup="true"
-              class="inline-flex items-center gap-1 px-3 py-2 rounded-md text-[var(--color-fg-muted)] dark:text-[var(--color-fg)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-surface)] transition-colors"
+              class="inline-flex items-center min-h-11 gap-1 px-3 rounded-md text-[var(--color-fg-muted)] dark:text-[var(--color-fg)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-surface)] transition-colors"
             >
               Platform
               <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
@@ -186,22 +184,22 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
             </a>
             <div class="absolute left-0 top-full pt-2 hidden group-hover:block group-focus-within:block z-40">
               <nav
-                class="min-w-[280px] py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md shadow-lg flex flex-col"
+                class="min-w-[260px] py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md flex flex-col"
                 aria-label="Platform"
               >
-                <a href="/how-it-works/" class="block px-4 py-2.5 hover:bg-[var(--color-bg-surface)]">
+                <a href="/how-it-works/" class="block min-h-11 px-3 py-2 hover:bg-[var(--color-bg-surface)]">
                   <span class="block font-medium text-[var(--color-fg)]">How it works</span>
                   <span class="block text-xs text-[var(--color-fg-muted)] mt-0.5">Meta-harness design, architecture &amp; lifecycle</span>
                 </a>
-                <a href="/features/" class="block px-4 py-2.5 hover:bg-[var(--color-bg-surface)]">
+                <a href="/features/" class="block min-h-11 px-3 py-2 hover:bg-[var(--color-bg-surface)]">
                   <span class="block font-medium text-[var(--color-fg)]">Features</span>
                   <span class="block text-xs text-[var(--color-fg-muted)] mt-0.5">Everything the platform gives you, and why</span>
                 </a>
-                <a href="/use-cases/" class="block px-4 py-2.5 hover:bg-[var(--color-bg-surface)]">
+                <a href="/use-cases/" class="block min-h-11 px-3 py-2 hover:bg-[var(--color-bg-surface)]">
                   <span class="block font-medium text-[var(--color-fg)]">Use cases</span>
                   <span class="block text-xs text-[var(--color-fg-muted)] mt-0.5">Real workflows the platform is built for</span>
                 </a>
-                <a href="/infrastructure/" class="block px-4 py-2.5 hover:bg-[var(--color-bg-surface)]">
+                <a href="/infrastructure/" class="block min-h-11 px-3 py-2 hover:bg-[var(--color-bg-surface)]">
                   <span class="block font-medium text-[var(--color-fg)]">Infrastructure</span>
                   <span class="block text-xs text-[var(--color-fg-muted)] mt-0.5">Fleets, any sandbox, bridge your own machine</span>
                 </a>
@@ -217,7 +215,7 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
             <a
               href="/features/agent-sandbox/"
               aria-haspopup="true"
-              class="inline-flex items-center gap-1 px-3 py-2 rounded-md text-[var(--color-fg-muted)] dark:text-[var(--color-fg)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-surface)] transition-colors"
+              class="inline-flex items-center min-h-11 gap-1 px-3 rounded-md text-[var(--color-fg-muted)] dark:text-[var(--color-fg)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-surface)] transition-colors"
             >
               Features
               <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
@@ -226,41 +224,41 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
             </a>
             <div class="absolute left-0 top-full pt-2 hidden group-hover:block group-focus-within:block z-40">
               <nav
-                class="min-w-[280px] py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md shadow-lg flex flex-col"
+                class="min-w-[260px] py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md flex flex-col"
                 aria-label="Features"
               >
-                <a href="/features/agent-sandbox/" class="block px-4 py-2.5 hover:bg-[var(--color-bg-surface)]">
+                <a href="/features/agent-sandbox/" class="block min-h-11 px-3 py-2 hover:bg-[var(--color-bg-surface)]">
                   <span class="block font-medium text-[var(--color-fg)]">Agent Sandbox</span>
                   <span class="block text-xs text-[var(--color-fg-muted)] mt-0.5">Cloudflare, Docker, K8s, E2B, Daytona &amp; more</span>
                 </a>
-                <a href="/features/local-machine/" class="block px-4 py-2.5 hover:bg-[var(--color-bg-surface)]">
+                <a href="/features/local-machine/" class="block min-h-11 px-3 py-2 hover:bg-[var(--color-bg-surface)]">
                   <span class="block font-medium text-[var(--color-fg)]">Local Machine</span>
                   <span class="block text-xs text-[var(--color-fg-muted)] mt-0.5">Bridge your own hardware — no inbound ports</span>
                 </a>
-                <a href="/features/private-kubernetes/" class="block px-4 py-2.5 hover:bg-[var(--color-bg-surface)]">
+                <a href="/features/private-kubernetes/" class="block min-h-11 px-3 py-2 hover:bg-[var(--color-bg-surface)]">
                   <span class="block font-medium text-[var(--color-fg)]">Private Kubernetes</span>
                   <span class="block text-xs text-[var(--color-fg-muted)] mt-0.5">Helm-connect your cluster — pods on your VPC</span>
                 </a>
-                <a href="/open-tag/" class="block px-4 py-2.5 hover:bg-[var(--color-bg-surface)]">
+                <a href="/open-tag/" class="block min-h-11 px-3 py-2 hover:bg-[var(--color-bg-surface)]">
                   <span class="block font-medium text-[var(--color-fg)]">Open Tag</span>
                   <span class="block text-xs text-[var(--color-fg-muted)] mt-0.5">Self-hosted Claude-Tag-style Slack agents</span>
                 </a>
-                <a href="/features/coding-agents/" class="block px-4 py-2.5 hover:bg-[var(--color-bg-surface)]">
+                <a href="/features/coding-agents/" class="block min-h-11 px-3 py-2 hover:bg-[var(--color-bg-surface)]">
                   <span class="block font-medium text-[var(--color-fg)]">Coding Agents</span>
                   <span class="block text-xs text-[var(--color-fg-muted)] mt-0.5">Long-running sessions, heartbeats, PRs</span>
                 </a>
               </nav>
             </div>
           </div>
-          <a href="/blog/" class="px-3 py-2 rounded-md text-[var(--color-fg-muted)] dark:text-[var(--color-fg)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-surface)] transition-colors">Blog</a>
-          <a href="https://docs.oma.duyet.net" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-[var(--color-fg-muted)] dark:text-[var(--color-fg)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-surface)] transition-colors">
+          <a href="/blog/" class="inline-flex items-center min-h-11 px-3 rounded-md text-[var(--color-fg-muted)] dark:text-[var(--color-fg)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-surface)] transition-colors">Blog</a>
+          <a href="https://docs.oma.duyet.net" class="inline-flex items-center min-h-11 gap-1.5 px-3 rounded-md text-[var(--color-fg-muted)] dark:text-[var(--color-fg)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-surface)] transition-colors">
             <Icon name="book" size={15} /> Docs
           </a>
           <a
             href="https://github.com/duyet/oma"
             target="_blank"
             rel="noopener noreferrer"
-            class="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-[var(--color-fg-muted)] dark:text-[var(--color-fg)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-surface)] transition-colors"
+            class="inline-flex items-center min-h-11 gap-1.5 px-3 rounded-md text-[var(--color-fg-muted)] dark:text-[var(--color-fg)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-surface)] transition-colors"
             ><Icon name="github" size={15} /> GitHub</a
           >
           <button
@@ -269,7 +267,7 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
             aria-label="Toggle color theme"
             aria-pressed="false"
             title="Toggle color theme"
-            class="ml-1 inline-flex items-center justify-center w-10 h-10 rounded-md text-[var(--color-fg-muted)] dark:text-[var(--color-fg)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-surface)] transition-colors"
+            class="ml-1 inline-flex items-center justify-center w-11 h-11 rounded-md text-[var(--color-fg-muted)] dark:text-[var(--color-fg)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-surface)] transition-colors"
           >
             <!-- Sun (visible in dark mode) -->
             <svg
@@ -306,7 +304,7 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
                signed-out bounce to login. Wording matches footer + hero CTAs. -->
           <a
             href="https://app.oma.duyet.net/"
-            class="ml-2 inline-flex items-center justify-center rounded-2xl border border-transparent text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px disabled:pointer-events-none disabled:opacity-50 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 bg-primary text-primary-foreground hover:bg-primary/80 h-8 gap-1.5 px-3"
+            class="ml-2 inline-flex items-center justify-center min-h-11 rounded-md border border-transparent text-sm font-medium whitespace-nowrap transition-colors select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 bg-primary text-primary-foreground hover:bg-primary/80 gap-1.5 px-3"
             >Try hosted</a
           >
         </nav>
@@ -341,7 +339,7 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
               </svg>
             </summary>
             <nav
-              class="absolute right-0 top-full mt-2 min-w-[180px] py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md shadow-lg flex flex-col text-sm z-40"
+              class="absolute right-0 top-full mt-2 min-w-[180px] py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md flex flex-col text-sm z-40"
               aria-label="Mobile primary"
             >
               <span class="px-4 pt-2 pb-1 text-[10px] font-mono uppercase tracking-widest text-[var(--color-fg-subtle)]">Platform</span>
@@ -368,7 +366,7 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
               >
               <a
                 href="https://app.oma.duyet.net/"
-                class="w-full mx-2 mt-1 inline-flex items-center justify-center rounded-2xl border border-transparent text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px disabled:pointer-events-none disabled:opacity-50 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 bg-primary text-primary-foreground hover:bg-primary/80 h-9 gap-1.5 px-4"
+                class="w-[calc(100%-1rem)] mx-2 mt-1 inline-flex items-center justify-center rounded-md border border-transparent text-sm font-medium whitespace-nowrap transition-colors select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 bg-primary text-primary-foreground hover:bg-primary/80 min-h-11 gap-1.5 px-4"
                 >Try hosted</a
               >
             </nav>
@@ -388,8 +386,7 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
          the mobile menu when a link inside it is clicked or when clicking
          outside, since <details> doesn't auto-close on navigation.
          Also: toggles a data-scrolled flag on the sticky header so it
-         picks up a shadow once the page leaves the top — cheap depth
-         cue that costs nothing when reduced-motion is on. -->
+         picks up a hairline once the page leaves the top. -->
     <script is:inline>
       // Sync theme-toggle aria-pressed with current theme on load + after each click.
       const syncThemePressed = () => {
@@ -426,7 +423,7 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
         }
       }
       // Sticky-header scroll state. Toggle once we're past 8px so the
-      // shadow only appears when there's actually content behind it.
+      // hairline only appears when there's actually content behind it.
       const siteHeader = document.querySelector('[data-site-header]');
       if (siteHeader) {
         const syncScrolled = () => {
