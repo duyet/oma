@@ -57,21 +57,26 @@ export function PageHeader({
   if (!hasTopRow && !toolbar && !tableHeader) return null;
 
   return createPortal(
-    <div className={cn("bg-bg", className)}>
+    <div className={cn("bg-background", className)}>
       {hasTopRow && (
-        <div className="flex items-start gap-4 pt-3">
-          <div className="min-w-0 flex-1">
+        <div className="flex flex-row flex-wrap items-start justify-between gap-x-3 gap-y-2 pt-3">
+          <div className="min-w-0 flex-1 space-y-1">
             {title && (
-              <h1 className="text-xl font-semibold tracking-tight truncate">
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground truncate sm:text-3xl">
                 {title}
               </h1>
             )}
             {subtitle && (
-              <p className="text-sm text-fg-muted mt-0.5">{subtitle}</p>
+              <p className="max-w-3xl text-sm text-muted-foreground">{subtitle}</p>
             )}
           </div>
           {actions && (
-            <div className="flex items-center gap-2 shrink-0">{actions}</div>
+            <div
+              data-testid="page-header-actions"
+              className="flex min-w-0 shrink-0 flex-row flex-wrap items-center justify-end gap-2"
+            >
+              {actions}
+            </div>
           )}
         </div>
       )}

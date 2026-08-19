@@ -12,65 +12,77 @@
 /* ---------- Dark mode: class-based ---------- */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ---------- Light theme (default) ---------- */
+/* ---------- Light theme (default) — shadcn oklch tokens (anyrouter-aligned) ---------- */
 :root {
-  /* "Iris" — one confident ownable indigo accent, matching the 2026
-     marketing redesign (apps/web global.css): #4f46e5 / hover #4338ca /
-     subtle #eef2ff. Carries all chrome: logo, links, focus ring, primary
-     buttons. Deliberately not terracotta (the Anthropic tell) and not a
-     washed AI-purple gradient — a single saturated indigo, used flat. */
-  --brand: #4f46e5;
-  --brand-hover: #4338ca;
-  --brand-subtle: #eef2ff;
-  /* White reads AA on the iris indigo (#ffffff on #4f46e5 = 6.6:1), so
-     unlike the old orange the primary foreground is white, not dark ink. */
-  --brand-fg: #ffffff;
+  --hairline-soft: color-mix(in oklch, var(--foreground) 12%, transparent);
 
-  /* Zinc greyscale ground — same neutral family as marketing (#ffffff /
-     #e4e4e7 / #18181b) so the two surfaces read as one product. Crisp 1px
-     hairline borders, restrained shadows, the shadcn/ui zinc look. */
-  --bg: #ffffff;
-  --bg-sidebar: #fafafa;
-  --bg-surface: #f4f4f5;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --info: oklch(0.62 0.19 259.8);
+  --info-foreground: oklch(0.985 0 0);
+  --success: oklch(0.596 0.145 163.2);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: oklch(0.79 0.184 86);
+  --warning-foreground: oklch(0.28 0.07 58);
+  --primary: oklch(0.555 0.163 48.998);
+  --primary-foreground: oklch(0.987 0.022 95.277);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.879 0.169 91.605);
+  --chart-2: oklch(0.769 0.188 70.08);
+  --chart-3: oklch(0.666 0.179 58.318);
+  --chart-4: oklch(0.555 0.163 48.998);
+  --chart-5: oklch(0.473 0.137 46.201);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.666 0.179 58.318);
+  --sidebar-primary-foreground: oklch(0.987 0.022 95.277);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+
+  /* Legacy OMA aliases → shadcn semantics (Phase 1 backward compat) */
+  --brand: var(--primary);
+  --brand-hover: color-mix(in oklch, var(--primary), var(--foreground) 12%);
+  --brand-subtle: color-mix(in oklch, var(--primary) 12%, var(--background));
+  --brand-fg: var(--primary-foreground);
+
+  --bg: var(--background);
+  --bg-sidebar: var(--sidebar);
+  --bg-surface: var(--muted);
   --bg-overlay: oklch(0 0 0 / 0.3);
 
-  --fg: #18181b;
-  --fg-muted: #52525b;
-  /* WCAG AA fix (issue #185) — the old #71717a passed against white
-     (4.83:1) but marginally failed against --bg-surface #f4f4f5 (4.40:1),
-     the tint most table rows / pills actually sit on. #6b6b74 clears AA
-     against both: 5.28:1 on #ffffff, 4.80:1 on #f4f4f5 — while staying
-     visibly quieter than --fg-muted (7.73:1 / 7.03:1 on the same pair). */
-  --fg-subtle: #6b6b74;
+  --fg: var(--foreground);
+  --fg-muted: var(--muted-foreground);
+  --fg-subtle: color-mix(in oklch, var(--muted-foreground) 88%, var(--foreground));
 
-  --border: #e4e4e7;
-  --border-strong: #d4d4d8;
+  --border-strong: color-mix(in oklch, var(--border), var(--foreground) 14%);
 
-  --success: oklch(0.6 0.18 145);
-  --success-subtle: oklch(0.96 0.04 145);
-  --warning: oklch(0.7 0.16 75);
-  --warning-subtle: oklch(0.96 0.04 75);
-  --danger: oklch(0.58 0.22 25);
-  --danger-subtle: oklch(0.96 0.04 25);
-  --info: oklch(0.58 0.16 260);
-  --info-subtle: oklch(0.96 0.03 260);
+  --success-subtle: color-mix(in oklch, var(--success) 14%, var(--background));
+  --warning-subtle: color-mix(in oklch, var(--warning) 14%, var(--background));
+  --danger: var(--destructive);
+  --danger-subtle: color-mix(in oklch, var(--destructive) 12%, var(--background));
+  --info-subtle: color-mix(in oklch, var(--info) 12%, var(--background));
   --accent-violet: oklch(0.55 0.2 300);
   --accent-violet-subtle: oklch(0.96 0.03 300);
 
-  /* Surface elevation — single shadow token, theme-aware. Light mode
-     uses near-black at 10% opacity; dark mode bumps to 50% so drop
-     shadows actually read against the dark surface. */
   --shadow-md: 0 4px 12px -4px rgb(0 0 0 / 0.12);
   --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 0.08);
 
-  /* Motion tokens. Default Tailwind transitions feel "computer-y" (linear
-     timing-function, 150ms blanket duration). These curves + scale give
-     interactions weight without being slow:
-     - soft: iOS-style spring out, perfect for modal/toast/menu reveal
-     - snap: tight ease-out for press states, hover state changes
-     - quart: gentle deceleration for layout-affecting changes
-     Pair with --dur-quick (button hover, focus), --dur-base (most state
-     changes), --dur-slow (overlays, page-level changes). */
   --ease-soft: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-snap: cubic-bezier(0.5, 0, 0.1, 1);
   --ease-quart: cubic-bezier(0.25, 1, 0.5, 1);
@@ -78,149 +90,159 @@
   --dur-base: 150ms;
   --dur-slow: 220ms;
 
-  --ring: var(--brand);
   color-scheme: light;
 }
 
 /* ---------- Dark theme ---------- */
 .dark {
-  /* Iris lifts in dark for contrast on the near-black ground — mirrors
-     marketing dark tokens: #818cf8 on #09090b ≈ 8.4:1. */
-  --brand: #818cf8;
-  --brand-hover: #a5b4fc;
-  --brand-subtle: #1e1b3a;
-  /* On the lighter dark-mode iris, dark ink reads better than white
-     (~7:1), so the primary foreground flips to near-black. */
-  --brand-fg: #0b0b12;
+  --hairline-soft: color-mix(in oklch, var(--foreground) 16%, transparent);
 
-  /* Zinc dark neutrals — marketing dark anchors (#09090b / #27272a). */
-  --bg: #09090b;
-  --bg-sidebar: #131316;
-  --bg-surface: #1c1c20;
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --info: oklch(0.707 0.165 254.6);
+  --info-foreground: oklch(0.985 0 0);
+  --success: oklch(0.696 0.17 162.5);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: oklch(0.828 0.176 83.8);
+  --warning-foreground: oklch(0.25 0.07 55);
+  --primary: oklch(0.7 0.15 46.201);
+  --primary-foreground: oklch(0.279 0.077 45.635);
+  --secondary: oklch(0.274 0.006 286.033);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.7 0.15 46.201);
+  --chart-1: oklch(0.879 0.169 91.605);
+  --chart-2: oklch(0.769 0.188 70.08);
+  --chart-3: oklch(0.666 0.179 58.318);
+  --chart-4: oklch(0.555 0.163 48.998);
+  --chart-5: oklch(0.7 0.15 46.201);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.769 0.188 70.08);
+  --sidebar-primary-foreground: oklch(0.279 0.077 45.635);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+
+  /* Legacy OMA aliases → shadcn semantics */
+  --brand: var(--primary);
+  --brand-hover: color-mix(in oklch, var(--primary), white 18%);
+  --brand-subtle: color-mix(in oklch, var(--primary) 16%, var(--background));
+  --brand-fg: var(--primary-foreground);
+
+  --bg: var(--background);
+  --bg-sidebar: var(--sidebar);
+  --bg-surface: var(--muted);
   --bg-overlay: oklch(0 0 0 / 0.6);
 
-  --fg: #fafafa;
-  --fg-muted: #a1a1aa;
-  /* WCAG AA fix (issue #185) — the dark theme reused the light theme's
-     #71717a unchanged, which fails AA against both dark backgrounds:
-     4.12:1 on --bg #09090b, 3.52:1 on --bg-surface #1c1c20 (needs 4.5:1
-     at the text-xs sizes this token is used at). #8e8e99 clears AA
-     against both: 6.14:1 on #09090b, 5.24:1 on #1c1c20 — while staying
-     visibly quieter than --fg-muted (7.76:1 / 6.63:1 on the same pair). */
-  --fg-subtle: #8e8e99;
+  --fg: var(--foreground);
+  --fg-muted: var(--muted-foreground);
+  --fg-subtle: color-mix(in oklch, var(--muted-foreground) 92%, var(--foreground));
 
-  --border: #27272a;
-  --border-strong: #3f3f46;
+  --border-strong: color-mix(in oklch, var(--border), var(--foreground) 22%);
 
-  --success: oklch(0.76 0.16 145);
-  --success-subtle: oklch(0.22 0.05 145);
-  --warning: oklch(0.8 0.14 75);
-  --warning-subtle: oklch(0.22 0.05 75);
-  --danger: oklch(0.72 0.18 25);
-  --danger-subtle: oklch(0.22 0.05 25);
-  --info: oklch(0.72 0.14 260);
-  --info-subtle: oklch(0.22 0.04 260);
+  --success-subtle: color-mix(in oklch, var(--success) 18%, var(--background));
+  --warning-subtle: color-mix(in oklch, var(--warning) 16%, var(--background));
+  --danger: var(--destructive);
+  --danger-subtle: color-mix(in oklch, var(--destructive) 16%, var(--background));
+  --info-subtle: color-mix(in oklch, var(--info) 16%, var(--background));
   --accent-violet: oklch(0.72 0.16 300);
   --accent-violet-subtle: oklch(0.22 0.05 300);
 
-  /* Dark-mode shadow — needs more opacity to register against #151515. */
   --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.5);
   --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 0.4);
 
-  --ring: var(--brand);
   color-scheme: dark;
 }
 
 /* ---------- Tailwind theme tokens ---------- */
 @theme {
   /* Fonts */
-  /* Display matches the marketing site (Poppins) so oma.duyet.net ↔
-     app.oma.duyet.net feel like one product. Body stays DM Sans — a serif
-     body (marketing's Lora) reads poorly in dense app UI. */
   --font-display: "Poppins", Arial, sans-serif;
   --font-sans: "DM Sans", -apple-system, "Segoe UI", sans-serif;
+  --font-heading: var(--font-sans);
   --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
 
-  /* Color palette — resolves dynamically via :root / .dark vars */
+  /* shadcn semantic tokens */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground, #ffffff);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Legacy OMA palette aliases (backward compat) */
   --color-brand: var(--brand);
   --color-brand-hover: var(--brand-hover);
   --color-brand-subtle: var(--brand-subtle);
   --color-brand-fg: var(--brand-fg);
-
   --color-bg: var(--bg);
   --color-bg-sidebar: var(--bg-sidebar);
   --color-bg-surface: var(--bg-surface);
   --color-bg-overlay: var(--bg-overlay);
-
   --color-fg: var(--fg);
   --color-fg-muted: var(--fg-muted);
   --color-fg-subtle: var(--fg-subtle);
-
-  --color-border: var(--border);
   --color-border-strong: var(--border-strong);
-
-  --color-success: var(--success);
   --color-success-subtle: var(--success-subtle);
-  --color-warning: var(--warning);
   --color-warning-subtle: var(--warning-subtle);
   --color-danger: var(--danger);
   --color-danger-subtle: var(--danger-subtle);
-  --color-info: var(--info);
   --color-info-subtle: var(--info-subtle);
   --color-accent-violet: var(--accent-violet);
   --color-accent-violet-subtle: var(--accent-violet-subtle);
 
-  --color-ring: var(--ring);
-
-  /* shadcn-style primitive aliases. The ai-elements + components/ui
-     primitives are vanilla shadcn copy-paste and reach for tokens like
-     `--color-secondary`, `--color-muted-foreground`, etc. Without these
-     aliases Tailwind v4 emits no rule for `bg-secondary`, `text-muted-
-     foreground`, `bg-popover`, `border-input` (the lookup just silently
-     yields nothing) and the lifted shadcn surfaces render unstyled.
-     Mapping straight onto the existing OMA palette keeps the chat surface
-     visually consistent with the rest of the console — no second palette
-     to maintain. Both themes (light + dark) get correct values automatically
-     because the OMA tokens above are theme-aware. */
-  --color-background: var(--bg);
-  --color-foreground: var(--fg);
-  --color-card: var(--bg);
-  --color-card-foreground: var(--fg);
-  --color-popover: var(--bg);
-  --color-popover-foreground: var(--fg);
-  --color-primary: var(--brand);
-  --color-primary-foreground: var(--brand-fg);
-  --color-secondary: var(--bg-surface);
-  --color-secondary-foreground: var(--fg);
-  --color-muted: var(--bg-surface);
-  --color-muted-foreground: var(--fg-muted);
-  --color-accent: var(--bg-surface);
-  --color-accent-foreground: var(--fg);
-  --color-destructive: var(--danger);
-  --color-destructive-foreground: #ffffff;
-  --color-input: var(--border);
-
-  /* shadcn primitives derive button + input rounding from --radius
-     via `rounded-[min(var(--radius-md),12px)]` and similar. OMA's
-     existing rounded utilities use the Tailwind defaults, so pin a
-     value that matches our existing chat bubble feel (rounded-lg). */
-  --radius: 0.5rem;
-  --radius-md: 0.5rem;
-
-  /* shadcn `Sidebar` primitive lookups. The sidebar component reaches
-     for its own --sidebar* family so its theming can drift from the
-     main canvas (typical use: subtly different bg, darker borders).
-     OMA wants the sidebar to share the existing palette, so we alias
-     straight through — bg-sidebar / fg / brand are all already
-     theme-aware via :root / .dark. */
-  --color-sidebar: var(--bg-sidebar);
-  --color-sidebar-foreground: var(--fg);
-  --color-sidebar-primary: var(--brand);
-  --color-sidebar-primary-foreground: var(--brand-fg);
-  --color-sidebar-accent: var(--bg-surface);
-  --color-sidebar-accent-foreground: var(--fg);
-  --color-sidebar-border: var(--border);
-  --color-sidebar-ring: var(--brand);
+  /* Radius scale (anyrouter / radix-rhea) */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 /* ---------- Base typography ---------- */
@@ -248,11 +270,15 @@ body,
   overflow: hidden;
 }
 
-/* Focus ring — brand-colored. Wrapped in @layer base so Tailwind utility
-   variants (focus-visible:outline-none, etc.) can override per-element.
-   Unlayered rules win over layered rules regardless of specificity, which
-   would otherwise make this impossible to suppress on a per-element basis. */
 @layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
   *:focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
