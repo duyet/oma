@@ -5,13 +5,18 @@ name: Release Please
 # its own CHANGELOG.md. Components are tracked and released independently:
 #
 #   - root   → repo-level CHANGELOG.md            (self-host / deploy version)
-#   - web    → apps/web + apps/web/CHANGELOG.md   (public website)
-#   - cli    → packages/cli + CHANGELOG.md        (oma CLI on npm)
-#   - docker → docker + docker/CHANGELOG.md       (container images / charts)
+#   - web    → apps/web/package.json + CHANGELOG.md (public website)
+#   - docker → docker/CHANGELOG.md                (container images / charts)
+#
+# changelog-path is relative to each package directory (default CHANGELOG.md).
+# Do not set it to "apps/web/CHANGELOG.md" — node/simple strategies prefix the
+# package path and that produces apps/web/apps/web/CHANGELOG.md (PR #358).
+#
+# @getoma/cli and @getoma/sdk are versioned by changesets (release.yml), not
+# here — a node strategy on packages/cli would rewrite package.json out of
+# band (0.1.x on npm vs a 0.7.x release-please bump).
 #
 # Each component gets its own tag (e.g. web-v0.1.0) and its own changelog.
-# npm package publishing for @getoma/cli / @getoma/sdk additionally
-# stays on changesets (release.yml).
 #
 # NOTE: requires the repo setting "Allow GitHub Actions to create and approve
 # pull requests" (Settings → Actions → General → Workflow permissions).
