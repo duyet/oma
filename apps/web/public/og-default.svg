@@ -1,11 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
-  <!-- 1200x630 OG card (2026 redesign). Neutral zinc ground, iris (#4f46e5)
-       accent, and the new frame+node brand mark. NOTE: the shipped social
-       image is og-default.png (rasterized) — regenerate it from this source
-       so the card matches the redesigned brand. -->
-
-  <!-- Background -->
   <rect width="1200" height="630" fill="#ffffff"/>
   <rect width="1200" height="630" fill="url(#bg-grad)"/>
   <defs>
@@ -15,47 +9,39 @@
     </linearGradient>
   </defs>
 
-  <!-- Brand mark (top right): the frame + edge + node glyph, iris tinted. -->
   <g transform="translate(980, 96)" opacity="0.9">
-    <rect x="0" y="0" width="120" height="120" rx="30" fill="none" stroke="#4f46e5" stroke-width="12"/>
-    <path d="M32 32 68 68" stroke="#4f46e5" stroke-width="12" stroke-linecap="round"/>
-    <circle cx="60" cy="60" r="17" fill="#4f46e5"/>
+    <rect x="0" y="0" width="120" height="120" rx="30" fill="none" stroke="#c2782c" stroke-width="12"/>
+    <path d="M32 32 68 68" stroke="#c2782c" stroke-width="12" stroke-linecap="round"/>
+    <circle cx="60" cy="60" r="17" fill="#c2782c"/>
   </g>
 
-  <!-- Wordmark (mono) -->
   <text x="80" y="120"
-    font-family="'Geist Mono','JetBrains Mono','Menlo',monospace"
+    font-family="'JetBrains Mono','Menlo',monospace"
     font-weight="700" font-size="36" fill="#18181b" letter-spacing="0.5">oma</text>
 
-  <!-- Eyebrow -->
   <text x="80" y="240"
-    font-family="'Geist','DM Sans',-apple-system,'Segoe UI',sans-serif"
+    font-family="'Inter',-apple-system,'Segoe UI',sans-serif"
     font-weight="600" font-size="22" letter-spacing="3"
-    fill="#4f46e5">APACHE 2.0  ·  CLOUDFLARE-NATIVE  ·  SELF-HOSTABLE</text>
+    fill="#c2782c">APACHE 2.0  ·  CLOUDFLARE-NATIVE  ·  SELF-HOSTABLE</text>
 
-  <!-- Headline -->
   <text x="80" y="322"
-    font-family="'Geist','DM Sans',-apple-system,'Segoe UI',sans-serif"
+    font-family="'Inter',-apple-system,'Segoe UI',sans-serif"
     font-weight="700" font-size="76" letter-spacing="-1.5" fill="#18181b">Open Managed Agents</text>
 
-  <!-- Subhead -->
   <text x="80" y="400"
-    font-family="'Geist','DM Sans',-apple-system,'Segoe UI',sans-serif"
+    font-family="'Inter',-apple-system,'Segoe UI',sans-serif"
     font-weight="400" font-size="36" fill="#52525b">Open-source alternative to Claude Managed Agents.</text>
 
-  <!-- Body line -->
   <text x="80" y="465"
-    font-family="'Geist','DM Sans',-apple-system,'Segoe UI',sans-serif"
+    font-family="'Inter',-apple-system,'Segoe UI',sans-serif"
     font-weight="400" font-size="26" fill="#52525b">Cloudflare Workers + Durable Objects.  Drop-in compatible API.</text>
 
-  <!-- Bottom row: URL on left, github tag on right -->
   <text x="80" y="560"
-    font-family="'Geist Mono','JetBrains Mono','Menlo',monospace"
+    font-family="'JetBrains Mono','Menlo',monospace"
     font-weight="500" font-size="22" fill="#18181b">oma.duyet.net</text>
   <text x="1120" y="560" text-anchor="end"
-    font-family="'Geist Mono','JetBrains Mono','Menlo',monospace"
+    font-family="'JetBrains Mono','Menlo',monospace"
     font-weight="500" font-size="22" fill="#52525b">github.com/duyet/oma</text>
 
-  <!-- Brand accent bar bottom -->
-  <rect x="0" y="620" width="1200" height="10" fill="#4f46e5"/>
+  <rect x="0" y="620" width="1200" height="10" fill="#c2782c"/>
 </svg>

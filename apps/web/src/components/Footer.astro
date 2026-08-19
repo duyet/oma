@@ -1,8 +1,4 @@
 ---
-// Shared site footer — a multi-column sitemap grouping every page by
-// intent (Product / Features / Resources / Community). Rendered once in
-// Base.astro so every page carries the same navigation. Reuses the site's
-// existing link + surface tokens; no new styles.
 import Logo from "./Logo.astro";
 
 const columns: { heading: string; links: { label: string; href: string; external?: boolean }[] }[] = [
@@ -42,44 +38,61 @@ const columns: { heading: string; links: { label: string; href: string; external
     heading: "Community",
     links: [
       { label: "GitHub", href: "https://github.com/duyet/oma", external: true },
-      // Single hosted entry — signed-in users land on the app shell; signed-out
-      // are bounced to login. Avoids dual Dashboard / Try hosted dead-ends.
       { label: "Try hosted", href: "https://app.oma.duyet.net/", external: true },
     ],
   },
 ];
 ---
 
-<footer class="border-t border-[var(--color-border)] mt-12">
-  <div class="site-container py-8">
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-6">
-      {
-        columns.map((col) => (
-          <nav aria-label={col.heading}>
-            <h2 class="font-mono text-[11px] uppercase tracking-widest text-[var(--color-fg-subtle)] mb-1">
-              {col.heading}
-            </h2>
-            <ul class="flex flex-col text-sm text-[var(--color-fg-muted)]">
-              {col.links.map((link) => (
-                <li>
-                  <a
-                    href={link.href}
-                    {...(link.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-                    class="inline-flex items-center min-h-11 hover:text-[var(--color-fg)] transition-colors"
-                  >
-                    {link.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        ))
-      }
+<footer class="mt-12 border-t border-border bg-background text-foreground">
+  <div class="site-container py-10 sm:py-12">
+    <div class="grid gap-x-8 gap-y-10 lg:grid-cols-[minmax(0,1.2fr)_repeat(4,minmax(0,1fr))]">
+      <div class="min-w-0 lg:pr-6">
+        <a href="/" class="inline-flex items-center gap-2 no-underline" aria-label="Open Managed Agents — home">
+          <Logo size={22} class="text-primary" />
+          <span class="font-mono font-bold tracking-tight text-foreground">oma</span>
+        </a>
+        <p class="mt-3 max-w-xs text-sm leading-relaxed text-muted-foreground">
+          Self-hosted agent platform — durable sessions, sandboxed tools, vault-backed credentials. Cloudflare or Docker.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-4 lg:col-span-4 lg:grid-cols-subgrid">
+        {
+          columns.map((col) => (
+            <nav aria-label={col.heading} class="min-w-0">
+              <p class="font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+                {col.heading}
+              </p>
+              <ul class="mt-3 flex flex-col">
+                {col.links.map((link) => (
+                  <li>
+                    <a
+                      href={link.href}
+                      {...(link.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                      class="block py-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      {link.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          ))
+        }
+      </div>
     </div>
 
-    <div class="mt-6 pt-4 border-t border-[var(--color-border)] flex items-center gap-2 text-sm text-[var(--color-fg-muted)]">
-      <Logo size={18} class="text-[var(--color-brand)]" />
+    <div class="mt-10 flex flex-col gap-2 border-t border-border pt-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
       <span>© {new Date().getFullYear()} Open Managed Agents. Apache 2.0 licensed.</span>
+      <a
+        href="https://github.com/duyet/oma"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="text-muted-foreground transition-colors hover:text-foreground"
+      >
+        github.com/duyet/oma
+      </a>
     </div>
   </div>
 </footer>

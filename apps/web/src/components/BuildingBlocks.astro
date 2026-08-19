@@ -1,6 +1,4 @@
 ---
-// "Skills, MCP, Artifacts" — the building blocks an agent wires together.
-// Compact 3-up card row consistent with the rest of the landing sections.
 import Icon from "./Icon.astro";
 
 const blocks: { name: string; icon: "book" | "globe" | "box"; body: string }[] = [
@@ -25,19 +23,13 @@ const blocks: { name: string; icon: "book" | "globe" | "box"; body: string }[] =
 <section class="border-t border-border py-10 sm:py-12" data-reveal>
   <div class="site-container">
     <header class="mb-6 sm:mb-8">
-      <p
-        class="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--color-brand)]"
-      >
+      <p class="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-primary">
         Building blocks
       </p>
-      <h2
-        class="mt-3 text-balance text-[1.6rem] font-semibold tracking-tighter text-[var(--color-fg)] sm:text-[2.1rem]"
-      >
+      <h2 class="mt-3 text-balance text-[1.6rem] font-semibold tracking-tighter text-foreground sm:text-[2.1rem]">
         Skills, MCP, artifacts
       </h2>
-      <p
-        class="mt-2 max-w-2xl text-pretty text-sm leading-relaxed text-[var(--color-fg-muted)] sm:text-base"
-      >
+      <p class="mt-2 max-w-2xl text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">
         What an agent assembles: reusable know-how (skills), external tools over
         MCP, and durable outputs (artifacts) that land in the session log.
       </p>
@@ -47,23 +39,17 @@ const blocks: { name: string; icon: "book" | "globe" | "box"; body: string }[] =
         blocks.map((b) => (
           <article
             data-lift
-            class="rounded-md border border-border bg-[var(--color-card)] p-4"
+            class="rounded-2xl border border-border bg-card p-4 transition-colors hover:border-border/80"
           >
             <div class="mb-3 flex items-center gap-2.5">
-              <div
-                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--color-brand-subtle)] text-[var(--color-brand)]"
-              >
+              <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <Icon name={b.icon} size={18} />
               </div>
-              <h3
-                class="text-base font-semibold tracking-tight text-[var(--color-fg)]"
-              >
+              <h3 class="text-base font-semibold tracking-tight text-foreground">
                 {b.name}
               </h3>
             </div>
-            <p class="text-sm leading-relaxed text-[var(--color-fg-muted)]">
-              {b.body}
-            </p>
+            <p class="text-sm leading-relaxed text-muted-foreground">{b.body}</p>
           </article>
         ))
       }

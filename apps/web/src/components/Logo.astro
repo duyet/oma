@@ -9,14 +9,14 @@
  * agent inside its durable frame" — the whole product in one mark.
  *
  * Pure inline SVG using `currentColor`, so it's theme-aware: set the color on
- * the wrapper (the header uses text-[var(--color-brand)] → iris) and the mark
+ * the wrapper (header uses text-primary) and the mark
  * follows light/dark automatically. Stroke geometry stays crisp at any size.
  */
 export interface Props {
   size?: number;
   /** Named color preset. The mark is a single `currentColor` glyph:
    *   - `current` inherit from the parent (default — pass color via `class`)
-   *   - `brand`   iris
+   *   - `brand`   primary (amber)
    *   - `white`   reversed-out, for dark / brand surfaces
    *   - `ink`     near-black, for light surfaces */
   tone?: "current" | "brand" | "white" | "ink";
@@ -25,7 +25,7 @@ export interface Props {
 const { size = 28, tone = "current", class: className = "" } = Astro.props;
 const TONE_CLASS = {
   current: "",
-  brand: "text-[var(--color-brand)]",
+  brand: "text-primary",
   white: "text-white",
   ink: "text-[#18181b]",
 } as const;
