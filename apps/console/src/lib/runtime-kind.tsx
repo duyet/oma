@@ -54,16 +54,29 @@ export const RUNTIME_KINDS: Record<RuntimeKind, RuntimeKindInfo> = {
 /** Minimal shape every caller already has — the agents list row, the detail
  *  page's record, and the session inspector's agent snapshot all satisfy it. */
 export interface RuntimeKindSource {
-  runtime_binding?: { runtime_id?: string } | null;
+  runtime_binding?: { runtime_id?: string; acp_agent_id?: string } | null;
   metadata?: Record<string, unknown> | null;
-  _oma?: { runtime_binding?: { runtime_id?: string } | null } | null;
+  _oma?: {
+    runtime_binding?: { runtime_id?: string; acp_agent_id?: string } | null;
+  } | null;
+}
+
+function hasLocalRuntimeBinding(
+  binding: { runtime_id?: string; acp_agent_id?: string } | null | undefined,
+): boolean {
+  return !!(binding?.runtime_id || binding?.acp_agent_id);
 }
 
 export function agentRuntimeKind(agent: RuntimeKindSource | null | undefined): RuntimeKind {
   if (!agent) return "cloud";
   // A runtime binding always wins: it IS the local loop, whatever else the
   // config says.
-  if (agent.runtime_binding?.runtime_id || agent._oma?.runtime_binding?.runtime_id) return "local";
+  if (
+    hasLocalRuntimeBinding(agent.runtime_binding) ||
+    hasLocalRuntimeBinding(agent._oma?.runtime_binding)
+  ) {
+    return "local";
+  }
   if (agent.metadata?.[RUNTIME_KIND_METADATA_KEY] === "browser") return "browser";
   return "cloud";
 }

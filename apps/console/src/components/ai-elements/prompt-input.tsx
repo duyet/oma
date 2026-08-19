@@ -1092,7 +1092,10 @@ export const PromptInputTextarea = ({
 // Attachment chips (image thumbnails above the toolbar)
 // ============================================================================
 
-export type PromptInputAttachmentsProps = HTMLAttributes<HTMLDivElement> & {
+export type PromptInputAttachmentsProps = Omit<
+  HTMLAttributes<HTMLDivElement>,
+  "children"
+> & {
   children: (attachment: FileUIPart & { id: string }) => ReactNode;
 };
 
