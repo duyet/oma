@@ -33,7 +33,7 @@ jobs:
   release-please:
     name: release-please
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - name: Run release-please
         id: release
@@ -42,3 +42,75 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           config-file: .github/release-please-config.json
           manifest-file: .github/.release-please-manifest.json
+
+      - name: Resolve release-please PR
+        id: release_pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          from_action=$(node -e "
+            const pr = '${{ steps.release.outputs.pr }}';
+            if (!pr || pr === '') process.exit(0);
+            try { console.log(JSON.parse(pr).number ?? ''); } catch { process.exit(0); }
+          ")
+          if [ -n "$from_action" ]; then
+            echo "number=$from_action" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          number=$(gh pr list --head release-please--branches--main --base main \
+            --state open --json number --jq '.[0].number // empty')
+          echo "number=${number}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout for verify
+        if: steps.release_pr.outputs.number != ''
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        if: steps.release_pr.outputs.number != ''
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        if: steps.release_pr.outputs.number != ''
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Verify release-please PR
+        if: steps.release_pr.outputs.number != ''
+        env:
+          PR_NUMBER: ${{ steps.release_pr.outputs.number }}
+        run: |
+          git fetch origin pull/${PR_NUMBER}/head:release-please-pr
+          git checkout release-please-pr
+          pnpm install --frozen-lockfile
+          pnpm typecheck && pnpm test
+
+      - name: Squash-merge release-please PR
+        if: success() && steps.release_pr.outputs.number != ''
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ steps.release_pr.outputs.number }}
+        with:
+          script: |
+            const prNumber = parseInt(process.env.PR_NUMBER, 10);
+            if (!prNumber) {
+              core.info("No release-please PR number; skipping merge");
+              return;
+            }
+            try {
+              await github.rest.pulls.merge({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber,
+                merge_method: "squash",
+              });
+              core.info(`Squash-merged release-please PR #${prNumber}`);
+            } catch (err) {
+              if (err.status === 405 || err.status === 409) {
+                core.info(`PR #${prNumber} already merged or not mergeable: ${err.message}`);
+                return;
+              }
+              throw err;
+            }
