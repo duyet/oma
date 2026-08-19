@@ -131,6 +131,15 @@ if (productPos < 0 || fitsPos > productPos) {
 if (/lg:-mx-12|xl:-mx-24/.test(index)) {
   fail("HowItFits must not use negative-margin bleed (causes page overflow)");
 }
+if (!css.includes(".site-container") || !/max-width:\s*64rem/.test(css)) {
+  fail("global.css must define .site-container at 64rem (max-w-5xl)");
+}
+if (/max-w-6xl|max-w-7xl/.test(index)) {
+  fail("landing sections must share .site-container, not a wider max-w-*");
+}
+if (!index.includes("site-container")) {
+  fail("landing must use the shared site-container class");
+}
 if (!process.exitCode) ok("landing source sections + concepts + viz + CTAs + hero + #layers alias");
 
 // --- Built dist (if present) ---

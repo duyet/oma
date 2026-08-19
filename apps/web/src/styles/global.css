@@ -156,6 +156,17 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Shared marketing content column. 64rem === Tailwind max-w-5xl; 1rem === px-4.
+   Header, footer, and every landing section wrap inner content in this so
+   left/right edges line up. Outer <section>s stay full-bleed for borders/
+   backgrounds; only the inner column is constrained. */
+.site-container {
+  width: 100%;
+  max-width: 64rem;
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
 /* Display type: headings share Inter Variable with body. Tailwind
    font-display maps here too. */
 h1, h2, h3, h4, h5, h6,
