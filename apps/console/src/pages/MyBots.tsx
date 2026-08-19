@@ -6,6 +6,7 @@ import { CopyIcon, ExternalLinkIcon, PauseIcon, PlayIcon, PencilIcon, QrCodeIcon
 import { useApi } from "../lib/api";
 import { useApiQuery } from "../lib/useApiQuery";
 import { useQueryClient } from "@tanstack/react-query";
+import { SortableTable } from "../components/SortableTable";
 import { StatusPill } from "@/components/StatusPill";
 import { FormDialog } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -94,77 +95,101 @@ export function MyBots() {
           </div>
         ) : (
           <div className="border border-border rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-fg-muted">
-                  <th className="font-medium px-4 py-2.5">Bot</th>
-                  <th className="font-medium px-4 py-2.5">Status</th>
-                  <th className="font-medium px-4 py-2.5">Visibility</th>
-                  <th className="font-medium px-4 py-2.5">Conversations</th>
-                  <th className="font-medium px-4 py-2.5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pubs.map((pub) => (
-                  <tr key={pub.id} className="border-b border-border last:border-0">
-                    <td className="px-4 py-3">
+            <SortableTable
+              data={pubs}
+              getRowId={(pub) => pub.id}
+              columns={[
+                {
+                  id: "bot",
+                  header: "Bot",
+                  accessor: (pub) => pub.title,
+                  cell: (pub) => (
+                    <div>
                       <div className="font-medium text-fg">{pub.title}</div>
                       <a
                         href={publicUrl(pub.slug)}
                         target="_blank"
                         rel="noreferrer"
                         className="text-xs text-brand hover:underline"
+                        onClick={(e) => e.stopPropagation()}
                       >
                         /p/{pub.slug}
                       </a>
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusPill status={STATUS_TONE[pub.status]} label={pub.status} />
-                    </td>
-                    <td className="px-4 py-3 text-fg-muted capitalize">{pub.visibility}</td>
-                    <td className="px-4 py-3 text-fg-muted">
+                    </div>
+                  ),
+                },
+                {
+                  id: "status",
+                  header: "Status",
+                  accessor: (pub) => pub.status,
+                  cell: (pub) => (
+                    <StatusPill status={STATUS_TONE[pub.status]} label={pub.status} />
+                  ),
+                },
+                {
+                  id: "visibility",
+                  header: "Visibility",
+                  accessor: (pub) => pub.visibility,
+                  cell: (pub) => (
+                    <span className="text-fg-muted capitalize">{pub.visibility}</span>
+                  ),
+                },
+                {
+                  id: "conversations",
+                  header: "Conversations",
+                  // Per-row async fetch — not client-sortable without a
+                  // pre-aggregated count on the list endpoint.
+                  cell: (pub) => (
+                    <span className="text-fg-muted">
                       <ConversationsCell publicationId={pub.id} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <IconBtn title="Share" onClick={() => setShareOf(pub)}>
-                          <QrCodeIcon className="w-4 h-4" />
-                        </IconBtn>
-                        <IconBtn title="Copy public link" onClick={() => copyLink(pub.slug)}>
-                          <CopyIcon className="w-4 h-4" />
-                        </IconBtn>
+                    </span>
+                  ),
+                },
+                {
+                  id: "actions",
+                  header: "Actions",
+                  align: "right",
+                  cell: (pub) => (
+                    <div className="flex items-center justify-end gap-1">
+                      <IconBtn title="Share" onClick={() => setShareOf(pub)}>
+                        <QrCodeIcon className="w-4 h-4" />
+                      </IconBtn>
+                      <IconBtn title="Copy public link" onClick={() => copyLink(pub.slug)}>
+                        <CopyIcon className="w-4 h-4" />
+                      </IconBtn>
+                      <IconBtn
+                        title="Open chat"
+                        onClick={() =>
+                          window.open(publicUrl(pub.slug), "_blank", "noreferrer")
+                        }
+                      >
+                        <ExternalLinkIcon className="w-4 h-4" />
+                      </IconBtn>
+                      <IconBtn title="Edit publication" onClick={() => setEditing(pub)}>
+                        <PencilIcon className="w-4 h-4" />
+                      </IconBtn>
+                      {pub.status === "paused" ? (
                         <IconBtn
-                          title="Open chat"
-                          onClick={() => window.open(publicUrl(pub.slug), "_blank", "noreferrer")}
+                          title="Resume"
+                          disabled={busyId === pub.id}
+                          onClick={() => setStatus(pub, "live")}
                         >
-                          <ExternalLinkIcon className="w-4 h-4" />
+                          <PlayIcon className="w-4 h-4" />
                         </IconBtn>
-                        <IconBtn title="Edit publication" onClick={() => setEditing(pub)}>
-                          <PencilIcon className="w-4 h-4" />
+                      ) : (
+                        <IconBtn
+                          title="Pause"
+                          disabled={busyId === pub.id}
+                          onClick={() => setStatus(pub, "paused")}
+                        >
+                          <PauseIcon className="w-4 h-4" />
                         </IconBtn>
-                        {pub.status === "paused" ? (
-                          <IconBtn
-                            title="Resume"
-                            disabled={busyId === pub.id}
-                            onClick={() => setStatus(pub, "live")}
-                          >
-                            <PlayIcon className="w-4 h-4" />
-                          </IconBtn>
-                        ) : (
-                          <IconBtn
-                            title="Pause"
-                            disabled={busyId === pub.id}
-                            onClick={() => setStatus(pub, "paused")}
-                          >
-                            <PauseIcon className="w-4 h-4" />
-                          </IconBtn>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      )}
+                    </div>
+                  ),
+                },
+              ]}
+            />
           </div>
         )}
       </div>

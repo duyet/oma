@@ -25,6 +25,7 @@ import {
   dailyActivitySlot,
   dailyActivityTickIndices,
 } from "../lib/daily-activity-chart";
+import { SortableTable } from "../components/SortableTable";
 import { cn, rowActivateKeyDown } from "@/lib/utils";
 
 // ── Usage wire shapes (mirror Usage.tsx) ──────────────────────────────────
@@ -543,69 +544,44 @@ export function Dashboard() {
                document. Secondary columns drop out below `md` rather than
                being squeezed; the primary summary + status + duration
                survive at every width. */
-            <div className="border border-border rounded-lg overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-muted/40 text-muted-foreground text-[11px] uppercase tracking-[0.08em]">
-                    <th className="text-left px-4 py-2.5 font-medium">Session</th>
-                    <th className="text-left px-4 py-2.5 font-medium">Status</th>
-                    <th className="text-left px-4 py-2.5 font-medium hidden lg:table-cell">
-                      Agent
-                    </th>
-                    <th className="text-right px-4 py-2.5 font-medium">Duration</th>
-                    <th className="text-right px-4 py-2.5 font-medium hidden md:table-cell">
-                      Messages
-                    </th>
-                    <th className="text-right px-4 py-2.5 font-medium hidden md:table-cell">
-                      Tools
-                    </th>
-                    <th className="text-right px-4 py-2.5 font-medium hidden sm:table-cell">
-                      Tokens
-                    </th>
-                    <th className="text-left px-4 py-2.5 font-medium hidden lg:table-cell">
-                      Created
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentSessions.map((s) => {
-                    const inTok = s.input_tokens ?? 0;
-                    const outTok = s.output_tokens ?? 0;
-                    const totalTok = inTok + outTok;
-                    // A running session's duration is still accruing — the
-                    // server's value is a snapshot taken at request time, so
-                    // mark it rather than implying it's final.
-                    const isRunning = s.status === "running";
-                    const agentName = agentNameById.get(s.agent_id);
-                    return (
-                      <tr
-                        key={s.id}
-                        onClick={() => nav(`/sessions/${s.id}`)}
-                        onKeyDown={rowActivateKeyDown(() =>
-                          nav(`/sessions/${s.id}`),
-                        )}
-                        tabIndex={0}
-                        role="button"
-                        className="border-t border-border hover:bg-muted/40 cursor-pointer transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
+            <div className="border border-border rounded-lg">
+              <SortableTable
+                data={recentSessions}
+                getRowId={(s) => s.id}
+                onRowClick={(s) => nav(`/sessions/${s.id}`)}
+                columns={[
+                  {
+                    id: "session",
+                    header: "Session",
+                    accessor: (s) => s.title || "",
+                    className: "max-w-[22rem]",
+                    cell: (s) => (
+                      <span
+                        className="block truncate text-foreground"
+                        title={s.title || undefined}
                       >
-                        {/* Summary. Truncated to one line so a long opening
-                            message can't blow the row height out; the full
-                            text stays reachable via the native tooltip. */}
-                        <td className="px-4 py-2.5 text-foreground max-w-[22rem]">
-                          <span
-                            className="block truncate"
-                            title={s.title || undefined}
-                          >
-                            {s.title || (
-                              <span className="text-muted-foreground">Untitled</span>
-                            )}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <StatusPill status={s.status || "idle"} />
-                        </td>
-                        <td
-                          className="px-4 py-2.5 text-muted-foreground text-[12px] hidden lg:table-cell max-w-[12rem]"
+                        {s.title || (
+                          <span className="text-muted-foreground">Untitled</span>
+                        )}
+                      </span>
+                    ),
+                  },
+                  {
+                    id: "status",
+                    header: "Status",
+                    accessor: (s) => s.status || "idle",
+                    cell: (s) => <StatusPill status={s.status || "idle"} />,
+                  },
+                  {
+                    id: "agent",
+                    header: "Agent",
+                    accessor: (s) => agentNameById.get(s.agent_id) ?? s.agent_id,
+                    className: "hidden lg:table-cell max-w-[12rem]",
+                    cell: (s) => {
+                      const agentName = agentNameById.get(s.agent_id);
+                      return (
+                        <span
+                          className="block truncate text-muted-foreground text-[12px]"
                           title={
                             agentName
                               ? `${agentName} (${s.agent_id})`
@@ -613,46 +589,84 @@ export function Dashboard() {
                           }
                         >
                           {agentName ? (
-                            <span className="block truncate">{agentName}</span>
+                            agentName
                           ) : (
-                            <span className="block truncate font-mono">
-                              {s.agent_id}
-                            </span>
+                            <span className="font-mono">{s.agent_id}</span>
                           )}
-                        </td>
-                        <td className="px-4 py-2.5 text-right text-muted-foreground text-[12px] tabular-nums whitespace-nowrap">
+                        </span>
+                      );
+                    },
+                  },
+                  {
+                    id: "duration",
+                    header: "Duration",
+                    align: "right",
+                    accessor: (s) => s.stats?.duration_seconds ?? 0,
+                    cell: (s) => {
+                      const isRunning = s.status === "running";
+                      return (
+                        <span className="text-muted-foreground text-[12px] whitespace-nowrap">
                           {formatSessionDuration(s.stats?.duration_seconds)}
                           {isRunning && s.stats?.duration_seconds != null ? (
-                            <span
-                              className="text-muted-foreground"
-                              title="Still running"
-                            >
+                            <span className="text-muted-foreground" title="Still running">
                               +
                             </span>
                           ) : null}
-                        </td>
-                        <td
-                          className="px-4 py-2.5 text-right text-muted-foreground text-[12px] tabular-nums hidden md:table-cell"
-                          title={
-                            s.message_count
-                              ? `${s.message_count.toLocaleString()} agent messages`
-                              : undefined
-                          }
-                        >
-                          {countLabel(s.message_count)}
-                        </td>
-                        <td
-                          className="px-4 py-2.5 text-right text-muted-foreground text-[12px] tabular-nums hidden md:table-cell"
-                          title={
-                            s.tool_call_count
-                              ? `${s.tool_call_count.toLocaleString()} tool calls`
-                              : undefined
-                          }
-                        >
-                          {countLabel(s.tool_call_count)}
-                        </td>
-                        <td
-                          className="px-4 py-2.5 text-right text-muted-foreground text-[12px] tabular-nums hidden sm:table-cell"
+                        </span>
+                      );
+                    },
+                  },
+                  {
+                    id: "messages",
+                    header: "Messages",
+                    align: "right",
+                    accessor: (s) => s.message_count ?? 0,
+                    className: "hidden md:table-cell",
+                    cell: (s) => (
+                      <span
+                        className="text-muted-foreground text-[12px]"
+                        title={
+                          s.message_count
+                            ? `${s.message_count.toLocaleString()} agent messages`
+                            : undefined
+                        }
+                      >
+                        {countLabel(s.message_count)}
+                      </span>
+                    ),
+                  },
+                  {
+                    id: "tools",
+                    header: "Tools",
+                    align: "right",
+                    accessor: (s) => s.tool_call_count ?? 0,
+                    className: "hidden md:table-cell",
+                    cell: (s) => (
+                      <span
+                        className="text-muted-foreground text-[12px]"
+                        title={
+                          s.tool_call_count
+                            ? `${s.tool_call_count.toLocaleString()} tool calls`
+                            : undefined
+                        }
+                      >
+                        {countLabel(s.tool_call_count)}
+                      </span>
+                    ),
+                  },
+                  {
+                    id: "tokens",
+                    header: "Tokens",
+                    align: "right",
+                    accessor: (s) => (s.input_tokens ?? 0) + (s.output_tokens ?? 0),
+                    className: "hidden sm:table-cell",
+                    cell: (s) => {
+                      const inTok = s.input_tokens ?? 0;
+                      const outTok = s.output_tokens ?? 0;
+                      const totalTok = inTok + outTok;
+                      return (
+                        <span
+                          className="text-muted-foreground text-[12px]"
                           title={
                             totalTok
                               ? `${inTok.toLocaleString()} in · ${outTok.toLocaleString()} out`
@@ -660,15 +674,23 @@ export function Dashboard() {
                           }
                         >
                           {countLabel(totalTok)}
-                        </td>
-                        <td className="px-4 py-2.5 text-muted-foreground text-[12px] whitespace-nowrap hidden lg:table-cell">
-                          {new Date(s.created_at).toLocaleDateString()}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                        </span>
+                      );
+                    },
+                  },
+                  {
+                    id: "created",
+                    header: "Created",
+                    accessor: (s) => s.created_at,
+                    className: "hidden lg:table-cell",
+                    cell: (s) => (
+                      <span className="text-muted-foreground text-[12px] whitespace-nowrap">
+                        {new Date(s.created_at).toLocaleDateString()}
+                      </span>
+                    ),
+                  },
+                ]}
+              />
             </div>
           )}
         </section>
