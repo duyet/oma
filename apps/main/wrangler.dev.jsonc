@@ -1,0 +1,129 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "oma-managed-agents",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Local `pnpm dev` only. Production stays on wrangler.jsonc.
+  // Intentionally omitted (always-remote, would prompt for a CF account):
+  //   ai, browser, worker_loaders
+  // Workers AI has no local simulator — omitting the binding is required
+  // for "no CF account" boot. web_fetch falls back when env.AI is unset.
+
+  "dev": {
+    "enable_containers": false
+  },
+
+  "assets": {
+    "directory": "../console/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": [
+      "/v1/*",
+      "/auth/*",
+      "/auth-info",
+      "/health",
+      "/linear/*",
+      "/linear-setup/*",
+      "/agents/runtime/*",
+      "/billing-api/*",
+      "/p/*",
+      "/sandbox-tab",
+      "/sandbox-tab/*"
+    ]
+  },
+
+  "rules": [
+    { "type": "Text", "globs": ["**/*.html"], "fallthrough": true }
+  ],
+
+  "kv_namespaces": [
+    { "binding": "CONFIG_KV", "id": "local-dev-config-kv" }
+  ],
+
+  "vars": {
+    "INTEGRATIONS_ORIGIN": "http://localhost:8787",
+    "TURNSTILE_SITE_KEY": ""
+  },
+
+  "r2_buckets": [
+    { "binding": "FILES_BUCKET", "bucket_name": "oma-managed-agents-files" },
+    { "binding": "MEMORY_BUCKET", "bucket_name": "oma-managed-agents-memory" }
+  ],
+
+  "d1_databases": [
+    { "binding": "MAIN_DB", "database_name": "oma-auth", "database_id": "local-dev-auth-db" },
+    { "binding": "INTEGRATIONS_DB", "database_name": "oma-integrations", "database_id": "local-dev-integrations-db", "migrations_dir": "migrations-integrations" }
+  ],
+
+  "durable_objects": {
+    "bindings": [
+      { "name": "RUNTIME_ROOM", "class_name": "RuntimeRoom" }
+    ]
+  },
+
+  "send_email": [
+    { "name": "SEND_EMAIL" }
+  ],
+
+  "services": [
+    { "binding": "SANDBOX_sandbox_default", "service": "oma-sandbox-default" },
+    { "binding": "INTEGRATIONS", "service": "oma-managed-agents-integrations" }
+  ],
+
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["SessionDO", "Sandbox"]
+    },
+    {
+      "tag": "v2",
+      "deleted_classes": ["SessionDO", "Sandbox"]
+    },
+    {
+      "tag": "v3",
+      "new_sqlite_classes": ["BuilderSandbox"]
+    },
+    {
+      "tag": "v4",
+      "deleted_classes": ["BuilderSandbox"]
+    },
+    {
+      "tag": "v5",
+      "new_sqlite_classes": ["RuntimeRoom"]
+    }
+  ],
+
+  "observability": { "enabled": true },
+
+  "ratelimits": [
+    { "name": "RL_AUTH_IP",         "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } },
+    { "name": "RL_AUTH_SEND_IP",    "namespace_id": "1002", "simple": { "limit": 5,  "period": 60 } },
+    { "name": "RL_AUTH_SEND_EMAIL", "namespace_id": "1003", "simple": { "limit": 1,  "period": 60 } },
+    { "name": "RL_API_USER_WRITE",  "namespace_id": "1004", "simple": { "limit": 60, "period": 60 } },
+    { "name": "RL_API_USER_READ",   "namespace_id": "1005", "simple": { "limit": 600,"period": 60 } },
+    { "name": "RL_SESSIONS_TENANT", "namespace_id": "1006", "simple": { "limit": 5,  "period": 60 } },
+    { "name": "RL_UPLOAD_TENANT",   "namespace_id": "1007", "simple": { "limit": 30, "period": 60 } },
+    { "name": "RL_MAGICLINK_EMAIL", "namespace_id": "1008", "simple": { "limit": 1,  "period": 60 } },
+    { "name": "RL_MCP_PROXY_TENANT","namespace_id": "1009", "simple": { "limit": 300,"period": 60 } }
+  ],
+
+  "queues": {
+    "consumers": [
+      {
+        "queue": "oma-managed-agents-memory-events",
+        "max_batch_size": 25,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "dead_letter_queue": "oma-managed-agents-memory-events-dlq"
+      },
+      {
+        "queue": "oma-managed-agents-memory-events-dlq",
+        "max_batch_size": 10,
+        "max_batch_timeout": 30,
+        "max_retries": 1
+      }
+    ]
+  }
+}

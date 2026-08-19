@@ -5,10 +5,19 @@
   "compatibility_date": "2025-09-15",
   "compatibility_flags": ["nodejs_compat"],
 
+  // Local `pnpm dev`: skip Docker. Container sandboxes need Docker; the rest
+  // of the worker (SessionDO, D1/KV/R2 sims) boots without it. Image path
+  // matches production wrangler.jsonc so enabling containers later works
+  // under pnpm (the old ../../node_modules/@cloudflare/sandbox/Dockerfile
+  // path does not exist — the package is nested at apps/agent/node_modules).
+  "dev": {
+    "enable_containers": false
+  },
+
   "containers": [
     {
       "class_name": "Sandbox",
-      "image": "../../node_modules/@cloudflare/sandbox/Dockerfile",
+      "image": "./Dockerfile.sandbox",
       "instance_type": "lite",
       "max_instances": 5
     }
@@ -48,7 +57,8 @@
     { "binding": "MAIN", "service": "oma-managed-agents" }
   ],
 
-  "browser": { "binding": "BROWSER" },
+  // Browser Rendering is always-remote (prompts for a CF account). Omit it
+  // for local simulators; the browser tool is already opt-in in agent config.
 
   "migrations": [
     {

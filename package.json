@@ -39,9 +39,10 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "wrangler dev -c apps/main/wrangler.jsonc -c apps/agent/wrangler.dev.jsonc",
-    "dev:main": "wrangler dev -c apps/main/wrangler.jsonc",
-    "dev:agent": "wrangler dev -c apps/agent/wrangler.dev.jsonc",
+    "predev": "node scripts/ensure-local-dev.mjs",
+    "dev": "wrangler dev --local -c apps/main/wrangler.dev.jsonc -c apps/agent/wrangler.dev.jsonc",
+    "dev:main": "wrangler dev --local -c apps/main/wrangler.dev.jsonc",
+    "dev:agent": "wrangler dev --local -c apps/agent/wrangler.dev.jsonc",
     "dev:console": "cd apps/console && npx vite",
     "build:console": "cd apps/console && npx vite build",
     "dev:docs": "pnpm --filter open-managed-agents-docs dev",

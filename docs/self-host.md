@@ -99,7 +99,10 @@ docker compose -f docker-compose.yml down -v    # stop, wipe volumes
 
 ```bash
 pnpm install
+cp .env.example .env
+# Set PLATFORM_ROOT_SECRET and BETTER_AUTH_SECRET (required). API_KEY optional.
 ANTHROPIC_API_KEY=sk-... pnpm --filter @duyet/oma-main-node start
+# `pnpm start` loads `.env` from cwd, apps/main-node/, or the repo root.
 # Same curl flow as above against localhost:8787.
 ```
 

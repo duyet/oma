@@ -8,6 +8,10 @@ ANTHROPIC_API_KEY=sk-ant-xxx
 # Required: at-rest encryption key for credentials.auth and
 # model_cards.api_key_cipher. Workers throw at first request if missing.
 # Generate with:  openssl rand -base64 32
+#
+# Copy this file to `.dev.vars` at the repo root. `pnpm dev` (predev)
+# copies it to apps/main/.dev.vars and apps/agent/.dev.vars — wrangler
+# reads the file next to each worker config, not the repo root.
 PLATFORM_ROOT_SECRET=
 
 # Optional local-trial escape hatch (Cloudflare wrangler local + self-host

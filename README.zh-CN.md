@@ -105,14 +105,16 @@ git clone https://github.com/duyet/oma.git
 cd oma
 pnpm install
 
-# 本地开发（不需要 CF 账户）—— wrangler dev + 模拟器
+# 本地开发（不需要 CF 账户）—— wrangler 本地模拟器，不需要 Docker
 cp .dev.vars.example .dev.vars && $EDITOR .dev.vars
 # PLATFORM_ROOT_SECRET 是启动所必需的；API_KEY 已预填一个仅供本地开发的占位值
 # （dev-test-key-change-me，与 .env.example 相同），下面的冒烟测试可以直接用 —— 一旦不再局限于
 # localhost 就务必修改它。
 pnpm dev
-# API     → http://localhost:8787
-# Console → http://localhost:5173
+# API + Console → http://localhost:8787
+# predev 会在缺省时构建 apps/console/dist，并把根目录 .dev.vars 复制到
+# 各 worker 配置目录（wrangler 读的是配置文件旁边的 .dev.vars）。
+# 可选热更新：pnpm dev:console → http://localhost:5173
 
 # 部署 —— 一个向导脚本搞定：创建 D1 数据库、KV 命名空间、R2 存储桶；
 # 把生成的 id 写入 apps/main + apps/agent + apps/integrations 的
