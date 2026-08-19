@@ -16,6 +16,12 @@ import { StackedAssembly } from "../components/StackedAssembly";
 import { GettingStartedGuide } from "../components/GettingStartedGuide";
 import { Button } from "@/components/ui/button";
 import { formatCompact, formatSandboxTime, formatSessionDuration } from "../lib/format";
+import {
+  DAILY_CHART_VIEW_W,
+  dailyActivityBarWidth,
+  dailyActivitySlot,
+  dailyActivityTickIndices,
+} from "../lib/daily-activity-chart";
 import { cn, rowActivateKeyDown } from "@/lib/utils";
 
 // ── Usage wire shapes (mirror Usage.tsx) ──────────────────────────────────
@@ -685,12 +691,16 @@ function MiniSparkline({ data }: { data: DailyBucket[] }) {
   if (n === 0) return <p className="text-sm text-fg-subtle">No data.</p>;
 
   const max = Math.max(1, ...data.map((d) => d.active_seconds));
-  const slot = 12;
-  const barW = 8;
+  const viewW = DAILY_CHART_VIEW_W;
+  const slot = dailyActivitySlot(n, viewW);
+  const barW = dailyActivityBarWidth(slot);
+  const tickSet = new Set(dailyActivityTickIndices(n, slot));
+  const rotate = slot < 28;
   const chartTop = 8;
   const chartH = 80;
   const baseline = chartTop + chartH;
-  const totalW = n * slot;
+  const labelH = rotate ? 28 : 16;
+  const viewH = baseline + labelH;
 
   const fmtDate = (iso: string) => {
     const d = new Date(iso);
@@ -698,19 +708,18 @@ function MiniSparkline({ data }: { data: DailyBucket[] }) {
   };
 
   return (
-    <div className="overflow-x-auto">
+    <div className="w-full">
       <svg
-        viewBox={`0 0 ${totalW} ${baseline + 16}`}
+        viewBox={`0 0 ${viewW} ${viewH}`}
         width="100%"
-        height={baseline + 16}
-        preserveAspectRatio="none"
+        preserveAspectRatio="xMidYMid meet"
         role="img"
         aria-label="7-day activity"
       >
         <line
           x1={0}
           y1={baseline}
-          x2={totalW}
+          x2={viewW}
           y2={baseline}
           stroke="var(--color-border)"
           strokeWidth={1}
@@ -719,6 +728,8 @@ function MiniSparkline({ data }: { data: DailyBucket[] }) {
           const h = max > 0 ? (d.active_seconds / max) * chartH : 0;
           const x = i * slot + (slot - barW) / 2;
           const y = baseline - h;
+          const cx = i * slot + slot / 2;
+          const labelY = baseline + 12;
           return (
             <g key={d.date}>
               <rect
@@ -726,19 +737,20 @@ function MiniSparkline({ data }: { data: DailyBucket[] }) {
                 y={y}
                 width={barW}
                 height={Math.max(h, d.active_seconds > 0 ? 1 : 0)}
-                rx={1.5}
+                rx={Math.min(1.5, barW / 2)}
                 fill="var(--color-brand)"
                 opacity={0.85}
               >
                 <title>{`${fmtDate(d.date)}: ${formatSandboxTime(d.active_seconds)} · ${d.runs} run${d.runs === 1 ? "" : "s"}`}</title>
               </rect>
-              {i % 2 === 0 && (
+              {tickSet.has(i) && (
                 <text
-                  x={i * slot + slot / 2}
-                  y={baseline + 12}
-                  textAnchor="middle"
+                  x={cx}
+                  y={labelY}
+                  textAnchor={rotate ? "end" : "middle"}
                   fontSize={7}
                   fill="var(--color-fg-subtle)"
+                  transform={rotate ? `rotate(-40 ${cx} ${labelY})` : undefined}
                 >
                   {fmtDate(d.date)}
                 </text>
