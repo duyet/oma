@@ -20,7 +20,7 @@ import { useInfiniteApiQuery } from "../lib/useApiQuery";
 import { DataTable, type ColumnDef } from "../components/DataTable";
 import { FilterBar } from "../components/FilterBar";
 import { RowActionsMenu } from "../components/RowActionsMenu";
-import { Badge } from "../components/Badge";
+import { ResourceBadge } from "@/components/ResourceBadge";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/useConfirm";
 import { formatCompact, formatRelative } from "../lib/format";
@@ -259,14 +259,14 @@ export function AgentsList() {
                 }}
                 className="rounded hover:text-fg transition-colors duration-[var(--dur-quick)]"
               >
-                <Badge
+                <ResourceBadge
                   icon={<MessageSquareIcon className="size-3" />}
                   label={s.sessions}
                   title={`${s.sessions} session${s.sessions === 1 ? "" : "s"} in the last 30 days — view them`}
                 />
               </button>
               {s.tokens > 0 && (
-                <Badge
+                <ResourceBadge
                   icon={<CoinsIcon className="size-3" />}
                   label={formatCompact(s.tokens)}
                   title={`${s.tokens.toLocaleString()} tokens in the last 30 days`}
@@ -288,20 +288,20 @@ export function AgentsList() {
           const mcpCount = a.mcp_servers?.length ?? 0;
           return (
             <div className="flex items-center gap-2.5">
-              <Badge
+              <ResourceBadge
                 icon={<WrenchIcon className="size-3" />}
                 label={toolsCount}
                 title={`${toolsCount} tool${toolsCount === 1 ? "" : "s"}`}
               />
               {skillsCount > 0 && (
-                <Badge
+                <ResourceBadge
                   icon={<BookOpenIcon className="size-3" />}
                   label={skillsCount}
                   title={`${skillsCount} skill${skillsCount === 1 ? "" : "s"}`}
                 />
               )}
               {mcpCount > 0 && (
-                <Badge
+                <ResourceBadge
                   icon={<PlugZapIcon className="size-3" />}
                   label={mcpCount}
                   title={`${mcpCount} MCP server${mcpCount === 1 ? "" : "s"}`}

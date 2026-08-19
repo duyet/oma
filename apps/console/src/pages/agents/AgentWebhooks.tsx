@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useApi } from "../../lib/api";
 import { useQueryClient } from "../../lib/useApiQuery";
-import { Field } from "../../components/Field";
+import { Field } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useConfirm } from "@/hooks/useConfirm";

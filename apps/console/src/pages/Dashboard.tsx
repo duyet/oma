@@ -12,9 +12,9 @@ import {
   CoinsIcon,
 } from "lucide-react";
 import { formatQueryError, useApiQuery } from "../lib/useApiQuery";
-import { StatusPill } from "../components/Badge";
+import { StatusPill } from "@/components/StatusPill";
 import { EmptyState } from "../components/EmptyState";
-import { Skeleton } from "../components/Skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { StackedAssembly } from "../components/StackedAssembly";
 import { GettingStartedGuide } from "../components/GettingStartedGuide";
 import { Button } from "@/components/ui/button";

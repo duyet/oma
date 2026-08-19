@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { IntegrationsApi } from "../api/client";
-import { Field } from "../../components/Field";
+import { Field } from "@/components/ui/field";
 import { useConfirm } from "@/hooks/useConfirm";
 import type { SlackInstallation, SlackPublication } from "../api/types";
 

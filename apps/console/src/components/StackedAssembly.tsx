@@ -21,7 +21,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { FitDiagram, ProviderMark, type FitCardStatus, type FitProviderMark, type FitStep } from "@duyet/oma-fit-diagram";
-import { Modal } from "./Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useApiQuery } from "../lib/useApiQuery";
@@ -664,7 +664,7 @@ export function StackedAssembly({
       )}
 
       {quick && (
-        <Modal
+        <FormDialog
           open
           onClose={() => setQuick(null)}
           title={quick.title}
@@ -686,7 +686,7 @@ export function StackedAssembly({
           }
         >
           <QuickViewBody view={quick} />
-        </Modal>
+        </FormDialog>
       )}
     </section>
   );

@@ -8,7 +8,7 @@ import type {
 } from "../api/types";
 import { StatusPill } from "../components/StatusPill";
 import { ConnectModeChooser } from "../components/ConnectModeChooser";
-import { Avatar } from "../../components/Avatar";
+import { EntityAvatar } from "@/components/EntityAvatar";
 import { EmptyState } from "../../components/EmptyState";
 import { formatRelative } from "../../lib/format";
 
@@ -256,7 +256,7 @@ function ManagedInstallBanner({
     return (
       <div className="mb-6 flex items-center gap-3 rounded-md border border-success/30 bg-success-subtle px-4 py-3">
         {login && (
-          <Avatar src={githubAvatarUrl(login)} name={login} size="sm" />
+          <EntityAvatar src={githubAvatarUrl(login)} name={login} size="sm" />
         )}
         <p className="text-[13px] text-fg">
           <span className="font-medium text-success">Connected</span>
@@ -309,7 +309,7 @@ function PendingRow({
         : "Awaiting install";
   return (
     <li className="flex items-center gap-3 px-4 py-3 rounded-md border border-warning/30 bg-warning-subtle/40">
-      <Avatar src={pub.persona.avatarUrl} name={pub.persona.name} size="sm" />
+      <EntityAvatar src={pub.persona.avatarUrl} name={pub.persona.name} size="sm" />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <span className="font-medium text-fg text-[14px] truncate">
@@ -374,7 +374,7 @@ function WorkspaceCard({
     <div className="border border-border rounded-lg overflow-hidden bg-bg hover:border-border-strong transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]">
       <div className="flex items-center justify-between gap-4 px-5 py-4">
         <div className="flex items-center gap-3 min-w-0">
-          <Avatar
+          <EntityAvatar
             src={githubAvatarUrl(installation.workspace_name)}
             name={installation.workspace_name}
             size="md"
@@ -508,7 +508,7 @@ function InstallationDetailRow({ detail }: { detail: GitHubInstallationDetail })
 function PublicationRow({ pub }: { pub: GitHubPublication }) {
   return (
     <li className="flex items-center gap-3 px-5 py-2.5 text-sm">
-      <Avatar src={pub.persona.avatarUrl} name={pub.persona.name} size="sm" />
+      <EntityAvatar src={pub.persona.avatarUrl} name={pub.persona.name} size="sm" />
       <span className="font-medium text-fg flex-1 truncate">{pub.persona.name}</span>
       <StatusPill status={pub.status} />
     </li>

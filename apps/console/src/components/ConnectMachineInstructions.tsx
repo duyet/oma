@@ -7,7 +7,7 @@
 import { toast } from "sonner";
 
 import { CopyButton } from "./CopyButton";
-import { Modal } from "./Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { RECONNECT_CMD, SETUP_CMD } from "../lib/bridge-commands";
 
@@ -139,7 +139,7 @@ export function ConnectMachineDialog({
   onCopy: (text: string, key: string) => void;
 }) {
   return (
-    <Modal
+    <FormDialog
       open={open}
       onClose={onClose}
       title="Connect a machine"
@@ -148,6 +148,6 @@ export function ConnectMachineDialog({
       footer={<Button onClick={onClose}>Done</Button>}
     >
       <ConnectMachineInstructions copied={copied} onCopy={onCopy} />
-    </Modal>
+    </FormDialog>
   );
 }

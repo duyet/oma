@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { useApi } from "../lib/api";
 import { useApiQuery } from "../lib/useApiQuery";
-import { Modal } from "../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Page } from "../components/Page";
 import { PageHeader } from "../components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -427,7 +427,7 @@ function MemoryDetailDialog({
   };
 
   return (
-    <Modal
+    <FormDialog
       open
       onClose={onClose}
       title={memory.path}
@@ -562,7 +562,7 @@ function MemoryDetailDialog({
           </table>
         </div>
       )}
-    </Modal>
+    </FormDialog>
   );
 }
 
@@ -687,7 +687,7 @@ function WriteMemoryDialog({
   };
 
   return (
-    <Modal
+    <FormDialog
       open
       onClose={onClose}
       title="New memory"
@@ -728,7 +728,7 @@ function WriteMemoryDialog({
         rows={14}
         className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-bg text-fg font-mono outline-none focus:border-border-strong"
       />
-    </Modal>
+    </FormDialog>
   );
 }
 

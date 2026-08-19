@@ -7,7 +7,7 @@ import { useApi } from "../../lib/api";
 import { useApiQuery } from "../../lib/useApiQuery";
 import { DataTable, type ColumnDef } from "../../components/DataTable";
 import { RowActionsMenu } from "../../components/RowActionsMenu";
-import { Modal } from "../../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/useConfirm";
 import { formatRelative } from "../../lib/format";
@@ -290,7 +290,7 @@ function ScheduleRunsDialog({
   }, [open, scheduleId]);
 
   return (
-    <Modal
+    <FormDialog
       open={open}
       onClose={onClose}
       title="Run history"
@@ -341,6 +341,6 @@ function ScheduleRunsDialog({
           )}
         </div>
       )}
-    </Modal>
+    </FormDialog>
   );
 }

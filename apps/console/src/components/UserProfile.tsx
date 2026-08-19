@@ -20,7 +20,7 @@ import {
 import { useAuth } from "../lib/auth";
 import { useTheme } from "../lib/theme";
 import { authClient } from "../lib/auth-client";
-import { Avatar } from "./Avatar";
+import { EntityAvatar } from "@/components/EntityAvatar";
 
 /**
  * Bottom-of-sidebar user profile menu. Single click target opens a
@@ -62,15 +62,15 @@ export function UserProfile() {
         <button
           type="button"
           aria-label="Account menu"
-          className="w-full h-11 px-3 flex items-center gap-2 hover:bg-sidebar-accent transition-colors text-left"
+          className="w-full h-10 rounded-2xl px-2 flex items-center gap-2 hover:bg-sidebar-accent transition-colors text-left"
         >
-          <Avatar name={label} size="sm" />
+          <EntityAvatar name={label} size="sm" />
           <div className="flex-1 min-w-0 text-left leading-tight group-data-[collapsible=icon]:hidden">
             <div className="text-sm text-sidebar-foreground truncate">
               {user.name || user.email}
             </div>
             {user.email && user.name && (
-              <div className="text-[11px] text-fg-subtle truncate">
+              <div className="text-[11px] text-muted-foreground truncate">
                 {user.email}
               </div>
             )}
@@ -86,11 +86,11 @@ export function UserProfile() {
       >
         <DropdownMenuLabel className="font-normal">
           <div className="leading-tight">
-            <div className="text-sm font-medium text-fg truncate">
+            <div className="text-sm font-medium text-foreground truncate">
               {user.name || user.email}
             </div>
             {user.email && user.name && (
-              <div className="text-[11px] text-fg-subtle truncate">
+              <div className="text-[11px] text-muted-foreground truncate">
                 {user.email}
               </div>
             )}
@@ -114,7 +114,7 @@ export function UserProfile() {
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuLabel className="text-[11px] uppercase tracking-wider text-fg-subtle font-medium">
+        <DropdownMenuLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
           Theme
         </DropdownMenuLabel>
         <DropdownMenuGroup>

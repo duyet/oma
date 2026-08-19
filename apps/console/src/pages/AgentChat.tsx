@@ -8,7 +8,7 @@ import {
   openSandboxTab,
 } from "../lib/sandboxTab";
 import { useDefaultEnvironment } from "../lib/useDefaultEnvironment";
-import { Select, SelectOption } from "../components/Select";
+import { Select, SelectOption } from "@/components/ui/form-select";
 
 interface ChatMessage {
   role: "user" | "agent";
