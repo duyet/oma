@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { XCircleIcon } from "lucide-react";
 import { useApi } from "../lib/api";
 import { useAsyncAction } from "../hooks/useAsyncAction";
-import { Modal } from "../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/useConfirm";
 import { DataTable, ExpandedDetail, type ColumnDef } from "../components/DataTable";
@@ -238,7 +238,7 @@ export function Members() {
             />
           </div>
         )}
-        <Modal
+        <FormDialog
           open={showInvite}
           onClose={closeDialog}
           title="Invite a teammate"
@@ -292,7 +292,7 @@ export function Members() {
               email address, and expires in 7 days.
             </p>
           </div>
-        </Modal>
+        </FormDialog>
       </DataTable>
     </>
   );

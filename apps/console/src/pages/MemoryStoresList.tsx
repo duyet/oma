@@ -8,7 +8,7 @@ import { DataTable, ExpandedDetail, type ColumnDef } from "../components/DataTab
 import { FacetedFilter } from "../components/FacetedFilter";
 import { FilterChip, CreatedFilterChip } from "../components/FilterChip";
 import { RowActionsMenu } from "../components/RowActionsMenu";
-import { Modal } from "../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { PopoverContent } from "@/components/ui/popover";
 import { useConfirm } from "@/hooks/useConfirm";
@@ -279,7 +279,7 @@ export function MemoryStoresList() {
         />
       )}
     >
-      <Modal
+      <FormDialog
         open={showCreate}
         onClose={() => {
           setShowCreate(false);
@@ -340,7 +340,7 @@ export function MemoryStoresList() {
             />
           </div>
         </div>
-      </Modal>
+      </FormDialog>
     </DataTable>
   );
 }

@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import { IntegrationsApi } from "../api/client";
 import type { GitHubA1FormStep, GitHubA1InstallLink } from "../api/types";
 import { Combobox } from "../../components/Combobox";
-import { Field } from "../../components/Field";
+import { Field } from "@/components/ui/field";
 
 const api = new IntegrationsApi();
 

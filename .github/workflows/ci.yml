@@ -28,6 +28,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
+      # Root `pnpm typecheck` excludes apps/console (Vite app; separate tsconfig).
+      # Gate it explicitly so console tsc errors cannot slip past CI (#406).
+      - run: pnpm --filter managed-agents-console typecheck
 
   test:
     runs-on: ubuntu-latest

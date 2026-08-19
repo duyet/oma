@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { IntegrationsApi } from "../api/client";
 import type { A1FormStep, A1InstallLink } from "../api/types";
-import { SecretInput, TextInput } from "../../components/Input";
+import { SecretInput, TextInput } from "@/components/ui/form-input";
 import { Combobox } from "../../components/Combobox";
-import { Field } from "../../components/Field";
+import { Field } from "@/components/ui/field";
 import { formatRelative } from "../../lib/format";
 
 const api = new IntegrationsApi();

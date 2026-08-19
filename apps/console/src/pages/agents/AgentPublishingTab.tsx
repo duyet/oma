@@ -7,7 +7,7 @@ import { useApi } from "../../lib/api";
 import { useApiQuery, formatQueryError } from "../../lib/useApiQuery";
 import { DataTable, ExpandedDetail, type ColumnDef } from "../../components/DataTable";
 import { RowActionsMenu } from "../../components/RowActionsMenu";
-import { StatusPill } from "../../components/Badge";
+import { StatusPill } from "@/components/StatusPill";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/useConfirm";
 import { useAgentHub } from "../AgentDetail";

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type JSX } from "react";
 
-import { Modal } from "../../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -117,7 +117,7 @@ export function BrowserVmDetailDialog({
   const { label: statusLabel, tone } = browserVmStatusMeta(status);
 
   return (
-    <Modal open={open} onClose={onClose} title="Browser VM" subtitle={runtimeId ?? undefined} maxWidth="max-w-2xl">
+    <FormDialog open={open} onClose={onClose} title="Browser VM" subtitle={runtimeId ?? undefined} maxWidth="max-w-2xl">
       <Tabs defaultValue="overview">
         <TabsList variant="line">
           <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -254,6 +254,6 @@ export function BrowserVmDetailDialog({
           </div>
         </TabsContent>
       </Tabs>
-    </Modal>
+    </FormDialog>
   );
 }

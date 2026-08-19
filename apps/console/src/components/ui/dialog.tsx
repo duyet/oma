@@ -152,6 +152,72 @@ function DialogDescription({
   )
 }
 
+// Tailwind JIT safelist hint — these literal `!max-w-*` strings exist
+// here so the bundler picks them up; FormDialog picks one at runtime via
+// `${"!"}${maxWidth}`. shadcn's <DialogContent> bakes `sm:max-w-sm`
+// (24rem) into its base className which would otherwise cap every modal
+// at 384 px on desktop; the `!` prefix lifts our chosen width over it.
+//
+// !max-w-sm !max-w-md !max-w-lg !max-w-xl !max-w-2xl !max-w-3xl !max-w-4xl
+
+interface FormDialogProps {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  subtitle?: string;
+  /** Tailwind max-width class WITHOUT the `!` prefix (e.g. `max-w-lg`). */
+  maxWidth?: string;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+}
+
+function FormDialog({
+  open,
+  onClose,
+  title,
+  subtitle,
+  maxWidth = "max-w-lg",
+  children,
+  footer,
+}: FormDialogProps) {
+  const widthClass = `!${maxWidth.replace(/^!/, "")}`;
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+    >
+      <DialogContent
+        className={cn(
+          "max-h-[85vh] flex flex-col gap-0 p-0",
+          widthClass,
+        )}
+      >
+        <DialogHeader className="px-6 py-4 border-b border-border gap-1">
+          <DialogTitle className="text-lg font-semibold font-display truncate">
+            {title}
+          </DialogTitle>
+          {subtitle && (
+            <DialogDescription className="text-sm text-muted-foreground">
+              {subtitle}
+            </DialogDescription>
+          )}
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4">{children}</div>
+
+        {footer && (
+          <DialogFooter className="m-0 px-6 py-4 border-t border-border bg-transparent rounded-none sm:justify-end gap-3">
+            {footer}
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export {
   Dialog,
   DialogClose,
@@ -163,4 +229,5 @@ export {
   DialogPortal,
   DialogTitle,
   DialogTrigger,
+  FormDialog,
 }

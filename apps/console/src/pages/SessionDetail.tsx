@@ -5,8 +5,9 @@ import { toast } from "sonner";
 import { Markdown } from "../components/Markdown";
 import { formatDuration, formatRelative, shortenId } from "../lib/format";
 import { ModelName } from "../lib/model-provider";
-import { Badge, StatusPill } from "../components/Badge";
-import { Modal } from "../components/Modal";
+import { StatusPill } from "@/components/StatusPill"
+import { ResourceBadge } from "@/components/ResourceBadge";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { AgentIcon, ClockIcon, DurationIcon, EnvIcon, VaultIcon } from "../components/icons";
 import { ResourcePanel } from "./session-detail/Panels";
@@ -943,21 +944,21 @@ export function SessionDetail() {
               to a short ID slice if the snapshot didn't carry one — better
               "agent_…XYZ" than nothing. */}
           {(sessionMeta.agentSnapshot?.id || agentId) && (
-            <Badge
+            <ResourceBadge
               icon={<AgentIcon />}
               label={sessionMeta.agentSnapshot?.name || shortenId(sessionMeta.agentSnapshot?.id || agentId)}
               onClick={() => toggleInspector(true, "overview")}
             />
           )}
           {sessionMeta.environmentId && (
-            <Badge
+            <ResourceBadge
               icon={<EnvIcon />}
               label={sessionMeta.envSnapshot?.name || shortenId(sessionMeta.environmentId)}
               onClick={() => toggleInspector(true, "sandbox")}
             />
           )}
           {(sessionMeta.vaults ?? sessionMeta.vaultIds?.map((id) => ({ id, display_name: undefined })) ?? []).map((v) => (
-            <Badge
+            <ResourceBadge
               key={v.id}
               icon={<VaultIcon />}
               label={v.display_name || shortenId(v.id)}
@@ -1798,7 +1799,7 @@ function SessionDurationBadge({ events }: { events: Event[] }) {
   }
   if (!Number.isFinite(first) || last <= first) return null;
   return (
-    <Badge
+    <ResourceBadge
       icon={<DurationIcon />}
       label={formatDuration(last - first)}
       title="Wall-clock from first to last event"
@@ -1995,7 +1996,7 @@ function RelativeTimeBadge({ iso }: { iso: string }) {
   const t = new Date(iso).getTime();
   if (!Number.isFinite(t)) return null;
   return (
-    <Badge
+    <ResourceBadge
       icon={<ClockIcon />}
       label={formatRelative(Date.now() - t)}
       title={new Date(iso).toLocaleString()}

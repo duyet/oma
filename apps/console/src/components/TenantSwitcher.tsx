@@ -3,7 +3,7 @@ import { ChevronsUpDownIcon, PlusIcon, CheckIcon } from "lucide-react";
 
 import { useApi, getActiveTenantId, setActiveTenantId } from "../lib/api";
 import { useApiQuery } from "../lib/useApiQuery";
-import { Modal } from "./Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar } from "./Avatar";
+import { EntityAvatar } from "@/components/EntityAvatar";
 
 // Slot beneath the logo in the sidebar. Opens a dropdown with all
 // memberships + "Create workspace" button. Switching writes
@@ -98,26 +98,26 @@ export function TenantSwitcher() {
             type="button"
             aria-label="Switch workspace"
             disabled={!ready}
-            className="w-full h-11 px-3 flex items-center gap-2 hover:bg-sidebar-accent transition-colors text-left disabled:cursor-default disabled:hover:bg-transparent outline-none focus-visible:bg-sidebar-accent"
+            className="w-full h-8 rounded-2xl px-2 flex items-center gap-2 hover:bg-sidebar-accent transition-colors text-left disabled:cursor-default disabled:hover:bg-transparent outline-none focus-visible:bg-sidebar-accent"
           >
             {ready ? (
-              <Avatar name={current.name} size="sm" squared />
+              <EntityAvatar name={current.name} size="sm" squared />
             ) : (
               <div className="size-6 rounded-md bg-brand-subtle shrink-0" aria-hidden="true" />
             )}
             <div className="min-w-0 flex-1 leading-tight group-data-[collapsible=icon]:hidden">
-              <div className="text-sm font-medium truncate text-fg">
+              <div className="text-sm font-medium truncate text-sidebar-foreground">
                 {ready ? displayName(current) : " "}
               </div>
               {ready && tenants.length > 1 && (
-                <div className="text-[10px] text-fg-subtle uppercase tracking-wider">
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
                   {current.role}
                 </div>
               )}
             </div>
             {ready && (
               <ChevronsUpDownIcon
-                className="w-3.5 h-3.5 text-fg-subtle shrink-0 group-data-[collapsible=icon]:hidden"
+                className="w-3.5 h-3.5 text-muted-foreground shrink-0 group-data-[collapsible=icon]:hidden"
                 aria-hidden="true"
               />
             )}
@@ -143,10 +143,10 @@ export function TenantSwitcher() {
               onSelect={() => switchTo(t.id)}
               className="flex items-center gap-2"
             >
-              <Avatar name={displayName(t)} size="xs" squared />
+              <EntityAvatar name={displayName(t)} size="xs" squared />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm">{displayName(t)}</div>
-                <div className="text-[10px] text-fg-subtle font-mono">{t.id}</div>
+                <div className="text-[10px] text-muted-foreground font-mono">{t.id}</div>
               </div>
               {t.id === active && (
                 <CheckIcon className="size-3.5 text-success shrink-0" />
@@ -156,7 +156,7 @@ export function TenantSwitcher() {
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onSelect={() => setCreateOpen(true)}
-            className="text-fg-muted"
+            className="text-muted-foreground"
           >
             <PlusIcon className="size-4 shrink-0" />
             Create workspace…
@@ -210,14 +210,14 @@ function CreateTenantModal({
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Create workspace">
+    <FormDialog open={open} onClose={onClose} title="Create workspace">
       <div className="space-y-4">
-        <p className="text-sm text-fg-muted">
+        <p className="text-sm text-muted-foreground">
           A workspace is an isolated container for agents, sessions, vaults,
           and integrations. You'll be the owner of the new one.
         </p>
         <div>
-          <label htmlFor="tenant-create-name" className="block text-xs uppercase tracking-wider text-fg-subtle mb-1">
+          <label htmlFor="tenant-create-name" className="block text-xs uppercase tracking-wider text-muted-foreground mb-1">
             Name
           </label>
           <input
@@ -228,7 +228,7 @@ function CreateTenantModal({
             placeholder="e.g. Acme Production"
             autoFocus
             disabled={working}
-            className="w-full bg-bg border border-border rounded-lg px-3 py-2 min-h-11 sm:min-h-0 text-sm outline-none focus:border-border-strong"
+            className="w-full bg-background border border-border rounded-lg px-3 py-2 min-h-11 sm:min-h-0 text-sm outline-none focus:border-border-strong"
           />
         </div>
         {error && (
@@ -240,7 +240,7 @@ function CreateTenantModal({
           <button
             onClick={onClose}
             disabled={working}
-            className="inline-flex items-center justify-center px-4 py-2 min-h-11 sm:min-h-0 rounded-lg border border-border text-sm text-fg-muted hover:bg-bg-surface disabled:opacity-40"
+            className="inline-flex items-center justify-center px-4 py-2 min-h-11 sm:min-h-0 rounded-lg border border-border text-sm text-muted-foreground hover:bg-muted disabled:opacity-40"
           >
             Cancel
           </button>
@@ -249,6 +249,6 @@ function CreateTenantModal({
           </Button>
         </div>
       </div>
-    </Modal>
+    </FormDialog>
   );
 }

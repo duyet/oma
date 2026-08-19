@@ -46,7 +46,7 @@ import {
 
 import { EmptyState, type EmptyStateKind } from "./EmptyState";
 import { PageHeader } from "./PageHeader";
-import { Skeleton } from "./Skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn, rowActivateKeyDown } from "@/lib/utils";
 import { useLocation } from "react-router";
 

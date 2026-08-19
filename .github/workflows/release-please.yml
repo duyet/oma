@@ -47,9 +47,10 @@ jobs:
         id: release_pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_JSON: ${{ steps.release.outputs.pr }}
         run: |
           from_action=$(node -e "
-            const pr = '${{ steps.release.outputs.pr }}';
+            const pr = process.env.PR_JSON;
             if (!pr || pr === '') process.exit(0);
             try { console.log(JSON.parse(pr).number ?? ''); } catch { process.exit(0); }
           ")

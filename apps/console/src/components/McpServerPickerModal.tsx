@@ -16,7 +16,7 @@
 // The modal closes itself after a pick — caller doesn't need to manage that.
 
 import { useState, type JSX } from "react";
-import { Modal } from "./Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { MCP_REGISTRY, type McpRegistryEntry } from "../data/mcp-registry";
 
 const inputCls =
@@ -48,7 +48,7 @@ export function McpServerPickerModal({
     : MCP_REGISTRY;
 
   return (
-    <Modal
+    <FormDialog
       open={open}
       onClose={() => {
         onClose();
@@ -116,6 +116,6 @@ export function McpServerPickerModal({
           )}
         </div>
       </div>
-    </Modal>
+    </FormDialog>
   );
 }

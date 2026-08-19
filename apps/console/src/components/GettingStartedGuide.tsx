@@ -16,7 +16,7 @@ import { CheckIcon, ArrowRightIcon, XIcon, SparklesIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useApiQuery } from "../lib/useApiQuery";
-import { Modal } from "./Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { AgentIcon, SessionsIcon, EnvIcon, VaultIcon } from "./icons";
 
 export const GETTING_STARTED_DISMISSED_KEY = "oma.dashboard.getting-started.dismissed";
@@ -435,7 +435,7 @@ function TourDialog({
   }
 
   return (
-    <Modal
+    <FormDialog
       open={open}
       onClose={close}
       title="How oma works"
@@ -488,7 +488,7 @@ function TourDialog({
           </Button>
         )}
       </div>
-    </Modal>
+    </FormDialog>
   );
 }
 

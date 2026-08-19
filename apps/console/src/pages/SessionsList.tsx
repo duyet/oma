@@ -7,7 +7,7 @@ import { ArchiveIcon, PauseIcon, PlayIcon, TrashIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useApi, ApiError } from "../lib/api";
 import { useInfiniteApiQuery } from "../lib/useApiQuery";
-import { Modal } from "../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/useConfirm";
 import { Combobox } from "../components/Combobox";
@@ -1006,7 +1006,7 @@ export function SessionsList() {
       columns={columns}
       renderExpandedRow={renderExpandedRow}
     >
-      <Modal
+      <FormDialog
         open={showCreate}
         onClose={closeModal}
         title="New Session"
@@ -1391,7 +1391,7 @@ export function SessionsList() {
             </div>
           </div>
         </div>
-      </Modal>
+      </FormDialog>
     </DataTable>
   );
 }

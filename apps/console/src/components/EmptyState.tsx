@@ -110,30 +110,30 @@ export function EmptyState({
   const KindIcon = kind ? KIND_ICONS[kind] : null;
   return (
     <div
-      className={`border border-border rounded-lg bg-bg-surface/30 text-center ${s.wrap} ${className}`.trim()}
+      className={`border border-border rounded-lg bg-muted/30 text-center ${s.wrap} ${className}`.trim()}
     >
       <div className={`flex justify-center ${s.gap}`}>
         {loading ? (
           <BrandLoader size={size} label={title} />
         ) : icon ? (
-          <span aria-hidden="true" className={`text-fg-subtle inline-flex ${s.icon}`}>
+          <span aria-hidden="true" className={`text-muted-foreground inline-flex ${s.icon}`}>
             {icon}
           </span>
         ) : KindIcon ? (
-          <KindIcon className={`${s.icon} text-fg-subtle`} />
+          <KindIcon className={`${s.icon} text-muted-foreground`} />
         ) : (
           <span
             aria-hidden="true"
-            className={`font-mono font-bold text-fg-subtle select-none ${s.mark}`}
+            className={`font-mono font-bold text-muted-foreground select-none ${s.mark}`}
           >
             [&nbsp;&nbsp;]
           </span>
         )}
       </div>
-      <p className={`${tone === "danger" ? "text-danger" : "text-fg"} ${s.title} font-medium`}>
+      <p className={`${tone === "danger" ? "text-destructive" : "text-foreground"} ${s.title} font-medium`}>
         {title}
       </p>
-      {body && <p className={`text-fg-muted mt-1.5 ${s.body}`}>{body}</p>}
+      {body && <p className={`text-muted-foreground mt-1.5 ${s.body}`}>{body}</p>}
       {action && <div className="mt-4 inline-flex">{action}</div>}
     </div>
   );

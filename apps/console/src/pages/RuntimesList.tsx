@@ -24,7 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Modal } from "../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { ProviderMark } from "../components/ProviderMark";
 import { RuntimesIcon } from "../components/icons";
 import { ConnectMachineDialog } from "../components/ConnectMachineInstructions";
@@ -698,7 +698,7 @@ function MachineDetailDialog({
     ([, s]) => s?.length,
   );
   return (
-    <Modal
+    <FormDialog
       open
       onClose={onClose}
       title={r.hostname}
@@ -820,7 +820,7 @@ function MachineDetailDialog({
 
         <UseInEnvironmentSection providerId="subprocess" onGo={onUseInEnvironment} />
       </div>
-    </Modal>
+    </FormDialog>
   );
 }
 
@@ -854,7 +854,7 @@ function ProviderDetailDialog({
     browserVm.status === "off" || browserVm.status === "offline" || browserVm.status === "error";
   return (
     <>
-      <Modal
+      <FormDialog
         open
         onClose={onClose}
         title={p.label}
@@ -1008,7 +1008,7 @@ function ProviderDetailDialog({
 
           <UseInEnvironmentSection providerId={p.id} onGo={onUseInEnvironment} />
         </div>
-      </Modal>
+      </FormDialog>
       {isBrowserVm && (
         <BrowserVmDetailDialog open={vmDetailOpen} onClose={() => setVmDetailOpen(false)} />
       )}
@@ -1075,7 +1075,7 @@ function SetupProviderModal({
 
   if (isK8sProvider(p)) {
     return (
-      <Modal
+      <FormDialog
         open
         onClose={onClose}
         title={`Set up ${p.label}`}
@@ -1104,13 +1104,13 @@ function SetupProviderModal({
           <span className="text-fg">oma-k8s-bridge</span>). Default mode runs
           tools inside the daemon pod; OpenShell mode isolates each session.
         </p>
-      </Modal>
+      </FormDialog>
     );
   }
 
   if (p.provider === "subprocess") {
     return (
-      <Modal
+      <FormDialog
         open
         onClose={onClose}
         title={`Set up ${p.label}`}
@@ -1133,13 +1133,13 @@ function SetupProviderModal({
             machines in the list behind this dialog.
           </p>
         </div>
-      </Modal>
+      </FormDialog>
     );
   }
 
   if (p.type === "byok") {
     return (
-      <Modal
+      <FormDialog
         open
         onClose={onClose}
         title={`Set up ${p.label}`}
@@ -1167,7 +1167,7 @@ function SetupProviderModal({
           its configuration, remove it from its card&rsquo;s menu and add a new
           one with the updated details.
         </p>
-      </Modal>
+      </FormDialog>
     );
   }
 
@@ -1177,7 +1177,7 @@ function SetupProviderModal({
     (e) => e.providerId === p.id || e.providerId === p.provider,
   );
   return (
-    <Modal
+    <FormDialog
       open
       onClose={onClose}
       title={`Set up ${p.label}`}
@@ -1208,7 +1208,7 @@ function SetupProviderModal({
           instead of a <code className="bg-bg-surface px-1 rounded font-mono text-[11px]">.env</code> file.
         </p>
       </div>
-    </Modal>
+    </FormDialog>
   );
 }
 

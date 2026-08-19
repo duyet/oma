@@ -4,7 +4,7 @@ import { Link } from "react-router";
 import { useApi, ApiError } from "../lib/api";
 import { useDefaultEnvironment } from "../lib/useDefaultEnvironment";
 import { useQueryClient } from "../lib/useApiQuery";
-import { Modal } from "./Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { EnvironmentPicker, VaultsPicker } from "./ResourcePicker";
 import { preferredEnvironmentId } from "../pages/agents/browser-env";
@@ -261,7 +261,7 @@ export function NewSessionDialog({
   };
 
   return (
-    <Modal
+    <FormDialog
       open={open}
       onClose={onClose}
       title="New session"
@@ -365,6 +365,6 @@ export function NewSessionDialog({
           />
         </div>
       </div>
-    </Modal>
+    </FormDialog>
   );
 }

@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 
-import { Select, SelectOption } from "../../components/Select";
+import { Select, SelectOption } from "@/components/ui/form-select";
 import {
   CRON_PRESETS,
   WEEKDAY_NAMES,

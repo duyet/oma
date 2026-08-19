@@ -25,7 +25,7 @@ import {
 
 import { useApi } from "../../lib/api";
 import { Button } from "@/components/ui/button";
-import { Select, SelectGroup, SelectGroupLabel, SelectOption } from "../../components/Select";
+import { Select, SelectGroup, SelectGroupLabel, SelectOption } from "@/components/ui/form-select";
 import { Combobox } from "../../components/Combobox";
 import { McpServerPickerModal } from "../../components/McpServerPickerModal";
 import { GitHubIcon, SlackIcon, LinearIcon } from "../../components/icons";

@@ -6,7 +6,8 @@ import UseCasesInteractive from "./UseCasesInteractive.tsx";
 import Icon from "./Icon.astro";
 ---
 
-<section class="max-w-5xl mx-auto px-4 py-10 md:py-12" data-reveal id="use-cases">
+<section class="py-10 md:py-12" data-reveal id="use-cases">
+  <div class="site-container">
   <p class="flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-2">
     <Icon name="workflow" size={14} class="text-[var(--color-brand)]" /> Workflows
   </p>
@@ -61,5 +62,6 @@ import Icon from "./Icon.astro";
     >
       Get Started <Icon name="arrowRight" size={16} />
     </a>
+  </div>
   </div>
 </section>

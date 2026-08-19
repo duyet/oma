@@ -5,12 +5,12 @@ import { toast } from "sonner";
 import { useApi } from "../lib/api";
 import { useApiQuery, useQueryClient } from "../lib/useApiQuery";
 
-import { Modal } from "../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Page } from "../components/Page";
 import { PageHeader } from "../components/PageHeader";
 import { Disclosure } from "../components/Disclosure";
 import { LocalCombobox } from "../components/LocalCombobox";
-import { SecretInput, TextInput } from "../components/Input";
+import { SecretInput, TextInput } from "@/components/ui/form-input";
 import { FilterChip } from "../components/FilterChip";
 import { FacetedFilter } from "../components/FacetedFilter";
 
@@ -689,7 +689,7 @@ function AddCredentialModal({
   };
 
   return (
-    <Modal
+    <FormDialog
       open
       onClose={onClose}
       title="Add credential"
@@ -1146,6 +1146,6 @@ function AddCredentialModal({
           </div>
         </TabsContent>
       </Tabs>
-    </Modal>
+    </FormDialog>
   );
 }

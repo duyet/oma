@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import { TrashIcon } from "lucide-react";
 import { useApi } from "../lib/api";
 import { formatQueryError, useApiQuery } from "../lib/useApiQuery";
-import { Modal } from "../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { PopoverContent } from "@/components/ui/popover";
 import { useConfirm } from "@/hooks/useConfirm";
@@ -498,7 +498,7 @@ export function SkillsList() {
       emptyAction={<Button onClick={() => setShowCreate(true)}>+ New skill</Button>}
     >
       {/* ===== Create Dialog ===== */}
-      <Modal
+      <FormDialog
         open={showCreate}
         onClose={() => {
           if (createUploading) return;
@@ -575,10 +575,10 @@ export function SkillsList() {
             <code> zip -r my-skill.zip my-skill</code>).
           </p>
         </div>
-      </Modal>
+      </FormDialog>
 
       {/* ===== Detail Dialog ===== */}
-      <Modal
+      <FormDialog
         open={!!detail}
         onClose={closeDetail}
         title={detail?.display_title || detail?.name || ""}
@@ -787,7 +787,7 @@ export function SkillsList() {
             </div>
           </div>
         ) : null}
-      </Modal>
+      </FormDialog>
     </DataTable>
   );
 }

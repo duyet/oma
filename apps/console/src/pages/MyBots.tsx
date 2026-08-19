@@ -6,9 +6,9 @@ import { CopyIcon, ExternalLinkIcon, PauseIcon, PlayIcon, PencilIcon, QrCodeIcon
 import { useApi } from "../lib/api";
 import { useApiQuery } from "../lib/useApiQuery";
 import { useQueryClient } from "@tanstack/react-query";
-import { StatusPill } from "../components/Badge";
-import { Modal } from "../components/Modal";
-import { Skeleton } from "../components/Skeleton";
+import { StatusPill } from "@/components/StatusPill";
+import { FormDialog } from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { encodeQrToMatrix, qrMatrixToSvg } from "../lib/qrcode";
 import { EditPublicationDialog } from "./agents/EditPublicationDialog";
@@ -249,7 +249,7 @@ function ShareModal({ pub, onClose }: { pub: Publication; onClose: () => void })
   };
 
   return (
-    <Modal open onClose={onClose} title={`Share ${pub.title}`} subtitle="Public link, QR code, and embed snippet">
+    <FormDialog open onClose={onClose} title={`Share ${pub.title}`} subtitle="Public link, QR code, and embed snippet">
       <div className="px-6 py-5 space-y-5">
         <div className="flex justify-center">
           <div
@@ -291,7 +291,7 @@ function ShareModal({ pub, onClose }: { pub: Publication; onClose: () => void })
           </p>
         </Field>
       </div>
-    </Modal>
+    </FormDialog>
   );
 }
 

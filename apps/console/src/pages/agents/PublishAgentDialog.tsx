@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { useApi, ApiError } from "../../lib/api";
-import { Modal } from "../../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Select, SelectOption } from "../../components/Select";
+import { Select, SelectOption } from "@/components/ui/form-select";
 import { EnvironmentPicker } from "../../components/ResourcePicker";
 import type { AgentRecord as Agent } from "../../types/agent";
 import type { Publication, PricingMode } from "./publication-types";
@@ -127,7 +127,7 @@ export function PublishAgentDialog({ open, onClose, agent, onPublished }: Props)
   };
 
   return (
-    <Modal
+    <FormDialog
       open={open}
       onClose={onClose}
       title="Publish as public bot"
@@ -255,6 +255,6 @@ export function PublishAgentDialog({ open, onClose, agent, onPublished }: Props)
           )}
         </div>
       </div>
-    </Modal>
+    </FormDialog>
   );
 }

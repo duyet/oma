@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { useApi } from "../../lib/api";
-import { Modal } from "../../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { EnvironmentPicker } from "../../components/ResourcePicker";
 import type { AgentRecord as Agent } from "../../types/agent";
@@ -103,7 +103,7 @@ export function CreateScheduleDialog({ open, onClose, agent, schedule, onCreated
   };
 
   return (
-    <Modal
+    <FormDialog
       open={open}
       onClose={onClose}
       title={isEdit ? "Edit schedule" : "Create schedule"}
@@ -180,6 +180,6 @@ export function CreateScheduleDialog({ open, onClose, agent, schedule, onCreated
           />
         </div>
       </div>
-    </Modal>
+    </FormDialog>
   );
 }

@@ -66,10 +66,10 @@ export function HubLayout({ title, description, tabs }: HubConfig) {
   );
 
   const header = (
-    <div className="bg-bg">
+    <div className="bg-background">
       <div className="pt-3">
         <h1 className="text-xl font-semibold tracking-tight truncate">{activeTab?.label ?? title}</h1>
-        <p className="text-sm text-fg-muted mt-0.5">{activeTab?.description ?? description}</p>
+        <p className="text-sm text-muted-foreground mt-0.5">{activeTab?.description ?? description}</p>
       </div>
       <nav
         aria-label={`${title} sections`}
