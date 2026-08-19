@@ -66,28 +66,34 @@ Same SDK. Same `/v1/agents` / `/v1/sessions` API. Same Console UI. Same crash-re
 ```bash
 git clone https://github.com/duyet/oma.git && cd oma
 cp .env.example .env
-# Three secrets in .env (server won't boot without the first two):
+# Two secrets in .env are required before first boot (generate locally):
 #   BETTER_AUTH_SECRET=$(openssl rand -hex 32)      # signs Console sessions
 #   PLATFORM_ROOT_SECRET=$(openssl rand -base64 32) # encrypts credentials at rest — back it up!
-#   API_KEY=$(openssl rand -hex 24)                 # optional, but the smoke test below needs it
+# API_KEY is prefilled as dev-test-key-change-me (same value as .dev.vars.example)
+# so the smoke test below authenticates. Rotate it for anything that isn't localhost.
+# A provider key is required for a successful turn — set ANTHROPIC_API_KEY in
+# .env, or add a Model Card in the Console, before the user.message curl.
 $EDITOR .env
 
 docker compose up -d        # SQLite + LocalSubprocess sandbox (default)
                             # …or: docker compose -f docker-compose.postgres.yml up -d
-curl localhost:8787/health  # → {"status":"ok", ...}
+curl localhost:8787/health  # → {"status":"ok","runtime":"node","pid":…,"uptime_s":…,"backends":{…}}
 open http://localhost:8787  # Console UI on the same port
 ```
 
-Smoke test the harness end-to-end (uses the `API_KEY` from `.env`):
+Smoke test the harness end-to-end (uses the `API_KEY` from `.env`; CLI is `oma sessions create --agent … --env …`):
 
 ```bash
-KEY=$(grep '^API_KEY=' .env | cut -d= -f2)
+KEY=$(grep '^API_KEY=' .env | cut -d= -f2-)
 
 AID=$(curl -s -X POST localhost:8787/v1/agents -H "x-api-key: $KEY" -H 'content-type: application/json' \
   -d '{"name":"hello","model":"claude-sonnet-4-6","tools":[{"type":"agent_toolset_20260401"}]}' | jq -r .id)
 
+EID=$(curl -s -X POST localhost:8787/v1/environments -H "x-api-key: $KEY" -H 'content-type: application/json' \
+  -d '{"name":"local","config":{"type":"cloud"}}' | jq -r .id)
+
 SID=$(curl -s -X POST localhost:8787/v1/sessions -H "x-api-key: $KEY" -H 'content-type: application/json' \
-  -d "{\"agent\":\"$AID\"}" | jq -r .id)
+  -d "{\"agent\":\"$AID\",\"environment_id\":\"$EID\"}" | jq -r .id)
 
 curl -s -X POST localhost:8787/v1/sessions/$SID/events -H "x-api-key: $KEY" -H 'content-type: application/json' \
   -d '{"events":[{"type":"user.message","content":[{"type":"text","text":"Run: uname -a"}]}]}'

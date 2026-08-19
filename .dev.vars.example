@@ -1,4 +1,8 @@
+# Local-dev bootstrap key — same value as .env.example (Docker / self-host).
+# README and docs/quickstart smoke tests grep API_KEY from the env file.
 API_KEY=dev-test-key-change-me
+# Placeholder only — a real provider key is required for a successful turn
+# (or add a Model Card in the Console).
 ANTHROPIC_API_KEY=sk-ant-xxx
 
 # Required: at-rest encryption key for credentials.auth and

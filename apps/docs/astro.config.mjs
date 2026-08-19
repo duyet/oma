@@ -1,6 +1,7 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import mdx from '@astrojs/mdx';
+import { copyFromEcLinesPlugin } from './src/lib/copy-code.ts';
 
 // Brand fonts — aligned to apps/web's current type stack (Inter Variable
 // for body, Instrument Serif for display accents, JetBrains Mono for
@@ -66,6 +67,11 @@ export default defineConfig({
       },
       lastUpdated: true,
       pagination: true,
+      // Rebuild copy payloads from .ec-line text so newlines survive
+      // HTML minification / dataset stripping of EC's U+007F stand-in.
+      expressiveCode: {
+        plugins: [copyFromEcLinesPlugin()],
+      },
       sidebar: [
         {
           label: 'Get Started',

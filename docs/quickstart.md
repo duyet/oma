@@ -35,6 +35,8 @@ echo "BETTER_AUTH_SECRET=$(openssl rand -hex 32)" >> .env
 echo "PLATFORM_ROOT_SECRET=$(openssl rand -base64 32)" >> .env
 ```
 
+`.env.example` already sets `API_KEY=dev-test-key-change-me` (same as `.dev.vars.example`). A provider key is required for a successful turn — set `ANTHROPIC_API_KEY` in `.env` or add a Model Card in the Console.
+
 **Important**: Back up `PLATFORM_ROOT_SECRET` — losing it makes all encrypted data unreadable.
 
 ### 3. Launch
@@ -49,10 +51,23 @@ Verify it's running:
 curl localhost:8787/health
 ```
 
-Expected response:
+Expected response (pid, uptime, and backend paths vary):
 
 ```json
-{"status":"ok","runtime":"node","auth":"better-auth-sqlite","backends":{"db":"sqlite"}}
+{
+  "status": "ok",
+  "runtime": "node",
+  "pid": 1,
+  "uptime_s": 12,
+  "auth": "better-auth-sqlite",
+  "backends": {
+    "agents": "sqlite",
+    "events": "sqlite",
+    "hub": "in-process",
+    "memory_blobs": "localfs /app/data/memory-blobs",
+    "db": "sqlite /app/data/oma.db"
+  }
+}
 ```
 
 ### 4. Create Your First Agent
@@ -67,7 +82,8 @@ CLI:
 
 ```bash
 export OMA_BASE="http://localhost:8787"
-export OMA_KEY="dev-test-key"
+export OMA_KEY="$(grep '^API_KEY=' .env | cut -d= -f2-)"
+# .env.example / .dev.vars.example ship API_KEY=dev-test-key-change-me
 
 AGENT_ID=$(curl -s -X POST "$OMA_BASE/v1/agents" \
   -H "x-api-key: $OMA_KEY" \
@@ -79,7 +95,13 @@ AGENT_ID=$(curl -s -X POST "$OMA_BASE/v1/agents" \
     "tools": [{"type": "agent_toolset_20260401", "default_config": {"enabled": true}}]
   }' | jq -r .id)
 
+ENV_ID=$(curl -s -X POST "$OMA_BASE/v1/environments" \
+  -H "x-api-key: $OMA_KEY" \
+  -H "content-type: application/json" \
+  -d '{"name":"local","config":{"type":"cloud"}}' | jq -r .id)
+
 echo "Agent: $AGENT_ID"
+echo "Environment: $ENV_ID"
 ```
 
 ### 5. Send a Message
@@ -88,7 +110,7 @@ echo "Agent: $AGENT_ID"
 SESSION_ID=$(curl -s -X POST "$OMA_BASE/v1/sessions" \
   -H "x-api-key: $OMA_KEY" \
   -H "content-type: application/json" \
-  -d "{\"agent\": \"$AGENT_ID\"}" | jq -r .id)
+  -d "{\"agent\": \"$AGENT_ID\", \"environment_id\": \"$ENV_ID\"}" | jq -r .id)
 
 curl -N -X POST "$OMA_BASE/v1/sessions/$SESSION_ID/messages" \
   -H "x-api-key: $OMA_KEY" \
@@ -96,7 +118,7 @@ curl -N -X POST "$OMA_BASE/v1/sessions/$SESSION_ID/messages" \
   -d '{"content": "Say hello and tell me what tools you have available."}'
 ```
 
-You'll see the agent's reply stream in real-time.
+You'll see the agent's reply stream in real-time. A real model key is required for a successful turn — set `ANTHROPIC_API_KEY` in `.env` (or add a Model Card in the Console) and restart if the session stays silent.
 
 ### Next Steps with Docker
 
@@ -187,6 +209,8 @@ curl -H "Authorization: Bearer $K8S_BRIDGE_TOKEN" \
 |---------|-------------|-----|
 | `docker compose up` fails | Port 8787 in use | Stop the conflicting process or change port in `docker-compose.yml` |
 | `health` returns 503 | Migrations not finished | Wait 10s and retry, check `docker compose logs oma` |
+| Agent creation fails with 401 | `OMA_KEY` does not match `API_KEY` in `.env` | Use `export OMA_KEY="$(grep '^API_KEY=' .env | cut -d= -f2-)"` (`.env.example` ships `dev-test-key-change-me`) |
+| Session create returns 400 `environment_id is required` | No environment on the request | Create one with `POST /v1/environments` and pass `environment_id` (CLI: `--env`) |
 | Session returns no reply | No model card configured | Add a Model Card in Console or set `ANTHROPIC_API_KEY` in `.env` |
 | `setup-cf.sh` fails on secret | Wrangler not logged in | Run `npx wrangler login` first |
 

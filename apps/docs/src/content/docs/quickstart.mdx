@@ -50,6 +50,8 @@ Fastest way from zero to a running agent. Requires only Docker.
      Losing it makes every encrypted row unreadable — store it in a password manager.
    </Aside>
 
+   `.env.example` already sets `API_KEY=dev-test-key-change-me` (same as `.dev.vars.example`). A provider key is required for a successful turn — set `ANTHROPIC_API_KEY` in `.env` or add a Model Card after you open the Console.
+
 3. **Launch with Docker Compose.**
 
    ```bash
@@ -62,17 +64,31 @@ Fastest way from zero to a running agent. Requires only Docker.
    curl localhost:8787/health
    ```
 
-   Expected:
+   Expected (pid, uptime, and backend paths vary):
 
    ```json
-   {"status":"ok","runtime":"node","auth":"better-auth-sqlite","backends":{"db":"sqlite"}}
+   {
+     "status": "ok",
+     "runtime": "node",
+     "pid": 1,
+     "uptime_s": 12,
+     "auth": "better-auth-sqlite",
+     "backends": {
+       "agents": "sqlite",
+       "events": "sqlite",
+       "hub": "in-process",
+       "memory_blobs": "localfs /app/data/memory-blobs",
+       "db": "sqlite /app/data/oma.db"
+     }
+   }
    ```
 
 4. **Create your first agent.**
 
    ```bash
    export OMA_BASE="http://localhost:8787"
-   export OMA_KEY="dev-test-key"
+   export OMA_KEY="$(grep '^API_KEY=' .env | cut -d= -f2-)"
+   # .env.example / .dev.vars.example ship API_KEY=dev-test-key-change-me
 
    AGENT_ID=$(curl -s -X POST "$OMA_BASE/v1/agents" \
      -H "x-api-key: $OMA_KEY" \
@@ -83,7 +99,14 @@ Fastest way from zero to a running agent. Requires only Docker.
        "system": "You are a helpful assistant. Keep replies short.",
        "tools": [{"type": "agent_toolset_20260401", "default_config": {"enabled": true}}]
      }' | jq -r .id)
+
+   ENV_ID=$(curl -s -X POST "$OMA_BASE/v1/environments" \
+     -H "x-api-key: $OMA_KEY" \
+     -H "content-type: application/json" \
+     -d '{"name":"local","config":{"type":"cloud"}}' | jq -r .id)
+
    echo "Agent: $AGENT_ID"
+   echo "Environment: $ENV_ID"
    ```
 
 5. **Send a message.**
@@ -92,7 +115,7 @@ Fastest way from zero to a running agent. Requires only Docker.
    SESSION_ID=$(curl -s -X POST "$OMA_BASE/v1/sessions" \
      -H "x-api-key: $OMA_KEY" \
      -H "content-type: application/json" \
-     -d "{\"agent\": \"$AGENT_ID\"}" | jq -r .id)
+     -d "{\"agent\": \"$AGENT_ID\", \"environment_id\": \"$ENV_ID\"}" | jq -r .id)
 
    curl -N -X POST "$OMA_BASE/v1/sessions/$SESSION_ID/messages" \
      -H "x-api-key: $OMA_KEY" \
@@ -100,7 +123,7 @@ Fastest way from zero to a running agent. Requires only Docker.
      -d '{"content": "Say hello and tell me what tools you have available."}'
    ```
 
-   You'll see the model's reply stream token-by-token.
+   You'll see the model's reply stream token-by-token. A real model key is required for a successful turn — set `ANTHROPIC_API_KEY` in `.env` (or add a Model Card in the Console) and restart if the session stays silent.
 
 6. **Open the Console.**
 
@@ -218,7 +241,8 @@ curl -H "Authorization: Bearer $K8S_BRIDGE_TOKEN" \
 |---|---|---|
 | `docker compose up` fails | Port 8787 in use | Stop the conflicting process or change the port in `docker-compose.yml` |
 | `health` returns 503 | Migrations not finished | Wait 10s and retry, or check `docker compose logs oma` |
-| Agent creation fails with 401 | Wrong API key | Verify `OMA_KEY` matches `API_KEY` in `.env` |
+| Agent creation fails with 401 | Wrong API key | `OMA_KEY` must match `API_KEY` in `.env` (`dev-test-key-change-me` from `.env.example`) |
+| Session create returns 400 `environment_id is required` | No environment on the request | Create one with `POST /v1/environments` and pass `environment_id` (CLI: `--env`) |
 | Session message returns no reply | No model card or `ANTHROPIC_API_KEY` | Add a Model Card in the Console, or set `ANTHROPIC_API_KEY` in `.env` and restart |
 | `setup-cf.sh` fails | Wrangler not logged in | Run `npx wrangler login` first |
 

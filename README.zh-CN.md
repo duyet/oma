@@ -47,15 +47,14 @@ cp .env.example .env
 #   BETTER_AUTH_SECRET   — 用于签发 Console 会话
 #   PLATFORM_ROOT_SECRET — 用于加密静态存储的凭证、Model Card API key、集成 token
 #                          （丢失后所有加密行将无法解密 —— 务必备份）
-# 第三个 API_KEY 是可选的，但下面的冒烟测试需要它（否则每个 curl 都会 401 ——
-# 全新安装还没有 Console 会话 cookie）：
+# 第三个 API_KEY 已预填为 dev-test-key-change-me（与 .dev.vars.example 相同），
+# 下面的冒烟测试需要它（否则每个 curl 都会 401 —— 全新安装还没有 Console
+# 会话 cookie）。非 localhost 请换成 openssl rand -hex 24。
+# 成功跑完一轮还需要真正的模型密钥：在 .env 里设置 ANTHROPIC_API_KEY，
+# 或在 Console 里添加 Model Card。
 $EDITOR .env
 # BETTER_AUTH_SECRET=$(openssl rand -hex 32)
 # PLATFORM_ROOT_SECRET=$(openssl rand -base64 32)
-# API_KEY=$(openssl rand -hex 24)
-#
-# 可选：ANTHROPIC_API_KEY 让第一个 agent 在还没添加 Model Card 时也能跑起来。
-# 生产环境请改为在 Console 里按 tenant 添加 Model Card。
 
 # SQLite + LocalSubprocess 沙箱（默认，最快路径）
 docker compose up -d
@@ -64,7 +63,7 @@ docker compose up -d
 # docker compose -f docker-compose.postgres.yml up -d
 
 curl localhost:8787/health
-# → {"status":"ok","backends":{"db":"sqlite ..."}, ...}
+# → {"status":"ok","runtime":"node","pid":…,"uptime_s":…,"backends":{"agents":"sqlite","db":"sqlite …",…}}
 
 open http://localhost:8787   # Console UI 跑在同一个端口
 ```
@@ -72,13 +71,16 @@ open http://localhost:8787   # Console UI 跑在同一个端口
 端到端冒烟测试（使用你在上面 `.env` 中设置的 `API_KEY`）：
 
 ```bash
-KEY=$(grep '^API_KEY=' .env | cut -d= -f2)
+KEY=$(grep '^API_KEY=' .env | cut -d= -f2-)
 
 AID=$(curl -s -X POST localhost:8787/v1/agents -H "x-api-key: $KEY" -H 'content-type: application/json' \
   -d '{"name":"hello","model":"claude-sonnet-4-6","tools":[{"type":"agent_toolset_20260401"}]}' | jq -r .id)
 
+EID=$(curl -s -X POST localhost:8787/v1/environments -H "x-api-key: $KEY" -H 'content-type: application/json' \
+  -d '{"name":"local","config":{"type":"cloud"}}' | jq -r .id)
+
 SID=$(curl -s -X POST localhost:8787/v1/sessions -H "x-api-key: $KEY" -H 'content-type: application/json' \
-  -d "{\"agent\":\"$AID\"}" | jq -r .id)
+  -d "{\"agent\":\"$AID\",\"environment_id\":\"$EID\"}" | jq -r .id)
 
 curl -s -X POST localhost:8787/v1/sessions/$SID/events -H "x-api-key: $KEY" -H 'content-type: application/json' \
   -d '{"events":[{"type":"user.message","content":[{"type":"text","text":"Run: uname -a"}]}]}'
@@ -105,7 +107,7 @@ pnpm install
 # 本地开发（不需要 CF 账户）—— wrangler dev + 模拟器
 cp .dev.vars.example .dev.vars && $EDITOR .dev.vars
 # PLATFORM_ROOT_SECRET 是启动所必需的；API_KEY 已预填一个仅供本地开发的占位值
-# （dev-test-key-change-me），下面的冒烟测试可以直接用 —— 一旦不再局限于
+# （dev-test-key-change-me，与 .env.example 相同），下面的冒烟测试可以直接用 —— 一旦不再局限于
 # localhost 就务必修改它。
 pnpm dev
 # API     → http://localhost:8787
@@ -161,9 +163,13 @@ AGENT=$(curl -s $BASE/v1/agents \
     "tools": [{ "type": "agent_toolset_20260401" }]
   }' | jq -r .id)
 
+ENV=$(curl -s $BASE/v1/environments \
+  -H "x-api-key: $KEY" -H "content-type: application/json" \
+  -d '{"name":"local","config":{"type":"cloud"}}' | jq -r .id)
+
 SESSION=$(curl -s $BASE/v1/sessions \
   -H "x-api-key: $KEY" -H "content-type: application/json" \
-  -d "{\"agent\":\"$AGENT\"}" | jq -r .id)
+  -d "{\"agent\":\"$AGENT\",\"environment_id\":\"$ENV\"}" | jq -r .id)
 
 # 发送一轮消息并逐 token 流式返回回复
 curl -N -X POST $BASE/v1/sessions/$SESSION/messages \
