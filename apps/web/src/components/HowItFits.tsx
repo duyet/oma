@@ -65,7 +65,7 @@ function ResourceGrid({ items }: { items: DialogResource[] }) {
           href={r.href}
           target="_blank"
           rel="noreferrer"
-          className="group flex items-center gap-2 rounded-md border border-border bg-bg-surface/60 px-2.5 py-2 no-underline transition-colors hover:border-brand/60 hover:bg-bg-surface"
+          className="group flex min-h-11 items-center gap-2 rounded-md border border-border bg-bg-surface/60 px-2.5 py-2 no-underline transition-colors hover:border-brand/60 hover:bg-bg-surface"
         >
           <span className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border bg-bg text-fg-muted group-hover:text-brand">
             <ProviderMark id={r.id} colored className="size-4" />
@@ -653,7 +653,7 @@ export default function HowItFits() {
         <button
           type="button"
           aria-label="Close"
-          className="px-1 text-sm text-fg-subtle hover:text-fg"
+          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md text-sm text-fg-subtle hover:bg-bg-surface hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           onClick={() => dialogRef.current?.close()}
         >
           ✕
@@ -706,7 +706,7 @@ export default function HowItFits() {
   );
 
   return (
-    <div aria-label="How it fits together">
+    <div className="min-w-0 max-w-full" aria-label="How it fits together">
       <FitDiagram
         steps={steps}
         collapsible

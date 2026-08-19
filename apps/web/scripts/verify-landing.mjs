@@ -113,15 +113,23 @@ for (const [name, src] of [
 if (!base.includes("Try hosted") || !footer.includes("Try hosted") || !index.includes("Try hosted")) {
   fail("Base/Footer/index must expose \"Try hosted\" CTA label");
 }
-// Hero leads with HowItFits diagram + product pitch (no "Configure · compose" billboard).
+// Hero leads with the H1 value prop; HowItFits is the supporting diagram
+// below (not a first-viewport billboard, no negative-margin page overflow).
 if (!index.includes("HowItFits") || !index.includes("self-hosted agent platform")) {
   fail("landing hero must include HowItFits + product pitch");
 }
-// HowItFits must appear before the product pitch section id.
+const h1Needle = "The self-hosted agent platform for any LLM provider and any sandbox";
+const h1Pos = index.indexOf(h1Needle);
 const fitsPos = index.indexOf("<HowItFits");
 const productPos = index.indexOf('id="what-is-oma"');
-if (fitsPos < 0 || productPos < 0 || fitsPos > productPos) {
-  fail("HowItFits must render above the rest of the page body (hero at top)");
+if (h1Pos < 0 || fitsPos < 0 || h1Pos > fitsPos) {
+  fail("H1 value prop must appear above HowItFits");
+}
+if (productPos < 0 || fitsPos > productPos) {
+  fail("HowItFits must still sit above the rest of the page body");
+}
+if (/lg:-mx-12|xl:-mx-24/.test(index)) {
+  fail("HowItFits must not use negative-margin bleed (causes page overflow)");
 }
 if (!process.exitCode) ok("landing source sections + concepts + viz + CTAs + hero + #layers alias");
 
