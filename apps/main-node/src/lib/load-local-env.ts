@@ -74,6 +74,11 @@ export function loadLocalEnv(
   env: NodeJS.ProcessEnv = process.env,
   opts: { cwd?: string; fromFile?: string } = {},
 ): string[] {
+  // Spawned unit tests (secret-guard, etc.) pass secrets via `env` and use
+  // cwd=repo root. Loading a developer's `.env` would hide missing/leaked
+  // values the test is asserting on. Direct calls with a custom `env` bag
+  // still load files so load-env.test.ts covers the parse/merge path.
+  if (env === process.env && env.NODE_ENV === "test") return [];
   const loaded: string[] = [];
   const seen = new Set<string>();
   for (const path of localEnvCandidates(opts)) {

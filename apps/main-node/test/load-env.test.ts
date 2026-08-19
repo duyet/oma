@@ -76,4 +76,15 @@ describe("loadLocalEnv", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it("skips dotenv files when applying to process.env under NODE_ENV=test", () => {
+    const prev = process.env.NODE_ENV;
+    process.env.NODE_ENV = "test";
+    try {
+      expect(loadLocalEnv()).toEqual([]);
+    } finally {
+      if (prev === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = prev;
+    }
+  });
 });
