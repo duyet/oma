@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { formatQueryError, useApiQuery } from "../lib/useApiQuery";
 import { EmptyState } from "../components/EmptyState";
-import { Skeleton, SkeletonRows } from "../components/Skeleton";
+import { Skeleton, SkeletonRows } from "@/components/ui/skeleton";
 import { formatCompact, formatSandboxTime, formatUsd } from "../lib/format";
 import {
   DAILY_CHART_VIEW_W,

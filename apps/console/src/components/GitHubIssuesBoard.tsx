@@ -10,8 +10,8 @@ import {
 } from "../lib/useGitHubBoardConfig";
 import type { GitHubIssue } from "../integrations/api/types";
 import { EmptyState } from "./EmptyState";
-import { Skeleton } from "./Skeleton";
-import { Select, SelectOption } from "./Select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectOption } from "@/components/ui/form-select";
 import { AssignIssueDialog } from "./AssignIssueDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

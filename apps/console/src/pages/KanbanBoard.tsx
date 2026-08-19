@@ -5,9 +5,9 @@ import { RepeatIcon, ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import { useApi } from "../lib/api";
 import { useApiQuery, useApiMutation, buildUrl } from "../lib/useApiQuery";
 import { EmptyState } from "../components/EmptyState";
-import { Skeleton } from "../components/Skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { FilterBar, FacetChip } from "../components/FilterBar";
-import { Select, SelectOption } from "../components/Select";
+import { Select, SelectOption } from "@/components/ui/form-select";
 import { formatRelative, shortenId } from "../lib/format";
 import {
   canMoveItem,

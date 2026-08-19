@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import { useApi } from "../../lib/api";
 import { useApiQuery } from "../../lib/useApiQuery";
-import { Modal } from "../../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { McpServerPickerModal } from "../../components/McpServerPickerModal";
 import { RuntimeInfo } from "../../components/RuntimeInfo";
@@ -247,7 +247,7 @@ export function AgentEditDialog({ open, onClose, agent, onSaved }: AgentEditDial
 
   return (
     <>
-      <Modal
+      <FormDialog
         open={open}
         onClose={onClose}
         title={`Edit ${agent.name}`}
@@ -379,7 +379,7 @@ export function AgentEditDialog({ open, onClose, agent, onSaved }: AgentEditDial
             {error}
           </div>
         )}
-      </Modal>
+      </FormDialog>
 
       <McpServerPickerModal
         open={showMcpPicker}

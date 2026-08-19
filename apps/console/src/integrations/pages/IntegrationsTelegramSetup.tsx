@@ -5,7 +5,7 @@ import {
 } from "../components/IntegrationSetupCard";
 import { IntegrationsApi } from "../api/client";
 import type { TelegramConnection } from "../api/types";
-import { SecretInput, TextInput } from "../../components/Input";
+import { SecretInput, TextInput } from "@/components/ui/form-input";
 
 const api = new IntegrationsApi();
 

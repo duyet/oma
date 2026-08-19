@@ -3,9 +3,9 @@ import { useState } from "react";
 import { useApi } from "../lib/api";
 import { useApiMutation } from "../lib/useApiQuery";
 import { Button } from "@/components/ui/button";
-import { Modal } from "../components/Modal";
-import { Select, SelectOption } from "../components/Select";
-import { TextInput, SecretInput } from "../components/Input";
+import { FormDialog } from "@/components/ui/dialog";
+import { Select, SelectOption } from "@/components/ui/form-select";
+import { TextInput, SecretInput } from "@/components/ui/form-input";
 
 // The console doesn't bundle @getoma/sandbox-sdk, so we mirror the
 // provider→env mapping that `providerConfigToEnv` applies server-side
@@ -275,7 +275,7 @@ export function AddSandboxProviderDialog({
   onCreated: () => void;
 }) {
   return (
-    <Modal
+    <FormDialog
       open={open}
       onClose={onClose}
       title="Register a sandbox provider"
@@ -283,7 +283,7 @@ export function AddSandboxProviderDialog({
       maxWidth="max-w-lg"
     >
       <SandboxProviderFormFields onCreated={onCreated} onDone={onClose} />
-    </Modal>
+    </FormDialog>
   );
 }
 

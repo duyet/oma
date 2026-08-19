@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { IntegrationsApi } from "../api/client";
-import { SecretInput, TextInput } from "../../components/Input";
+import { SecretInput, TextInput } from "@/components/ui/form-input";
 import { Combobox } from "../../components/Combobox";
 
 const api = new IntegrationsApi();

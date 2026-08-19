@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { useApi } from "../../lib/api";
-import { Modal } from "../../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Select, SelectOption } from "../../components/Select";
+import { Select, SelectOption } from "@/components/ui/form-select";
 import {
   EnvironmentPicker,
   MemoryStoresPicker,
@@ -129,7 +129,7 @@ export function CreateDeploymentDialog({ open, onClose, agent, versions, onCreat
   // Post-create webhook view — surface the URL, then Done.
   if (createdWebhookUrl) {
     return (
-      <Modal
+      <FormDialog
         open={open}
         onClose={onClose}
         title="Deployment created"
@@ -153,12 +153,12 @@ export function CreateDeploymentDialog({ open, onClose, agent, versions, onCreat
             message.
           </p>
         </div>
-      </Modal>
+      </FormDialog>
     );
   }
 
   return (
-    <Modal
+    <FormDialog
       open={open}
       onClose={onClose}
       title="Create deployment"
@@ -288,6 +288,6 @@ export function CreateDeploymentDialog({ open, onClose, agent, versions, onCreat
           )}
         </div>
       </div>
-    </Modal>
+    </FormDialog>
   );
 }

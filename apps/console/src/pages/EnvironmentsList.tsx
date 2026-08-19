@@ -3,11 +3,11 @@ import { useNavigate } from "react-router";
 import { ArchiveIcon, TrashIcon } from "lucide-react";
 import { useApi } from "../lib/api";
 import { useInfiniteApiQuery } from "../lib/useApiQuery";
-import { Modal } from "../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { PopoverContent } from "@/components/ui/popover";
 import { useConfirm } from "@/hooks/useConfirm";
-import { Select, SelectOption } from "../components/Select";
+import { Select, SelectOption } from "@/components/ui/form-select";
 import { EnvVarsEditor, rowsToEnvVars, type EnvVarRow } from "../components/EnvVarsEditor";
 import { DataTable, type ColumnDef } from "../components/DataTable";
 import { FacetedFilter } from "../components/FacetedFilter";
@@ -363,7 +363,7 @@ export function EnvironmentsList() {
       }
       columns={columns}
     >
-      <Modal
+      <FormDialog
         open={showCreate}
         onClose={() => setShowCreate(false)}
         title="Add Environment"
@@ -441,7 +441,7 @@ export function EnvironmentsList() {
             <EnvVarsEditor rows={envVarRows} setRows={setEnvVarRows} />
           </div>
         </div>
-      </Modal>
+      </FormDialog>
     </DataTable>
   );
 }

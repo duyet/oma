@@ -3,10 +3,10 @@ import { Link, useNavigate, useParams } from "react-router";
 import { useApi } from "../lib/api";
 import { useApiQuery } from "../lib/useApiQuery";
 import { Button } from "@/components/ui/button";
-import { Select, SelectOption } from "../components/Select";
+import { Select, SelectOption } from "@/components/ui/form-select";
 import { toast } from "sonner";
 import { Page } from "../components/Page";
-import { Field } from "../components/Field";
+import { Field } from "@/components/ui/field";
 import { friendlyHostingDescription, type HostingTypeLike } from "../lib/hostingTypes";
 import {
   PACKAGE_PRESETS,

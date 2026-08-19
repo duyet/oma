@@ -8,9 +8,9 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CheckCircle2Icon } from "lucide-react";
 import { toast } from "sonner";
 
-import { Modal } from "./Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { TextInput } from "./Input";
+import { TextInput } from "@/components/ui/form-input";
 import { HighlightedCode } from "./HighlightedCode";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/ui/spinner";
@@ -726,7 +726,7 @@ export function RegisterK8sClusterDialog({
   onConnected?: (runtime: RuntimeRow) => void;
 }) {
   return (
-    <Modal
+    <FormDialog
       open={open}
       onClose={onClose}
       title="Register a Kubernetes cluster"
@@ -743,6 +743,6 @@ export function RegisterK8sClusterDialog({
           onConnected={onConnected}
         />
       ) : null}
-    </Modal>
+    </FormDialog>
   );
 }

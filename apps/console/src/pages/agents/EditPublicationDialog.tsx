@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { useApi, ApiError } from "../../lib/api";
-import { Modal } from "../../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Select, SelectOption } from "../../components/Select";
+import { Select, SelectOption } from "@/components/ui/form-select";
 import type { Publication } from "./publication-types";
 
 interface Props {
@@ -103,7 +103,7 @@ export function EditPublicationDialog({ open, onClose, agentId, publication, onU
   };
 
   return (
-    <Modal
+    <FormDialog
       open={open}
       onClose={onClose}
       title={`Edit ${publication.title}`}
@@ -195,6 +195,6 @@ export function EditPublicationDialog({ open, onClose, agentId, publication, onU
           </Select>
         </div>
       </div>
-    </Modal>
+    </FormDialog>
   );
 }

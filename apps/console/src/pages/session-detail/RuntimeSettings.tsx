@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { useApi, ApiError } from "../../lib/api";
-import { Modal } from "../../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -114,7 +114,7 @@ export function RuntimeSettingsDialog({
   };
 
   return (
-    <Modal
+    <FormDialog
       open={open}
       onClose={onClose}
       title="Session model"
@@ -180,6 +180,6 @@ export function RuntimeSettingsDialog({
           </span>
         </label>
       </div>
-    </Modal>
+    </FormDialog>
   );
 }

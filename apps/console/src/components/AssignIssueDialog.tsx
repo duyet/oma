@@ -5,8 +5,8 @@ import { useApiQuery } from "../lib/useApiQuery";
 import { useDefaultEnvironment } from "../lib/useDefaultEnvironment";
 import type { AgentRecord } from "../types/agent";
 import type { GitHubIssue } from "../integrations/api/types";
-import { Modal } from "./Modal";
-import { Select, SelectOption } from "./Select";
+import { FormDialog } from "@/components/ui/dialog";
+import { Select, SelectOption } from "@/components/ui/form-select";
 import { EnvironmentPicker } from "./ResourcePicker";
 import { Button } from "@/components/ui/button";
 
@@ -123,7 +123,7 @@ export function AssignIssueDialog({ open, onClose, issue, repo, onCreated }: Pro
   };
 
   return (
-    <Modal
+    <FormDialog
       open={open}
       onClose={onClose}
       title={issue ? `Assign issue #${issue.number} to an agent` : "Assign issue"}
@@ -177,6 +177,6 @@ export function AssignIssueDialog({ open, onClose, issue, repo, onCreated }: Pro
           </div>
         )}
       </div>
-    </Modal>
+    </FormDialog>
   );
 }

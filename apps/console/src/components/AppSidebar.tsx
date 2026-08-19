@@ -29,6 +29,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
+  SidebarRail,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
@@ -251,11 +252,11 @@ export function AppSidebar() {
     if (key === "runtimes") {
       if (runtimes === undefined || runtimes.length === 0) return null;
       return (
-        <SidebarMenuBadge className="gap-1 text-fg-subtle">
+        <SidebarMenuBadge className="gap-1 text-muted-foreground">
           <span
             className={cn(
               "size-1.5 rounded-full",
-              runtimesOnline ? "bg-success" : "bg-fg-subtle",
+              runtimesOnline ? "bg-success" : "bg-muted-foreground",
             )}
           />
           {runtimesOnline}/{runtimes.length}
@@ -265,7 +266,7 @@ export function AppSidebar() {
     if (key && stats) {
       const count = stats?.[key];
       if (!count) return null;
-      return <SidebarMenuBadge className="text-fg-subtle">{count}</SidebarMenuBadge>;
+      return <SidebarMenuBadge className="text-muted-foreground">{count}</SidebarMenuBadge>;
     }
     if (providerKey) {
       const count = integrationStatus[providerKey];
@@ -324,22 +325,17 @@ export function AppSidebar() {
     const childActive = itemHasActiveChild(item);
     const active = isItemActive(item.to, item.end) || childActive;
     const hasChildren = !!item.children?.length;
-    // min-h-11 (44px) — same target size as the shell header band. Nested
-    // rows use it too so expanding Resources/Settings doesn't drop below
-    // the touch-target floor.
-    const itemClass = active
-      ? "min-h-11 bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-      : "min-h-11 !bg-transparent hover:!bg-sidebar-accent/50 !text-sidebar-foreground hover:!text-sidebar-foreground";
 
+    // Density matches anyrouter: default h-8 + rounded-2xl from
+    // SidebarMenuButton variants — no min-h-11 overrides.
     const button = (
       <SidebarMenuButton
         asChild
         isActive={active}
         tooltip={item.label}
-        className={itemClass}
       >
         <NavLink to={item.to} end={item.end} data-testid={`sidebar-item-${item.label}`}>
-          <item.icon className="size-4 shrink-0 opacity-90 group-data-[active=true]/menu-button:opacity-100" />
+          <item.icon className="size-4 shrink-0" />
           <span>{item.label}</span>
         </NavLink>
       </SidebarMenuButton>
@@ -383,14 +379,13 @@ export function AppSidebar() {
                     <SidebarMenuSubButton
                       asChild
                       isActive={nestedActive}
-                      className="min-h-11"
                     >
                       <NavLink
                         to={child.to}
                         end={child.end}
                         data-testid={`sidebar-item-${child.label}`}
                       >
-                        <child.icon className="size-4 shrink-0 opacity-90 group-data-[active=true]/menu-button:opacity-100" />
+                        <child.icon className="size-4 shrink-0" />
                         <span>{child.label}</span>
                       </NavLink>
                     </SidebarMenuSubButton>
@@ -412,26 +407,22 @@ export function AppSidebar() {
   );
 
   return (
-    <Sidebar
-      collapsible="icon"
-      className="bg-sidebar border-0 group-data-[side=left]:border-r-0"
-    >
-      <SidebarHeader className="bg-sidebar h-11 px-3 flex-row items-center gap-2">
-        <Logo size="sm" />
-        <span className="font-mono font-bold text-base text-brand group-data-[collapsible=icon]:hidden">
-          oma
-        </span>
+    <Sidebar collapsible="icon" variant="inset">
+      <SidebarHeader className="gap-2 border-b border-sidebar-border">
+        <div className="flex h-8 items-center gap-2 px-2">
+          <Logo size="sm" />
+          <span className="font-mono font-bold text-sm text-sidebar-foreground group-data-[collapsible=icon]:hidden">
+            oma
+          </span>
+        </div>
+        <TenantSwitcher />
       </SidebarHeader>
 
-      <div className="mt-2">
-        <TenantSwitcher />
-      </div>
-
       {/* Quick action: New Agent — always visible, gets you started fast */}
-      <div className="px-3 pt-3 pb-1 group-data-[collapsible=icon]:hidden">
+      <div className="px-2 pt-2 pb-1 group-data-[collapsible=icon]:hidden">
         <Button
           onClick={() => navigate("/agents/new")}
-          className="w-full gap-1.5 text-sm h-9"
+          className="w-full gap-1.5"
           size="sm"
         >
           <PlusIcon className="size-4" />
@@ -439,13 +430,14 @@ export function AppSidebar() {
         </Button>
       </div>
 
-      <SidebarContent className="bg-sidebar [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+      <SidebarContent className="[&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
         {groups.map(renderGroup)}
       </SidebarContent>
 
-      <SidebarFooter className="bg-sidebar p-0">
+      <SidebarFooter className="border-t border-sidebar-border p-0">
         <UserProfile />
       </SidebarFooter>
+      <SidebarRail />
     </Sidebar>
   );
 }

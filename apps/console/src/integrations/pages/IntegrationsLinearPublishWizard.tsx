@@ -5,9 +5,9 @@ import type {
   LinearPublicationShell,
   LinearPublicationInstallLink,
 } from "../api/types";
-import { SecretInput, TextInput } from "../../components/Input";
+import { SecretInput, TextInput } from "@/components/ui/form-input";
 import { Combobox } from "../../components/Combobox";
-import { Field } from "../../components/Field";
+import { Field } from "@/components/ui/field";
 
 const api = new IntegrationsApi();
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { IntegrationsApi } from "../api/client";
-import { Avatar } from "../../components/Avatar";
+import { EntityAvatar } from "@/components/EntityAvatar";
 import { EmptyState } from "../../components/EmptyState";
 import { ConnectModeChooser } from "../components/ConnectModeChooser";
 import { formatRelative } from "../../lib/format";
@@ -155,7 +155,7 @@ function PendingRow({
     pub.status === "pending_setup" ? "Pending setup" : "Awaiting install";
   return (
     <li className="flex items-center gap-3 px-4 py-3 rounded-md border border-warning/30 bg-warning-subtle/40">
-      <Avatar src={pub.persona.avatarUrl} name={pub.persona.name} size="sm" />
+      <EntityAvatar src={pub.persona.avatarUrl} name={pub.persona.name} size="sm" />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <span className="font-medium text-fg text-[14px] truncate">
@@ -237,7 +237,7 @@ function WorkspaceCard({
 function PublicationRow({ pub }: { pub: LinearPublication }) {
   return (
     <li className="flex items-center gap-3 px-5 py-2.5 text-sm">
-      <Avatar src={pub.persona.avatarUrl} name={pub.persona.name} size="sm" />
+      <EntityAvatar src={pub.persona.avatarUrl} name={pub.persona.name} size="sm" />
       <span className="font-medium text-fg flex-1 truncate">{pub.persona.name}</span>
       <StatusPill status={pub.status} />
     </li>

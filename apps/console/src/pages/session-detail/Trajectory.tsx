@@ -4,8 +4,8 @@ import {
   outcomeToStatusTone,
   type Trajectory,
 } from "../../lib/trajectory";
-import { StatusPill } from "../../components/Badge";
-import { Modal } from "../../components/Modal";
+import { StatusPill } from "@/components/StatusPill";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { displayTrajectoryOutcome } from "./turn-ux";
 
@@ -105,7 +105,7 @@ export function TrajectoryViewerModal({
   }
 
   return (
-    <Modal
+    <FormDialog
       open={open}
       onClose={onClose}
       title="Trajectory"
@@ -135,6 +135,6 @@ export function TrajectoryViewerModal({
           {json}
         </pre>
       )}
-    </Modal>
+    </FormDialog>
   );
 }

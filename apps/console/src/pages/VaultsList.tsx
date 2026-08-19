@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { ArchiveIcon, TrashIcon } from "lucide-react";
 import { useApi } from "../lib/api";
 import { useInfiniteApiQuery } from "../lib/useApiQuery";
-import { Modal } from "../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { PopoverContent } from "@/components/ui/popover";
 import { useConfirm } from "@/hooks/useConfirm";
@@ -237,7 +237,7 @@ export function VaultsList() {
       columns={columns}
     >
       {/* Create Vault */}
-      <Modal
+      <FormDialog
         open={showCreateVault}
         onClose={() => setShowCreateVault(false)}
         title="New Vault"
@@ -260,7 +260,7 @@ export function VaultsList() {
             />
           </div>
         </div>
-      </Modal>
+      </FormDialog>
     </DataTable>
   );
 }

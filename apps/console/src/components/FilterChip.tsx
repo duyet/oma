@@ -45,7 +45,7 @@ export function FilterChip({
           "inline-flex items-center gap-1 h-8 text-sm shrink-0 transition-colors",
           active
             ? "rounded-full border border-brand text-brand bg-brand-subtle"
-            : "text-fg-muted hover:text-fg",
+            : "text-muted-foreground hover:text-foreground",
         )}
       >
         <PopoverTrigger asChild>
@@ -59,7 +59,7 @@ export function FilterChip({
             <span className="font-medium">{label}</span>
             {display && (
               <>
-                <span className="text-fg-subtle">:</span>
+                <span className="text-muted-foreground">:</span>
                 <span>{display}</span>
               </>
             )}
@@ -209,8 +209,8 @@ export function CreatedFilterChip({
             onClick={() => apply(p)}
             className={cn(
               "w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded text-sm",
-              "hover:bg-bg-surface",
-              preset === p && "text-fg font-medium",
+              "hover:bg-muted",
+              preset === p && "text-foreground font-medium",
             )}
           >
             {CREATED_PRESET_LABELS[p]}
@@ -220,7 +220,7 @@ export function CreatedFilterChip({
         {preset === "custom" && (
           <div className="mt-1 pt-2 border-t border-border space-y-2 px-1 pb-1">
             <label className="block">
-              <span className="text-xs text-fg-muted mb-1 block">From</span>
+              <span className="text-xs text-muted-foreground mb-1 block">From</span>
               <Input
                 type="date"
                 value={msToDateInput(customAfter)}
@@ -233,7 +233,7 @@ export function CreatedFilterChip({
               />
             </label>
             <label className="block">
-              <span className="text-xs text-fg-muted mb-1 block">To</span>
+              <span className="text-xs text-muted-foreground mb-1 block">To</span>
               <Input
                 type="date"
                 value={msToDateInput(customBefore)}

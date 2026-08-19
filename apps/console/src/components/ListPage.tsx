@@ -20,7 +20,7 @@ import {
 import { EmptyState, type EmptyStateKind } from "./EmptyState";
 import { Page } from "./Page";
 import { PageHeader } from "./PageHeader";
-import { Skeleton } from "./Skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { rowActivateKeyDown } from "@/lib/utils";
 
 interface Column<T> {
@@ -181,7 +181,7 @@ export function ListPage<T>({
       {showCreate && <Button onClick={onCreate}>{createLabel}</Button>}
       {filters}
       {onShowArchivedChange && (
-        <label className="flex items-center gap-2 text-sm text-fg-muted cursor-pointer select-none shrink-0">
+        <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none shrink-0">
           <Checkbox
             checked={showArchived ?? false}
             onCheckedChange={(c) => onShowArchivedChange(c === true)}
@@ -306,13 +306,13 @@ function TableShell<T>({ columns, headSticky, children }: TableShellProps<T>) {
   return (
     <Table>
       {/* Cleaner thead — normal-case xs text with a bg tint that matches
-          the rest of the canvas (bg-bg/95 + backdrop-blur lets the row
+          the rest of the canvas (bg-background/95 + backdrop-blur lets the row
           beneath bleed through faintly as the user scrolls under it).
           The previous uppercase tracking-wider treatment read as
           dashboard-y / Bootstrap-era; modern app tables (Linear, Vercel,
           Plane) use plain case + subtle weight. */}
       <TableHeader
-        className={`${headSticky} bg-bg/95 backdrop-blur supports-[backdrop-filter]:bg-bg/80 text-fg-muted`}
+        className={`${headSticky} bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 text-muted-foreground`}
       >
         <TableRow className="border-b border-border hover:bg-transparent">
           {columns.map((col) => (
@@ -366,7 +366,7 @@ function LoadMoreRow({
 
   return (
     <TableRow ref={ref} className="hover:bg-transparent">
-      <TableCell colSpan={colSpan} className="text-center py-4 text-xs text-fg-subtle">
+      <TableCell colSpan={colSpan} className="text-center py-4 text-xs text-muted-foreground">
         {loading ? "Loading more…" : " "}
       </TableCell>
     </TableRow>
