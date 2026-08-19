@@ -4,9 +4,12 @@ import { useNavigate } from "react-router";
 import {
   ActivityIcon,
   BotIcon,
-  PlayIcon,
+  ChartColumnIcon,
+  CirclePlayIcon,
+  HistoryIcon,
   TimerIcon,
   TriangleAlertIcon,
+  CoinsIcon,
 } from "lucide-react";
 import { formatQueryError, useApiQuery } from "../lib/useApiQuery";
 import { StatusPill } from "../components/Badge";
@@ -72,6 +75,8 @@ interface RecentSession {
 interface MetricCard {
   label: string;
   icon: typeof TimerIcon;
+  /** Tailwind classes for the icon badge (bg + text). */
+  iconTone: string;
   value: string;
   caption: string;
   isLoading: boolean;
@@ -153,6 +158,7 @@ export function Dashboard() {
     {
       label: "Sandbox time",
       icon: TimerIcon,
+      iconTone: "bg-brand-subtle text-brand",
       value: statsQuery.error ? "—" : formatSandboxTime(stats?.total_sandbox_seconds),
       caption: statsQuery.error
         ? "Couldn't load"
@@ -165,7 +171,8 @@ export function Dashboard() {
     },
     {
       label: "Sessions run",
-      icon: PlayIcon,
+      icon: CirclePlayIcon,
+      iconTone: "bg-info-subtle text-info",
       value: statsQuery.error
         ? "—"
         : (stats?.total_usage_sessions ?? 0).toLocaleString(),
@@ -181,6 +188,11 @@ export function Dashboard() {
     {
       label: "Active sessions",
       icon: ActivityIcon,
+      iconTone: runningSessionsQuery.error
+        ? "bg-bg-surface text-fg-subtle"
+        : (runningCount ?? 0) > 0
+          ? "bg-success-subtle text-success"
+          : "bg-bg-surface text-fg-muted",
       value: runningSessionsQuery.error
         ? "—"
         : `${runningCount ?? 0}${runningHasMore ? "+" : ""}`,
@@ -194,6 +206,7 @@ export function Dashboard() {
     {
       label: "Agents",
       icon: BotIcon,
+      iconTone: "bg-accent-violet-subtle text-accent-violet",
       value: statsQuery.error ? "—" : (stats?.agents ?? 0).toLocaleString(),
       caption: statsQuery.error
         ? "Couldn't load"
@@ -333,35 +346,47 @@ export function Dashboard() {
                       : undefined
                   }
                 >
-                  <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] text-fg-muted font-medium">
-                    <Icon className="h-3.5 w-3.5 text-fg-subtle" aria-hidden />
-                    {m.label}
-                    {m.isLive ? (
-                      <span
-                        className="ml-0.5 h-1.5 w-1.5 rounded-full bg-success animate-pulse"
-                        aria-hidden
-                      />
-                    ) : null}
-                  </div>
-                  {m.isLoading ? (
-                    <Skeleton className="mt-2 h-7 w-16" rounded="sm" />
-                  ) : (
-                    <div
+                  <div className="flex items-start gap-3">
+                    <span
                       className={cn(
-                        "mt-1.5 font-display text-[26px] leading-none font-semibold tabular-nums",
-                        m.isError ? "text-fg-subtle" : "text-fg",
+                        "flex size-10 shrink-0 items-center justify-center rounded-2xl border border-border/50",
+                        m.iconTone,
                       )}
+                      aria-hidden
                     >
-                      {m.value}
+                      <Icon className="size-[18px]" strokeWidth={1.75} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] text-fg-muted font-medium">
+                        {m.label}
+                        {m.isLive ? (
+                          <span
+                            className="ml-0.5 h-1.5 w-1.5 rounded-full bg-success animate-pulse"
+                            aria-hidden
+                          />
+                        ) : null}
+                      </div>
+                      {m.isLoading ? (
+                        <Skeleton className="mt-2 h-7 w-16" rounded="sm" />
+                      ) : (
+                        <div
+                          className={cn(
+                            "mt-1.5 font-display text-[26px] leading-none font-semibold tabular-nums",
+                            m.isError ? "text-fg-subtle" : "text-fg",
+                          )}
+                        >
+                          {m.value}
+                        </div>
+                      )}
+                      <div
+                        className={cn(
+                          "mt-1 text-[12px]",
+                          m.isError ? "text-danger" : "text-fg-subtle",
+                        )}
+                      >
+                        {m.caption}
+                      </div>
                     </div>
-                  )}
-                  <div
-                    className={cn(
-                      "mt-1 text-[12px]",
-                      m.isError ? "text-danger" : "text-fg-subtle",
-                    )}
-                  >
-                    {m.caption}
                   </div>
                 </div>
               );
@@ -375,7 +400,8 @@ export function Dashboard() {
         {showAnalytics ? (
           <section aria-label="Usage summary">
             <div className="mb-3 flex items-baseline justify-between gap-3">
-              <h2 className="font-display text-lg font-semibold text-fg">
+              <h2 className="font-display text-lg font-semibold text-fg inline-flex items-center gap-2">
+                <ChartColumnIcon className="size-[18px] text-fg-muted" aria-hidden />
                 Activity
               </h2>
               <button
@@ -390,7 +416,7 @@ export function Dashboard() {
               </button>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <MiniCard title="Last 7 days">
+              <MiniCard title="Last 7 days" icon={ChartColumnIcon}>
                 {usageQuery.isLoading && !usage ? (
                   <Skeleton className="h-[120px] w-full" rounded="sm" />
                 ) : usageQuery.error ? (
@@ -412,7 +438,7 @@ export function Dashboard() {
                 )}
               </MiniCard>
 
-              <MiniCard title="Token mix">
+              <MiniCard title="Token mix" icon={CoinsIcon}>
                 {usageQuery.isLoading && !usage ? (
                   <Skeleton className="h-[120px] w-full" rounded="sm" />
                 ) : usageQuery.error ? (
@@ -443,7 +469,8 @@ export function Dashboard() {
         <section data-testid="recent-sessions">
 
           <div className="flex items-baseline justify-between mb-3">
-            <h2 className="font-display text-lg font-semibold text-fg">
+            <h2 className="font-display text-lg font-semibold text-fg inline-flex items-center gap-2">
+              <HistoryIcon className="size-[18px] text-fg-muted" aria-hidden />
               Recent sessions
             </h2>
             <button
@@ -658,10 +685,23 @@ export function Dashboard() {
 /** Local titled panel for the Activity strip. The shadcn `Card` only
  *  accepts DOM props, so a `title` string would land as an HTML tooltip —
  *  this helper renders a real visible heading instead (mirrors Usage.tsx). */
-function MiniCard({ title, children }: { title: string; children: ReactNode }) {
+function MiniCard({
+  title,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  icon?: typeof ChartColumnIcon;
+  children: ReactNode;
+}) {
   return (
     <div className="rounded-xl border border-border bg-bg-surface/30 p-4">
-      <h3 className="font-display text-sm font-semibold text-fg mb-3">{title}</h3>
+      <h3 className="font-display text-sm font-semibold text-fg mb-3 inline-flex items-center gap-2">
+        {Icon ? (
+          <Icon className="size-4 text-fg-muted" aria-hidden strokeWidth={1.75} />
+        ) : null}
+        {title}
+      </h3>
       {children}
     </div>
   );
@@ -685,32 +725,35 @@ function MiniSparkline({ data }: { data: DailyBucket[] }) {
   if (n === 0) return <p className="text-sm text-fg-subtle">No data.</p>;
 
   const max = Math.max(1, ...data.map((d) => d.active_seconds));
-  const slot = 12;
-  const barW = 8;
+  const viewW = 320;
+  const slot = viewW / Math.max(n, 1);
+  const barW = Math.min(Math.max(slot * 0.5, 2), 18);
   const chartTop = 8;
   const chartH = 80;
   const baseline = chartTop + chartH;
-  const totalW = n * slot;
+  const viewH = baseline + 20;
 
   const fmtDate = (iso: string) => {
     const d = new Date(iso);
     return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
   };
 
+  const labelStep = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(viewW / 40))));
+
   return (
-    <div className="overflow-x-auto">
+    <div className="w-full">
       <svg
-        viewBox={`0 0 ${totalW} ${baseline + 16}`}
+        viewBox={`0 0 ${viewW} ${viewH}`}
         width="100%"
-        height={baseline + 16}
-        preserveAspectRatio="none"
+        height={viewH}
+        preserveAspectRatio="xMidYMid meet"
         role="img"
         aria-label="7-day activity"
       >
         <line
           x1={0}
           y1={baseline}
-          x2={totalW}
+          x2={viewW}
           y2={baseline}
           stroke="var(--color-border)"
           strokeWidth={1}
@@ -719,6 +762,7 @@ function MiniSparkline({ data }: { data: DailyBucket[] }) {
           const h = max > 0 ? (d.active_seconds / max) * chartH : 0;
           const x = i * slot + (slot - barW) / 2;
           const y = baseline - h;
+          const cx = i * slot + slot / 2;
           return (
             <g key={d.date}>
               <rect
@@ -732,17 +776,17 @@ function MiniSparkline({ data }: { data: DailyBucket[] }) {
               >
                 <title>{`${fmtDate(d.date)}: ${formatSandboxTime(d.active_seconds)} · ${d.runs} run${d.runs === 1 ? "" : "s"}`}</title>
               </rect>
-              {i % 2 === 0 && (
+              {i % labelStep === 0 || i === n - 1 ? (
                 <text
-                  x={i * slot + slot / 2}
+                  x={cx}
                   y={baseline + 12}
                   textAnchor="middle"
-                  fontSize={7}
+                  fontSize={8}
                   fill="var(--color-fg-subtle)"
                 >
                   {fmtDate(d.date)}
                 </text>
-              )}
+              ) : null}
             </g>
           );
         })}

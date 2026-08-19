@@ -12,10 +12,25 @@
  */
 
 import type { ReactNode } from "react";
+import {
+  BotIcon,
+  CpuIcon,
+  DatabaseIcon,
+  FileTextIcon,
+  KeyRoundIcon,
+  LaptopIcon,
+  LayoutDashboardIcon,
+  LockKeyholeIcon,
+  MessageSquareIcon,
+  ServerIcon,
+  ZapIcon,
+} from "lucide-react";
 
 interface IconProps {
   className?: string;
 }
+
+const navIconClass = (className?: string) => className ?? "size-4";
 
 function StrokeIcon({ d, className }: { d: string; className?: string }) {
   return (
@@ -76,50 +91,52 @@ function EmptyStateSvg({
 
 // ─── Resource icons (used in sidebar nav AND page header badges) ──────────
 
+/** Sidebar + page-header resource glyphs — lucide for crisp 24×24 strokes at
+ *  every density; each concept gets a distinct icon (Agent vs Runtimes used to
+ *  share the same hand-drawn monitor path). */
 export function DashboardIcon({ className }: IconProps) {
-  return <StrokeIcon className={className} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />;
+  return <LayoutDashboardIcon className={navIconClass(className)} aria-hidden />;
 }
 
 export function AgentIcon({ className }: IconProps) {
-  return <StrokeIcon className={className} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />;
+  return <BotIcon className={navIconClass(className)} aria-hidden />;
 }
 
 export function SessionsIcon({ className }: IconProps) {
-  return <StrokeIcon className={className} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />;
+  return <MessageSquareIcon className={navIconClass(className)} aria-hidden />;
 }
 
 export function EnvIcon({ className }: IconProps) {
-  return <StrokeIcon className={className} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />;
+  return <ServerIcon className={navIconClass(className)} aria-hidden />;
 }
 
 export function VaultIcon({ className }: IconProps) {
-  return <StrokeIcon className={className} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />;
+  return <LockKeyholeIcon className={navIconClass(className)} aria-hidden />;
 }
 
 export function SkillsIcon({ className }: IconProps) {
-  return <StrokeIcon className={className} d="M13 10V3L4 14h7v7l9-11h-7z" />;
+  return <ZapIcon className={navIconClass(className)} aria-hidden />;
 }
 
 export function MemoryIcon({ className }: IconProps) {
-  return <StrokeIcon className={className} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />;
+  return <DatabaseIcon className={navIconClass(className)} aria-hidden />;
 }
 
 export function ModelCardsIcon({ className }: IconProps) {
-  return <StrokeIcon className={className} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />;
+  return <CpuIcon className={navIconClass(className)} aria-hidden />;
 }
 
 export function ApiKeysIcon({ className }: IconProps) {
-  return <StrokeIcon className={className} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />;
+  return <KeyRoundIcon className={navIconClass(className)} aria-hidden />;
 }
 
-/** Local Runtimes — the user's machine running `oma bridge daemon`. Laptop /
- *  desktop-mac silhouette. */
+/** Local bridge daemon / sandbox providers on the operator's machine. */
 export function RuntimesIcon({ className }: IconProps) {
-  return <StrokeIcon className={className} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />;
+  return <LaptopIcon className={navIconClass(className)} aria-hidden />;
 }
 
 export function FilesIcon({ className }: IconProps) {
-  return <StrokeIcon className={className} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />;
+  return <FileTextIcon className={navIconClass(className)} aria-hidden />;
 }
 
 // ─── Brand marks (simple-icons paths, full 0..24 coverage, fill-rendered) ─
