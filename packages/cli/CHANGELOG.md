@@ -1,5 +1,11 @@
 # @getoma/cli
 
+## 0.1.10
+
+### Patch Changes
+
+- 16d0571: Ship a bin stub that exists before `dist/` is built so `pnpm exec oma` works on a fresh workspace install.
+
 ## 0.1.9
 
 ### Patch Changes
