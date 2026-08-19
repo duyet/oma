@@ -23,7 +23,7 @@ const schemas = [
 >
   <!-- Page hero -->
   <section class="border-b border-[var(--color-border)]">
-    <div class="max-w-5xl mx-auto px-4 py-8 md:py-10">
+    <div class="site-container py-8 md:py-10">
       <p class="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
         <Icon name="grid" size={14} class="text-[var(--color-brand)]" /> Features
       </p>
@@ -43,7 +43,7 @@ const schemas = [
 
   <!-- Why -->
   <section class="border-y border-[var(--color-border)] bg-[var(--color-bg-surface)]" data-reveal id="why">
-    <div class="max-w-5xl mx-auto px-4 py-10 md:py-12">
+    <div class="site-container py-10 md:py-12">
       <p class="flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
         <Icon name="check" size={14} class="text-[var(--color-brand)]" /> Why
       </p>
@@ -74,7 +74,8 @@ const schemas = [
   </section>
 
   <!-- API compatibility -->
-  <section class="max-w-5xl mx-auto px-4 py-10 md:py-12" data-reveal id="api-compat">
+  <section class="py-10 md:py-12" data-reveal id="api-compat">
+    <div class="site-container">
     <p class="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
       <Icon name="terminal" size={14} class="text-[var(--color-brand)]" /> API
     </p>
@@ -98,6 +99,7 @@ const schemas = [
         <span class="url-swap-new">oma.duyet.net <span class="url-swap-tag">hosted</span></span>
         <span class="url-swap-new">localhost:8787 <span class="url-swap-tag">self-host</span></span>
       </span>
+    </div>
     </div>
   </section>
 </Base>

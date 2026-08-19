@@ -62,7 +62,7 @@ const schemas = [
   schemas={schemas}
 >
   <section class="border-b border-[var(--color-border)]">
-    <div class="max-w-5xl mx-auto px-4 py-10 md:py-12">
+    <div class="site-container py-10 md:py-12">
       <p class="text-sm font-mono uppercase tracking-wider text-[var(--color-fg-subtle)] mb-4">
         Features / Agent Sandbox
       </p>
@@ -108,7 +108,8 @@ const schemas = [
     </div>
   </section>
 
-  <section class="max-w-5xl mx-auto px-4 py-10" data-reveal>
+  <section class="py-10" data-reveal>
+    <div class="site-container">
     <h2 class="font-display text-3xl font-bold mb-4">How it works</h2>
     <div class="grid md:grid-cols-3 gap-3 text-sm">
       <div>
@@ -136,16 +137,18 @@ const schemas = [
         </p>
       </div>
     </div>
+    </div>
   </section>
 
   <section class="border-y border-[var(--color-border)] bg-[var(--color-bg-surface)]" data-reveal>
-    <div class="max-w-5xl mx-auto px-4 py-10">
+    <div class="site-container py-10">
       <h2 class="font-display text-3xl font-bold mb-8">Sandbox providers</h2>
       <SandboxProviderGrid client:load />
     </div>
   </section>
 
-  <section class="max-w-5xl mx-auto px-4 py-10" data-reveal>
+  <section class="py-10" data-reveal>
+    <div class="site-container">
     <h2 class="font-display text-3xl font-bold mb-8">See it in the Console</h2>
     <div class="grid md:grid-cols-2 gap-4">
       <figure class="rounded-lg border border-[var(--color-border)] overflow-hidden">
@@ -161,9 +164,11 @@ const schemas = [
         <figcaption class="px-4 py-2.5 text-xs text-[var(--color-fg-muted)] border-t border-[var(--color-border)]">One session → one sandbox: bash, files, and browsers run inside; the provider is set by the environment.</figcaption>
       </figure>
     </div>
+    </div>
   </section>
 
-  <section class="max-w-5xl mx-auto px-4 py-10" data-reveal>
+  <section class="py-10" data-reveal>
+    <div class="site-container">
     <h2 class="font-display text-3xl font-bold mb-4">Configure it in one field</h2>
     <p class="text-[var(--color-fg-muted)] leading-relaxed mb-6 max-w-3xl">
       An environment is a reusable record: sandbox provider, package
@@ -190,10 +195,11 @@ const schemas = [
       HTTP gateway, pod diagram) is covered on
       <a href="/features/private-kubernetes/">Private Kubernetes</a>.
     </p>
+    </div>
   </section>
 
   <section class="border-t border-[var(--color-border)]" data-reveal>
-    <div class="max-w-5xl mx-auto px-4 py-10">
+    <div class="site-container py-10">
       <h2 class="font-display text-3xl font-bold mb-8">FAQ</h2>
       <div class="grid md:grid-cols-2 gap-4">
         {faqItems.map((item) => (

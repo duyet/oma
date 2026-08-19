@@ -58,7 +58,8 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
   keywords="open managed agents brand, oma logo, brand guidelines, design tokens, oma identity"
 >
   <!-- Header -->
-  <section class="max-w-5xl mx-auto px-4 pt-8 pb-6 md:pt-10">
+  <section class="pt-8 pb-6 md:pt-10">
+    <div class="site-container">
     <p class="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
       <Icon name="layers" size={14} class="text-[var(--color-brand)]" /> Brand
     </p>
@@ -71,11 +72,12 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
       This page is the reference — the mark, the tokens, the type, and how to
       use them.
     </p>
+    </div>
   </section>
 
   <!-- Logo -->
   <section class="border-t border-[var(--color-border)]" id="logo">
-    <div class="max-w-5xl mx-auto px-4 py-8">
+    <div class="site-container py-8">
       <h2 class="font-display text-2xl font-bold tracking-tight mb-2">Logo</h2>
       <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed max-w-2xl mb-8">
         A rounded-square <strong class="text-[var(--color-fg)] font-semibold">frame</strong>
@@ -201,7 +203,7 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
 
   <!-- Mascot -->
   <section class="border-t border-[var(--color-border)] bg-[var(--color-bg-surface)]" id="mascot">
-    <div class="max-w-5xl mx-auto px-4 py-8 flex flex-col sm:flex-row items-center gap-6">
+    <div class="site-container py-8 flex flex-col sm:flex-row items-center gap-6">
       <div class="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-4 shrink-0">
         <PixelAgent size={96} class="block" />
       </div>
@@ -220,7 +222,7 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
 
   <!-- Color -->
   <section class="border-t border-[var(--color-border)]" id="color">
-    <div class="max-w-5xl mx-auto px-4 py-8">
+    <div class="site-container py-8">
       <h2 class="font-display text-2xl font-bold tracking-tight mb-2">Color</h2>
       <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed max-w-2xl mb-8">
         Every color is a CSS custom property in
@@ -260,7 +262,7 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
 
   <!-- Typography -->
   <section class="border-t border-[var(--color-border)] bg-[var(--color-bg-surface)]" id="type">
-    <div class="max-w-5xl mx-auto px-4 py-8">
+    <div class="site-container py-8">
       <h2 class="font-display text-2xl font-bold tracking-tight mb-2">Typography</h2>
       <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed max-w-2xl mb-8">
         <strong class="text-[var(--color-fg)] font-semibold">Inter Variable</strong> for
@@ -308,7 +310,7 @@ const groups: { title: string; note: string; rows: Swatch[] }[] = [
 
   <!-- Usage -->
   <section class="border-t border-[var(--color-border)]" id="usage">
-    <div class="max-w-5xl mx-auto px-4 py-8">
+    <div class="site-container py-8">
       <h2 class="font-display text-2xl font-bold tracking-tight mb-8">Usage</h2>
       <div class="grid md:grid-cols-2 gap-4">
         <div>
