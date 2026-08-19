@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { XCircleIcon } from "lucide-react";
 import { useApi } from "../lib/api";
 import { useAsyncAction } from "../hooks/useAsyncAction";
-import { FormDialog } from "@/components/ui/dialog";
+import { Modal } from "../components/Modal";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/useConfirm";
-import { DataTable, ExpandedDetail, type ColumnDef } from "../components/DataTable";
+import { DataTable, type ColumnDef } from "../components/DataTable";
 import { RowActionsMenu } from "../components/RowActionsMenu";
 
 // Workspace members + pending teammate invites (issue #175). Owners/admins
@@ -175,7 +175,6 @@ export function Members() {
           />
         ),
         enableHiding: false,
-        enableResizing: false,
         size: 56,
       },
     ],
@@ -197,20 +196,6 @@ export function Members() {
         emptyTitle="No members yet"
         emptySubtitle="Invite a teammate by email to start collaborating in this workspace."
         columns={memberColumns}
-        renderExpandedRow={(m) => (
-          <ExpandedDetail
-            rows={[
-              { label: "User ID", value: <span className="font-mono text-xs">{m.user_id}</span> },
-              { label: "Email", value: m.email ?? "—" },
-              { label: "Name", value: m.name ?? "—" },
-              { label: "Role", value: m.role },
-              {
-                label: "Joined",
-                value: new Date(m.created_at).toLocaleString(),
-              },
-            ]}
-          />
-        )}
       >
         {invites.length > 0 && (
           <div className="mt-8">
@@ -221,24 +206,10 @@ export function Members() {
               getRowId={(i) => i.id}
               emptyTitle="No pending invites"
               columns={inviteColumns}
-              renderExpandedRow={(i) => (
-                <ExpandedDetail
-                  rows={[
-                    { label: "Invite ID", value: <span className="font-mono text-xs">{i.id}</span> },
-                    { label: "Email", value: i.email },
-                    { label: "Role", value: i.role },
-                    { label: "Status", value: i.status },
-                    {
-                      label: "Expires",
-                      value: new Date(i.expires_at).toLocaleString(),
-                    },
-                  ]}
-                />
-              )}
             />
           </div>
         )}
-        <FormDialog
+        <Modal
           open={showInvite}
           onClose={closeDialog}
           title="Invite a teammate"
@@ -292,7 +263,7 @@ export function Members() {
               email address, and expires in 7 days.
             </p>
           </div>
-        </FormDialog>
+        </Modal>
       </DataTable>
     </>
   );

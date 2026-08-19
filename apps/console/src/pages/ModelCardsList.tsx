@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useApi } from "../lib/api";
 import { useInfiniteApiQuery } from "../lib/useApiQuery";
-import { FormDialog } from "@/components/ui/dialog";
+import { Modal } from "../components/Modal";
 import { Button } from "@/components/ui/button";
 import { PopoverContent } from "@/components/ui/popover";
 import { useConfirm } from "@/hooks/useConfirm";
@@ -20,10 +20,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DataTable, ExpandedDetail, type ColumnDef } from "../components/DataTable";
+import { DataTable, type ColumnDef } from "../components/DataTable";
 import { FacetedFilter } from "../components/FacetedFilter";
 import { FilterChip, CreatedFilterChip } from "../components/FilterChip";
-import { TextInput, SecretInput } from "@/components/ui/form-input";
+import { TextInput, SecretInput } from "../components/Input";
 import { toast } from "sonner";
 import type { ModelCard } from "@duyet/oma-api-types";
 import { INITIAL_FORM as AGENT_INITIAL_FORM, formToConfig } from "./agents/AgentFormDialog";
@@ -993,22 +993,8 @@ export function ModelCardsList() {
         )
       }
       columns={columns}
-      renderExpandedRow={(mc) => (
-        <ExpandedDetail
-          rows={[
-            { label: "ID", value: <span className="font-mono text-xs">{mc.id}</span> },
-            { label: "Provider", value: mc.provider },
-            { label: "Model ID", value: mc.model_id },
-            { label: "Base URL", value: mc.base_url ?? "—" },
-            {
-              label: "Created",
-              value: new Date(mc.created_at).toLocaleString(),
-            },
-          ]}
-        />
-      )}
     >
-      <FormDialog open={showCreate} onClose={closeDialog} title={editingId ? "Edit Model Card" : "New Model Card"}
+      <Modal open={showCreate} onClose={closeDialog} title={editingId ? "Edit Model Card" : "New Model Card"}
         footer={
           <>
             {editingId && (
@@ -1188,7 +1174,7 @@ export function ModelCardsList() {
             Set as default model card
           </label>
         </form>
-      </FormDialog>
+      </Modal>
       </DataTable>
 
       {/* Provider connections — its own bordered block below the table so

@@ -5,9 +5,9 @@ import { toast } from "sonner";
 
 import { useApi } from "../../lib/api";
 import { useApiQuery, formatQueryError } from "../../lib/useApiQuery";
-import { DataTable, ExpandedDetail, type ColumnDef } from "../../components/DataTable";
+import { DataTable, type ColumnDef } from "../../components/DataTable";
 import { RowActionsMenu } from "../../components/RowActionsMenu";
-import { StatusPill } from "@/components/StatusPill";
+import { StatusPill } from "../../components/Badge";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/useConfirm";
 import { useAgentHub } from "../AgentDetail";
@@ -183,7 +183,6 @@ export function AgentPublishingTab() {
           );
         },
         enableHiding: false,
-        enableResizing: false,
         size: 56,
       },
     ],
@@ -221,20 +220,6 @@ export function AgentPublishingTab() {
         emptySubtitle="Publish this agent to share a public chat page, embed widget, or QR code."
         emptyAction={<Button onClick={() => setShowPublish(true)}>+ Publish as bot</Button>}
         columns={columns}
-        renderExpandedRow={(p) => (
-          <ExpandedDetail
-            rows={[
-              { label: "ID", value: <span className="font-mono text-xs">{p.id}</span> },
-              { label: "Slug", value: `/p/${p.slug}` },
-              { label: "Status", value: p.status },
-              { label: "Visibility", value: p.visibility },
-              {
-                label: "Created",
-                value: new Date(p.created_at).toLocaleString(),
-              },
-            ]}
-          />
-        )}
       />
 
       <PublishAgentDialog
