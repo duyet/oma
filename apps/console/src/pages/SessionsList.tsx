@@ -244,7 +244,7 @@ function LiveDuration({ created_at, terminated_at }: { created_at: string; termi
     return () => clearInterval(id);
   }, [terminated_at, getMs]);
 
-  return <span className="text-fg-subtle text-xs whitespace-nowrap">{formatDuration(ms)}</span>;
+  return <span className="text-muted-foreground text-xs whitespace-nowrap">{formatDuration(ms)}</span>;
 }
 
 export function SessionsList() {
@@ -283,7 +283,7 @@ export function SessionsList() {
     return next;
   });
 
-  const inputCls = "w-full border border-border rounded-md px-3 py-2 min-h-11 sm:min-h-0 text-sm bg-bg text-fg outline-none focus:border-brand transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)] placeholder:text-fg-subtle";
+  const inputCls = "w-full border border-border rounded-md px-3 py-2 min-h-11 sm:min-h-0 text-sm bg-background text-foreground outline-none focus:border-primary transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)] placeholder:text-muted-foreground";
 
   // Server-driven filter state. Each piece flows into sessionsParams below
   // → useInfiniteApiQuery resets to page 1 on params change → the list
@@ -690,7 +690,7 @@ export function SessionsList() {
     switch (status) {
       case "idle": return "bg-success-subtle text-success";
       case "running": return "bg-info-subtle text-info";
-      default: return "bg-bg-surface text-fg-muted";
+      default: return "bg-muted text-muted-foreground";
     }
   };
 
@@ -784,7 +784,7 @@ export function SessionsList() {
         accessorKey: "id",
         header: "ID",
         cell: ({ row }) => (
-          <span title={row.original.id} className="font-mono text-xs text-fg-muted">
+          <span title={row.original.id} className="font-mono text-xs text-muted-foreground">
             {row.original.id}
           </span>
         ),
@@ -795,7 +795,7 @@ export function SessionsList() {
         accessorFn: (s) => s.title ?? "",
         header: "Name",
         cell: ({ row }) => (
-          <span className="inline-flex items-center gap-2 font-medium text-fg">
+          <span className="inline-flex items-center gap-2 font-medium text-foreground">
             {row.original.title || "Untitled"}
             <LinearBadge metadata={row.original.metadata} />
             <SlackBadge metadata={row.original.metadata} />
@@ -826,7 +826,7 @@ export function SessionsList() {
           const name = agentNameById.get(id);
           return (
             <span
-              className="text-fg-muted text-xs max-w-[12rem] block truncate"
+              className="text-muted-foreground text-xs max-w-[12rem] block truncate"
               title={name ? `${name} (${id})` : id}
             >
               {name ? (
@@ -981,8 +981,8 @@ export function SessionsList() {
         <div className="space-y-4">
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-sm text-fg-muted">Agent</label>
-              <a href="/agents" className="text-xs text-brand hover:underline">Manage agents →</a>
+              <label className="text-sm text-muted-foreground">Agent</label>
+              <a href="/agents" className="text-xs text-primary hover:underline">Manage agents →</a>
             </div>
             <Controller
               control={control}
@@ -999,7 +999,7 @@ export function SessionsList() {
                     getValue={(a) => a.id}
                     getLabel={(a) => (
                       <span>
-                        {a.name} <span className="text-fg-subtle text-[12px]">({a.id})</span>
+                        {a.name} <span className="text-muted-foreground text-[12px]">({a.id})</span>
                       </span>
                     )}
                     getTextLabel={(a) => `${a.name} (${a.id})`}
@@ -1031,12 +1031,12 @@ export function SessionsList() {
             />
           )}
           {isLocalRuntime && (
-            <p className="text-xs text-fg-subtle bg-bg-surface px-3 py-2 rounded-lg">
+            <p className="text-xs text-muted-foreground bg-muted px-3 py-2 rounded-lg">
               Local runtime agents use the runtime machine's filesystem — no cloud environment needed.
             </p>
           )}
           <div>
-            <label htmlFor="session-title" className="text-sm text-fg-muted block mb-1">Title <span className="text-fg-subtle">(optional)</span></label>
+            <label htmlFor="session-title" className="text-sm text-muted-foreground block mb-1">Title <span className="text-muted-foreground">(optional)</span></label>
             {/* autoComplete=off + an unrecognised name to defeat Chrome /
                 Safari email autofill — first text input in the dialog
                 got pre-filled with the user's saved email otherwise.
@@ -1074,7 +1074,7 @@ export function SessionsList() {
                       <li key={s.url}>· {s.host}</li>
                     ))}
                   </ul>
-                  <div className="mt-1 text-fg-muted font-sans">
+                  <div className="mt-1 text-muted-foreground font-sans">
                     Agent will dial these endpoints unauthenticated. Add a vault credential for each, or expect the agent to see 401s mid-conversation.
                   </div>
                 </div>
@@ -1084,13 +1084,13 @@ export function SessionsList() {
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-sm text-fg-muted">Resources <span className="text-fg-subtle">(optional)</span></label>
+              <label className="text-sm text-muted-foreground">Resources <span className="text-muted-foreground">(optional)</span></label>
             </div>
-            <p className="text-xs text-fg-subtle mb-2">
+            <p className="text-xs text-muted-foreground mb-2">
               Mount files, GitHub repositories, memory stores, or pass environment variables into the session.
             </p>
             {resourceFields.length === 0 ? (
-              <div className="text-xs text-fg-subtle border border-dashed border-border rounded-lg px-3 py-3 text-center">
+              <div className="text-xs text-muted-foreground border border-dashed border-border rounded-lg px-3 py-3 text-center">
                 No resources added.
               </div>
             ) : (
@@ -1103,13 +1103,13 @@ export function SessionsList() {
                   const live = watchedResources[i];
                   if (!live) return null;
                   return (
-                    <div key={field.id} className="border border-border rounded-lg bg-bg-surface p-3">
+                    <div key={field.id} className="border border-border rounded-lg bg-muted p-3">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-medium text-fg inline-flex items-center gap-2">
+                        <span className="text-xs font-medium text-foreground inline-flex items-center gap-2">
                           {kindLabel(live.kind)}
                           {showPrimaryHint && live.kind === "github" && i === firstGithubIdx && (
                             <span
-                              className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-brand/10 border border-brand/30 text-brand"
+                              className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 border border-primary/30 text-primary"
                               title="This repo's token is used for GitHub API calls that don't target a specific repo (GraphQL, Search, /user, …)"
                             >
                               primary
@@ -1119,7 +1119,7 @@ export function SessionsList() {
                         <button
                           type="button"
                           onClick={() => removeResource(i)}
-                          className="inline-flex items-center justify-center min-w-11 min-h-11 sm:min-w-0 sm:min-h-0 px-2 text-fg-subtle hover:text-danger text-xs"
+                          className="inline-flex items-center justify-center min-w-11 min-h-11 sm:min-w-0 sm:min-h-0 px-2 text-muted-foreground hover:text-danger text-xs"
                           aria-label="Remove resource"
                         >
                           Remove
@@ -1128,7 +1128,7 @@ export function SessionsList() {
                       {live.kind === "github" && (
                         <div className="space-y-2">
                           <div>
-                            <label htmlFor={`session-resource-${i}-url`} className="text-xs text-fg-muted block mb-0.5">Repository URL <span className="text-danger">*</span></label>
+                            <label htmlFor={`session-resource-${i}-url`} className="text-xs text-muted-foreground block mb-0.5">Repository URL <span className="text-danger">*</span></label>
                             <input
                               id={`session-resource-${i}-url`}
                               {...register(`resources.${i}.url`)}
@@ -1145,7 +1145,7 @@ export function SessionsList() {
                             )}
                           </div>
                           <div>
-                            <label htmlFor={`session-resource-${i}-token`} className="text-xs text-fg-muted block mb-0.5">
+                            <label htmlFor={`session-resource-${i}-token`} className="text-xs text-muted-foreground block mb-0.5">
                               Authorization Token <span className="text-danger">*</span>
                             </label>
                             <div className="relative">
@@ -1160,7 +1160,7 @@ export function SessionsList() {
                                 <button
                                   type="button"
                                   onClick={() => toggleReveal(`${i}:token`)}
-                                  className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center min-w-11 min-h-11 sm:min-w-0 sm:min-h-0 px-1 text-xs text-fg-subtle hover:text-fg"
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center min-w-11 min-h-11 sm:min-w-0 sm:min-h-0 px-1 text-xs text-muted-foreground hover:text-foreground"
                                   aria-label="Toggle token visibility"
                                 >
                                   {revealedSecrets.has(`${i}:token`) ? "hide" : "show"}
@@ -1178,7 +1178,7 @@ export function SessionsList() {
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <label htmlFor={`session-resource-${i}-checkout-type`} className="text-xs text-fg-muted block mb-0.5">Checkout</label>
+                              <label htmlFor={`session-resource-${i}-checkout-type`} className="text-xs text-muted-foreground block mb-0.5">Checkout</label>
                               <select
                                 id={`session-resource-${i}-checkout-type`}
                                 {...register(`resources.${i}.checkout_type`, {
@@ -1195,7 +1195,7 @@ export function SessionsList() {
                               </select>
                             </div>
                             <div>
-                              <label htmlFor={`session-resource-${i}-checkout-name`} className="text-xs text-fg-muted block mb-0.5">
+                              <label htmlFor={`session-resource-${i}-checkout-name`} className="text-xs text-muted-foreground block mb-0.5">
                                 {live.checkout_type === "commit" ? "Commit SHA" : "Name"}
                               </label>
                               <input
@@ -1208,7 +1208,7 @@ export function SessionsList() {
                             </div>
                           </div>
                           <div>
-                            <label htmlFor={`session-resource-${i}-mount`} className="text-xs text-fg-muted block mb-0.5">Mount Path <span className="text-fg-subtle">(optional)</span></label>
+                            <label htmlFor={`session-resource-${i}-mount`} className="text-xs text-muted-foreground block mb-0.5">Mount Path <span className="text-muted-foreground">(optional)</span></label>
                             <input
                               id={`session-resource-${i}-mount`}
                               {...register(`resources.${i}.mount_path`)}
@@ -1222,8 +1222,8 @@ export function SessionsList() {
                         <div className="space-y-2">
                           <div>
                             <div className="flex items-center justify-between mb-0.5">
-                              <label htmlFor={`session-resource-${i}-file`} className="text-xs text-fg-muted">File <span className="text-danger">*</span></label>
-                              <a href="/files" className="inline-flex items-center min-h-11 sm:min-h-0 text-xs text-brand hover:underline">Manage files →</a>
+                              <label htmlFor={`session-resource-${i}-file`} className="text-xs text-muted-foreground">File <span className="text-danger">*</span></label>
+                              <a href="/files" className="inline-flex items-center min-h-11 sm:min-h-0 text-xs text-primary hover:underline">Manage files →</a>
                             </div>
                             <select
                               id={`session-resource-${i}-file`}
@@ -1238,11 +1238,11 @@ export function SessionsList() {
                               ))}
                             </select>
                             {files.length === 0 && (
-                              <p className="text-xs text-fg-subtle mt-1">No files yet — upload via the AMA SDK or POST /v1/files.</p>
+                              <p className="text-xs text-muted-foreground mt-1">No files yet — upload via the AMA SDK or POST /v1/files.</p>
                             )}
                           </div>
                           <div>
-                            <label htmlFor={`session-resource-${i}-file-mount`} className="text-xs text-fg-muted block mb-0.5">Mount Path <span className="text-fg-subtle">(optional)</span></label>
+                            <label htmlFor={`session-resource-${i}-file-mount`} className="text-xs text-muted-foreground block mb-0.5">Mount Path <span className="text-muted-foreground">(optional)</span></label>
                             <input
                               id={`session-resource-${i}-file-mount`}
                               {...register(`resources.${i}.mount_path`)}
@@ -1256,8 +1256,8 @@ export function SessionsList() {
                         <div className="space-y-2">
                           <div>
                             <div className="flex items-center justify-between mb-0.5">
-                              <label htmlFor={`session-resource-${i}-store`} className="text-xs text-fg-muted">Store <span className="text-danger">*</span></label>
-                              <a href="/memory" className="inline-flex items-center min-h-11 sm:min-h-0 text-xs text-brand hover:underline">Manage stores →</a>
+                              <label htmlFor={`session-resource-${i}-store`} className="text-xs text-muted-foreground">Store <span className="text-danger">*</span></label>
+                              <a href="/memory" className="inline-flex items-center min-h-11 sm:min-h-0 text-xs text-primary hover:underline">Manage stores →</a>
                             </div>
                             <select
                               id={`session-resource-${i}-store`}
@@ -1274,7 +1274,7 @@ export function SessionsList() {
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <label htmlFor={`session-resource-${i}-access`} className="text-xs text-fg-muted block mb-0.5">Access</label>
+                              <label htmlFor={`session-resource-${i}-access`} className="text-xs text-muted-foreground block mb-0.5">Access</label>
                               <select
                                 id={`session-resource-${i}-access`}
                                 {...register(`resources.${i}.access`)}
@@ -1285,7 +1285,7 @@ export function SessionsList() {
                               </select>
                             </div>
                             <div>
-                              <label htmlFor={`session-resource-${i}-store-mount`} className="text-xs text-fg-muted block mb-0.5">Mount Path <span className="text-fg-subtle">(optional)</span></label>
+                              <label htmlFor={`session-resource-${i}-store-mount`} className="text-xs text-muted-foreground block mb-0.5">Mount Path <span className="text-muted-foreground">(optional)</span></label>
                               <input
                                 id={`session-resource-${i}-store-mount`}
                                 {...register(`resources.${i}.mount_path`)}
@@ -1299,7 +1299,7 @@ export function SessionsList() {
                       {live.kind === "env" && (
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <label htmlFor={`session-resource-${i}-env-name`} className="text-xs text-fg-muted block mb-0.5">Name <span className="text-danger">*</span></label>
+                            <label htmlFor={`session-resource-${i}-env-name`} className="text-xs text-muted-foreground block mb-0.5">Name <span className="text-danger">*</span></label>
                             <input
                               id={`session-resource-${i}-env-name`}
                               {...register(`resources.${i}.name`)}
@@ -1308,7 +1308,7 @@ export function SessionsList() {
                             />
                           </div>
                           <div>
-                            <label htmlFor={`session-resource-${i}-env-value`} className="text-xs text-fg-muted block mb-0.5">Value <span className="text-danger">*</span></label>
+                            <label htmlFor={`session-resource-${i}-env-value`} className="text-xs text-muted-foreground block mb-0.5">Value <span className="text-danger">*</span></label>
                             <div className="relative">
                               <input
                                 id={`session-resource-${i}-env-value`}
@@ -1321,7 +1321,7 @@ export function SessionsList() {
                                 <button
                                   type="button"
                                   onClick={() => toggleReveal(`${i}:value`)}
-                                  className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center min-w-11 min-h-11 sm:min-w-0 sm:min-h-0 px-1 text-xs text-fg-subtle hover:text-fg"
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center min-w-11 min-h-11 sm:min-w-0 sm:min-h-0 px-1 text-xs text-muted-foreground hover:text-foreground"
                                   aria-label="Toggle value visibility"
                                 >
                                   {revealedSecrets.has(`${i}:value`) ? "hide" : "show"}
@@ -1337,10 +1337,10 @@ export function SessionsList() {
               </div>
             )}
             <div className="flex flex-wrap gap-2 mt-2">
-              <button type="button" onClick={() => addResource("github")} className="inline-flex items-center justify-center min-h-11 sm:min-h-0 text-xs px-2.5 py-1.5 border border-border rounded-md hover:bg-bg-surface text-fg-muted hover:text-fg">+ GitHub repo</button>
-              <button type="button" onClick={() => addResource("file")} className="inline-flex items-center justify-center min-h-11 sm:min-h-0 text-xs px-2.5 py-1.5 border border-border rounded-md hover:bg-bg-surface text-fg-muted hover:text-fg">+ File</button>
-              <button type="button" onClick={() => addResource("memory_store")} className="inline-flex items-center justify-center min-h-11 sm:min-h-0 text-xs px-2.5 py-1.5 border border-border rounded-md hover:bg-bg-surface text-fg-muted hover:text-fg">+ Memory store</button>
-              <button type="button" onClick={() => addResource("env")} className="inline-flex items-center justify-center min-h-11 sm:min-h-0 text-xs px-2.5 py-1.5 border border-border rounded-md hover:bg-bg-surface text-fg-muted hover:text-fg">+ Env var</button>
+              <button type="button" onClick={() => addResource("github")} className="inline-flex items-center justify-center min-h-11 sm:min-h-0 text-xs px-2.5 py-1.5 border border-border rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">+ GitHub repo</button>
+              <button type="button" onClick={() => addResource("file")} className="inline-flex items-center justify-center min-h-11 sm:min-h-0 text-xs px-2.5 py-1.5 border border-border rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">+ File</button>
+              <button type="button" onClick={() => addResource("memory_store")} className="inline-flex items-center justify-center min-h-11 sm:min-h-0 text-xs px-2.5 py-1.5 border border-border rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">+ Memory store</button>
+              <button type="button" onClick={() => addResource("env")} className="inline-flex items-center justify-center min-h-11 sm:min-h-0 text-xs px-2.5 py-1.5 border border-border rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">+ Env var</button>
             </div>
           </div>
         </div>

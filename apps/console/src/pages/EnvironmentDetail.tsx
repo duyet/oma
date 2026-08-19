@@ -266,7 +266,7 @@ export function EnvironmentDetail() {
     );
   }
   if (!env) {
-    return <div className="flex-1 p-8 text-fg-muted">Loading...</div>;
+    return <div className="flex-1 p-8 text-muted-foreground">Loading...</div>;
   }
 
   const metadataHasError = metadataRows.some(
@@ -297,13 +297,13 @@ export function EnvironmentDetail() {
               id="env-name"
               value={name}
               onChange={(e) => setName(e.target.value.slice(0, 50))}
-              className="border border-border rounded-md px-3 py-2 min-h-11 sm:min-h-0 text-sm bg-bg text-fg outline-none focus:border-brand transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)] w-full sm:w-72"
+              className="border border-border rounded-md px-3 py-2 min-h-11 sm:min-h-0 text-sm bg-background text-foreground outline-none focus:border-primary transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)] w-full sm:w-72"
               placeholder="environment name"
             />
-            <span className="text-[11px] px-2 py-0.5 rounded border border-border bg-bg-surface text-fg-muted font-medium uppercase tracking-wider">
+            <span className="text-[11px] px-2 py-0.5 rounded-2xl border border-border bg-muted text-muted-foreground font-medium uppercase tracking-wider">
               {providerLabel}
             </span>
-            <span className="text-fg-subtle" aria-hidden="true">
+            <span className="text-muted-foreground" aria-hidden="true">
               <GlobeIcon />
             </span>
             {/* Status chip + build_error banner removed — env is stateless
@@ -313,11 +313,11 @@ export function EnvironmentDetail() {
                 env, not at env-creation time. */}
           </div>
           {providerDescription && (
-            <p className="text-xs text-fg-subtle">{providerDescription}</p>
+            <p className="text-xs text-muted-foreground">{providerDescription}</p>
           )}
 
           <div>
-            <label className="block text-[13px] font-medium text-fg mb-1.5" htmlFor="env-description">
+            <label className="block text-[13px] font-medium text-foreground mb-1.5" htmlFor="env-description">
               Description
             </label>
             <textarea
@@ -325,7 +325,7 @@ export function EnvironmentDetail() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
-              className="w-full border border-border rounded-md px-3 py-2 text-[13px] bg-bg text-fg outline-none focus:border-brand transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)] placeholder:text-fg-subtle resize-y"
+              className="w-full border border-border rounded-md px-3 py-2 text-[13px] bg-background text-foreground outline-none focus:border-primary transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)] placeholder:text-muted-foreground resize-y"
               placeholder="What is this environment for?"
             />
           </div>
