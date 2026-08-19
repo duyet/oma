@@ -9,7 +9,7 @@ import { PopoverContent } from "@/components/ui/popover";
 import { useConfirm } from "@/hooks/useConfirm";
 import { Select, SelectOption } from "../components/Select";
 import { EnvVarsEditor, rowsToEnvVars, type EnvVarRow } from "../components/EnvVarsEditor";
-import { DataTable, type ColumnDef } from "../components/DataTable";
+import { DataTable, ExpandedDetail, type ColumnDef } from "../components/DataTable";
 import { FacetedFilter } from "../components/FacetedFilter";
 import { FilterChip, CreatedFilterChip } from "../components/FilterChip";
 import { RowActionsMenu } from "../components/RowActionsMenu";
@@ -294,10 +294,11 @@ export function EnvironmentsList() {
           );
         },
         enableHiding: false,
+        enableResizing: false,
         size: 56,
       },
     ],
-    [api, load, confirm],
+    [api, load, confirm, hostingTypes],
   );
 
   // Active-filter chip displays — kept null when matching the default so
@@ -362,6 +363,25 @@ export function EnvironmentsList() {
           : "An environment defines the sandbox your agents run in — packages, network access, and hardware. Create your first one to get started."
       }
       columns={columns}
+      renderExpandedRow={(e) => (
+        <ExpandedDetail
+          rows={[
+            { label: "ID", value: <span className="font-mono text-xs">{e.id}</span> },
+            {
+              label: "Provider",
+              value: hostingTypeLabel(
+                (e.config?.type ?? e.config?.sandbox_provider) as string | undefined,
+                hostingTypes,
+              ),
+            },
+            { label: "Status", value: e.status ?? "ready" },
+            {
+              label: "Created",
+              value: new Date(e.created_at).toLocaleString(),
+            },
+          ]}
+        />
+      )}
     >
       <Modal
         open={showCreate}

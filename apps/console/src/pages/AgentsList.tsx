@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
@@ -17,7 +17,7 @@ import {
 
 import { useApi } from "../lib/api";
 import { useInfiniteApiQuery } from "../lib/useApiQuery";
-import { DataTable, type ColumnDef } from "../components/DataTable";
+import { DataTable, ExpandedDetail, type ColumnDef } from "../components/DataTable";
 import { FilterBar } from "../components/FilterBar";
 import { RowActionsMenu } from "../components/RowActionsMenu";
 import { Badge } from "../components/Badge";
@@ -442,10 +442,30 @@ export function AgentsList() {
           );
         },
         enableHiding: false,
+        enableResizing: false,
         size: 56,
       },
     ],
     [api, refreshAgents, confirm, nav, duplicateAgent, quickStats],
+  );
+
+  const renderExpandedRow = useCallback(
+    (a: Agent) => (
+      <ExpandedDetail
+        rows={[
+          { label: "ID", value: <span className="font-mono text-xs">{a.id}</span> },
+          { label: "Model", value: modelStr(a.model) },
+          { label: "Harness", value: a._oma?.harness ?? "default" },
+          { label: "Tools", value: String(a.tools?.length ?? 0) },
+          { label: "Version", value: `v${a.version}` },
+          {
+            label: "Created",
+            value: new Date(a.created_at).toLocaleString(),
+          },
+        ]}
+      />
+    ),
+    [],
   );
 
   const filters = (
@@ -502,6 +522,7 @@ export function AgentsList() {
         )
       }
       columns={columns}
+      renderExpandedRow={renderExpandedRow}
     >
       <AgentFormDialog
         open={showCreate}
