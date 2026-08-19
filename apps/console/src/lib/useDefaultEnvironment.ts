@@ -24,7 +24,7 @@ export interface DefaultEnvironmentResult {
  * sessions/index.ts). Centralizes the three-way UX:
  *   - exactly one environment → use it silently
  *   - several → caller renders a picker (defaulting to the first)
- *   - none → caller renders a CTA linking to /environments instead of
+ *   - none → caller creates a default env inline (New session modal) instead of
  *     letting the request 400
  */
 export function useDefaultEnvironment(): DefaultEnvironmentResult {

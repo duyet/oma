@@ -9,7 +9,7 @@ import type { AgentConfig, EnvironmentConfig, StoredEvent } from "@duyet/oma-api
 // --- Identity & lifecycle ---
 
 export type TrajectoryOutcome =
-  | "success" // session.status_idle reached without errors
+  | "success" // last turn reached session.status_idle without session.error
   | "failure" // session.error or supervisor failed
   | "timeout" // wall-clock or turn limit hit
   | "interrupted" // user.interrupt

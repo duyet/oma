@@ -3,6 +3,7 @@ import { Link } from "react-router";
 
 import { useApi, ApiError } from "../lib/api";
 import { useDefaultEnvironment } from "../lib/useDefaultEnvironment";
+import { useQueryClient } from "../lib/useApiQuery";
 import { Modal } from "./Modal";
 import { Button } from "@/components/ui/button";
 import { EnvironmentPicker, VaultsPicker } from "./ResourcePicker";
@@ -31,6 +32,16 @@ interface Props {
 const textareaCls =
   "w-full border border-border rounded-md px-3 py-2 min-h-11 sm:min-h-0 text-sm bg-bg text-fg outline-none focus:border-brand transition-colors placeholder:text-fg-subtle resize-none";
 
+/** Sensible Cloudflare sandbox default — `type: "cloud"` is the hosted
+ *  Console's environment create default and resolves to CloudflareSandbox
+ *  when `sandbox_provider` is unset. One-click from the New session modal
+ *  so first-run does not dump the user on /environments (#398). */
+export const DEFAULT_CLOUD_ENVIRONMENT = {
+  name: "Default",
+  description: "Cloudflare sandbox (default).",
+  config: { type: "cloud" as const },
+};
+
 /**
  * "New session" dialog for the agent hub header (and any fixed-agent host).
  * Cloud agents need an environment_id (server-enforced); this reuses the same
@@ -49,25 +60,41 @@ export function NewSessionDialog({
   onCreated,
 }: Props) {
   const { api } = useApi();
-  const { environments, isLoading: envsLoading, singleEnvironmentId, hasNoEnvironments } =
+  const queryClient = useQueryClient();
+  const { isLoading: envsLoading, singleEnvironmentId, hasNoEnvironments } =
     useDefaultEnvironment();
 
   const [environmentId, setEnvironmentId] = useState("");
   const [vaultIds, setVaultIds] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [creating, setCreating] = useState(false);
+  const [creatingEnv, setCreatingEnv] = useState(false);
+  /** Stays true after an inline default-env create so we hide the empty
+   *  CTA and keep the picker in this modal without waiting on refetch. */
+  const [inlineEnvCreated, setInlineEnvCreated] = useState(false);
   const [mcpUrls, setMcpUrls] = useState<string[]>(agentMcpUrlsProp ?? []);
   const [vaultCredHosts, setVaultCredHosts] = useState<Record<string, Set<string>>>({});
   const [vaultCount, setVaultCount] = useState(0);
 
-  // Reset + preselect the default environment every time the dialog opens.
+  // Reset fields when the dialog opens. Environment preselect tracks
+  // `singleEnvironmentId` separately so an inline env create that
+  // populates the list does not wipe the initial message.
+  useEffect(() => {
+    if (!open) return;
+    setMessage("");
+    setCreating(false);
+    setCreatingEnv(false);
+    setInlineEnvCreated(false);
+    setVaultIds([]);
+    setVaultCredHosts({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
     setEnvironmentId(preferredEnvironmentId(agentMetadata, singleEnvironmentId));
-    setMessage("");
-    setCreating(false);
-    setVaultIds([]);
-    setVaultCredHosts({});
+    // agentMetadata is read for the default id; parent identity is stable
+    // for the life of the dialog host.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, singleEnvironmentId]);
 
@@ -173,11 +200,31 @@ export function NewSessionDialog({
     return missing;
   }, [mcpUrls, vaultIds, vaultCredHosts]);
 
-  const needsEnvironment = !isLocalRuntime && !hasNoEnvironments;
+  const needsEnvironment = !isLocalRuntime && (!hasNoEnvironments || inlineEnvCreated);
   // Agent default (metadata.default_environment_id) lets the server resolve
   // the env when the picker is empty — docs/sandbox-runtime-selection.md.
   const agentDefaultEnv = preferredEnvironmentId(agentMetadata, null);
   const canSubmit = isLocalRuntime || !!environmentId || !!agentDefaultEnv;
+  const showNoEnvCta = !isLocalRuntime && hasNoEnvironments && !inlineEnvCreated;
+
+  const createDefaultEnvironment = async () => {
+    if (creatingEnv) return;
+    setCreatingEnv(true);
+    try {
+      const env = await api<{ id: string; name?: string }>("/v1/environments", {
+        method: "POST",
+        body: JSON.stringify(DEFAULT_CLOUD_ENVIRONMENT),
+      });
+      setEnvironmentId(env.id);
+      setInlineEnvCreated(true);
+      await queryClient.invalidateQueries({ queryKey: ["/v1/environments"] });
+    } catch (err) {
+      if (!(err instanceof ApiError)) throw err;
+      // api() already toasted — leave the CTA so they can retry.
+    } finally {
+      setCreatingEnv(false);
+    }
+  };
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -224,7 +271,7 @@ export function NewSessionDialog({
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={!canSubmit || creating || envsLoading}>
+          <Button onClick={submit} disabled={!canSubmit || creating || envsLoading || creatingEnv}>
             {creating ? "Creating…" : "Create session"}
           </Button>
         </>
@@ -247,13 +294,19 @@ export function NewSessionDialog({
             </p>
           </div>
         )}
-        {!isLocalRuntime && hasNoEnvironments && (
-          <div className="rounded-lg border border-border bg-bg-surface px-3 py-2 text-sm text-fg-muted">
-            This agent needs an environment to run sessions, and your tenant has none yet.{" "}
-            <a href="/environments" className="text-brand hover:underline">
-              Create an environment
-            </a>{" "}
-            to continue.
+        {showNoEnvCta && (
+          <div className="rounded-lg border border-border bg-bg-surface px-3 py-2 text-sm text-fg-muted space-y-2">
+            <p>
+              This agent needs an environment to run sessions, and your tenant has none yet.
+              Create a default Cloudflare sandbox here to continue.
+            </p>
+            <Button
+              variant="secondary"
+              onClick={() => void createDefaultEnvironment()}
+              disabled={creatingEnv}
+            >
+              {creatingEnv ? "Creating…" : "Create default environment"}
+            </Button>
           </div>
         )}
 

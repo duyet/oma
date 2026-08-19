@@ -73,8 +73,8 @@ export interface Trajectory {
 }
 
 export type TrajectoryOutcome =
-  | "success"          // session.status_idle reached without errors
-  | "failure"          // session.error or supervisor failed
+  | "success"          // last turn reached session.status_idle without session.error
+  | "failure"          // session.error (even when crash-recovery then emits status_idle) or supervisor failed
   | "timeout"          // wall-clock or turn limit hit
   | "interrupted"      // user.interrupt
   | "running";         // not yet ended
