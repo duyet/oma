@@ -366,6 +366,39 @@ function UsageSkeleton() {
   );
 }
 
+/** Design-space layout for the daily-activity SVG. ViewBox width is fixed so
+ *  `preserveAspectRatio="xMidYMid meet"` can scale uniformly — stretching with
+ *  `none` + a tiny `n*12` viewBox made bars huge and date labels illegible. */
+export const DAILY_CHART_VIEW_W = 640;
+const DAILY_CHART_MIN_LABEL_SLOT = 48;
+
+export function dailyActivitySlot(n: number, viewW = DAILY_CHART_VIEW_W): number {
+  return viewW / Math.max(n, 1);
+}
+
+export function dailyActivityBarWidth(slot: number): number {
+  return Math.min(Math.max(slot * 0.5, 2), 22);
+}
+
+export function dailyActivityLabelStep(n: number, slot: number): number {
+  const maxLabels = Math.max(2, Math.floor((n * slot) / DAILY_CHART_MIN_LABEL_SLOT));
+  return Math.max(1, Math.ceil(n / Math.min(maxLabels, n)));
+}
+
+export function dailyActivityTickIndices(n: number, slot: number): number[] {
+  if (n <= 0) return [];
+  const step = dailyActivityLabelStep(n, slot);
+  const ticks: number[] = [];
+  for (let i = 0; i < n; i += step) ticks.push(i);
+  const last = n - 1;
+  if (ticks[ticks.length - 1] !== last) ticks.push(last);
+  if (ticks.length >= 2) {
+    const gap = ticks[ticks.length - 1]! - ticks[ticks.length - 2]!;
+    if (gap * slot < DAILY_CHART_MIN_LABEL_SLOT) ticks.splice(ticks.length - 2, 1);
+  }
+  return ticks;
+}
+
 /** Bar chart of daily sandbox-active-seconds — same hand-rolled inline-SVG
  *  approach as AgentObservabilityTab's ActivityChart (bars + baseline +
  *  `<title>` tooltips + thinned date labels), no chart library. */
@@ -374,13 +407,16 @@ function DailyChart({ data }: { data: DailyBucket[] }) {
   if (n === 0) return <p className="text-sm text-fg-subtle">No data.</p>;
 
   const max = Math.max(1, ...data.map((d) => d.active_seconds));
-  const slot = 12; // user units per bucket
-  const barW = 8;
+  const viewW = DAILY_CHART_VIEW_W;
+  const slot = dailyActivitySlot(n, viewW);
+  const barW = dailyActivityBarWidth(slot);
+  const tickSet = new Set(dailyActivityTickIndices(n, slot));
+  const rotate = slot < 28;
   const chartTop = 8;
-  const chartH = 100; // plot area height
+  const chartH = 100;
   const baseline = chartTop + chartH;
-  const labelStep = Math.max(1, Math.round(n / 6));
-  const totalW = n * slot;
+  const labelH = rotate ? 36 : 22;
+  const viewH = baseline + labelH;
 
   const fmtDate = (iso: string) => {
     const d = new Date(iso);
@@ -388,19 +424,18 @@ function DailyChart({ data }: { data: DailyBucket[] }) {
   };
 
   return (
-    <div className="overflow-x-auto">
+    <div className="w-full">
       <svg
-        viewBox={`0 0 ${totalW} ${baseline + 22}`}
+        viewBox={`0 0 ${viewW} ${viewH}`}
         width="100%"
-        height={baseline + 22}
-        preserveAspectRatio="none"
+        preserveAspectRatio="xMidYMid meet"
         role="img"
         aria-label="Daily sandbox activity"
       >
         <line
           x1={0}
           y1={baseline}
-          x2={totalW}
+          x2={viewW}
           y2={baseline}
           stroke="var(--color-border)"
           strokeWidth={1}
@@ -409,6 +444,8 @@ function DailyChart({ data }: { data: DailyBucket[] }) {
           const h = max > 0 ? (d.active_seconds / max) * chartH : 0;
           const x = i * slot + (slot - barW) / 2;
           const y = baseline - h;
+          const cx = i * slot + slot / 2;
+          const labelY = baseline + 14;
           return (
             <g key={d.date}>
               <rect
@@ -416,19 +453,20 @@ function DailyChart({ data }: { data: DailyBucket[] }) {
                 y={y}
                 width={barW}
                 height={Math.max(h, d.active_seconds > 0 ? 1 : 0)}
-                rx={1.5}
+                rx={Math.min(2, barW / 2)}
                 fill="var(--color-brand)"
                 opacity={0.85}
               >
                 <title>{`${fmtDate(d.date)}: ${formatSandboxTime(d.active_seconds)} · ${d.runs} run${d.runs === 1 ? "" : "s"}`}</title>
               </rect>
-              {i % labelStep === 0 && (
+              {tickSet.has(i) && (
                 <text
-                  x={i * slot + slot / 2}
-                  y={baseline + 14}
-                  textAnchor="middle"
-                  fontSize={7}
+                  x={cx}
+                  y={labelY}
+                  textAnchor={rotate ? "end" : "middle"}
+                  fontSize={10}
                   fill="var(--color-fg-subtle)"
+                  transform={rotate ? `rotate(-40 ${cx} ${labelY})` : undefined}
                 >
                   {fmtDate(d.date)}
                 </text>
