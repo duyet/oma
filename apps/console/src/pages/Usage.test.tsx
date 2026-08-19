@@ -5,7 +5,14 @@ import { MemoryRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../mocks/server";
-import { Usage } from "./Usage";
+import {
+  Usage,
+  DAILY_CHART_VIEW_W,
+  dailyActivityBarWidth,
+  dailyActivityLabelStep,
+  dailyActivitySlot,
+  dailyActivityTickIndices,
+} from "./Usage";
 
 function renderPage() {
   const queryClient = new QueryClient({
@@ -104,6 +111,9 @@ describe("<Usage />", () => {
     expect(screen.getByText("30%")).toBeInTheDocument(); // 45K / (45K + 105K)
 
     expect(screen.getByText("Daily activity")).toBeInTheDocument();
+    const chart = screen.getByRole("img", { name: "Daily sandbox activity" });
+    expect(chart).toHaveAttribute("preserveAspectRatio", "xMidYMid meet");
+    expect(chart.getAttribute("viewBox")).toMatch(new RegExp(`^0 0 ${DAILY_CHART_VIEW_W} `));
     expect(screen.getByText("By kind")).toBeInTheDocument();
     expect(screen.getByText("Sandbox active time")).toBeInTheDocument();
     expect(screen.getByText("Model input tokens")).toBeInTheDocument();
@@ -220,5 +230,46 @@ describe("<Usage />", () => {
     await userEvent.click(screen.getByRole("button", { name: "7d" }));
 
     await waitFor(() => expect(lastDays).toBe("7"));
+  });
+
+  it("thins x-axis labels on a 30-day series instead of painting every date", async () => {
+    const daily = Array.from({ length: 30 }, (_, i) => ({
+      date: `2026-07-${String(i + 1).padStart(2, "0")}`,
+      active_seconds: 60 * (i + 1),
+      runs: 1,
+    }));
+    server.use(
+      http.get("/v1/usage", () => HttpResponse.json({ ...fullUsage, daily })),
+      http.get("/v1/cost_report", () => HttpResponse.json(fullCostReport)),
+    );
+    renderPage();
+
+    const chart = await screen.findByRole("img", { name: "Daily sandbox activity" });
+    const labels = chart.querySelectorAll("text");
+    expect(labels.length).toBeGreaterThanOrEqual(2);
+    expect(labels.length).toBeLessThan(30);
+    expect(chart.querySelectorAll("rect")).toHaveLength(30);
+  });
+});
+
+describe("daily activity chart layout", () => {
+  it("caps bar width so a short series does not fill the slot", () => {
+    const slot = dailyActivitySlot(7);
+    expect(slot).toBeCloseTo(DAILY_CHART_VIEW_W / 7);
+    expect(dailyActivityBarWidth(slot)).toBeLessThanOrEqual(22);
+    expect(dailyActivityBarWidth(slot)).toBeLessThan(slot);
+  });
+
+  it("keeps 30-day ticks sparse enough that labels cannot collide", () => {
+    const n = 30;
+    const slot = dailyActivitySlot(n);
+    const ticks = dailyActivityTickIndices(n, slot);
+    expect(ticks[0]).toBe(0);
+    expect(ticks[ticks.length - 1]).toBe(n - 1);
+    expect(ticks.length).toBeLessThan(n);
+    expect(dailyActivityLabelStep(n, slot)).toBeGreaterThan(1);
+    for (let i = 1; i < ticks.length; i++) {
+      expect((ticks[i]! - ticks[i - 1]!) * slot).toBeGreaterThanOrEqual(48);
+    }
   });
 });
