@@ -1,16 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="oma">
-  <!-- oma mark (2026 redesign): a rounded-square frame (the environment /
-       sandbox) with an edge running in from the top-left corner into a solid
-       node at the center (the managed agent a request lands on). Drawn as
-       paths so it renders identically as a favicon, where no webfont exists.
-       Iris (#4f46e5) is the brand accent; a media query lifts it in dark UI
-       chrome so the tab icon stays legible on dark browser toolbars. -->
+  <!-- Amber primary (AnyRouter/shadcn oklch palette). -->
   <style>
-    .mk { stroke: #4f46e5; }
-    .nd { fill: #4f46e5; }
+    .mk { stroke: #c2782c; }
+    .nd { fill: #c2782c; }
     @media (prefers-color-scheme: dark) {
-      .mk { stroke: #818cf8; }
-      .nd { fill: #818cf8; }
+      .mk { stroke: #e8953a; }
+      .nd { fill: #e8953a; }
     }
   </style>
   <rect class="mk" x="9" y="9" width="46" height="46" rx="13" fill="none" stroke-width="5.5" />

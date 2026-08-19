@@ -141,13 +141,13 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
       <script is:inline type="application/ld+json" set:html={JSON.stringify(schema)} />
     ))}
   </head>
-  <body class="bg-bg text-fg">
+  <body class="bg-background text-foreground">
     <!-- Skip-to-content for keyboard users. sr-only by default, becomes
          visible on :focus-visible (next focusable element after document
          start), so the very first Tab press exposes it. -->
     <a
       href="#main"
-      class="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-3 focus-visible:left-3 focus-visible:z-50 focus-visible:px-3 focus-visible:py-2 focus-visible:rounded-md focus-visible:bg-[var(--color-fg)] focus-visible:text-[var(--color-bg)] focus-visible:font-medium focus-visible:no-underline"
+      class="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-3 focus-visible:left-3 focus-visible:z-50 focus-visible:px-3 focus-visible:py-2 focus-visible:rounded-md focus-visible:bg-foreground focus-visible:text-background focus-visible:font-medium focus-visible:no-underline"
     >
       Skip to content
     </a>
@@ -162,8 +162,8 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
           class="flex items-center gap-2 min-h-11 py-1.5 group"
           aria-label="Open Managed Agents — home"
         >
-          <Logo size={26} class="text-[var(--color-brand)]" />
-          <span class="font-mono font-bold tracking-tight text-[var(--color-fg)]">oma</span>
+          <Logo size={26} class="text-primary" />
+          <span class="font-mono font-bold tracking-tight text-foreground">oma</span>
         </a>
 
         <!-- Desktop nav -->
@@ -175,7 +175,7 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
             <a
               href="/how-it-works/"
               aria-haspopup="true"
-              class="inline-flex items-center min-h-11 gap-1 px-3 rounded-md text-[var(--color-fg-muted)] dark:text-[var(--color-fg)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-surface)] transition-colors"
+              class="inline-flex items-center min-h-11 gap-1 px-3 rounded-md text-muted-foreground dark:text-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
               Platform
               <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
@@ -184,24 +184,24 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
             </a>
             <div class="absolute left-0 top-full pt-2 hidden group-hover:block group-focus-within:block z-40">
               <nav
-                class="min-w-[260px] py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md flex flex-col"
+                class="min-w-[260px] py-1 bg-background border border-border rounded-md flex flex-col"
                 aria-label="Platform"
               >
-                <a href="/how-it-works/" class="block min-h-11 px-3 py-2 hover:bg-[var(--color-bg-surface)]">
-                  <span class="block font-medium text-[var(--color-fg)]">How it works</span>
-                  <span class="block text-xs text-[var(--color-fg-muted)] mt-0.5">Meta-harness design, architecture &amp; lifecycle</span>
+                <a href="/how-it-works/" class="block min-h-11 px-3 py-2 hover:bg-muted">
+                  <span class="block font-medium text-foreground">How it works</span>
+                  <span class="block text-xs text-muted-foreground mt-0.5">Meta-harness design, architecture &amp; lifecycle</span>
                 </a>
-                <a href="/features/" class="block min-h-11 px-3 py-2 hover:bg-[var(--color-bg-surface)]">
-                  <span class="block font-medium text-[var(--color-fg)]">Features</span>
-                  <span class="block text-xs text-[var(--color-fg-muted)] mt-0.5">Everything the platform gives you, and why</span>
+                <a href="/features/" class="block min-h-11 px-3 py-2 hover:bg-muted">
+                  <span class="block font-medium text-foreground">Features</span>
+                  <span class="block text-xs text-muted-foreground mt-0.5">Everything the platform gives you, and why</span>
                 </a>
-                <a href="/use-cases/" class="block min-h-11 px-3 py-2 hover:bg-[var(--color-bg-surface)]">
-                  <span class="block font-medium text-[var(--color-fg)]">Use cases</span>
-                  <span class="block text-xs text-[var(--color-fg-muted)] mt-0.5">Real workflows the platform is built for</span>
+                <a href="/use-cases/" class="block min-h-11 px-3 py-2 hover:bg-muted">
+                  <span class="block font-medium text-foreground">Use cases</span>
+                  <span class="block text-xs text-muted-foreground mt-0.5">Real workflows the platform is built for</span>
                 </a>
-                <a href="/infrastructure/" class="block min-h-11 px-3 py-2 hover:bg-[var(--color-bg-surface)]">
-                  <span class="block font-medium text-[var(--color-fg)]">Infrastructure</span>
-                  <span class="block text-xs text-[var(--color-fg-muted)] mt-0.5">Fleets, any sandbox, bridge your own machine</span>
+                <a href="/infrastructure/" class="block min-h-11 px-3 py-2 hover:bg-muted">
+                  <span class="block font-medium text-foreground">Infrastructure</span>
+                  <span class="block text-xs text-muted-foreground mt-0.5">Fleets, any sandbox, bridge your own machine</span>
                 </a>
               </nav>
             </div>
@@ -215,7 +215,7 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
             <a
               href="/features/agent-sandbox/"
               aria-haspopup="true"
-              class="inline-flex items-center min-h-11 gap-1 px-3 rounded-md text-[var(--color-fg-muted)] dark:text-[var(--color-fg)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-surface)] transition-colors"
+              class="inline-flex items-center min-h-11 gap-1 px-3 rounded-md text-muted-foreground dark:text-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
               Features
               <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
@@ -224,41 +224,41 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
             </a>
             <div class="absolute left-0 top-full pt-2 hidden group-hover:block group-focus-within:block z-40">
               <nav
-                class="min-w-[260px] py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md flex flex-col"
+                class="min-w-[260px] py-1 bg-background border border-border rounded-md flex flex-col"
                 aria-label="Features"
               >
-                <a href="/features/agent-sandbox/" class="block min-h-11 px-3 py-2 hover:bg-[var(--color-bg-surface)]">
-                  <span class="block font-medium text-[var(--color-fg)]">Agent Sandbox</span>
-                  <span class="block text-xs text-[var(--color-fg-muted)] mt-0.5">Cloudflare, Docker, K8s, E2B, Daytona &amp; more</span>
+                <a href="/features/agent-sandbox/" class="block min-h-11 px-3 py-2 hover:bg-muted">
+                  <span class="block font-medium text-foreground">Agent Sandbox</span>
+                  <span class="block text-xs text-muted-foreground mt-0.5">Cloudflare, Docker, K8s, E2B, Daytona &amp; more</span>
                 </a>
-                <a href="/features/local-machine/" class="block min-h-11 px-3 py-2 hover:bg-[var(--color-bg-surface)]">
-                  <span class="block font-medium text-[var(--color-fg)]">Local Machine</span>
-                  <span class="block text-xs text-[var(--color-fg-muted)] mt-0.5">Bridge your own hardware — no inbound ports</span>
+                <a href="/features/local-machine/" class="block min-h-11 px-3 py-2 hover:bg-muted">
+                  <span class="block font-medium text-foreground">Local Machine</span>
+                  <span class="block text-xs text-muted-foreground mt-0.5">Bridge your own hardware — no inbound ports</span>
                 </a>
-                <a href="/features/private-kubernetes/" class="block min-h-11 px-3 py-2 hover:bg-[var(--color-bg-surface)]">
-                  <span class="block font-medium text-[var(--color-fg)]">Private Kubernetes</span>
-                  <span class="block text-xs text-[var(--color-fg-muted)] mt-0.5">Helm-connect your cluster — pods on your VPC</span>
+                <a href="/features/private-kubernetes/" class="block min-h-11 px-3 py-2 hover:bg-muted">
+                  <span class="block font-medium text-foreground">Private Kubernetes</span>
+                  <span class="block text-xs text-muted-foreground mt-0.5">Helm-connect your cluster — pods on your VPC</span>
                 </a>
-                <a href="/open-tag/" class="block min-h-11 px-3 py-2 hover:bg-[var(--color-bg-surface)]">
-                  <span class="block font-medium text-[var(--color-fg)]">Open Tag</span>
-                  <span class="block text-xs text-[var(--color-fg-muted)] mt-0.5">Self-hosted Claude-Tag-style Slack agents</span>
+                <a href="/open-tag/" class="block min-h-11 px-3 py-2 hover:bg-muted">
+                  <span class="block font-medium text-foreground">Open Tag</span>
+                  <span class="block text-xs text-muted-foreground mt-0.5">Self-hosted Claude-Tag-style Slack agents</span>
                 </a>
-                <a href="/features/coding-agents/" class="block min-h-11 px-3 py-2 hover:bg-[var(--color-bg-surface)]">
-                  <span class="block font-medium text-[var(--color-fg)]">Coding Agents</span>
-                  <span class="block text-xs text-[var(--color-fg-muted)] mt-0.5">Long-running sessions, heartbeats, PRs</span>
+                <a href="/features/coding-agents/" class="block min-h-11 px-3 py-2 hover:bg-muted">
+                  <span class="block font-medium text-foreground">Coding Agents</span>
+                  <span class="block text-xs text-muted-foreground mt-0.5">Long-running sessions, heartbeats, PRs</span>
                 </a>
               </nav>
             </div>
           </div>
-          <a href="/blog/" class="inline-flex items-center min-h-11 px-3 rounded-md text-[var(--color-fg-muted)] dark:text-[var(--color-fg)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-surface)] transition-colors">Blog</a>
-          <a href="https://docs.oma.duyet.net" class="inline-flex items-center min-h-11 gap-1.5 px-3 rounded-md text-[var(--color-fg-muted)] dark:text-[var(--color-fg)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-surface)] transition-colors">
+          <a href="/blog/" class="inline-flex items-center min-h-11 px-3 rounded-md text-muted-foreground dark:text-foreground hover:text-foreground hover:bg-muted transition-colors">Blog</a>
+          <a href="https://docs.oma.duyet.net" class="inline-flex items-center min-h-11 gap-1.5 px-3 rounded-md text-muted-foreground dark:text-foreground hover:text-foreground hover:bg-muted transition-colors">
             <Icon name="book" size={15} /> Docs
           </a>
           <a
             href="https://github.com/duyet/oma"
             target="_blank"
             rel="noopener noreferrer"
-            class="inline-flex items-center min-h-11 gap-1.5 px-3 rounded-md text-[var(--color-fg-muted)] dark:text-[var(--color-fg)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-surface)] transition-colors"
+            class="inline-flex items-center min-h-11 gap-1.5 px-3 rounded-md text-muted-foreground dark:text-foreground hover:text-foreground hover:bg-muted transition-colors"
             ><Icon name="github" size={15} /> GitHub</a
           >
           <button
@@ -267,7 +267,7 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
             aria-label="Toggle color theme"
             aria-pressed="false"
             title="Toggle color theme"
-            class="ml-1 inline-flex items-center justify-center w-11 h-11 rounded-md text-[var(--color-fg-muted)] dark:text-[var(--color-fg)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-surface)] transition-colors"
+            class="ml-1 inline-flex items-center justify-center w-11 h-11 rounded-md text-muted-foreground dark:text-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
             <!-- Sun (visible in dark mode) -->
             <svg
@@ -319,7 +319,7 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
             data-theme-toggle
             aria-label="Toggle color theme"
             aria-pressed="false"
-            class="inline-flex items-center justify-center w-11 h-11 rounded-md text-[var(--color-fg-muted)] dark:text-[var(--color-fg)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-surface)] transition-colors"
+            class="inline-flex items-center justify-center w-11 h-11 rounded-md text-muted-foreground dark:text-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
             <svg class="hidden dark:block w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="12" cy="12" r="4" />
@@ -331,7 +331,7 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
           </button>
           <details class="relative" data-mobile-menu>
             <summary
-              class="list-none inline-flex items-center justify-center w-11 h-11 rounded-md text-[var(--color-fg-muted)] dark:text-[var(--color-fg)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-surface)] transition-colors cursor-pointer"
+              class="list-none inline-flex items-center justify-center w-11 h-11 rounded-md text-muted-foreground dark:text-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
               aria-label="Open menu"
             >
               <svg class="block w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
@@ -339,29 +339,29 @@ const allSchemas = [organizationSchema(), websiteSchema(), ...schemas];
               </svg>
             </summary>
             <nav
-              class="absolute right-0 top-full mt-2 min-w-[180px] py-1 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-md flex flex-col text-sm z-40"
+              class="absolute right-0 top-full mt-2 min-w-[180px] py-1 bg-background border border-border rounded-md flex flex-col text-sm z-40"
               aria-label="Mobile primary"
             >
-              <span class="px-4 pt-2 pb-1 text-[10px] font-mono uppercase tracking-widest text-[var(--color-fg-subtle)]">Platform</span>
-              <a href="/how-it-works/" class="block px-4 py-3 hover:bg-[var(--color-bg-surface)]">How it works</a>
-              <a href="/features/" class="block px-4 py-3 hover:bg-[var(--color-bg-surface)]">Features</a>
-              <a href="/use-cases/" class="block px-4 py-3 hover:bg-[var(--color-bg-surface)]">Use cases</a>
-              <a href="/infrastructure/" class="block px-4 py-3 hover:bg-[var(--color-bg-surface)]">Infrastructure</a>
-              <div class="my-1 border-t border-[var(--color-border)]"></div>
-              <span class="px-4 pt-2 pb-1 text-[10px] font-mono uppercase tracking-widest text-[var(--color-fg-subtle)]">Features</span>
-              <a href="/features/agent-sandbox/" class="block px-4 py-3 hover:bg-[var(--color-bg-surface)]">Agent Sandbox</a>
-              <a href="/features/local-machine/" class="block px-4 py-3 hover:bg-[var(--color-bg-surface)]">Local Machine</a>
-              <a href="/features/private-kubernetes/" class="block px-4 py-3 hover:bg-[var(--color-bg-surface)]">Private Kubernetes</a>
-              <a href="/open-tag/" class="block px-4 py-3 hover:bg-[var(--color-bg-surface)]">Open Tag</a>
-              <a href="/features/coding-agents/" class="block px-4 py-3 hover:bg-[var(--color-bg-surface)]">Coding Agents</a>
-              <div class="my-1 border-t border-[var(--color-border)]"></div>
-              <a href="/blog/" class="block px-4 py-3 hover:bg-[var(--color-bg-surface)]">Blog</a>
-              <a href="https://docs.oma.duyet.net" class="block px-4 py-3 hover:bg-[var(--color-bg-surface)]">Docs</a>
+              <span class="px-4 pt-2 pb-1 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Platform</span>
+              <a href="/how-it-works/" class="block px-4 py-3 hover:bg-muted">How it works</a>
+              <a href="/features/" class="block px-4 py-3 hover:bg-muted">Features</a>
+              <a href="/use-cases/" class="block px-4 py-3 hover:bg-muted">Use cases</a>
+              <a href="/infrastructure/" class="block px-4 py-3 hover:bg-muted">Infrastructure</a>
+              <div class="my-1 border-t border-border"></div>
+              <span class="px-4 pt-2 pb-1 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Features</span>
+              <a href="/features/agent-sandbox/" class="block px-4 py-3 hover:bg-muted">Agent Sandbox</a>
+              <a href="/features/local-machine/" class="block px-4 py-3 hover:bg-muted">Local Machine</a>
+              <a href="/features/private-kubernetes/" class="block px-4 py-3 hover:bg-muted">Private Kubernetes</a>
+              <a href="/open-tag/" class="block px-4 py-3 hover:bg-muted">Open Tag</a>
+              <a href="/features/coding-agents/" class="block px-4 py-3 hover:bg-muted">Coding Agents</a>
+              <div class="my-1 border-t border-border"></div>
+              <a href="/blog/" class="block px-4 py-3 hover:bg-muted">Blog</a>
+              <a href="https://docs.oma.duyet.net" class="block px-4 py-3 hover:bg-muted">Docs</a>
               <a
                 href="https://github.com/duyet/oma"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="block px-4 py-3 hover:bg-[var(--color-bg-surface)]"
+                class="block px-4 py-3 hover:bg-muted"
                 >GitHub</a
               >
               <a
