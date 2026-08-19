@@ -24,6 +24,10 @@ import HowItFits from "./HowItFits.tsx";
 </div>
 
 <style>
+  .fits {
+    min-width: 0;
+    max-width: 100%;
+  }
   .fits-hint {
     display: flex;
     flex-wrap: wrap;
@@ -45,15 +49,19 @@ import HowItFits from "./HowItFits.tsx";
   .fits-hint-copy {
     color: var(--color-fg-subtle);
   }
-  /* Reserve vertical space for the four-column assembly so hydration and
-     late font metrics don't reflow the sections below. Tuned to typical
-     desktop diagram height; mobile columns stack so min-height is a floor. */
+  /* Inner scroll only — never widen the page. Capacity accordion collapses
+     columns when the row is under ~1000px; this is the overflow fallback. */
   .fits-diagram {
-    min-height: 18rem;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    min-height: 16rem;
   }
   @media (min-width: 768px) {
     .fits-diagram {
-      min-height: 22rem;
+      min-height: 20rem;
     }
   }
 </style>
