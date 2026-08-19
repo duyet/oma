@@ -95,6 +95,8 @@ export interface InspectorSessionMeta {
     model?: string | { id: string };
     description?: string;
     version?: number;
+    runtime_binding?: { runtime_id?: string; acp_agent_id?: string };
+    metadata?: Record<string, unknown>;
   };
   envSnapshot?: { id?: string; name?: string; description?: string };
   /** Extras returned by GET /v1/sessions/:id beyond the stored row. */

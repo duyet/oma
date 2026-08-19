@@ -950,7 +950,7 @@ export function SessionsList() {
       emptyTitle={hasActiveFilter ? "No matching sessions" : "No sessions yet"}
       emptyKind="session"
       emptyAction={!hasActiveFilter && (
-        <Button onClick={openModal}>+ New session</Button>
+        <Button onClick={() => openModal()}>+ New session</Button>
       )}
       emptySubtitle={
         hasActiveFilter

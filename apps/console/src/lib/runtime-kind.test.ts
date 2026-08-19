@@ -11,6 +11,7 @@ describe("agentRuntimeKind", () => {
   it("reads a runtime binding from either the row or the _oma extension", () => {
     expect(agentRuntimeKind({ runtime_binding: { runtime_id: "rt_1" } })).toBe("local");
     expect(agentRuntimeKind({ _oma: { runtime_binding: { runtime_id: "rt_1" } } })).toBe("local");
+    expect(agentRuntimeKind({ runtime_binding: { acp_agent_id: "claude-acp" } })).toBe("local");
   });
 
   it("reads the browser marker off metadata", () => {
