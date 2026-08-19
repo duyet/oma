@@ -99,7 +99,7 @@ curl -s -X POST localhost:8787/v1/sessions/$SID/events -H "x-api-key: $KEY" -H '
   -d '{"events":[{"type":"user.message","content":[{"type":"text","text":"Run: uname -a"}]}]}'
 ```
 
-Single-user local trial with zero auth friction? `echo "AUTH_DISABLED=1" >> .env`, restart, and drop the `x-api-key` header — every request becomes `tenant_id="default"`.
+Single-user local trial with zero auth friction? `echo "AUTH_DISABLED=1" >> .env`, restart, drop the `x-api-key` header — every request becomes `tenant_id="default"` — and open the Console: it skips login and enters the default tenant. Do not use `AUTH_DISABLED=1` in production.
 
 Full self-host guide (sandbox modes, Postgres, BoxRun, vault sidecar, operator gotchas): **[docs/self-host.md](docs/self-host.md)** · **[docs/quickstart.md](docs/quickstart.md)**.
 

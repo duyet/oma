@@ -46,6 +46,8 @@ import {
   FEDERATION_CRYPTO_LABEL,
   TELEGRAM_CRYPTO_LABEL,
   resolveFederationInstance,
+  isAuthDisabled,
+  AUTH_DISABLED_HTTP,
 } from "@duyet/oma-shared";
 import { toEnvironmentConfig } from "@duyet/oma-environments-store";
 import { authMiddleware } from "./auth";
@@ -305,6 +307,9 @@ app.route("/webhooks", paymentsWebhookRoutes);
 // Lazy import to avoid crashing workerd in test environments
 app.use("/auth/*", authRateLimitMiddleware);
 app.on(["GET", "POST"], "/auth/*", async (c) => {
+  if (isAuthDisabled(c.env.AUTH_DISABLED)) {
+    return c.json(AUTH_DISABLED_HTTP.body, AUTH_DISABLED_HTTP.status);
+  }
   if (!c.env.MAIN_DB) return c.json({ error: "Auth not configured" }, 503);
   const { createAuth } = await import("./auth-config");
   return createAuth(c.env).handler(c.req.raw);
@@ -312,7 +317,15 @@ app.on(["GET", "POST"], "/auth/*", async (c) => {
 
 // Auth info endpoint (public — tells the frontend which providers are enabled
 // and surfaces the Turnstile site key so the Login page can render the widget).
+// AUTH_DISABLED=1 → providers: [] so the Console skips login rather than
+// offering signup against unmounted better-auth routes.
 app.get("/auth-info", (c) => {
+  if (isAuthDisabled(c.env.AUTH_DISABLED)) {
+    return c.json({
+      providers: [],
+      turnstile_site_key: c.env.TURNSTILE_SITE_KEY ?? null,
+    });
+  }
   const providers: string[] = ["email", "email-otp"];
   if (c.env.GOOGLE_CLIENT_ID && c.env.GOOGLE_CLIENT_SECRET) {
     providers.push("google");
@@ -542,7 +555,7 @@ const meRoutes = new Hono<{
   const services = ctx.var.services;
   const app = buildMeRoutes({
     services: () => cfRouteServicesFromCtx(ctx),
-    authDisabled: false,
+    authDisabled: isAuthDisabled(env.AUTH_DISABLED),
     loadUser: async (userId) => {
       if (!env.MAIN_DB) return null;
       const r = await env.MAIN_DB
@@ -647,7 +660,7 @@ function cfInviteDeps(env: Env): InviteRoutesDeps {
     };
   };
   return {
-    authDisabled: false,
+    authDisabled: isAuthDisabled(env.AUTH_DISABLED),
     getRole: async (userId, tenantId) => {
       const r = await db
         .prepare("SELECT role FROM membership WHERE user_id = ? AND tenant_id = ? LIMIT 1")

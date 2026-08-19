@@ -72,7 +72,9 @@ Expected response (pid, uptime, and backend paths vary):
 
 ### 4. Create Your First Agent
 
-Open [http://localhost:8787](http://localhost:8787) in your browser, sign up, and use the Console:
+Open [http://localhost:8787](http://localhost:8787) in your browser, sign up, and use the Console.
+
+For a single-user local trial without signup, set `AUTH_DISABLED=1` in `.env`, recreate the container, and the Console skips login (default tenant). Do not use that flag in production.
 
 - **Launch wizard** at `/launch` — ordered path: model access → environment (sandbox) → vault → agent → session. Same control plane on Docker/self-host **k3s** and **Cloudflare Workers**; only the sandbox provider differs.
 - **Overview** Getting Started checklist uses the same order (environment and vault before the first session).

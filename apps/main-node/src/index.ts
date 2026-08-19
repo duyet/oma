@@ -59,6 +59,8 @@ import {
   generateEventId,
   findLeakedPlaceholderSecrets,
   formatLeakedSecretError,
+  isAuthDisabled,
+  AUTH_DISABLED_HTTP,
 } from "@duyet/oma-shared";
 import { DefaultHarness } from "@duyet/oma-agent/harness/default-loop";
 import { ClaudeAgentSdkHarness } from "@duyet/oma-agent/harness/claude-agent-sdk-loop";
@@ -193,6 +195,7 @@ import type {
 } from "@duyet/oma-scheduler/jobs/scheduled-agent-runs";
 import type { ScheduledDeploymentRunLauncher } from "@duyet/oma-scheduler/jobs/scheduled-deployment-runs";
 import { startNodeMemoryQueue } from "./lib/node-memory-queue.js";
+import { resolveConsoleDir } from "./lib/console-dir";
 import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, relative } from "node:path";
 import { nanoid } from "nanoid";
@@ -330,7 +333,7 @@ if (!platformRootSecret) {
 
 // ─── Auth ───────────────────────────────────────────────────────────────
 
-const authDisabled = process.env.AUTH_DISABLED === "1";
+const authDisabled = isAuthDisabled(process.env.AUTH_DISABLED);
 const authDbPath = process.env.AUTH_DATABASE_PATH ?? "./data/auth.db";
 const sender = senderFromEnv(process.env);
 
@@ -1287,6 +1290,13 @@ app.get("/auth-info", (c) =>
 
 if (auth) {
   app.on(["GET", "POST"], "/auth/*", (c) => auth!.handler(c.req.raw));
+} else {
+  // AUTH_DISABLED=1 does not mount better-auth. Return 410 (not 404) so a
+  // leftover Console login form can surface a real message instead of
+  // "Authentication failed". The Console treats providers: [] as skip-login.
+  app.on(["GET", "POST"], "/auth/*", (c) =>
+    c.json(AUTH_DISABLED_HTTP.body, AUTH_DISABLED_HTTP.status),
+  );
 }
 
 // Auth middleware via packages/auth — same core resolution as apps/main on
@@ -2548,7 +2558,7 @@ v1.get("/sessions/:id/memory_stores", async (c) => {
 });
 
 // ── Console UI (optional) ──
-const consoleDir = process.env.CONSOLE_DIR;
+const consoleDir = resolveConsoleDir(process.env, process.cwd());
 if (consoleDir) {
   const cwd = process.cwd();
   const rootRel = consoleDir.startsWith("/")

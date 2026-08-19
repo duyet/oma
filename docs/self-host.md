@@ -320,7 +320,8 @@ Things I'd document if I were the on-call who got paged:
 - **`AUTH_DISABLED=1` must be in `.env`, not the shell.** `docker
   compose` substitutes `${AUTH_DISABLED}` from the compose-time env
   (your `.env` at the compose dir). Putting it in the shell only is
-  silently ignored.
+  silently ignored. With the flag on, the Console skips login
+  (`/auth-info` returns `providers: []`).
 - **`docker compose restart` does NOT re-read env.** After editing
   `.env`, use `docker compose up -d --force-recreate oma-server` to
   pick up changes (or `down` then `up`).
@@ -787,6 +788,11 @@ Open `http://localhost:8787` and you get the Console — same port as the
 API. CF prod has the equivalent via the `ASSETS` binding; same UX,
 different mechanism.
 
+Local `pnpm --filter @duyet/oma-main-node start` does the same when
+`apps/console/dist` exists (`pnpm --filter managed-agents-console build`)
+or `CONSOLE_DIR` points at that dist. Unset + no dist → API-only JSON
+404 on `/` (use the Vite path below).
+
 ```bash
 docker compose -f docker-compose.yml up -d
 open http://localhost:8787
@@ -797,8 +803,11 @@ To skip the console build (smaller API-only image, ~250MB → ~245MB):
 ```bash
 docker build -f apps/main-node/Dockerfile --build-arg SKIP_CONSOLE=1 \
   -t oma/main-node:api-only .
-# then unset CONSOLE_DIR in your runtime env
 ```
+
+`SKIP_CONSOLE=1` leaves `apps/console/dist` without `index.html`. main-node
+only mounts the SPA when that file exists, so the image stays API-only
+even if `CONSOLE_DIR` is still set.
 
 ### Vite dev server (development)
 
@@ -825,6 +834,13 @@ sign up via email + password. The verification OTP is printed to
 main-node's stdout — paste into the console verify-signup screen.
 Operators wiring real email replace the `sendVerificationOTP` callback
 in `apps/main-node/src/auth/config.ts` with a Resend / SES / SMTP call.
+
+**`AUTH_DISABLED=1`:** put it in `.env` (not only the shell — see
+[Operator gotchas](#operator-gotchas)), restart, and the Console **skips
+login** — you enter the default tenant with no signup. `/auth-info`
+returns `providers: []` (the Console treats that as auth-off, not
+email-only). Leftover `/auth/*` calls return **410** rather than 404.
+Do not use this in production.
 
 ### GitHub OAuth login (optional)
 

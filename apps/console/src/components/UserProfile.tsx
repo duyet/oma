@@ -44,7 +44,7 @@ const THEME_OPTIONS = [
 ];
 
 export function UserProfile() {
-  const { user } = useAuth();
+  const { user, authDisabled } = useAuth();
   const { theme, setTheme } = useTheme();
 
   if (!user) return null;
@@ -134,15 +134,19 @@ export function UserProfile() {
           })}
         </DropdownMenuGroup>
 
-        <DropdownMenuSeparator />
+        {!authDisabled && (
+          <>
+            <DropdownMenuSeparator />
 
-        <DropdownMenuItem
-          onClick={handleSignOut}
-          className="text-danger focus:text-danger focus:bg-danger/10"
-        >
-          <LogOutIcon className="size-4" />
-          Sign out
-        </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={handleSignOut}
+              className="text-danger focus:text-danger focus:bg-danger/10"
+            >
+              <LogOutIcon className="size-4" />
+              Sign out
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

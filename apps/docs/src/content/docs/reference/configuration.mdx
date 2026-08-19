@@ -198,6 +198,13 @@ Required for self-host. Set as Worker secrets via `npx wrangler secret put NAME`
 | `API_KEY` | main | Bootstrap REST key for first-run. `.env.example` / `.dev.vars.example` ship `dev-test-key-change-me`. |
 | `INTEGRATIONS_INTERNAL_SECRET` | main, integrations | Shared secret between main and integrations workers |
 
+### Optional auth / Console
+
+| Variable | Worker | Purpose |
+|---|---|---|
+| `AUTH_DISABLED` | main (Node + CF wrangler local) | Set to `1` for a **single-user local trial**. Every request becomes `tenant_id="default"` (no `x-api-key`), `/auth-info` returns `providers: []`, and the Console skips login. `/auth/*` returns 410 while auth is off. Do not use in production. |
+| `CONSOLE_DIR` | main (self-host Node) | Path to the built Console SPA (`index.html`). Docker images set this. Local `pnpm --filter @duyet/oma-main-node start` also auto-detects `apps/console/dist`. Unset + no dist → API-only on `:8787`. |
+
 ### Optional integrations
 
 | Variable | Worker | Purpose |

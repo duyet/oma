@@ -88,7 +88,8 @@ curl -s -X POST localhost:8787/v1/sessions/$SID/events -H "x-api-key: $KEY" -H '
 
 没设置 `API_KEY`、只想在单用户本地试用时彻底跳过认证？`echo "AUTH_DISABLED=1" >> .env`，
 重启，然后把上面每个 curl 里的 `-H "x-api-key: ..."` 去掉即可 —— 所有请求都会变成
-`tenant_id="default"`。完整的认证模式（邮箱密码注册、OTP、Google OAuth）：
+`tenant_id="default"`。打开 Console 时也会跳过登录，直接进入默认租户。不要在生产环境使用
+`AUTH_DISABLED=1`。完整的认证模式（邮箱密码注册、OTP、Google OAuth）：
 **[docs.oma.duyet.net/self-host/node-docker#login](https://docs.oma.duyet.net/self-host/node-docker/#login)**。
 
 完整的自部署指南（沙箱模式、Postgres、BoxRun、vault sidecar、Console UI、运维注意事项）：**[docs.oma.duyet.net/self-host/overview](https://docs.oma.duyet.net/self-host/overview/)**

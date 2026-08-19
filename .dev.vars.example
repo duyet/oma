@@ -10,6 +10,11 @@ ANTHROPIC_API_KEY=sk-ant-xxx
 # Generate with:  openssl rand -base64 32
 PLATFORM_ROOT_SECRET=
 
+# Optional local-trial escape hatch (Cloudflare wrangler local + self-host
+# Node). AUTH_DISABLED=1 makes every request tenant_id="default" and the
+# Console skips login. Do not use in production.
+# AUTH_DISABLED=1
+
 # Optional: per-slug and per-IP daily caps on public (/p/:slug) session
 # creation. KV-backed counter in publicSessionCaps. Defaults 50 / 20 when
 # unset (see apps/main/src/routes/publications.ts).
