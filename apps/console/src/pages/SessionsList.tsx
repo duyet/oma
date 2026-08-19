@@ -7,15 +7,15 @@ import { ArchiveIcon, PauseIcon, PlayIcon, TrashIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useApi, ApiError } from "../lib/api";
 import { useInfiniteApiQuery } from "../lib/useApiQuery";
-import { Modal } from "../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/useConfirm";
 import { Combobox } from "../components/Combobox";
-import { DataTable, type ColumnDef } from "../components/DataTable";
+import { DataTable, ExpandedDetail, type ColumnDef } from "../components/DataTable";
 import { FilterBar } from "../components/FilterBar";
 import { EnvironmentPicker, VaultsPicker } from "../components/ResourcePicker";
 import { RowActionsMenu } from "../components/RowActionsMenu";
-import { formatDuration } from "../lib/format";
+import { formatCompact, formatDuration } from "../lib/format";
 
 import type { SessionRecord as Session } from "../types/session";
 
@@ -920,10 +920,56 @@ export function SessionsList() {
           );
         },
         enableHiding: false,
+        enableResizing: false,
         size: 56,
       },
     ],
     [api, refreshSessions, confirm, agentNameById],
+  );
+
+  const renderExpandedRow = useCallback(
+    (s: Session) => {
+      const agentLabel = agentNameById.get(s.agent.id) ?? s.agent.id;
+      const inTok = s.input_tokens ?? 0;
+      const outTok = s.output_tokens ?? 0;
+      const duration =
+        s.stats?.duration_seconds != null
+          ? formatDuration(s.stats.duration_seconds * 1000)
+          : "—";
+      return (
+        <ExpandedDetail
+          rows={[
+            { label: "ID", value: <span className="font-mono text-xs">{s.id}</span> },
+            { label: "Agent", value: `${agentLabel} (v${s.agent.version})` },
+            { label: "Status", value: s.status ?? "idle" },
+            { label: "Duration", value: duration },
+            {
+              label: "Tokens",
+              value:
+                inTok + outTok > 0
+                  ? `${formatCompact(inTok)} in / ${formatCompact(outTok)} out`
+                  : "—",
+            },
+            {
+              label: "Messages",
+              value: s.message_count != null && s.message_count > 0 ? String(s.message_count) : "—",
+            },
+            {
+              label: "Tool calls",
+              value:
+                s.tool_call_count != null && s.tool_call_count > 0
+                  ? String(s.tool_call_count)
+                  : "—",
+            },
+            {
+              label: "Created",
+              value: new Date(s.created_at).toLocaleString(),
+            },
+          ]}
+        />
+      );
+    },
+    [agentNameById],
   );
 
   const hasActiveFilter = !!search || !!filterAgent || status !== "any" || created.after !== undefined || created.before !== undefined;
@@ -958,8 +1004,9 @@ export function SessionsList() {
           : "A session is a running conversation with one of your agents. Start one to watch it work."
       }
       columns={columns}
+      renderExpandedRow={renderExpandedRow}
     >
-      <Modal
+      <FormDialog
         open={showCreate}
         onClose={closeModal}
         title="New Session"
@@ -1344,7 +1391,7 @@ export function SessionsList() {
             </div>
           </div>
         </div>
-      </Modal>
+      </FormDialog>
     </DataTable>
   );
 }

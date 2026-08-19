@@ -1,10 +1,16 @@
 import {
+  Fragment,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
 import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  ChevronUpIcon,
+  ChevronsUpDownIcon,
   EyeIcon,
   EyeOffIcon,
   SearchIcon,
@@ -14,8 +20,11 @@ import {
 import {
   flexRender,
   getCoreRowModel,
+  getSortedRowModel,
   useReactTable,
   type ColumnDef,
+  type ColumnSizingState,
+  type SortingState,
   type Table as TanstackTable,
   type VisibilityState,
 } from "@tanstack/react-table";
@@ -41,6 +50,26 @@ import { Skeleton } from "./Skeleton";
 import { cn, rowActivateKeyDown } from "@/lib/utils";
 import { useLocation } from "react-router";
 
+/** Compact label/value grid for expandable row detail panels. */
+export function ExpandedDetail({
+  rows,
+}: {
+  rows: Array<{ label: string; value: ReactNode }>;
+}) {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-6 gap-y-3 text-sm">
+      {rows.map(({ label, value }) => (
+        <div key={label}>
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
+            {label}
+          </div>
+          <div className="text-foreground mt-0.5 break-words">{value}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /**
  * DataTable — list page chrome with a frozen, column-aligned header.
  *
@@ -53,81 +82,127 @@ import { useLocation } from "react-router";
  *     filter chips, and a "Columns" dropdown for show/hide.
  *   - IntersectionObserver-driven load-more for infinite scroll (same
  *     API as ListPage — `hasMore` / `loadingMore` / `onLoadMore`).
+ *   - Client-side sort + column resize on **loaded rows only** — when
+ *     `hasMore` is true, a toolbar hint warns that unloaded pages aren't
+ *     included. Persisted per route in localStorage (`dt-sort`, `dt-sizes`).
+ *   - Optional expandable detail rows via `renderExpandedRow`.
  *
- * What DataTable deliberately does NOT do:
- *
- *   - **No click-header sorting.** Order is whatever the server returns
- *     (today: `created_at DESC, id DESC` on cursor pages). Adding a
- *     client-side sort over already-loaded rows is a lie when more
- *     pages exist — the next page lands at the bottom in raw order.
- *     If a list needs to be sorted differently, the server endpoint
- *     decides; the UI doesn't pretend.
- *   - **No per-column free-text filter popovers.** Same lie: a contains-
- *     match on loaded rows hides the user's data without telling them.
- *     Structured filters (enum, time bucket) belong in the toolbar
- *     `filters` slot, where each page pushes them as real query params.
+ * Structured filters (enum, time bucket) belong in the toolbar `filters`
+ * slot, wired to real server query params — not per-column filter popovers.
  */
 export interface DataTableProps<T> {
-  /** Page title — usually omitted for list pages where AppBreadcrumb
-   *  already names the route at the top of the shell. Detail/sub-views
-   *  that need a richer label (entity name) still pass it. */
-  title?: string;
-  /** Brief one-liner under the title — kept even when title is hidden
-   *  so list pages can publish a description. */
+  title?: ReactNode;
   subtitle?: ReactNode;
-
-  /** Primary "create" button. Both must be set to render. */
   createLabel?: string;
   onCreate?: () => void;
   headerActions?: ReactNode;
-
-  /** Server-side search input rendered in the toolbar. */
   searchPlaceholder?: string;
   searchValue?: string;
   onSearchChange?: (v: string) => void;
-
-  /** Page-specific filter slot — structured chips (status enum,
-   *  created-at bucket, agent dropdown). Pages own these and wire them
-   *  to real server query params, so the UI doesn't promise filtering
-   *  it can't deliver. */
   filters?: ReactNode;
-
-  /** TanStack column definitions. Each column should set `id` (or
-   *  derive from `accessorKey`) so column visibility can key by it.
-   *  Use `enableHiding: false` to pin a column visible. */
   columns: ColumnDef<T, unknown>[];
   data: T[];
   getRowId: (item: T) => string;
-
   loading?: boolean;
   emptyTitle?: string;
   emptySubtitle?: ReactNode;
   emptyAction?: ReactNode;
   emptyKind?: EmptyStateKind;
   emptyIcon?: ReactNode;
-
-  /** Message from a failed fetch (e.g. `useInfiniteApiQuery`'s `error`).
-   *  When set and there are no rows to show, renders a danger-toned error
-   *  state instead of the empty state — never silently shows "Nothing
-   *  here yet" for a failed request. Ignored once rows exist (stale data
-   *  from before the failure keeps rendering; see `onRetry`). */
   error?: string | null;
-  /** Retry handler wired to the error state's "Retry" button — pass the
-   *  query's `refresh`/`refetch`. */
   onRetry?: () => void;
-  /** Title for the error state. Defaults to a generic message; pass an
-   *  entity-specific one (e.g. "Couldn't load agents") to match the
-   *  page's empty-state phrasing. */
   errorTitle?: string;
-
   onRowClick?: (item: T) => void;
-
-  /** Infinite-scroll mode — paired with `useInfiniteApiQuery`. */
   hasMore?: boolean;
   onLoadMore?: () => void;
   loadingMore?: boolean;
-
+  renderExpandedRow?: (item: T) => ReactNode;
+  getRowCanExpand?: (item: T) => boolean;
   children?: ReactNode;
+}
+
+const EXPAND_COLUMN_ID = "_expand";
+
+function isActionColumn<T>(col: ColumnDef<T, unknown>): boolean {
+  const id = col.id ?? ("accessorKey" in col ? String(col.accessorKey) : "");
+  return id === "actions" || col.enableResizing === false;
+}
+
+function prepareColumns<T>(
+  columns: ColumnDef<T, unknown>[],
+  withExpand: boolean,
+): ColumnDef<T, unknown>[] {
+  const normalized = columns.map((col) => {
+    const hasAccessor =
+      ("accessorKey" in col && col.accessorKey != null) ||
+      ("accessorFn" in col && typeof col.accessorFn === "function");
+    const action = isActionColumn(col);
+    return {
+      ...col,
+      enableSorting: col.enableSorting ?? (hasAccessor && !action),
+      enableResizing: col.enableResizing ?? !action,
+    };
+  });
+  if (!withExpand) return normalized;
+  return [
+    {
+      id: EXPAND_COLUMN_ID,
+      header: () => null,
+      cell: () => null,
+      enableHiding: false,
+      enableSorting: false,
+      enableResizing: false,
+      size: 36,
+    },
+    ...normalized,
+  ];
+}
+
+function cycleColumnSort<T>(
+  column: ReturnType<TanstackTable<T>["getAllColumns"]>[number],
+) {
+  const sorted = column.getIsSorted();
+  if (!sorted) column.toggleSorting(false);
+  else if (sorted === "asc") column.toggleSorting(true);
+  else column.clearSorting();
+}
+
+function SortableHeader<T>({
+  column,
+  children,
+}: {
+  column: ReturnType<TanstackTable<T>["getAllColumns"]>[number];
+  children: ReactNode;
+}) {
+  if (!column.getCanSort()) {
+    return <span className="font-medium">{children}</span>;
+  }
+  const sorted = column.getIsSorted();
+  const Icon =
+    sorted === "asc"
+      ? ChevronUpIcon
+      : sorted === "desc"
+        ? ChevronDownIcon
+        : ChevronsUpDownIcon;
+  return (
+    <button
+      type="button"
+      className="inline-flex items-center gap-1 font-medium hover:text-foreground transition-colors -ml-1 px-1 rounded"
+      onClick={() => cycleColumnSort(column)}
+    >
+      {children}
+      <Icon className={cn("size-3.5 shrink-0", !sorted && "opacity-40")} />
+    </button>
+  );
+}
+
+function readJsonStorage<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 export function DataTable<T>({
@@ -156,57 +231,84 @@ export function DataTable<T>({
   hasMore,
   onLoadMore,
   loadingMore,
+  renderExpandedRow,
+  getRowCanExpand,
   children,
 }: DataTableProps<T>) {
-  // Column visibility persists per route in localStorage — toggling
-  // Columns on /agents doesn't leak to /sessions, but coming back to
-  // /agents restores the user's last choice. Auto-keyed by pathname
-  // so callers don't need to pass anything; lift to a `tableId` prop
-  // if a page ever stacks two DataTables.
   const { pathname } = useLocation();
-  const storageKey = `dt-cols:${pathname}`;
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
-    () => {
-      try {
-        const raw = localStorage.getItem(storageKey);
-        return raw ? (JSON.parse(raw) as VisibilityState) : {};
-      } catch {
-        return {};
-      }
-    },
+  const colsStorageKey = `dt-cols:${pathname}`;
+  const sortStorageKey = `dt-sort:${pathname}`;
+  const sizesStorageKey = `dt-sizes:${pathname}`;
+
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(() =>
+    readJsonStorage(colsStorageKey, {}),
   );
+  const [sorting, setSorting] = useState<SortingState>(() =>
+    readJsonStorage(sortStorageKey, []),
+  );
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(() =>
+    readJsonStorage(sizesStorageKey, {}),
+  );
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(() => new Set());
+
   useEffect(() => {
     try {
-      localStorage.setItem(storageKey, JSON.stringify(columnVisibility));
+      localStorage.setItem(colsStorageKey, JSON.stringify(columnVisibility));
     } catch {
-      // localStorage unavailable (private mode / quota) — silently skip;
-      // visibility just won't persist this session.
+      /* ignore */
     }
-  }, [storageKey, columnVisibility]);
+  }, [colsStorageKey, columnVisibility]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(sortStorageKey, JSON.stringify(sorting));
+    } catch {
+      /* ignore */
+    }
+  }, [sortStorageKey, sorting]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(sizesStorageKey, JSON.stringify(columnSizing));
+    } catch {
+      /* ignore */
+    }
+  }, [sizesStorageKey, columnSizing]);
+
+  const tableColumns = useMemo(
+    () => prepareColumns(columns, !!renderExpandedRow),
+    [columns, renderExpandedRow],
+  );
 
   const table = useReactTable({
     data,
-    columns,
-    state: { columnVisibility },
+    columns: tableColumns,
+    state: { columnVisibility, sorting, columnSizing },
     onColumnVisibilityChange: setColumnVisibility,
+    onSortingChange: setSorting,
+    onColumnSizingChange: setColumnSizing,
     getRowId: (row) => getRowId(row),
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    enableColumnResizing: true,
+    columnResizeMode: "onChange",
+    defaultColumn: { minSize: 60, size: 150 },
   });
 
   const showCreate = !!onCreate && !!createLabel;
+  const showSortHint = !!hasMore && sorting.length > 0;
 
-  // Single-row toolbar: [+ New X] on far left, page-specific filter
-  // chips next, then a flex spacer pushes [search] + [Columns] to the
-  // far right. Matches the LangSmith / Linear / Vercel pattern of one
-  // continuous action row above the table (no separate top-right
-  // "actions" zone). When there's no createCTA and no filters, the
-  // search box still right-aligns via `ml-auto`.
   const toolbar = (
     <>
       {headerActions}
       {showCreate && <Button onClick={onCreate}>{createLabel}</Button>}
       {filters}
       <div className="flex-1" />
+      {showSortHint ? (
+        <p className="hidden sm:block text-[11px] text-muted-foreground shrink-0 max-w-[14rem] leading-tight">
+          Sorted among loaded rows — load more to include the rest
+        </p>
+      ) : null}
       {onSearchChange && (
         <InputGroup className="w-full sm:w-64 shrink-0">
           <InputGroupAddon>
@@ -228,21 +330,11 @@ export function DataTable<T>({
 
   const filteredRows = table.getRowModel().rows;
   const hasRows = filteredRows.length > 0;
-  // Stale-while-revalidate: a background refetch failure with rows
-  // already on screen falls through to the normal data render below
-  // (hasRows wins) rather than replacing visible data with an error
-  // screen. The error state only appears for the empty+failed case.
   const hasError = !loading && !hasRows && !!error;
   const isEmpty = !loading && !hasRows && !error;
   const visibleColumns = table.getAllColumns().filter((c) => c.getIsVisible());
   const visibleColumnCount = visibleColumns.length;
 
-  // Excel-style frozen column header: rendered as its own <table> inside
-  // the PageHeader portal slot, physically OUTSIDE the scroll container.
-  // Body table below shares the same colgroup widths via
-  // `table-layout: fixed` so columns line up perfectly across both
-  // tables. TanStack drives the cell sizes via `column.getSize()`
-  // (defaults to 150 per column).
   const colgroup = (
     <colgroup>
       {visibleColumns.map((col) => (
@@ -252,13 +344,8 @@ export function DataTable<T>({
   );
 
   const frozenHeader = !loading && hasRows ? (
-    // Wrap the header table in an overflow-x:hidden container with a
-    // stable id so the body's horizontal scroll can drive scrollLeft
-    // on this element — see the useEffect below. Without this sync,
-    // wide tables (many columns / long URLs) horizontal-scroll the
-    // body but the header stays put → cells lose alignment.
     <div id="dt-header-scroll" className="overflow-x-hidden">
-      <table className="w-full table-fixed text-fg-muted">
+      <table className="w-full table-fixed text-muted-foreground">
         {colgroup}
         <thead>
           {table.getHeaderGroups().map((headerGroup) => (
@@ -266,13 +353,28 @@ export function DataTable<T>({
               {headerGroup.headers.map((header) => (
                 <th
                   key={header.id}
-                  className="h-9 px-3 text-left text-xs font-medium align-middle whitespace-nowrap"
+                  className="relative h-9 px-3 text-left text-xs font-medium align-middle whitespace-nowrap"
+                  style={{ width: header.getSize() }}
                 >
-                  {header.isPlaceholder ? null : (
-                    <span className="font-medium">
+                  {header.isPlaceholder ? null : header.column.id === EXPAND_COLUMN_ID ? null : (
+                    <SortableHeader column={header.column}>
                       {flexRender(header.column.columnDef.header, header.getContext())}
-                    </span>
+                    </SortableHeader>
                   )}
+                  {header.column.getCanResize() ? (
+                    <div
+                      onMouseDown={header.getResizeHandler()}
+                      onTouchStart={header.getResizeHandler()}
+                      onClick={(e) => e.stopPropagation()}
+                      className={cn(
+                        "absolute right-0 top-0 h-full w-1 cursor-col-resize select-none touch-none",
+                        header.column.getIsResizing()
+                          ? "bg-brand opacity-80"
+                          : "opacity-0 hover:opacity-100 hover:bg-border",
+                      )}
+                      aria-hidden
+                    />
+                  ) : null}
                 </th>
               ))}
             </tr>
@@ -282,10 +384,6 @@ export function DataTable<T>({
     </div>
   ) : undefined;
 
-  // Sync the frozen header's horizontal scroll to the body's. Both
-  // elements are identified by id (single DataTable per page is the
-  // current usage; lift to refs + context if we ever stack two on the
-  // same page). passive listener — we're only reading scrollLeft.
   useEffect(() => {
     const body = document.getElementById("dt-body-scroll");
     const header = document.getElementById("dt-header-scroll");
@@ -297,12 +395,18 @@ export function DataTable<T>({
     return () => body.removeEventListener("scroll", onScroll);
   }, [loading, isEmpty, hasError]);
 
+  const toggleExpand = (rowId: string) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowId)) next.delete(rowId);
+      else next.add(rowId);
+      return next;
+    });
+  };
+
   return (
     <>
-      <PageHeader
-        toolbar={toolbar}
-        tableHeader={frozenHeader}
-      />
+      <PageHeader toolbar={toolbar} tableHeader={frozenHeader} title={title} subtitle={subtitle} />
 
       {loading ? (
         <SkeletonRows colSpan={visibleColumnCount} />
@@ -312,7 +416,7 @@ export function DataTable<T>({
             title={errorTitle}
             body={error}
             action={onRetry && <Button onClick={onRetry}>Retry</Button>}
-            icon={<TriangleAlertIcon className="text-danger" />}
+            icon={<TriangleAlertIcon className="text-destructive" />}
             tone="danger"
             size="lg"
           />
@@ -330,40 +434,78 @@ export function DataTable<T>({
         </div>
       ) : (
         <div id="dt-body-scroll" className="pb-4 overflow-x-auto">
-          {/* Body sits flush against the frozen header in the slot —
-              no extra top padding so the gap between header and first
-              row is only the row pill's own `border-spacing-y-1.5`
-              (6 px). overflow-x-auto lets wide tables scroll
-              horizontally; the useEffect above mirrors scrollLeft to
-              the frozen header so column alignment is preserved. */}
           <table className="w-full table-fixed border-separate border-spacing-y-1.5">
             {colgroup}
             <tbody>
               {filteredRows.map((row) => {
                 const cells = row.getVisibleCells();
+                const canExpand =
+                  !!renderExpandedRow &&
+                  (getRowCanExpand ? getRowCanExpand(row.original) : true);
+                const isExpanded = canExpand && expandedRows.has(row.id);
+
                 return (
-                  <tr
-                    key={row.id}
-                    onClick={onRowClick ? () => onRowClick(row.original) : undefined}
-                    onKeyDown={
-                      onRowClick ? rowActivateKeyDown(() => onRowClick(row.original)) : undefined
-                    }
-                    tabIndex={onRowClick ? 0 : undefined}
-                    role={onRowClick ? "button" : undefined}
-                    className={cn(
-                      "bg-bg-surface/60 hover:bg-bg-surface transition-colors",
-                      "[&>td]:bg-transparent [&>td]:px-3 [&>td]:py-2 [&>td]:align-middle [&>td]:text-sm",
-                      "[&>td:first-child]:rounded-l-lg",
-                      "[&>td:last-child]:rounded-r-lg",
-                      onRowClick && "cursor-pointer",
-                    )}
-                  >
-                    {cells.map((cell) => (
-                      <td key={cell.id} className="truncate">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
-                  </tr>
+                  <Fragment key={row.id}>
+                    <tr
+                      onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+                      onKeyDown={
+                        onRowClick
+                          ? rowActivateKeyDown(() => onRowClick(row.original))
+                          : undefined
+                      }
+                      tabIndex={onRowClick ? 0 : undefined}
+                      role={onRowClick ? "button" : undefined}
+                      className={cn(
+                        "bg-muted/60 hover:bg-muted transition-colors",
+                        "[&>td]:bg-transparent [&>td]:px-3 [&>td]:py-2 [&>td]:align-middle [&>td]:text-sm",
+                        "[&>td:first-child]:rounded-l-lg",
+                        "[&>td:last-child]:rounded-r-lg",
+                        onRowClick && "cursor-pointer",
+                      )}
+                    >
+                      {cells.map((cell) => {
+                        if (cell.column.id === EXPAND_COLUMN_ID) {
+                          return (
+                            <td key={cell.id} className="w-9 !px-1">
+                              {canExpand ? (
+                                <button
+                                  type="button"
+                                  aria-label={isExpanded ? "Collapse row" : "Expand row"}
+                                  aria-expanded={isExpanded}
+                                  className="inline-flex items-center justify-center rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleExpand(row.id);
+                                  }}
+                                >
+                                  <ChevronRightIcon
+                                    className={cn(
+                                      "size-4 transition-transform",
+                                      isExpanded && "rotate-90",
+                                    )}
+                                  />
+                                </button>
+                              ) : null}
+                            </td>
+                          );
+                        }
+                        return (
+                          <td key={cell.id} className="truncate">
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                    {isExpanded && renderExpandedRow ? (
+                      <tr>
+                        <td colSpan={visibleColumnCount} className="!p-0 !bg-transparent">
+                          <div className="mx-1 mb-1.5 rounded-lg border border-border/60 bg-background/90 px-4 py-3 shadow-sm">
+                            {renderExpandedRow(row.original)}
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
                 );
               })}
               {onLoadMore && hasMore && (
@@ -383,9 +525,6 @@ export function DataTable<T>({
   );
 }
 
-/** Right-pinned "Columns" toggle in the toolbar — shadcn dropdown
- *  with one checkbox per non-required column. Required columns
- *  (id, name) typically set `enableHiding: false` on their def. */
 function ColumnVisibilityMenu<T>({ table }: { table: TanstackTable<T> }) {
   const hideableColumns = table.getAllColumns().filter((c) => c.getCanHide());
   if (hideableColumns.length === 0) return null;
@@ -399,7 +538,7 @@ function ColumnVisibilityMenu<T>({ table }: { table: TanstackTable<T> }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuLabel className="text-[11px] uppercase tracking-wider text-fg-subtle font-medium">
+        <DropdownMenuLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
           Visible columns
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
@@ -408,7 +547,6 @@ function ColumnVisibilityMenu<T>({ table }: { table: TanstackTable<T> }) {
             key={column.id}
             checked={column.getIsVisible()}
             onCheckedChange={(value) => column.toggleVisibility(!!value)}
-            // Keep menu open while toggling several columns in a row.
             onSelect={(e) => e.preventDefault()}
             className="capitalize"
           >
@@ -425,19 +563,6 @@ function ColumnVisibilityMenu<T>({ table }: { table: TanstackTable<T> }) {
   );
 }
 
-/** Skeleton state — matches the live row recipe exactly (pill-style
- *  rows on a `border-separate border-spacing-y-1.5` table) so loading
- *  → loaded has zero visual jump and no rogue table borders.
- *
- *  The earlier version reused shadcn's `<Table>` / `<TableRow>` /
- *  `<TableCell>` primitives which carry `border-b` on every row; those
- *  paint visible dark hairlines between skeleton rows that the loaded
- *  view doesn't have. Rolling the markup by hand here gives us the
- *  same `<table>` shape as the live body, just with a Skeleton inside
- *  each cell instead of a value.
- *
- *  Width distribution is identical to ListPage's skeleton so list
- *  pages on either chrome show the same loading texture. */
 function SkeletonRows({ colSpan }: { colSpan: number }) {
   const cols = colSpan || 4;
   return (
@@ -448,7 +573,7 @@ function SkeletonRows({ colSpan }: { colSpan: number }) {
             <tr
               key={`sk-${rowIdx}`}
               className={cn(
-                "bg-bg-surface/60",
+                "bg-muted/60",
                 "[&>td]:bg-transparent [&>td]:px-3 [&>td]:py-2 [&>td]:align-middle",
                 "[&>td:first-child]:rounded-l-lg",
                 "[&>td:last-child]:rounded-r-lg",
@@ -503,12 +628,11 @@ function LoadMoreRow({
 
   return (
     <tr ref={ref}>
-      <td colSpan={colSpan} className="text-center py-4 text-xs text-fg-subtle">
+      <td colSpan={colSpan} className="text-center py-4 text-xs text-muted-foreground">
         {loading ? "Loading more…" : " "}
       </td>
     </tr>
   );
 }
 
-// Re-export for caller-side column definitions.
 export { type ColumnDef } from "@tanstack/react-table";

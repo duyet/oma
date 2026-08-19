@@ -5,9 +5,9 @@ import { toast } from "sonner";
 
 import { useApi } from "../../lib/api";
 import { useApiQuery } from "../../lib/useApiQuery";
-import { DataTable, type ColumnDef } from "../../components/DataTable";
+import { DataTable, ExpandedDetail, type ColumnDef } from "../../components/DataTable";
 import { RowActionsMenu } from "../../components/RowActionsMenu";
-import { Modal } from "../../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/useConfirm";
 import { formatRelative } from "../../lib/format";
@@ -175,6 +175,7 @@ export function AgentSchedulesTab() {
           );
         },
         enableHiding: false,
+        enableResizing: false,
         size: 56,
       },
     ],
@@ -197,6 +198,21 @@ export function AgentSchedulesTab() {
         emptySubtitle="Run this agent on a cron cadence — recurring maintenance, digests, or polling jobs."
         emptyAction={<Button onClick={() => setShowCreate(true)}>+ Create schedule</Button>}
         columns={columns}
+        renderExpandedRow={(s) => (
+          <ExpandedDetail
+            rows={[
+              { label: "ID", value: <span className="font-mono text-xs">{s.id}</span> },
+              { label: "Cron", value: s.cron_expression },
+              { label: "Timezone", value: s.timezone },
+              { label: "Environment", value: s.environment_id },
+              { label: "Enabled", value: s.enabled ? "Yes" : "No" },
+              {
+                label: "Next run",
+                value: s.next_run_at ? new Date(s.next_run_at).toLocaleString() : "Never",
+              },
+            ]}
+          />
+        )}
       />
 
       <CreateScheduleDialog
@@ -290,7 +306,7 @@ function ScheduleRunsDialog({
   }, [open, scheduleId]);
 
   return (
-    <Modal
+    <FormDialog
       open={open}
       onClose={onClose}
       title="Run history"
@@ -341,6 +357,6 @@ function ScheduleRunsDialog({
           )}
         </div>
       )}
-    </Modal>
+    </FormDialog>
   );
 }

@@ -3,11 +3,11 @@ import { useNavigate, useSearchParams } from "react-router";
 import { TrashIcon } from "lucide-react";
 import { useApi } from "../lib/api";
 import { formatQueryError, useApiQuery } from "../lib/useApiQuery";
-import { Modal } from "../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { PopoverContent } from "@/components/ui/popover";
 import { useConfirm } from "@/hooks/useConfirm";
-import { DataTable, type ColumnDef } from "../components/DataTable";
+import { DataTable, ExpandedDetail, type ColumnDef } from "../components/DataTable";
 import { FacetedFilter } from "../components/FacetedFilter";
 import { FilterChip } from "../components/FilterChip";
 import { RowActionsMenu } from "../components/RowActionsMenu";
@@ -419,6 +419,7 @@ export function SkillsList() {
           );
         },
         enableHiding: false,
+        enableResizing: false,
         size: 56,
       },
     ],
@@ -477,13 +478,27 @@ export function SkillsList() {
       getRowId={(s) => s.id}
       onRowClick={handleRowClick}
       columns={columns}
+      renderExpandedRow={(s) => (
+        <ExpandedDetail
+          rows={[
+            { label: "ID", value: <span className="font-mono text-xs">{s.id}</span> },
+            { label: "Source", value: s.source },
+            { label: "Version", value: `v${s.latest_version}` },
+            { label: "Description", value: s.description?.trim() || "—" },
+            {
+              label: "Created",
+              value: new Date(s.created_at).toLocaleString(),
+            },
+          ]}
+        />
+      )}
       emptyTitle="No skills yet"
       emptyKind="skill"
       emptySubtitle="A skill is a reusable set of instructions and files you can attach to any agent. Create your first one to give your agents domain expertise."
       emptyAction={<Button onClick={() => setShowCreate(true)}>+ New skill</Button>}
     >
       {/* ===== Create Dialog ===== */}
-      <Modal
+      <FormDialog
         open={showCreate}
         onClose={() => {
           if (createUploading) return;
@@ -560,10 +575,10 @@ export function SkillsList() {
             <code> zip -r my-skill.zip my-skill</code>).
           </p>
         </div>
-      </Modal>
+      </FormDialog>
 
       {/* ===== Detail Dialog ===== */}
-      <Modal
+      <FormDialog
         open={!!detail}
         onClose={closeDetail}
         title={detail?.display_title || detail?.name || ""}
@@ -772,7 +787,7 @@ export function SkillsList() {
             </div>
           </div>
         ) : null}
-      </Modal>
+      </FormDialog>
     </DataTable>
   );
 }

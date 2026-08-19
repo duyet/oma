@@ -3,11 +3,11 @@ import { useNavigate } from "react-router";
 import { ArchiveIcon, TrashIcon } from "lucide-react";
 import { useApi } from "../lib/api";
 import { useInfiniteApiQuery } from "../lib/useApiQuery";
-import { Modal } from "../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { PopoverContent } from "@/components/ui/popover";
 import { useConfirm } from "@/hooks/useConfirm";
-import { DataTable, type ColumnDef } from "../components/DataTable";
+import { DataTable, ExpandedDetail, type ColumnDef } from "../components/DataTable";
 import { FacetedFilter } from "../components/FacetedFilter";
 import { FilterChip, CreatedFilterChip } from "../components/FilterChip";
 import { RowActionsMenu } from "../components/RowActionsMenu";
@@ -174,6 +174,7 @@ export function VaultsList() {
           );
         },
         enableHiding: false,
+        enableResizing: false,
         size: 56,
       },
     ],
@@ -235,9 +236,21 @@ export function VaultsList() {
       }
       emptySubtitle="A vault securely stores credentials like API tokens so agents can use them without ever seeing the raw secret. Create your first one to get started."
       columns={columns}
+      renderExpandedRow={(v) => (
+        <ExpandedDetail
+          rows={[
+            { label: "ID", value: <span className="font-mono text-xs">{v.id}</span> },
+            { label: "Status", value: v.archived_at ? "archived" : "active" },
+            {
+              label: "Created",
+              value: new Date(v.created_at).toLocaleString(),
+            },
+          ]}
+        />
+      )}
     >
       {/* Create Vault */}
-      <Modal
+      <FormDialog
         open={showCreateVault}
         onClose={() => setShowCreateVault(false)}
         title="New Vault"
@@ -260,7 +273,7 @@ export function VaultsList() {
             />
           </div>
         </div>
-      </Modal>
+      </FormDialog>
     </DataTable>
   );
 }

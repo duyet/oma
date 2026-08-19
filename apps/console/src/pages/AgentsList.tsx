@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
@@ -17,10 +17,10 @@ import {
 
 import { useApi } from "../lib/api";
 import { useInfiniteApiQuery } from "../lib/useApiQuery";
-import { DataTable, type ColumnDef } from "../components/DataTable";
+import { DataTable, ExpandedDetail, type ColumnDef } from "../components/DataTable";
 import { FilterBar } from "../components/FilterBar";
 import { RowActionsMenu } from "../components/RowActionsMenu";
-import { Badge } from "../components/Badge";
+import { ResourceBadge } from "@/components/ResourceBadge";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/useConfirm";
 import { formatCompact, formatRelative } from "../lib/format";
@@ -259,14 +259,14 @@ export function AgentsList() {
                 }}
                 className="rounded hover:text-fg transition-colors duration-[var(--dur-quick)]"
               >
-                <Badge
+                <ResourceBadge
                   icon={<MessageSquareIcon className="size-3" />}
                   label={s.sessions}
                   title={`${s.sessions} session${s.sessions === 1 ? "" : "s"} in the last 30 days — view them`}
                 />
               </button>
               {s.tokens > 0 && (
-                <Badge
+                <ResourceBadge
                   icon={<CoinsIcon className="size-3" />}
                   label={formatCompact(s.tokens)}
                   title={`${s.tokens.toLocaleString()} tokens in the last 30 days`}
@@ -288,20 +288,20 @@ export function AgentsList() {
           const mcpCount = a.mcp_servers?.length ?? 0;
           return (
             <div className="flex items-center gap-2.5">
-              <Badge
+              <ResourceBadge
                 icon={<WrenchIcon className="size-3" />}
                 label={toolsCount}
                 title={`${toolsCount} tool${toolsCount === 1 ? "" : "s"}`}
               />
               {skillsCount > 0 && (
-                <Badge
+                <ResourceBadge
                   icon={<BookOpenIcon className="size-3" />}
                   label={skillsCount}
                   title={`${skillsCount} skill${skillsCount === 1 ? "" : "s"}`}
                 />
               )}
               {mcpCount > 0 && (
-                <Badge
+                <ResourceBadge
                   icon={<PlugZapIcon className="size-3" />}
                   label={mcpCount}
                   title={`${mcpCount} MCP server${mcpCount === 1 ? "" : "s"}`}
@@ -442,10 +442,30 @@ export function AgentsList() {
           );
         },
         enableHiding: false,
+        enableResizing: false,
         size: 56,
       },
     ],
     [api, refreshAgents, confirm, nav, duplicateAgent, quickStats],
+  );
+
+  const renderExpandedRow = useCallback(
+    (a: Agent) => (
+      <ExpandedDetail
+        rows={[
+          { label: "ID", value: <span className="font-mono text-xs">{a.id}</span> },
+          { label: "Model", value: modelStr(a.model) },
+          { label: "Harness", value: a._oma?.harness ?? "default" },
+          { label: "Tools", value: String(a.tools?.length ?? 0) },
+          { label: "Version", value: `v${a.version}` },
+          {
+            label: "Created",
+            value: new Date(a.created_at).toLocaleString(),
+          },
+        ]}
+      />
+    ),
+    [],
   );
 
   const filters = (
@@ -502,6 +522,7 @@ export function AgentsList() {
         )
       }
       columns={columns}
+      renderExpandedRow={renderExpandedRow}
     >
       <AgentFormDialog
         open={showCreate}

@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { XCircleIcon } from "lucide-react";
 import { useApi } from "../lib/api";
 import { useAsyncAction } from "../hooks/useAsyncAction";
-import { Modal } from "../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/useConfirm";
-import { DataTable, type ColumnDef } from "../components/DataTable";
+import { DataTable, ExpandedDetail, type ColumnDef } from "../components/DataTable";
 import { RowActionsMenu } from "../components/RowActionsMenu";
 
 interface ApiKey {
@@ -141,6 +141,7 @@ export function ApiKeysList() {
           />
         ),
         enableHiding: false,
+        enableResizing: false,
         size: 56,
       },
     ],
@@ -162,8 +163,20 @@ export function ApiKeysList() {
       emptyKind="api_key"
       emptySubtitle="An API key lets you connect to this platform from the command line or your own code. Create one to get started."
       columns={columns}
+      renderExpandedRow={(k) => (
+        <ExpandedDetail
+          rows={[
+            { label: "ID", value: <span className="font-mono text-xs">{k.id}</span> },
+            { label: "Prefix", value: <span className="font-mono text-xs">{k.prefix}</span> },
+            {
+              label: "Created",
+              value: new Date(k.created_at).toLocaleString(),
+            },
+          ]}
+        />
+      )}
     >
-      <Modal
+      <FormDialog
         open={showCreate}
         onClose={closeDialog}
         title={createdKey ? "API Key Created" : "New API Key"}
@@ -220,7 +233,7 @@ export function ApiKeysList() {
             </div>
           </div>
         )}
-      </Modal>
+      </FormDialog>
     </DataTable>
   );
 }

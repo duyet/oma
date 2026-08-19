@@ -3,13 +3,13 @@ import { useNavigate } from "react-router";
 import { ArchiveIcon, TrashIcon } from "lucide-react";
 import { useApi } from "../lib/api";
 import { useInfiniteApiQuery } from "../lib/useApiQuery";
-import { Modal } from "../components/Modal";
+import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { PopoverContent } from "@/components/ui/popover";
 import { useConfirm } from "@/hooks/useConfirm";
-import { Select, SelectOption } from "../components/Select";
+import { Select, SelectOption } from "@/components/ui/form-select";
 import { EnvVarsEditor, rowsToEnvVars, type EnvVarRow } from "../components/EnvVarsEditor";
-import { DataTable, type ColumnDef } from "../components/DataTable";
+import { DataTable, ExpandedDetail, type ColumnDef } from "../components/DataTable";
 import { FacetedFilter } from "../components/FacetedFilter";
 import { FilterChip, CreatedFilterChip } from "../components/FilterChip";
 import { RowActionsMenu } from "../components/RowActionsMenu";
@@ -294,6 +294,7 @@ export function EnvironmentsList() {
           );
         },
         enableHiding: false,
+        enableResizing: false,
         size: 56,
       },
     ],
@@ -362,8 +363,27 @@ export function EnvironmentsList() {
           : "An environment defines the sandbox your agents run in — packages, network access, and hardware. Create your first one to get started."
       }
       columns={columns}
+      renderExpandedRow={(e) => (
+        <ExpandedDetail
+          rows={[
+            { label: "ID", value: <span className="font-mono text-xs">{e.id}</span> },
+            {
+              label: "Provider",
+              value: hostingTypeLabel(
+                (e.config?.type ?? e.config?.sandbox_provider) as string | undefined,
+                hostingTypes,
+              ),
+            },
+            { label: "Status", value: e.status ?? "ready" },
+            {
+              label: "Created",
+              value: new Date(e.created_at).toLocaleString(),
+            },
+          ]}
+        />
+      )}
     >
-      <Modal
+      <FormDialog
         open={showCreate}
         onClose={() => setShowCreate(false)}
         title="Add Environment"
@@ -441,7 +461,7 @@ export function EnvironmentsList() {
             <EnvVarsEditor rows={envVarRows} setRows={setEnvVarRows} />
           </div>
         </div>
-      </Modal>
+      </FormDialog>
     </DataTable>
   );
 }
