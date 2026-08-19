@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/duyet/oma/compare/root-v0.1.2...root-v0.1.3) (2026-08-19)
+
+
+### ✨ Features
+
+* **console:** sort remaining embedded tables with SortableTable ([#422](https://github.com/duyet/oma/issues/422)) ([2e80f02](https://github.com/duyet/oma/commit/2e80f021c1fe67beaf0c698252c5dd6d704b4a59))
+
 ## [0.1.2](https://github.com/duyet/oma/compare/root-v0.1.1...root-v0.1.2) (2026-08-19)
 
 
