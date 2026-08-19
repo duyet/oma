@@ -10,6 +10,7 @@ export * from "@duyet/oma-api-types";
 export * from "@duyet/oma-eval-core";
 
 export * from "./env";
+export * from "./auth-disabled";
 export * from "./errors";
 export * from "./id";
 export * from "./format";

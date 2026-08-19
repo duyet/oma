@@ -1,6 +1,6 @@
 import { createMiddleware } from "hono/factory";
 import type { Env } from "@duyet/oma-shared";
-import { logWarn, logError } from "@duyet/oma-shared";
+import { logWarn, logError, isAuthDisabled } from "@duyet/oma-shared";
 import { CfKvStore } from "@duyet/oma-kv-store";
 
 async function sha256(data: string): Promise<string> {
@@ -70,6 +70,14 @@ export const authMiddleware = createMiddleware<{
     c.req.path === "/v1/telemetry/ingest" ||
     c.req.path === "/v1/telemetry/stats"
   ) {
+    return next();
+  }
+
+  // AUTH_DISABLED=1 — same single-user trial as self-host Node. Every
+  // request is tenant_id="default"; Console skips login via /auth-info
+  // providers: []. Do not use in production.
+  if (isAuthDisabled(c.env.AUTH_DISABLED)) {
+    c.set("tenant_id", "default");
     return next();
   }
 

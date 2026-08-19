@@ -164,6 +164,13 @@ export interface Env {
    *  per-host scoping. */
   AUTH_COOKIE_DOMAIN?: string;
   AUTH_COOKIE_NAME?: string;
+  /**
+   * Single-user local trial. `AUTH_DISABLED=1` makes every request
+   * `tenant_id="default"` and `/auth-info` returns `providers: []` so the
+   * Console skips login. Self-host Node and CF wrangler local. Do not use
+   * in production.
+   */
+  AUTH_DISABLED?: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   /** E2B API key. When set, /v1/hosting_types advertises the E2B external

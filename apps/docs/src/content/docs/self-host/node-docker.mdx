@@ -110,7 +110,7 @@ email + password — sign-up creates a session immediately, no OTP screen.
 | Mode | When | How to enable |
 |---|---|---|
 | **email + password** (default) | Single user / team / dev / demo | Just `docker compose up`, sign up via Console |
-| **AUTH_DISABLED=1** | "I'm the only user, skip auth entirely" | `echo "AUTH_DISABLED=1" >> .env`, restart. Every request becomes `tenant_id=default`. |
+| **AUTH_DISABLED=1** | "I'm the only user, skip auth entirely" | `echo "AUTH_DISABLED=1" >> .env`, restart. Every request becomes `tenant_id=default`, `/auth-info` returns `providers: []`, and the Console **skips login**. Do not use in production. |
 | **email + OTP gate** | Real prod, you wired up SMTP | `AUTH_REQUIRE_EMAIL_VERIFY=1`, override `sendVerificationOTP` in `apps/main-node/src/auth/config.ts` to call Resend / SES / SMTP / Postmark / etc. |
 | **Google OAuth** | Team SSO | `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` in `.env`. Console renders Google button automatically. |
 
@@ -234,7 +234,8 @@ Skip the sidecar if you don't need it: `docker compose up oma-server`.
 
 - **`AUTH_DISABLED=1` belongs in `.env`, not the shell.** Compose
   substitutes `${AUTH_DISABLED}` from the `.env` file at the compose
-  dir — exporting it only in your shell is silently ignored.
+  dir — exporting it only in your shell is silently ignored. With the
+  flag on, the Console skips login (`/auth-info` returns `providers: []`).
 - **`docker compose restart` does NOT re-read env.** After editing
   `.env`, use `docker compose up -d --force-recreate oma-server`.
 - **`oma-vault` and `oma-server` MUST agree on the backend.** If you

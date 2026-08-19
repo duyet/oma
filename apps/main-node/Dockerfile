@@ -159,9 +159,9 @@ ENV HOST=0.0.0.0
 ENV DATABASE_PATH=/app/data/oma.db
 ENV SANDBOX_WORKDIR=/app/data/sandboxes
 # Console SPA is at /app/apps/console/dist (built natively on $BUILDPLATFORM
-# in the console-builder stage, see top of file). main-node's serveStatic
-# middleware mounts it at "/*" with index.html fallback. Unset CONSOLE_DIR
-# (or build with --build-arg SKIP_CONSOLE=1) to ship an API-only image.
+# in the console-builder stage, see top of file). main-node only mounts
+# serveStatic when that directory contains index.html. SKIP_CONSOLE=1 leaves
+# an empty dist, so the image stays API-only without unsetting CONSOLE_DIR.
 ENV CONSOLE_DIR=/app/apps/console/dist
 
 EXPOSE 8787
