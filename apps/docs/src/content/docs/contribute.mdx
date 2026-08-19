@@ -44,7 +44,7 @@ The `docs/` folder at the repo root is **internal RFC and design notes** — not
 
 <Steps>
 
-1. **Install Node 22+, pnpm 10+, and `wrangler`.** Sign in once with `npx wrangler login`.
+1. **Install Node 22+ and pnpm 10+.** A Cloudflare account and `wrangler login` are **not** required for `pnpm dev` (local simulators).
 
 2. **Install dependencies.**
 
@@ -59,14 +59,15 @@ The `docs/` folder at the repo root is **internal RFC and design notes** — not
 4. **Run.** Pick what you need:
 
    ```bash
-   # API + agent worker (most common dev loop)
+   # API + Console on http://localhost:8787 (most common dev loop)
+   # predev builds apps/console/dist and copies .dev.vars next to worker configs
    pnpm dev
 
    # Just one of them
    pnpm dev:main
    pnpm dev:agent
 
-   # The Console (Vite)
+   # Console Vite HMR (optional; ASSETS already serves the SPA on :8787)
    pnpm dev:console     # → http://localhost:5173
 
    # The docs site (this site)

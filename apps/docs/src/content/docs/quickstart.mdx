@@ -141,6 +141,42 @@ Fastest way from zero to a running agent. Requires only Docker.
 - [Self-host overview](/self-host/overview/)
 
 </TabItem>
+<TabItem label="⚡ Local wrangler (no Docker)">
+
+Cloudflare Workers + Durable Object simulators. No Docker and no Cloudflare account. Container sandboxes and Workers AI are off in this path.
+
+### Steps
+
+<Steps>
+
+1. **Clone, install, and copy secrets.**
+
+   ```bash
+   git clone https://github.com/duyet/oma.git && cd oma
+   pnpm install
+   cp .dev.vars.example .dev.vars
+   ```
+
+   Set `PLATFORM_ROOT_SECRET=$(openssl rand -base64 32)` and `BETTER_AUTH_SECRET=$(openssl rand -hex 32)` in `.dev.vars`. Do not reuse a value from this public repo.
+
+2. **Start.**
+
+   ```bash
+   pnpm dev
+   # API + Console → http://localhost:8787
+   curl localhost:8787/health
+   ```
+
+   `predev` builds `apps/console/dist` if needed and copies `.dev.vars` next to the worker configs (wrangler does not read the repo-root file). Optional HMR: `pnpm dev:console` → http://localhost:5173.
+
+</Steps>
+
+### Next Steps
+
+- [README](https://github.com/duyet/oma#cloudflare)
+- [Cloudflare deploy](/self-host/deploy/)
+
+</TabItem>
 <TabItem label="☁️ Cloudflare (production)">
 
 Deploy to Cloudflare Workers for a production setup.
@@ -240,7 +276,8 @@ curl -H "Authorization: Bearer $K8S_BRIDGE_TOKEN" \
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | `docker compose up` fails | Port 8787 in use | Stop the conflicting process or change the port in `docker-compose.yml` |
-| `health` returns 503 | Migrations not finished | Wait 10s and retry, or check `docker compose logs oma` |
+| `health` returns 503 | Migrations not finished, or missing `BETTER_AUTH_SECRET` / `PLATFORM_ROOT_SECRET` | Wait 10s and retry; for `pnpm dev`, set both secrets in repo-root `.dev.vars` |
+| `pnpm dev` asks for a Cloudflare account | Always-remote Workers AI binding | Use current `pnpm dev` (`--local` + `wrangler.dev.jsonc`; AI omitted) |
 | Agent creation fails with 401 | Wrong API key | `OMA_KEY` must match `API_KEY` in `.env` (`dev-test-key-change-me` from `.env.example`) |
 | Session create returns 400 `environment_id is required` | No environment on the request | Create one with `POST /v1/environments` and pass `environment_id` (CLI: `--env`) |
 | Session message returns no reply | No model card or `ANTHROPIC_API_KEY` | Add a Model Card in the Console, or set `ANTHROPIC_API_KEY` in `.env` and restart |
