@@ -258,7 +258,7 @@ export function DataTable<T>({
     // wide tables (many columns / long URLs) horizontal-scroll the
     // body but the header stays put → cells lose alignment.
     <div id="dt-header-scroll" className="overflow-x-hidden">
-      <table className="w-full table-fixed text-fg-muted">
+      <table className="w-full table-fixed text-muted-foreground">
         {colgroup}
         <thead>
           {table.getHeaderGroups().map((headerGroup) => (
@@ -351,7 +351,7 @@ export function DataTable<T>({
                     tabIndex={onRowClick ? 0 : undefined}
                     role={onRowClick ? "button" : undefined}
                     className={cn(
-                      "bg-bg-surface/60 hover:bg-bg-surface transition-colors",
+                      "bg-muted/60 hover:bg-muted transition-colors",
                       "[&>td]:bg-transparent [&>td]:px-3 [&>td]:py-2 [&>td]:align-middle [&>td]:text-sm",
                       "[&>td:first-child]:rounded-l-lg",
                       "[&>td:last-child]:rounded-r-lg",
@@ -399,7 +399,7 @@ function ColumnVisibilityMenu<T>({ table }: { table: TanstackTable<T> }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuLabel className="text-[11px] uppercase tracking-wider text-fg-subtle font-medium">
+        <DropdownMenuLabel className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
           Visible columns
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
@@ -448,7 +448,7 @@ function SkeletonRows({ colSpan }: { colSpan: number }) {
             <tr
               key={`sk-${rowIdx}`}
               className={cn(
-                "bg-bg-surface/60",
+                "bg-muted/60",
                 "[&>td]:bg-transparent [&>td]:px-3 [&>td]:py-2 [&>td]:align-middle",
                 "[&>td:first-child]:rounded-l-lg",
                 "[&>td:last-child]:rounded-r-lg",
@@ -503,7 +503,7 @@ function LoadMoreRow({
 
   return (
     <tr ref={ref}>
-      <td colSpan={colSpan} className="text-center py-4 text-xs text-fg-subtle">
+      <td colSpan={colSpan} className="text-center py-4 text-xs text-muted-foreground">
         {loading ? "Loading more…" : " "}
       </td>
     </tr>
