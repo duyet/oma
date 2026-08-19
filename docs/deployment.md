@@ -159,28 +159,28 @@ notes.
 
 ## CF Local (`wrangler dev`)
 
-**`wrangler dev` on three workers** with local D1 / KV / R2 / DO / Queue
-simulators. Identical-shape to prod; same code, same bindings, just no
-network presence.
+**`wrangler dev --local`** on the main + agent configs with local D1 / KV /
+R2 / DO / Queue simulators. One process, public HTTP on `:8787` only —
+the agent worker is reached via a service binding, not a second port.
+Workers AI, Browser Rendering, and container images are omitted so boot
+does not need a Cloudflare account or Docker.
 
 ```
        ┌── browser / oma CLI ──┐
        │                        │
        ▼                        ▼
   ┌────────────────────┐
-  │ wrangler dev       │   ports 8787 (main), 8788 (agent)
+  │ wrangler dev       │   http://localhost:8787
   │  ├─ apps/main      │
   │  │   └─ Hono routes
   │  │   └─ assets binding → apps/console/dist (SPA)
   │  │   └─ DO: RuntimeRoom
-  │  │   └─ R2 binding (local sim)
-  │  │   └─ KV binding (local sim)
-  │  │   └─ D1 binding (local sim)
+  │  │   └─ R2 / KV / D1 local sims
   │  │   └─ Queue consumers (local sim, no R2 events though)
   │  │   └─ Service binding → SANDBOX_sandbox_default → agent worker
-  │  └─ apps/agent (separate worker process)
-  │      └─ DO: SessionDO + Sandbox (Container)
-  │      └─ Service binding → MAIN_MCP → main worker
+  │  └─ apps/agent (same wrangler process)
+  │      └─ DO: SessionDO + Sandbox (no container image locally)
+  │      └─ Service binding → MAIN → main worker
   └────────────────────┘
 ```
 
@@ -188,12 +188,12 @@ network presence.
 
 | Concern | Implementation |
 |---|---|
-| HTTP server | Workers runtime via wrangler dev, ports 8787/8788 |
+| HTTP server | Workers runtime via wrangler dev, http://localhost:8787 |
 | SQL store | D1 local simulator (sqlite under the hood). Same migration files as prod |
 | KV | wrangler local KV simulator |
 | Blob store | wrangler local R2 simulator |
 | Event log | DO storage SQL (per-DO sqlite namespace) |
-| Sandbox | SessionDO + local D1/KV/R2 sims. Cloudflare Container sandboxes are off by default (`dev.enable_containers: false`) so Docker is not required to boot |
+| Sandbox | SessionDO + local D1/KV/R2 sims. The `containers` array is omitted locally (wrangler 4.83 always docker-builds declared images) so Docker is not required to boot |
 | Auth | `better-auth` against the local D1 simulator |
 | Vault credential injection | `MAIN_MCP.outboundForward` RPC — agent's container HTTPS calls go through main worker which injects header |
 | Memory mount | R2 simulator + sandbox.mountBucket(localBucket: true) sync |
@@ -216,7 +216,7 @@ cp .dev.vars.example .dev.vars   # set PLATFORM_ROOT_SECRET + BETTER_AUTH_SECRET
 # from prompting for a Cloudflare account. Local wrangler.dev.jsonc omits
 # the `containers` array so Docker is not required to boot.
 pnpm dev
-# → main worker on :8787 (API + Console ASSETS), agent worker on :8788
+# → http://localhost:8787 (API + Console ASSETS); agent is a local service binding
 
 # Sanity
 curl localhost:8787/health
