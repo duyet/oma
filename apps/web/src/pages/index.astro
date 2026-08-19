@@ -31,7 +31,7 @@ const btnQuiet =
 // rhythm so the body reads as one compact scroll, not a stack of billboard
 // sections.
 const section = "border-t border-border py-10 sm:py-12";
-const container = "max-w-5xl mx-auto px-4";
+const container = "site-container";
 const eyebrow =
   "font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--color-brand)]";
 const sectionTitle =
@@ -129,15 +129,15 @@ const explore = [
     </div>
   </section>
 
-  {/* How it fits — supporting mental model, after the pitch. Stay inside
-      the viewport (no negative-margin bleed): at 1024–1100px the capacity
-      accordion collapses CONFIGURE/REACH to rails instead of clipping the
-      page. overflow-x-auto is a last-resort inner scroll, never body. */}
+  {/* How it fits — supporting mental model, after the pitch. Same
+      .site-container as every other section (no wider column / negative-margin
+      bleed). At 1024–1100px the capacity accordion collapses CONFIGURE/REACH
+      to rails; overflow-x-auto is a last-resort inner scroll, never body. */}
   <section
     class="border-t border-border py-8 sm:py-10"
     aria-labelledby="how-it-fits-heading"
   >
-    <div class="mx-auto min-w-0 max-w-6xl px-4">
+    <div class:list={[container, "min-w-0"]}>
       <header class="mb-5 max-w-3xl sm:mb-6">
         <p class={eyebrow}>How it fits</p>
         <h2 id="how-it-fits-heading" class={sectionTitle}>
