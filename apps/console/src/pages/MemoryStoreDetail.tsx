@@ -2,12 +2,12 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { useApi } from "../lib/api";
 import { useApiQuery } from "../lib/useApiQuery";
+import { SortableTable } from "../components/SortableTable";
 import { FormDialog } from "@/components/ui/dialog";
 import { Page } from "../components/Page";
 import { PageHeader } from "../components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { rowActivateKeyDown } from "@/lib/utils";
 import { useConfirm } from "@/hooks/useConfirm";
 
 interface MemoryStore {
@@ -253,38 +253,55 @@ function MemoriesPanel({ storeId, archived }: { storeId: string; archived: boole
         />
       )}
 
-      {loading ? <p className="text-fg-subtle text-sm py-4">Loading...</p> : (
-        <div className="border border-border rounded-lg overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-bg-surface/60 text-fg-muted text-xs uppercase tracking-wider">
-                <th className="text-left px-4 py-2.5">Path</th>
-                <th className="text-left px-4 py-2.5">Size</th>
-                <th className="text-left px-4 py-2.5">SHA-256</th>
-                <th className="text-left px-4 py-2.5">Updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {memories.map((m) => (
-                <tr
-                  key={m.id}
-                  onClick={() => openMemory(m)}
-                  onKeyDown={rowActivateKeyDown(() => void openMemory(m))}
-                  tabIndex={0}
-                  role="button"
-                  className="border-t border-border cursor-pointer hover:bg-bg-surface transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
-                >
-                  <td className="px-4 py-3 font-mono text-xs">{m.path}</td>
-                  <td className="px-4 py-3">{m.size_bytes} B</td>
-                  <td className="px-4 py-3 font-mono text-xs text-fg-muted">{m.content_sha256.slice(0, 12)}…</td>
-                  <td className="px-4 py-3 text-fg-muted">{new Date(m.updated_at).toLocaleString()}</td>
-                </tr>
-              ))}
-              {!memories.length && (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-fg-subtle">No memories</td></tr>
-              )}
-            </tbody>
-          </table>
+      {loading ? (
+        <p className="text-fg-subtle text-sm py-4">Loading...</p>
+      ) : memories.length === 0 ? (
+        <div className="border border-border rounded-lg px-4 py-8 text-center text-fg-subtle text-sm">
+          No memories
+        </div>
+      ) : (
+        <div className="border border-border rounded-lg">
+          <SortableTable
+            data={memories}
+            getRowId={(m) => m.id}
+            onRowClick={(m) => void openMemory(m)}
+            columns={[
+              {
+                id: "path",
+                header: "Path",
+                accessor: (m) => m.path,
+                cell: (m) => (
+                  <span className="font-mono text-xs">{m.path}</span>
+                ),
+              },
+              {
+                id: "size",
+                header: "Size",
+                accessor: (m) => m.size_bytes,
+                cell: (m) => `${m.size_bytes} B`,
+              },
+              {
+                id: "sha",
+                header: "SHA-256",
+                accessor: (m) => m.content_sha256,
+                cell: (m) => (
+                  <span className="font-mono text-xs text-fg-muted">
+                    {m.content_sha256.slice(0, 12)}…
+                  </span>
+                ),
+              },
+              {
+                id: "updated",
+                header: "Updated",
+                accessor: (m) => m.updated_at,
+                cell: (m) => (
+                  <span className="text-fg-muted">
+                    {new Date(m.updated_at).toLocaleString()}
+                  </span>
+                ),
+              },
+            ]}
+          />
         </div>
       )}
 
@@ -515,51 +532,107 @@ function MemoryDetailDialog({
       )}
 
       {showVersions && versions && (
-        <div className="mt-4 border border-border rounded-lg overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="bg-bg-surface/60 text-fg-muted uppercase tracking-wider">
-                <th className="text-left px-3 py-2">When</th>
-                <th className="text-left px-3 py-2">Op</th>
-                <th className="text-left px-3 py-2">Actor</th>
-                <th className="text-left px-3 py-2">SHA-256</th>
-                <th className="text-right px-3 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {versions.map((v) => {
-                const isLiveHead = v.content_sha256 && v.content_sha256 === memory.content_sha256;
-                return (
-                  <tr key={v.id} className="border-t border-border">
-                    <td className="px-3 py-2 text-fg-muted">{new Date(v.created_at).toLocaleString()}</td>
-                    <td className="px-3 py-2 font-mono">{v.operation}{v.redacted && " · redacted"}</td>
-                    <td className="px-3 py-2 font-mono text-fg-muted">{v.actor.type}:{v.actor.id}</td>
-                    <td className="px-3 py-2 font-mono text-fg-muted">
-                      {v.content_sha256 ? v.content_sha256.slice(0, 12) + "…" : "—"}
-                      {isLiveHead && <span className="ml-2 text-brand">(head)</span>}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      {!archived && !v.redacted && v.content !== undefined && v.content !== null && !isLiveHead && (
-                        <button onClick={() => rollback(v)}
-                          className="inline-flex items-center justify-center min-w-11 min-h-11 sm:min-w-0 sm:min-h-0 px-2 text-xs text-brand hover:underline mr-1 sm:mr-2">
-                          Roll back
-                        </button>
-                      )}
-                      {!archived && !v.redacted && !isLiveHead && (
-                        <button onClick={() => redact(v)}
-                          className="inline-flex items-center justify-center min-w-11 min-h-11 sm:min-w-0 sm:min-h-0 px-2 text-xs text-danger hover:underline">
-                          Redact
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-              {!versions.length && (
-                <tr><td colSpan={5} className="px-3 py-4 text-center text-fg-subtle">No versions</td></tr>
-              )}
-            </tbody>
-          </table>
+        <div className="mt-4 border border-border rounded-lg">
+          {versions.length === 0 ? (
+            <div className="px-3 py-4 text-center text-fg-subtle text-xs">
+              No versions
+            </div>
+          ) : (
+            <SortableTable
+              dense
+              data={versions}
+              getRowId={(v) => v.id}
+              columns={[
+                {
+                  id: "when",
+                  header: "When",
+                  accessor: (v) => v.created_at,
+                  cell: (v) => (
+                    <span className="text-fg-muted text-xs">
+                      {new Date(v.created_at).toLocaleString()}
+                    </span>
+                  ),
+                },
+                {
+                  id: "op",
+                  header: "Op",
+                  accessor: (v) => v.operation,
+                  cell: (v) => (
+                    <span className="font-mono text-xs">
+                      {v.operation}
+                      {v.redacted && " · redacted"}
+                    </span>
+                  ),
+                },
+                {
+                  id: "actor",
+                  header: "Actor",
+                  accessor: (v) => `${v.actor.type}:${v.actor.id}`,
+                  cell: (v) => (
+                    <span className="font-mono text-xs text-fg-muted">
+                      {v.actor.type}:{v.actor.id}
+                    </span>
+                  ),
+                },
+                {
+                  id: "sha",
+                  header: "SHA-256",
+                  accessor: (v) => v.content_sha256 ?? "",
+                  cell: (v) => {
+                    const isLiveHead =
+                      v.content_sha256 &&
+                      v.content_sha256 === memory.content_sha256;
+                    return (
+                      <span className="font-mono text-xs text-fg-muted">
+                        {v.content_sha256
+                          ? v.content_sha256.slice(0, 12) + "…"
+                          : "—"}
+                        {isLiveHead && (
+                          <span className="ml-2 text-brand">(head)</span>
+                        )}
+                      </span>
+                    );
+                  },
+                },
+                {
+                  id: "actions",
+                  header: "",
+                  align: "right",
+                  cell: (v) => {
+                    const isLiveHead =
+                      !!v.content_sha256 &&
+                      v.content_sha256 === memory.content_sha256;
+                    return (
+                      <>
+                        {!archived &&
+                          !v.redacted &&
+                          v.content !== undefined &&
+                          v.content !== null &&
+                          !isLiveHead && (
+                            <button
+                              type="button"
+                              onClick={() => rollback(v)}
+                              className="inline-flex items-center justify-center min-w-11 min-h-11 sm:min-w-0 sm:min-h-0 px-2 text-xs text-brand hover:underline mr-1 sm:mr-2"
+                            >
+                              Roll back
+                            </button>
+                          )}
+                        {!archived && !v.redacted && !isLiveHead && (
+                          <button
+                            type="button"
+                            onClick={() => redact(v)}
+                            className="inline-flex items-center justify-center min-w-11 min-h-11 sm:min-w-0 sm:min-h-0 px-2 text-xs text-danger hover:underline"
+                          >
+                            Redact
+                          </button>
+                        )}
+                      </>
+                    );
+                  },
+                },
+              ]}
+            />
+          )}
         </div>
       )}
     </FormDialog>
@@ -589,31 +662,62 @@ function VersionsPanel({ storeId }: { storeId: string }) {
   if (!versions.length) return <p className="text-fg-subtle text-sm py-4">No versions yet.</p>;
 
   return (
-    <div className="border border-border rounded-lg overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="bg-bg-surface/60 text-fg-muted text-xs uppercase tracking-wider">
-            <th className="text-left px-4 py-2.5">When</th>
-            <th className="text-left px-4 py-2.5">Op</th>
-            <th className="text-left px-4 py-2.5">Path</th>
-            <th className="text-left px-4 py-2.5">Actor</th>
-            <th className="text-left px-4 py-2.5">SHA-256</th>
-          </tr>
-        </thead>
-        <tbody>
-          {versions.map((v) => (
-            <tr key={v.id} className="border-t border-border">
-              <td className="px-4 py-3 text-fg-muted">{new Date(v.created_at).toLocaleString()}</td>
-              <td className="px-4 py-3 font-mono text-xs">{v.operation}{v.redacted && " · redacted"}</td>
-              <td className="px-4 py-3 font-mono text-xs">{v.path ?? "—"}</td>
-              <td className="px-4 py-3 font-mono text-xs text-fg-muted">{v.actor.type}:{v.actor.id}</td>
-              <td className="px-4 py-3 font-mono text-xs text-fg-muted">
+    <div className="border border-border rounded-lg">
+      <SortableTable
+        data={versions}
+        getRowId={(v) => v.id}
+        columns={[
+          {
+            id: "when",
+            header: "When",
+            accessor: (v) => v.created_at,
+            cell: (v) => (
+              <span className="text-fg-muted">
+                {new Date(v.created_at).toLocaleString()}
+              </span>
+            ),
+          },
+          {
+            id: "op",
+            header: "Op",
+            accessor: (v) => v.operation,
+            cell: (v) => (
+              <span className="font-mono text-xs">
+                {v.operation}
+                {v.redacted && " · redacted"}
+              </span>
+            ),
+          },
+          {
+            id: "path",
+            header: "Path",
+            accessor: (v) => v.path ?? "",
+            cell: (v) => (
+              <span className="font-mono text-xs">{v.path ?? "—"}</span>
+            ),
+          },
+          {
+            id: "actor",
+            header: "Actor",
+            accessor: (v) => `${v.actor.type}:${v.actor.id}`,
+            cell: (v) => (
+              <span className="font-mono text-xs text-fg-muted">
+                {v.actor.type}:{v.actor.id}
+              </span>
+            ),
+          },
+          {
+            id: "sha",
+            header: "SHA-256",
+            accessor: (v) => v.content_sha256 ?? "",
+            cell: (v) => (
+              <span className="font-mono text-xs text-fg-muted">
                 {v.content_sha256 ? v.content_sha256.slice(0, 12) + "…" : "—"}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </span>
+            ),
+          },
+        ]}
+      />
     </div>
   );
 }

@@ -19,6 +19,7 @@ import { PopoverContent } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useConfirm } from "@/hooks/useConfirm";
 
+import { SortableTable } from "../components/SortableTable";
 import { MCP_REGISTRY, type McpRegistryEntry } from "../data/mcp-registry";
 
 // =================================================================
@@ -283,78 +284,111 @@ export function VaultDetail() {
                 : "No credentials match the current filter."}
             </div>
           ) : (
-            <div className="border border-border rounded-lg overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-bg-surface/60 text-fg-muted text-xs uppercase tracking-wider">
-                    <th className="text-left px-4 py-2.5">Name</th>
-                    <th className="text-left px-4 py-2.5">ID</th>
-                    <th className="text-left px-4 py-2.5">Type</th>
-                    <th className="text-left px-4 py-2.5">MCP server URL</th>
-                    <th className="text-left px-4 py-2.5">Status</th>
-                    <th className="text-left px-4 py-2.5">Updated</th>
-                    <th className="text-right px-4 py-2.5"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredCreds.map((c) => {
-                    const typeLabel =
+            <div className="border border-border rounded-lg">
+              <SortableTable
+                data={filteredCreds}
+                getRowId={(c) => c.id}
+                columns={[
+                  {
+                    id: "name",
+                    header: "Name",
+                    accessor: (c) => c.display_name,
+                    cell: (c) => (
+                      <span className="font-medium text-fg">{c.display_name}</span>
+                    ),
+                  },
+                  {
+                    id: "id",
+                    header: "ID",
+                    accessor: (c) => c.id,
+                    cell: (c) => (
+                      <span className="font-mono text-xs text-fg-muted">{c.id}</span>
+                    ),
+                  },
+                  {
+                    id: "type",
+                    header: "Type",
+                    accessor: (c) =>
                       c.auth.type === "mcp_oauth"
                         ? "OAuth"
                         : c.auth.type === "cap_cli"
                           ? "CLI"
-                          : "Bearer";
-                    const typeCls =
-                      c.auth.type === "mcp_oauth"
-                        ? "bg-info-subtle text-info"
-                        : c.auth.type === "cap_cli"
-                          ? "bg-brand-subtle text-brand"
-                          : "bg-success-subtle text-success";
-                    return (
-                      <tr key={c.id} className="border-t border-border">
-                        <td className="px-4 py-3 font-medium text-fg">
-                          {c.display_name}
-                        </td>
-                        <td className="px-4 py-3 font-mono text-xs text-fg-muted">
-                          {c.id}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`text-[10px] px-2 py-0.5 rounded-full ${typeCls}`}
-                          >
-                            {typeLabel}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 font-mono text-xs text-fg-muted truncate max-w-[260px]">
-                          {c.auth.mcp_server_url || c.auth.cli_id || "—"}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`inline-flex items-center text-[11px] px-2 py-0.5 rounded-full ${
-                              c.archived_at
-                                ? "bg-bg-surface text-fg-subtle"
-                                : "bg-success-subtle text-success"
-                            }`}
-                          >
-                            {c.archived_at ? "archived" : "active"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-fg-muted">
-                          {new Date(c.updated_at ?? c.created_at).toLocaleString()}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={() => deleteCred(c.id)}
-                            className="inline-flex items-center justify-center min-w-11 min-h-11 sm:min-w-0 sm:min-h-0 px-2 text-xs text-fg-subtle hover:text-danger transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          : "Bearer",
+                    cell: (c) => {
+                      const typeLabel =
+                        c.auth.type === "mcp_oauth"
+                          ? "OAuth"
+                          : c.auth.type === "cap_cli"
+                            ? "CLI"
+                            : "Bearer";
+                      const typeCls =
+                        c.auth.type === "mcp_oauth"
+                          ? "bg-info-subtle text-info"
+                          : c.auth.type === "cap_cli"
+                            ? "bg-brand-subtle text-brand"
+                            : "bg-success-subtle text-success";
+                      return (
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full ${typeCls}`}
+                        >
+                          {typeLabel}
+                        </span>
+                      );
+                    },
+                  },
+                  {
+                    id: "url",
+                    header: "MCP server URL",
+                    accessor: (c) => c.auth.mcp_server_url || c.auth.cli_id || "",
+                    className: "max-w-[260px]",
+                    cell: (c) => (
+                      <span className="font-mono text-xs text-fg-muted truncate block">
+                        {c.auth.mcp_server_url || c.auth.cli_id || "—"}
+                      </span>
+                    ),
+                  },
+                  {
+                    id: "status",
+                    header: "Status",
+                    accessor: (c) => (c.archived_at ? "archived" : "active"),
+                    cell: (c) => (
+                      <span
+                        className={`inline-flex items-center text-[11px] px-2 py-0.5 rounded-full ${
+                          c.archived_at
+                            ? "bg-bg-surface text-fg-subtle"
+                            : "bg-success-subtle text-success"
+                        }`}
+                      >
+                        {c.archived_at ? "archived" : "active"}
+                      </span>
+                    ),
+                  },
+                  {
+                    id: "updated",
+                    header: "Updated",
+                    accessor: (c) => c.updated_at ?? c.created_at,
+                    cell: (c) => (
+                      <span className="text-fg-muted">
+                        {new Date(c.updated_at ?? c.created_at).toLocaleString()}
+                      </span>
+                    ),
+                  },
+                  {
+                    id: "actions",
+                    header: "",
+                    align: "right",
+                    cell: (c) => (
+                      <button
+                        type="button"
+                        onClick={() => deleteCred(c.id)}
+                        className="inline-flex items-center justify-center min-w-11 min-h-11 sm:min-w-0 sm:min-h-0 px-2 text-xs text-fg-subtle hover:text-danger transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
+                      >
+                        Delete
+                      </button>
+                    ),
+                  },
+                ]}
+              />
             </div>
           )}
         </section>
