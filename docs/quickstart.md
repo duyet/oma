@@ -77,8 +77,8 @@ Open [http://localhost:8787](http://localhost:8787) in your browser, sign up, an
 
 For a single-user local trial without signup, set `AUTH_DISABLED=1` in `.env`, recreate the container, and the Console skips login (default tenant). Do not use that flag in production.
 
-- **Launch wizard** at `/launch` — ordered path: model access → environment (sandbox) → vault → agent → session. Same control plane on Docker/self-host **k3s** and **Cloudflare Workers**; only the sandbox provider differs.
-- **Overview** Getting Started checklist uses the same order (environment and vault before the first session).
+- **Overview** Getting started checklist is the first-run path: agent → environment (sandbox) → vault → session. It hides once any session exists.
+- `/launch` is the same four steps (command palette / URL); it collapses to Overview / Sessions after the first session. Same control plane on Docker/self-host **k3s** and **Cloudflare Workers**; only the sandbox provider differs.
 - Or create ad-hoc via **New Agent** / API (below).
 
 CLI:

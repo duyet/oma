@@ -223,7 +223,7 @@ const protectedRoutes: RouteObject[] = [
   },
   // Usage — standalone. It renders its own "Usage & cost" page header, so it
   // isn't wrapped in a tab hub (that produced a duplicated header). Reached
-  // via the sidebar's Workspace group.
+  // via the sidebar's daily path.
   { path: "usage", element: <Usage />, handle: { crumb: "Usage" } },
   // Session detail — full-page, no hub tabs. Pathless parent carries the
   // `Sessions` crumb (linking back to the list) so the breadcrumb reads

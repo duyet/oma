@@ -10,6 +10,8 @@ import {
   ChartColumnIcon,
   UsersIcon,
   BlocksIcon,
+  FolderIcon,
+  SettingsIcon,
 } from "lucide-react";
 
 import {
@@ -90,7 +92,7 @@ type BadgeKey =
   | "api_keys"
   | "runtimes";
 
-interface NavItem {
+export interface NavItem {
   to: string;
   label: string;
   icon: ComponentType<{ className?: string }>;
@@ -106,7 +108,7 @@ interface NavItem {
   children?: NavItem[];
 }
 
-interface NavGroup {
+export interface NavGroup {
   label: string;
   items: NavItem[];
 }
@@ -120,63 +122,72 @@ interface IntegrationStatusMap {
   total?: number;
 }
 
-/* ── Navigation — single source of truth for sidebar items ──
- * Every page gets its own item, filed under a labeled group, so the whole
- * surface is legible at rest rather than hidden one tab-click deep behind
- * a hub. The groups deliberately mirror the hub boundaries defined in
- * `main.tsx` (SESSIONS_HUB / RESOURCES_HUB / SETTINGS_HUB) — an item
- * deep-links straight to a tab, and the hub page still renders its own
- * tab strip, so the two navigations agree instead of describing different
- * structures. The Integrations hub (My Bots + Linear/GitHub/Slack, which
- * has no tab strip of its own) is filed under Resources here with an
- * aggregate count badge rather than a per-provider sub-menu, collapsing
- * three provider rows into one. Agents keeps a chevron sub-item (New
- * Agent) for its fast-path create flow. */
-const navGroups: NavGroup[] = [
-  {
-    label: "Workspace",
-    items: [
-      { to: "/", label: "Overview", icon: DashboardIcon, end: true },
-      { to: "/launch", label: "Launch", icon: CircleCheckBigIcon, end: true },
-      {
-        to: "/agents",
-        label: "Agents",
-        icon: AgentIcon,
-        badge: "agents",
-      },
-      { to: "/sessions", label: "Sessions", icon: SessionsIcon, badge: "sessions" },
-      { to: "/kanban", label: "Kanban Board", icon: SquareKanbanIcon },
-      { to: "/usage", label: "Usage", icon: ChartColumnIcon },
-    ],
-  },
-  {
-    label: "Resources",
-    items: [
-      { to: "/environments", label: "Environments", icon: EnvIcon, badge: "environments" },
-      { to: "/vaults", label: "Credential Vaults", icon: VaultIcon, badge: "vaults" },
-      { to: "/memory", label: "Memory Stores", icon: MemoryIcon },
-      { to: "/skills", label: "Skills", icon: SkillsIcon, badge: "skills" },
-      { to: "/files", label: "Files", icon: FilesIcon },
-      { to: "/model-cards", label: "Model Cards", icon: ModelCardsIcon, badge: "model_cards" },
-      {
-        to: "/integrations",
-        label: "Integrations",
-        icon: BlocksIcon,
-        end: true,
-        integrationStatus: "total",
-      },
-    ],
-  },
-  {
-    label: "Advanced",
-    items: [
-      { to: "/members", label: "Members", icon: UsersIcon },
-      { to: "/evals", label: "Eval Runs", icon: CircleCheckBigIcon },
-      { to: "/api-keys", label: "API Keys", icon: ApiKeysIcon, badge: "api_keys" },
-      { to: "/runtimes", label: "Sandbox providers", icon: RuntimesIcon, badge: "runtimes" },
-    ],
-  },
-];
+/* ── Navigation — daily path first, everything else nested ──
+ * Agents + Sessions are the everyday destinations. Resource pages
+ * (environments, vaults, memory, skills, files, …) stay reachable — they
+ * are nested under one Resources parent instead of each occupying a
+ * top-level row. Settings is the same pattern for members / keys /
+ * sandbox providers / evals. Launch is not a sidebar item: Overview's
+ * Getting started checklist is the single first-run path; `/launch`
+ * remains a deep-link (command palette / URL) that collapses once a
+ * session exists.
+ *
+ * Hub tab strips in `main.tsx` still switch between sibling pages; this
+ * tree only decides what the chrome shows at rest. */
+export function buildNavGroups(): NavGroup[] {
+  return [
+    {
+      label: "",
+      items: [
+        { to: "/agents", label: "Agents", icon: AgentIcon, badge: "agents" },
+        {
+          to: "/sessions",
+          label: "Sessions",
+          icon: SessionsIcon,
+          badge: "sessions",
+          children: [
+            { to: "/kanban", label: "Kanban", icon: SquareKanbanIcon },
+          ],
+        },
+        { to: "/", label: "Overview", icon: DashboardIcon, end: true },
+        { to: "/usage", label: "Usage", icon: ChartColumnIcon },
+        {
+          to: "/environments",
+          label: "Resources",
+          icon: FolderIcon,
+          children: [
+            { to: "/environments", label: "Environments", icon: EnvIcon, badge: "environments" },
+            { to: "/vaults", label: "Credential Vaults", icon: VaultIcon, badge: "vaults" },
+            { to: "/memory", label: "Memory Stores", icon: MemoryIcon },
+            { to: "/skills", label: "Skills", icon: SkillsIcon, badge: "skills" },
+            { to: "/files", label: "Files", icon: FilesIcon },
+            { to: "/model-cards", label: "Model Cards", icon: ModelCardsIcon, badge: "model_cards" },
+            {
+              to: "/integrations",
+              label: "Integrations",
+              icon: BlocksIcon,
+              end: true,
+              integrationStatus: "total",
+            },
+          ],
+        },
+        {
+          to: "/members",
+          label: "Settings",
+          icon: SettingsIcon,
+          children: [
+            { to: "/members", label: "Members", icon: UsersIcon },
+            { to: "/api-keys", label: "API Keys", icon: ApiKeysIcon, badge: "api_keys" },
+            { to: "/runtimes", label: "Sandbox providers", icon: RuntimesIcon, badge: "runtimes" },
+            { to: "/evals", label: "Eval Runs", icon: CircleCheckBigIcon },
+          ],
+        },
+      ],
+    },
+  ];
+}
+
+const navGroups = buildNavGroups();
 
 export function AppSidebar() {
   const { pathname } = useLocation();
@@ -310,21 +321,24 @@ export function AppSidebar() {
   ];
 
   const renderItem = (item: NavItem) => {
-    const active = isItemActive(item.to, item.end);
+    const childActive = itemHasActiveChild(item);
+    const active = isItemActive(item.to, item.end) || childActive;
     const hasChildren = !!item.children?.length;
+    // min-h-11 (44px) — same target size as the shell header band. Nested
+    // rows use it too so expanding Resources/Settings doesn't drop below
+    // the touch-target floor.
+    const itemClass = active
+      ? "min-h-11 bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+      : "min-h-11 !bg-transparent hover:!bg-sidebar-accent/50 !text-sidebar-foreground hover:!text-sidebar-foreground";
 
     const button = (
       <SidebarMenuButton
         asChild
         isActive={active}
         tooltip={item.label}
-        className={
-          active
-            ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-            : "!bg-transparent hover:!bg-sidebar-accent/50 !text-sidebar-foreground hover:!text-sidebar-foreground"
-        }
+        className={itemClass}
       >
-        <NavLink to={item.to} end={item.end}>
+        <NavLink to={item.to} end={item.end} data-testid={`sidebar-item-${item.label}`}>
           <item.icon className="size-4 opacity-80" />
           <span>{item.label}</span>
         </NavLink>
@@ -336,7 +350,7 @@ export function AppSidebar() {
       // same slot the chevron would take — so items with children skip it
       // rather than stacking two things on top of each other.
       return (
-        <SidebarMenuItem key={item.to}>
+        <SidebarMenuItem key={`${item.to}:${item.label}`}>
           {button}
           {(item.badge || item.integrationStatus) ? renderBadge(item.badge, item.integrationStatus) : null}
         </SidebarMenuItem>
@@ -347,7 +361,7 @@ export function AppSidebar() {
 
     return (
       <Collapsible
-        key={item.to}
+        key={`${item.to}:${item.label}`}
         open={isOpen}
         onOpenChange={(open) => setOpenItems((prev) => ({ ...prev, [item.to]: open }))}
         className="group"
@@ -361,13 +375,21 @@ export function AppSidebar() {
             </SidebarMenuAction>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <SidebarMenuSub>
+            <SidebarMenuSub data-testid={`sidebar-sub-${item.label}`}>
               {item.children!.map((child) => {
-                const childActive = isItemActive(child.to, child.end);
+                const nestedActive = isItemActive(child.to, child.end);
                 return (
-                  <SidebarMenuSubItem key={child.to}>
-                    <SidebarMenuSubButton asChild isActive={childActive}>
-                      <NavLink to={child.to} end={child.end}>
+                  <SidebarMenuSubItem key={`${child.to}:${child.label}`}>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={nestedActive}
+                      className="min-h-11"
+                    >
+                      <NavLink
+                        to={child.to}
+                        end={child.end}
+                        data-testid={`sidebar-item-${child.label}`}
+                      >
                         <child.icon className="size-4 opacity-80" />
                         <span>{child.label}</span>
                       </NavLink>
@@ -383,7 +405,7 @@ export function AppSidebar() {
   };
 
   const renderGroup = (g: NavGroup) => (
-    <SidebarGroup key={g.label}>
+    <SidebarGroup key={g.label || "primary"}>
       {g.label ? <SidebarGroupLabel>{g.label}</SidebarGroupLabel> : null}
       <SidebarMenu>{g.items.map(renderItem)}</SidebarMenu>
     </SidebarGroup>

@@ -81,6 +81,17 @@ describe("<AgentDetail /> hub layout", () => {
     expect(sessionCta.getAttribute("href")).toContain("agent=agent_1");
   });
 
+  it("hides run readiness once the agent already has a session", async () => {
+    server.use(
+      http.get("/v1/sessions", () =>
+        HttpResponse.json({ data: [{ id: "sess_1" }] }),
+      ),
+    );
+    renderHub();
+    await screen.findByRole("heading", { name: "My Agent" });
+    expect(screen.queryByTestId("agent-run-readiness")).toBeNull();
+  });
+
   it("renders the header + tab strip once the agent loads", async () => {
     renderHub();
     expect(await screen.findByRole("heading", { name: "My Agent" })).toBeInTheDocument();

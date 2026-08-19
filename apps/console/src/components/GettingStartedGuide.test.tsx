@@ -8,7 +8,6 @@ import { server } from "../mocks/server";
 import {
   GettingStartedGuide,
   GETTING_STARTED_DISMISSED_KEY,
-  GETTING_STARTED_COMPLETED_KEY,
 } from "./GettingStartedGuide";
 
 function mockDeps({
@@ -68,24 +67,22 @@ describe("GettingStartedGuide", () => {
   // The whole point of the panel: it must reflect real tenant state, not a
   // static checklist a user has to tick by hand.
   it("checks off steps whose resource already exists", async () => {
-    mockDeps({ agents: 2, sessions: 1 });
+    mockDeps({ agents: 2, environments: 1 });
     renderGuide();
 
     await waitFor(() => {
       expect(screen.getByTestId("guide-step-agent").dataset.done).toBe("true");
     });
-    // Session can be done without env in stats, but env/vault still open.
-    expect(screen.getByTestId("guide-step-session").dataset.done).toBe("true");
-    expect(screen.getByTestId("guide-step-environment").dataset.done).toBe("false");
+    expect(screen.getByTestId("guide-step-environment").dataset.done).toBe("true");
     expect(screen.getByTestId("guide-step-vault").dataset.done).toBe("false");
+    expect(screen.getByTestId("guide-step-session").dataset.done).toBe("false");
     expect(screen.getByText("2/4 done")).toBeTruthy();
   });
 
   // First incomplete step is the only "Next" target — equal-weight rows
   // made operators scan without a clear primary action.
-  // With agent done, Next is environment (not session) even if sessions exist.
   it("marks the first incomplete step as Next", async () => {
-    mockDeps({ agents: 2, sessions: 1 });
+    mockDeps({ agents: 2 });
     renderGuide();
 
     await waitFor(() => {
@@ -115,19 +112,22 @@ describe("GettingStartedGuide", () => {
     expect(screen.getByTestId("guide-step-vault").dataset.next).toBe("true");
   });
 
-  it("reports completion when every step is satisfied", async () => {
-    mockDeps({ agents: 1, sessions: 1, environments: 1, vaults: 1 });
+  it("hides once any session exists, even if vault is still open", async () => {
+    mockDeps({ agents: 1, environments: 0, vaults: 0, sessions: 1 });
     renderGuide();
 
-    expect(await screen.findByText("You're all set up")).toBeTruthy();
-    // Completion surfaces a labeled Dismiss button (not just the X icon).
-    expect(screen.getByRole("button", { name: "Dismiss" })).toBeTruthy();
-    // First completion visit records COMPLETED for future auto-hide, but
-    // does not dismiss yet — the operator still sees the banner once.
-    await waitFor(() =>
-      expect(localStorage.getItem(GETTING_STARTED_COMPLETED_KEY)).toBe("1"),
-    );
-    expect(screen.getByTestId("getting-started-guide")).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.queryByTestId("getting-started-guide")).toBeNull();
+    });
+    expect(screen.queryByText("Launch wizard")).toBeNull();
+  });
+
+  it("does not offer a second Launch wizard during first-run", async () => {
+    mockDeps();
+    renderGuide();
+
+    expect(await screen.findByTestId("getting-started-guide")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Launch wizard" })).toBeNull();
   });
 
   it("hides on dismiss and persists the dismissal", async () => {
@@ -147,19 +147,6 @@ describe("GettingStartedGuide", () => {
     renderGuide();
 
     expect(screen.queryByTestId("getting-started-guide")).toBeNull();
-  });
-
-  it("auto-hides on a returning visit after setup was already complete", async () => {
-    // Prior visit finished every step and recorded COMPLETED. This visit
-    // should not re-show the completion banner.
-    localStorage.setItem(GETTING_STARTED_COMPLETED_KEY, "1");
-    mockDeps({ agents: 1, sessions: 1, environments: 1, vaults: 1 });
-    renderGuide();
-
-    await waitFor(() => {
-      expect(screen.queryByTestId("getting-started-guide")).toBeNull();
-    });
-    expect(localStorage.getItem(GETTING_STARTED_DISMISSED_KEY)).toBe("1");
   });
 
   it("walks the tour dialog forward and back", async () => {

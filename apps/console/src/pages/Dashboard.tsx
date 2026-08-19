@@ -236,7 +236,7 @@ export function Dashboard() {
     return {
       title: "Overview",
       subtitle:
-        "Sandbox time, active sessions, and recent work. Use the map below to manage each piece of the stack.",
+        "Recent sessions, sandbox time, and what's running. Start another from Agents or Sessions.",
     };
   }, [stats, statsQuery.isLoading, recentSessions.length]);
 
@@ -281,10 +281,9 @@ export function Dashboard() {
           </p>
         </header>
 
-        {/* Onboarding checklist — dismissible, ticks itself off from the
-            counts already fetched below. Sits above the metrics because a
-            first-run tenant has nothing to read in them yet. */}
-        <GettingStartedGuide />
+        {/* Onboarding checklist — first-run only. Hides itself once any
+            session exists so this page isn't a second Launch wizard. */}
+        {!isMature ? <GettingStartedGuide /> : null}
 
         {/* Headline metrics — number-forward strip. Cards that map to a list
             page are activatable (keyboard + click) so the numbers double as
@@ -438,17 +437,11 @@ export function Dashboard() {
           </section>
         ) : null}
 
-        {/* How it fits together — numbered setup-steps grid: three step
-            columns ordered by setup dependency (① Foundation → ② Agent →
-            ③ Reach). Each card is a component type with its real instances
-            as badges; step headers check off as required cards go green —
-            the conceptual map and the setup checklist in one panel.
-            Set-up tenants get it collapsed by default so they aren't forced
-            to scroll past the architecture map every visit. */}
-        <StackedAssembly defaultOpen={assemblyDefaultOpen} />
+        {/* Recent sessions — above the architecture map so a workspace that
+            already has runs leads with next action, not a second setup
+            wizard. First-run empty state still sits here as the CTA. */}
+        <section data-testid="recent-sessions">
 
-        {/* Recent sessions */}
-        <section>
           <div className="flex items-baseline justify-between mb-3">
             <h2 className="font-display text-lg font-semibold text-fg">
               Recent sessions
@@ -646,6 +639,15 @@ export function Dashboard() {
             </div>
           )}
         </section>
+
+        {/* How it fits together — numbered setup-steps grid: three step
+            columns ordered by setup dependency (① Foundation → ② Agent →
+            ③ Reach). Each card is a component type with its real instances
+            as badges; step headers check off as required cards go green —
+            the conceptual map and the setup checklist in one panel.
+            Set-up tenants get it collapsed by default so they aren't forced
+            to scroll past the architecture map every visit. */}
+        <StackedAssembly defaultOpen={assemblyDefaultOpen} />
       </div>
     </div>
   );

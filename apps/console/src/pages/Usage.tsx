@@ -110,11 +110,10 @@ function formatKindTotal(kind: string, value: number): string {
 }
 
 /**
- * Tenant-wide usage & cost analytics (issue #174) — 4th tab in the Sessions
- * hub, alongside Sessions / Kanban Board / Eval Runs. There's no dedicated
- * top-level "Analytics" nav destination (the sidebar is deliberately capped
- * at 6 flat items — see AppSidebar.tsx), so this extends the closest
- * existing home rather than adding a 7th.
+ * Tenant-wide usage & cost analytics (issue #174). There's no dedicated
+ * top-level "Analytics" nav destination (the sidebar daily path is Agents,
+ * Sessions, Overview, Usage, plus nested Resources / Settings — see
+ * AppSidebar.tsx), so this page is the Usage item on that path.
  *
  * Consumes:
  *   - GET /v1/usage?days=0&group_by=agent — the "All time" stat tiles,
