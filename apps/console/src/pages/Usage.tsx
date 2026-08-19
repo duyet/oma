@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { TriangleAlertIcon } from "lucide-react";
 
+import { SortableTable } from "../components/SortableTable";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { formatQueryError, useApiQuery } from "../lib/useApiQuery";
@@ -463,24 +464,26 @@ function DailyChart({ data }: { data: DailyBucket[] }) {
 function KindTable({ rows }: { rows: UsageByKind[] }) {
   if (rows.length === 0) return <p className="text-sm text-muted-foreground">No usage recorded.</p>;
   return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="text-muted-foreground text-[11px] uppercase tracking-[0.08em]">
-          <th className="text-left pb-2 font-medium">Kind</th>
-          <th className="text-right pb-2 font-medium">Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => (
-          <tr key={r.kind} className="border-t border-border">
-            <td className="py-2 text-foreground">{KIND_META[r.kind]?.label ?? r.kind}</td>
-            <td className="py-2 text-right text-muted-foreground tabular-nums">
-              {formatKindTotal(r.kind, r.total)}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <SortableTable
+      dense
+      data={rows}
+      getRowId={(r) => r.kind}
+      columns={[
+        {
+          id: "kind",
+          header: "Kind",
+          accessor: (r) => KIND_META[r.kind]?.label ?? r.kind,
+          cell: (r) => KIND_META[r.kind]?.label ?? r.kind,
+        },
+        {
+          id: "total",
+          header: "Total",
+          align: "right",
+          accessor: (r) => r.total,
+          cell: (r) => formatKindTotal(r.kind, r.total),
+        },
+      ]}
+    />
   );
 }
 
@@ -488,73 +491,82 @@ function InstanceTypeTable({ rows }: { rows: UsageByInstanceType[] }) {
   if (rows.length === 0)
     return <p className="text-sm text-muted-foreground">No sandbox usage recorded.</p>;
   return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="text-muted-foreground text-[11px] uppercase tracking-[0.08em]">
-          <th className="text-left pb-2 font-medium">Instance type</th>
-          <th className="text-right pb-2 font-medium">Active time</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => (
-          <tr key={r.instance_type ?? "unknown"} className="border-t border-border">
-            <td className="py-2 text-foreground font-mono text-xs">{r.instance_type ?? "unknown"}</td>
-            <td className="py-2 text-right text-muted-foreground tabular-nums">
-              {formatSandboxTime(r.total_seconds)}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <SortableTable
+      dense
+      data={rows}
+      getRowId={(r) => r.instance_type ?? "unknown"}
+      columns={[
+        {
+          id: "instance_type",
+          header: "Instance type",
+          accessor: (r) => r.instance_type ?? "unknown",
+          cell: (r) => (
+            <span className="font-mono text-xs">{r.instance_type ?? "unknown"}</span>
+          ),
+        },
+        {
+          id: "active_time",
+          header: "Active time",
+          align: "right",
+          accessor: (r) => r.total_seconds,
+          cell: (r) => formatSandboxTime(r.total_seconds),
+        },
+      ]}
+    />
   );
 }
 
-/** Per-agent breakdown (?group_by=agent, #231) — one row per agent plus an
- *  "Unattributed" row for usage_events with no agent_id. A plain
- *  hand-rolled <table>, matching KindTable/InstanceTypeTable right above
- *  rather than the full-page DataTable component (search/columns-menu/
- *  infinite-scroll chrome built for standalone list routes) — this is a
- *  small, unpaginated summary embedded in an existing analytics Card. */
+/** Per-agent breakdown (?group_by=agent, #231) with client-side column sort. */
 function ByAgentTable({ rows }: { rows: UsageByAgent[] }) {
   if (rows.length === 0)
     return <p className="text-sm text-muted-foreground">No per-agent usage recorded.</p>;
   return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="text-muted-foreground text-[11px] uppercase tracking-[0.08em]">
-          <th className="text-left pb-2 font-medium">Agent</th>
-          <th className="text-right pb-2 font-medium">Sandbox time</th>
-          <th className="text-right pb-2 font-medium">Sessions</th>
-          <th className="text-right pb-2 font-medium">Tokens in</th>
-          <th className="text-right pb-2 font-medium">Tokens out</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => (
-          <tr key={r.agent_id ?? "unattributed"} className="border-t border-border">
-            <td className="py-2 text-foreground">
-              {r.agent_name ?? (r.agent_id ? (
-                <span className="font-mono text-xs">{r.agent_id}</span>
-              ) : (
-                <span className="text-muted-foreground italic">Unattributed</span>
-              ))}
-            </td>
-            <td className="py-2 text-right text-muted-foreground tabular-nums">
-              {formatSandboxTime(r.total_active_seconds)}
-            </td>
-            <td className="py-2 text-right text-muted-foreground tabular-nums">
-              {formatCompact(r.total_sessions)}
-            </td>
-            <td className="py-2 text-right text-muted-foreground tabular-nums">
-              {formatCompact(kindValue(r.by_kind, "model_input_tokens"))}
-            </td>
-            <td className="py-2 text-right text-muted-foreground tabular-nums">
-              {formatCompact(kindValue(r.by_kind, "model_output_tokens"))}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <SortableTable
+      dense
+      data={rows}
+      getRowId={(r) => r.agent_id ?? "unattributed"}
+      columns={[
+        {
+          id: "agent",
+          header: "Agent",
+          accessor: (r) => r.agent_name ?? r.agent_id ?? "",
+          cell: (r) =>
+            r.agent_name ?? (r.agent_id ? (
+              <span className="font-mono text-xs">{r.agent_id}</span>
+            ) : (
+              <span className="text-muted-foreground italic">Unattributed</span>
+            )),
+        },
+        {
+          id: "sandbox_time",
+          header: "Sandbox time",
+          align: "right",
+          accessor: (r) => r.total_active_seconds,
+          cell: (r) => formatSandboxTime(r.total_active_seconds),
+        },
+        {
+          id: "sessions",
+          header: "Sessions",
+          align: "right",
+          accessor: (r) => r.total_sessions,
+          cell: (r) => formatCompact(r.total_sessions),
+        },
+        {
+          id: "tokens_in",
+          header: "Tokens in",
+          align: "right",
+          accessor: (r) => kindValue(r.by_kind, "model_input_tokens"),
+          cell: (r) => formatCompact(kindValue(r.by_kind, "model_input_tokens")),
+        },
+        {
+          id: "tokens_out",
+          header: "Tokens out",
+          align: "right",
+          accessor: (r) => kindValue(r.by_kind, "model_output_tokens"),
+          cell: (r) => formatCompact(kindValue(r.by_kind, "model_output_tokens")),
+        },
+      ]}
+    />
   );
 }
 

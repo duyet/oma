@@ -4,7 +4,7 @@ import { ArchiveIcon, TrashIcon } from "lucide-react";
 
 import { useApi } from "../lib/api";
 import { formatQueryError, useApiQuery } from "../lib/useApiQuery";
-import { DataTable, type ColumnDef } from "../components/DataTable";
+import { DataTable, ExpandedDetail, type ColumnDef } from "../components/DataTable";
 import { FacetedFilter } from "../components/FacetedFilter";
 import { FilterChip, CreatedFilterChip } from "../components/FilterChip";
 import { RowActionsMenu } from "../components/RowActionsMenu";
@@ -190,6 +190,7 @@ export function MemoryStoresList() {
           );
         },
         enableHiding: false,
+        enableResizing: false,
         size: 56,
       },
     ],
@@ -264,6 +265,19 @@ export function MemoryStoresList() {
       }
       emptySubtitle="A memory store lets your agents save notes and context that carry over across sessions. Create your first one to get started."
       columns={columns}
+      renderExpandedRow={(s) => (
+        <ExpandedDetail
+          rows={[
+            { label: "ID", value: <span className="font-mono text-xs">{s.id}</span> },
+            { label: "Description", value: s.description?.trim() || "—" },
+            { label: "Status", value: s.archived_at ? "archived" : "active" },
+            {
+              label: "Created",
+              value: new Date(s.created_at).toLocaleString(),
+            },
+          ]}
+        />
+      )}
     >
       <FormDialog
         open={showCreate}
