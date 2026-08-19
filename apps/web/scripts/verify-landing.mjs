@@ -142,6 +142,44 @@ if (!index.includes("site-container")) {
 }
 if (!process.exitCode) ok("landing source sections + concepts + viz + CTAs + hero + #layers alias");
 
+// --- Marketing subpages: same content column as the homepage ---
+const legacyColumn = /max-w-5xl\s+mx-auto\s+px-4|max-w-6xl|max-w-7xl/;
+const subpageRoots = [
+  join(root, "src/pages/how-it-works.astro"),
+  join(root, "src/pages/stats.astro"),
+  join(root, "src/pages/infrastructure.astro"),
+  join(root, "src/pages/use-cases.astro"),
+  join(root, "src/pages/brand.astro"),
+  join(root, "src/pages/features"),
+];
+for (const path of subpageRoots) {
+  if (!existsSync(path)) {
+    fail(`expected marketing subpage missing: ${path.replace(root + "/", "")}`);
+    continue;
+  }
+  const files =
+    path.endsWith("features") ?
+      ["index.astro", "agent-sandbox.astro", "coding-agents.astro", "local-machine.astro", "private-kubernetes.astro"].map(
+        (name) => join(path, name),
+      )
+    : [path];
+  for (const file of files) {
+    if (!existsSync(file)) continue;
+    const rel = file.replace(root + "/", "");
+    const src = readFileSync(file, "utf8");
+    if (legacyColumn.test(src)) {
+      fail(`${rel}: must use .site-container, not legacy max-w-* column classes`);
+    }
+    if (/section class="site-container/.test(src)) {
+      fail(`${rel}: site-container belongs on inner content, not on <section> (keep sections full-bleed)`);
+    }
+    if (!src.includes("site-container")) {
+      fail(`${rel}: marketing subpage must wrap inner content in site-container`);
+    }
+  }
+}
+if (!process.exitCode) ok("marketing subpages use site-container (no legacy max-w-* columns)");
+
 // --- Built dist (if present) ---
 const distIndex = join(root, "dist/index.html");
 if (existsSync(distIndex)) {

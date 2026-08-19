@@ -48,7 +48,7 @@ const schemas = [
   schemas={schemas}
 >
   <section class="border-b border-[var(--color-border)]">
-    <div class="max-w-5xl mx-auto px-4 py-10 md:py-14">
+    <div class="site-container py-10 md:py-14">
       <p class="text-sm font-mono uppercase tracking-wider text-[var(--color-fg-subtle)] mb-4">
         Local Machine
       </p>
@@ -104,7 +104,8 @@ const schemas = [
     </div>
   </section>
 
-  <section class="max-w-5xl mx-auto px-4 py-10" data-reveal>
+  <section class="py-10" data-reveal>
+    <div class="site-container">
     <h2 class="font-display text-3xl font-bold mb-4">How it works</h2>
     <p class="text-[var(--color-fg-muted)] leading-relaxed mb-8 max-w-3xl">
       A lightweight bridge daemon pairs your machine with your tenant. From
@@ -138,10 +139,11 @@ const schemas = [
         </p>
       </div>
     </div>
+    </div>
   </section>
 
   <section class="border-y border-[var(--color-border)] bg-[var(--color-bg-surface)]" data-reveal>
-    <div class="max-w-5xl mx-auto px-4 py-10">
+    <div class="site-container py-10">
       <h2 class="font-display text-3xl font-bold mb-8 text-center">Pair a machine</h2>
       <div class="max-w-2xl mx-auto rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] overflow-hidden">
         <div class="flex items-center gap-1.5 px-4 py-2.5 border-b border-[var(--color-border)]">
@@ -173,7 +175,8 @@ manual server to run.</span></code></pre>
     </div>
   </section>
 
-  <section class="max-w-5xl mx-auto px-4 py-10" data-reveal>
+  <section class="py-10" data-reveal>
+    <div class="site-container">
     <h2 class="font-display text-3xl font-bold mb-4">What you get, and what's still missing</h2>
     <div class="grid md:grid-cols-2 gap-4">
       <div>
@@ -195,10 +198,11 @@ manual server to run.</span></code></pre>
         </ul>
       </div>
     </div>
+    </div>
   </section>
 
   <section class="border-t border-[var(--color-border)]" data-reveal>
-    <div class="max-w-5xl mx-auto px-4 py-10">
+    <div class="site-container py-10">
       <h2 class="font-display text-3xl font-bold mb-8">FAQ</h2>
       <div class="grid md:grid-cols-2 gap-4">
         {faqItems.map((item) => (

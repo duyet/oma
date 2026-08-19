@@ -78,7 +78,7 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
 >
   <!-- Page hero -->
   <section class="border-b border-[var(--color-border)]">
-    <div class="max-w-5xl mx-auto px-4 py-8 md:py-10">
+    <div class="site-container py-8 md:py-10">
       <p class="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
         <Icon name="server" size={14} class="text-[var(--color-brand)]" /> Infrastructure
       </p>
@@ -94,7 +94,7 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
 
   <!-- Deployment topology: two parallel paths, not a pipeline -->
   <section class="border-b border-[var(--color-border)] bg-[var(--color-bg-surface)]" data-reveal id="topology">
-    <div class="max-w-5xl mx-auto px-4 py-8 md:py-10">
+    <div class="site-container py-8 md:py-10">
       <p class="flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
         <Icon name="layers" size={14} class="text-[var(--color-brand)]" /> Deployment
       </p>
@@ -172,7 +172,7 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
 
   <!-- Fleet operations -->
   <section class="border-b border-[var(--color-border)]" data-reveal id="fleets">
-    <div class="max-w-5xl mx-auto px-4 py-10 md:py-12 text-center">
+    <div class="site-container py-10 md:py-12 text-center">
       <p class="flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
         <Icon name="server" size={14} class="text-[var(--color-brand)]" /> Fleets
       </p>
@@ -244,7 +244,8 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
   </section>
 
   <!-- Any sandbox provider -->
-  <section class="max-w-5xl mx-auto px-4 py-10 md:py-12" data-reveal id="sandboxes">
+  <section class="py-10 md:py-12" data-reveal id="sandboxes">
+    <div class="site-container">
     <p class="flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
       <Icon name="box" size={14} class="text-[var(--color-brand)]" /> Sandboxes
     </p>
@@ -281,11 +282,12 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
         );
       })}
     </div>
+    </div>
   </section>
 
   <!-- Bridge: connect your own machine -->
   <section class="border-t border-[var(--color-border)]" data-reveal id="bridge">
-    <div class="max-w-5xl mx-auto px-4 py-10 md:py-12">
+    <div class="site-container py-10 md:py-12">
       <p class="flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
         <Icon name="terminal" size={14} class="text-[var(--color-brand)]" /> Bridge
       </p>
