@@ -36,43 +36,50 @@ on both backends regardless.
 
 ```bash
 git clone https://github.com/duyet/oma.git
-cd open-managed-agents
+cd oma
 cp .env.example .env
 
 # Two secrets are required before first boot — both generated locally:
 #   BETTER_AUTH_SECRET   — signs Console sessions
 #   PLATFORM_ROOT_SECRET — encrypts credentials, model-card API keys, integration tokens
 #                          (lose it and every encrypted row is unreadable — back it up)
+# API_KEY is prefilled as dev-test-key-change-me (same as .dev.vars.example).
+# A provider key is required for a successful turn — set ANTHROPIC_API_KEY
+# or add a Model Card in the Console.
 $EDITOR .env
 # BETTER_AUTH_SECRET=$(openssl rand -hex 32)
 # PLATFORM_ROOT_SECRET=$(openssl rand -base64 32)
-# ANTHROPIC_API_KEY is optional — in production, prefer a per-tenant Model Card.
 
 # First time builds the image; subsequent runs skip --build
 docker compose up -d --build
 
 # Sanity
 curl localhost:8787/health
-# → {"status":"ok","backends":{"db":"sqlite ..."},...}
+# → {"status":"ok","runtime":"node","pid":…,"uptime_s":…,"backends":{"db":"sqlite …",…}}
 
 # Console UI on the same port — sign up with email + password,
 # you'll be in the app immediately (no email-OTP gate by default)
 open http://localhost:8787
 ```
 
-Drive the harness end-to-end:
+Drive the harness end-to-end (uses `API_KEY` from `.env`; sessions need an environment, same as `oma sessions create --agent … --env …`):
 
 ```bash
-AID=$(curl -s -X POST localhost:8787/v1/agents -H 'content-type: application/json' \
+KEY=$(grep '^API_KEY=' .env | cut -d= -f2-)
+
+AID=$(curl -s -X POST localhost:8787/v1/agents -H "x-api-key: $KEY" -H 'content-type: application/json' \
   -d '{"name":"hello","model":"claude-sonnet-4-6","tools":[{"type":"agent_toolset_20260401"}]}' \
   | jq -r .id)
 
-SID=$(curl -s -X POST localhost:8787/v1/sessions -H 'content-type: application/json' \
-  -d "{\"agent\":\"$AID\"}" | jq -r .id)
+EID=$(curl -s -X POST localhost:8787/v1/environments -H "x-api-key: $KEY" -H 'content-type: application/json' \
+  -d '{"name":"local","config":{"type":"cloud"}}' | jq -r .id)
+
+SID=$(curl -s -X POST localhost:8787/v1/sessions -H "x-api-key: $KEY" -H 'content-type: application/json' \
+  -d "{\"agent\":\"$AID\",\"environment_id\":\"$EID\"}" | jq -r .id)
 
 curl -N localhost:8787/v1/sessions/$SID/events/stream &
 
-curl -s -X POST localhost:8787/v1/sessions/$SID/events -H 'content-type: application/json' \
+curl -s -X POST localhost:8787/v1/sessions/$SID/events -H "x-api-key: $KEY" -H 'content-type: application/json' \
   -d '{"events":[{"type":"user.message","content":[{"type":"text","text":"Run uname -a"}]}]}'
 ```
 

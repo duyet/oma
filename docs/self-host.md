@@ -49,31 +49,38 @@ cp .env.example .env
 $EDITOR .env
 # BETTER_AUTH_SECRET=$(openssl rand -hex 32)
 # PLATFORM_ROOT_SECRET=$(openssl rand -base64 32)
-# ANTHROPIC_API_KEY is optional — in production, prefer a per-tenant Model Card.
+# API_KEY is prefilled as dev-test-key-change-me. A provider key is required
+# for a successful turn — set ANTHROPIC_API_KEY, or add a Model Card.
 
 # 2. Start (first time builds the image; subsequent runs skip --build)
 docker compose -f docker-compose.yml up -d --build
 
 # 3. Sanity check
 curl localhost:8787/health
-# → {"status":"ok","runtime":"node","backends":{"db":"sqlite ..."},...}
+# → {"status":"ok","runtime":"node","pid":…,"uptime_s":…,"backends":{"db":"sqlite …",…}}
 
-# 4. Create + drive an agent
+# 4. Create + drive an agent (API_KEY from .env; sessions require environment_id)
+KEY=$(grep '^API_KEY=' .env | cut -d= -f2-)
+
 AID=$(curl -s -X POST localhost:8787/v1/agents \
-  -H 'content-type: application/json' \
+  -H "x-api-key: $KEY" -H 'content-type: application/json' \
   -d '{"name":"shell","model":"claude-sonnet-4-6","system":"Use bash to answer.","tools":[{"type":"bash"}]}' \
   | jq -r .id)
 
+EID=$(curl -s -X POST localhost:8787/v1/environments \
+  -H "x-api-key: $KEY" -H 'content-type: application/json' \
+  -d '{"name":"local","config":{"type":"cloud"}}' | jq -r .id)
+
 SID=$(curl -s -X POST localhost:8787/v1/sessions \
-  -H 'content-type: application/json' \
-  -d "{\"agent_id\":\"$AID\"}" | jq -r .id)
+  -H "x-api-key: $KEY" -H 'content-type: application/json' \
+  -d "{\"agent\":\"$AID\",\"environment_id\":\"$EID\"}" | jq -r .id)
 
 # Open a streaming SSE in one terminal:
 curl -N localhost:8787/v1/sessions/$SID/events/stream &
 
 # Send a message in another:
 curl -s -X POST localhost:8787/v1/sessions/$SID/events \
-  -H 'content-type: application/json' \
+  -H "x-api-key: $KEY" -H 'content-type: application/json' \
   -d '{"events":[{"type":"user.message","content":[{"type":"text","text":"Run: ls -la / | head"}]}]}'
 
 # Watch the SSE — you should see agent.tool_use → agent.tool_result →
