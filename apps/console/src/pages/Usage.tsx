@@ -184,8 +184,8 @@ export function Usage() {
   return (
     <div className="pb-4 space-y-6">
       <div>
-        <h2 className="font-display text-lg font-semibold text-fg">Usage &amp; cost</h2>
-        <p className="text-sm text-fg-muted mt-0.5">
+        <h2 className="font-display text-lg font-semibold text-foreground">Usage &amp; cost</h2>
+        <p className="text-sm text-muted-foreground mt-0.5">
           Sandbox time, model tokens, and Cloudflare infra cost across every agent in this
           workspace.
         </p>
@@ -218,7 +218,7 @@ export function Usage() {
       ) : (
         <>
           <div>
-            <h3 className="text-xs uppercase tracking-wider text-fg-subtle font-medium mb-2">
+            <h3 className="text-xs uppercase tracking-wider text-muted-foreground font-medium mb-2">
               All time
             </h3>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-5xl">
@@ -236,7 +236,7 @@ export function Usage() {
           </div>
 
           <div>
-            <h3 className="text-xs uppercase tracking-wider text-fg-subtle font-medium mb-2">
+            <h3 className="text-xs uppercase tracking-wider text-muted-foreground font-medium mb-2">
               Model tokens
             </h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 max-w-5xl">
@@ -287,7 +287,7 @@ export function Usage() {
                   href="https://docs.oma.duyet.net/reference/configuration/"
                   target="_blank"
                   rel="noreferrer"
-                  className="underline hover:text-fg"
+                  className="underline hover:text-foreground"
                 >
                   Configuration docs
                 </a>
@@ -306,10 +306,10 @@ export function Usage() {
         ) : cost ? (
           <>
             <div className="mb-3">
-              <div className="text-lg font-semibold text-fg tabular-nums">
+              <div className="text-lg font-semibold text-foreground tabular-nums">
                 {formatUsd(cost.total_estimated_cost)}
               </div>
-              <div className="text-xs text-fg-subtle">
+              <div className="text-xs text-muted-foreground">
                 {cost.period.start} – {cost.period.end} · incl.{" "}
                 {formatUsd(cost.platform_fee)} platform fee
               </div>
@@ -324,16 +324,16 @@ export function Usage() {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border border-border rounded-lg bg-bg-surface/30 px-4 py-3">
-      <div className="text-xs text-fg-muted uppercase tracking-wider">{label}</div>
-      <div className="text-lg font-semibold text-fg mt-0.5 tabular-nums">{value}</div>
+    <div className="border border-border rounded-2xl bg-card px-4 py-3">
+      <div className="text-xs text-muted-foreground uppercase tracking-wider">{label}</div>
+      <div className="text-lg font-semibold text-foreground mt-0.5 tabular-nums">{value}</div>
     </div>
   );
 }
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="border border-border rounded-lg bg-bg-surface/30 p-4 max-w-5xl">
+    <div className="border border-border rounded-2xl bg-card p-4 max-w-5xl">
       <h3 className="font-display text-base font-semibold mb-3">{title}</h3>
       {children}
     </div>
@@ -343,7 +343,7 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 function RangePicker({ range, onChange }: { range: Range; onChange: (r: Range) => void }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs text-fg-subtle">Range</span>
+      <span className="text-xs text-muted-foreground">Range</span>
       <div className="inline-flex items-center gap-1 rounded-lg bg-muted p-[3px]">
         {RANGES.map((r) => (
           <button
@@ -370,7 +370,7 @@ function UsageSkeleton() {
     <div className="space-y-3">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-5xl">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="border border-border rounded-lg bg-bg-surface/30 px-4 py-3">
+          <div key={i} className="border border-border rounded-2xl bg-card px-4 py-3">
             <Skeleton className="h-3 w-20" rounded="sm" />
             <Skeleton className="h-6 w-16 mt-2" rounded="sm" />
           </div>
@@ -386,7 +386,7 @@ function UsageSkeleton() {
  *  `<title>` tooltips + thinned date labels), no chart library. */
 function DailyChart({ data }: { data: DailyBucket[] }) {
   const n = data.length;
-  if (n === 0) return <p className="text-sm text-fg-subtle">No data.</p>;
+  if (n === 0) return <p className="text-sm text-muted-foreground">No data.</p>;
 
   const max = Math.max(1, ...data.map((d) => d.active_seconds));
   const viewW = DAILY_CHART_VIEW_W;
@@ -462,7 +462,7 @@ function DailyChart({ data }: { data: DailyBucket[] }) {
 }
 
 function KindTable({ rows }: { rows: UsageByKind[] }) {
-  if (rows.length === 0) return <p className="text-sm text-fg-subtle">No usage recorded.</p>;
+  if (rows.length === 0) return <p className="text-sm text-muted-foreground">No usage recorded.</p>;
   return (
     <SortableTable
       dense
@@ -489,7 +489,7 @@ function KindTable({ rows }: { rows: UsageByKind[] }) {
 
 function InstanceTypeTable({ rows }: { rows: UsageByInstanceType[] }) {
   if (rows.length === 0)
-    return <p className="text-sm text-fg-subtle">No sandbox usage recorded.</p>;
+    return <p className="text-sm text-muted-foreground">No sandbox usage recorded.</p>;
   return (
     <SortableTable
       dense
@@ -519,7 +519,7 @@ function InstanceTypeTable({ rows }: { rows: UsageByInstanceType[] }) {
 /** Per-agent breakdown (?group_by=agent, #231) with client-side column sort. */
 function ByAgentTable({ rows }: { rows: UsageByAgent[] }) {
   if (rows.length === 0)
-    return <p className="text-sm text-fg-subtle">No per-agent usage recorded.</p>;
+    return <p className="text-sm text-muted-foreground">No per-agent usage recorded.</p>;
   return (
     <SortableTable
       dense
@@ -534,7 +534,7 @@ function ByAgentTable({ rows }: { rows: UsageByAgent[] }) {
             r.agent_name ?? (r.agent_id ? (
               <span className="font-mono text-xs">{r.agent_id}</span>
             ) : (
-              <span className="text-fg-subtle italic">Unattributed</span>
+              <span className="text-muted-foreground italic">Unattributed</span>
             )),
         },
         {
@@ -580,11 +580,11 @@ function ByAgentTable({ rows }: { rows: UsageByAgent[] }) {
 function ServiceCostTable({ services }: { services: Record<string, ServiceCost> }) {
   const rows = Object.entries(services);
   if (rows.length === 0)
-    return <p className="text-sm text-fg-subtle">No Cloudflare service usage recorded.</p>;
+    return <p className="text-sm text-muted-foreground">No Cloudflare service usage recorded.</p>;
   return (
     <table className="w-full text-sm">
       <thead>
-        <tr className="text-fg-subtle text-[11px] uppercase tracking-[0.08em]">
+        <tr className="text-muted-foreground text-[11px] uppercase tracking-[0.08em]">
           <th className="text-left pb-2 font-medium">Service</th>
           <th className="text-left pb-2 font-medium">Usage</th>
           <th className="text-right pb-2 font-medium">Cost</th>
@@ -593,13 +593,13 @@ function ServiceCostTable({ services }: { services: Record<string, ServiceCost> 
       <tbody>
         {rows.map(([key, svc]) => (
           <tr key={key} className="border-t border-border">
-            <td className="py-2 text-fg">{SERVICE_LABELS[key] ?? key}</td>
-            <td className="py-2 text-fg-muted text-xs">
+            <td className="py-2 text-foreground">{SERVICE_LABELS[key] ?? key}</td>
+            <td className="py-2 text-muted-foreground text-xs">
               {Object.entries(svc.usage)
                 .map(([k, v]) => `${k}: ${formatCompact(v)}`)
                 .join(" · ") || "—"}
             </td>
-            <td className="py-2 text-right text-fg-muted tabular-nums">
+            <td className="py-2 text-right text-muted-foreground tabular-nums">
               {formatUsd(svc.cost)}
             </td>
           </tr>
