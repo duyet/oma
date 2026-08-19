@@ -339,7 +339,7 @@ export function AppSidebar() {
         className={itemClass}
       >
         <NavLink to={item.to} end={item.end} data-testid={`sidebar-item-${item.label}`}>
-          <item.icon className="size-4 opacity-80" />
+          <item.icon className="size-4 shrink-0 opacity-90 group-data-[active=true]/menu-button:opacity-100" />
           <span>{item.label}</span>
         </NavLink>
       </SidebarMenuButton>
@@ -390,7 +390,7 @@ export function AppSidebar() {
                         end={child.end}
                         data-testid={`sidebar-item-${child.label}`}
                       >
-                        <child.icon className="size-4 opacity-80" />
+                        <child.icon className="size-4 shrink-0 opacity-90 group-data-[active=true]/menu-button:opacity-100" />
                         <span>{child.label}</span>
                       </NavLink>
                     </SidebarMenuSubButton>
