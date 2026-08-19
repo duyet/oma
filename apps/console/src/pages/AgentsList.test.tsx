@@ -25,6 +25,9 @@ function mountHandlers() {
     http.get("/v1/skills", () => HttpResponse.json({ data: [] })),
     http.get("/v1/model_cards", () => HttpResponse.json({ data: [] })),
     http.get("/v1/runtimes", () => HttpResponse.json({ runtimes: [] })),
+    http.get("/v1/usage", () =>
+      HttpResponse.json({ by_agent: [], total_sessions: 0, total_active_seconds: 0, by_kind: [], daily: [] }),
+    ),
   );
 }
 

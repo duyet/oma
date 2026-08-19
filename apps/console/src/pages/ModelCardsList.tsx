@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DataTable, type ColumnDef } from "../components/DataTable";
+import { DataTable, ExpandedDetail, type ColumnDef } from "../components/DataTable";
 import { FacetedFilter } from "../components/FacetedFilter";
 import { FilterChip, CreatedFilterChip } from "../components/FilterChip";
 import { TextInput, SecretInput } from "@/components/ui/form-input";
@@ -993,6 +993,20 @@ export function ModelCardsList() {
         )
       }
       columns={columns}
+      renderExpandedRow={(mc) => (
+        <ExpandedDetail
+          rows={[
+            { label: "ID", value: <span className="font-mono text-xs">{mc.id}</span> },
+            { label: "Provider", value: mc.provider },
+            { label: "Model ID", value: mc.model_id },
+            { label: "Base URL", value: mc.base_url ?? "—" },
+            {
+              label: "Created",
+              value: new Date(mc.created_at).toLocaleString(),
+            },
+          ]}
+        />
+      )}
     >
       <FormDialog open={showCreate} onClose={closeDialog} title={editingId ? "Edit Model Card" : "New Model Card"}
         footer={
