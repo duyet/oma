@@ -2,8 +2,10 @@
 
 | Workflow | Purpose |
 |---|---|
-| `automerge.yml` | squash-merges open PRs when CI (`typecheck` + `test`) succeeds on the PR head (via `workflow_run`; also covers bot release PRs verified in `release.yml` / `release-please.yml`) |
-| `release.yml` | changeset-driven npm publish for the SDK / CLI packages |
+| `ci.yml` | PR + main gate — `pnpm typecheck` and `pnpm test` |
+| `automerge.yml` | Squash-merge PRs after CI succeeds (bot release PRs use inline verify in `release.yml` / `release-please.yml`) |
+| `release.yml` | changeset npm publish for `@getoma/cli` / `@getoma/sdk`; inline CI + auto-merge on the Version Packages PR |
+| `release-please.yml` | Conventional-commit bumps for root / web / cli / docker; inline CI + auto-merge on the release-please PR |
 | `build-sandbox-image.yml` | builds the agent sandbox container image and pushes to GHCR for OSS users to pull |
 | `build-example-images.yml` | builds/pushes the `examples/**` demo images to GHCR |
 | `self-improvement-agent.yml` | opt-in cron that calls an already-running OMA instance's REST API |

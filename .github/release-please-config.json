@@ -28,7 +28,7 @@
     "apps/web": {
       "release-type": "node",
       "package-name": "web",
-      "changelog-path": "apps/web/CHANGELOG.md",
+      "changelog-path": "CHANGELOG.md",
       "draft": false,
       "prerelease": false,
       "changelog-sections": [
@@ -47,7 +47,7 @@
     "packages/cli": {
       "release-type": "node",
       "package-name": "cli",
-      "changelog-path": "packages/cli/CHANGELOG.md",
+      "changelog-path": "CHANGELOG.md",
       "draft": false,
       "prerelease": false,
       "changelog-sections": [
@@ -66,7 +66,7 @@
     "docker": {
       "release-type": "simple",
       "package-name": "docker",
-      "changelog-path": "docker/CHANGELOG.md",
+      "changelog-path": "CHANGELOG.md",
       "draft": false,
       "prerelease": false,
       "changelog-sections": [
