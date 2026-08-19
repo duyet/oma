@@ -240,6 +240,15 @@ export function GettingStartedGuide() {
     persistCompletedSeen();
   }, [allDone, dismissed, stats, statsQuery.isLoading, completedBefore]);
 
+  // One onboarding path: hide as soon as any session exists so Overview
+  // doesn't keep selling setup (or disagree with /launch / Run readiness)
+  // after the workspace is already in use. Wait for the first counts to
+  // land so a still-loading zero doesn't flash the checklist then hide it.
+  const countsPending =
+    (statsQuery.isLoading && !stats) ||
+    (sessionsQuery.isLoading && !sessionsQuery.data);
+  if (countsPending) return null;
+  if (hasSessions) return null;
   if (dismissed) return null;
 
   function dismiss() {
@@ -275,14 +284,9 @@ export function GettingStartedGuide() {
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {!allDone && (
-                <>
-                  <Button variant="secondary" size="sm" onClick={() => nav("/launch")}>
-                    Launch wizard
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setTourOpen(true)}>
-                    Take the tour
-                  </Button>
-                </>
+                <Button variant="outline" size="sm" onClick={() => setTourOpen(true)}>
+                  Take the tour
+                </Button>
               )}
               {allDone ? (
                 <Button variant="secondary" size="sm" onClick={dismiss}>

@@ -1,12 +1,13 @@
-// Guided first-run path: Foundation → Sandbox → Credentials → Agent → Session.
-// Composes existing list/create routes rather than duplicating forms — same
-// control plane on Cloudflare Workers and self-host (k3s / main-node).
+// Guided first-run path: Agent → Sandbox → Credentials → Session.
+// Same four steps as Overview Getting started. Composes existing list/create
+// routes rather than duplicating forms — same control plane on Cloudflare
+// Workers and self-host (k3s / main-node). Once any session exists this
+// page collapses to a pointer back to Overview / Sessions.
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import {
   ArrowRightIcon,
   CheckIcon,
-  KeyRoundIcon,
   RocketIcon,
   ServerIcon,
   ShieldIcon,
@@ -44,24 +45,25 @@ export function LaunchWizard() {
   });
   const stats = statsQ.data;
   const firstAgentId = agentsQ.data?.data?.[0]?.id;
+  const agentCount = Math.max(stats?.agents ?? 0, agentsQ.data?.data?.length ?? 0);
+  const sessionCount = stats?.sessions ?? 0;
 
   const steps: WizardStep[] = useMemo(() => {
-    const agents = stats?.agents ?? 0;
     const envs = stats?.environments ?? 0;
     const vaults = stats?.vaults ?? 0;
-    const sessions = stats?.sessions ?? 0;
-    const foundation = (stats?.model_cards ?? 0) > 0 || (stats?.api_keys ?? 0) > 0;
 
+    // Same four steps as Overview Getting started so the two first-run
+    // surfaces cannot disagree on n/m. Foundation (model cards / API keys)
+    // is not a separate row — creating an agent covers it.
     return [
       {
-        id: "foundation",
-        title: "Model access",
-        body: "Connect a model card or mint an API key so agents can call a provider. Same on CF Workers and k3s self-host.",
-        done: foundation || agents > 0,
-        optional: true,
-        to: "/model-cards",
-        cta: "Model cards",
-        icon: KeyRoundIcon,
+        id: "agent",
+        title: "Create agent",
+        body: "Name, model, system prompt, tools, skills, and MCP. Templates speed this up.",
+        done: agentCount > 0,
+        to: agentCount > 0 ? "/agents" : "/agents/new",
+        cta: agentCount > 0 ? "View agents" : "New agent",
+        icon: AgentIcon,
       },
       {
         id: "environment",
@@ -77,25 +79,15 @@ export function LaunchWizard() {
         title: "Credential vault",
         body: "Store tokens for MCP and git hosts. Injected at the network layer — never into the sandbox. Optional if the agent only uses public tools.",
         done: vaults > 0,
-        optional: true,
         to: "/vaults",
         cta: vaults > 0 ? "Manage vaults" : "Create vault",
         icon: VaultIcon,
       },
       {
-        id: "agent",
-        title: "Create agent",
-        body: "Name, model, system prompt, tools, skills, and MCP. Templates speed this up.",
-        done: agents > 0,
-        to: "/agents/new",
-        cta: agents > 0 ? "View agents" : "New agent",
-        icon: AgentIcon,
-      },
-      {
         id: "session",
         title: "Start a session",
         body: "Attach environment + vaults, send a first message, watch tools run in the sandbox.",
-        done: sessions > 0,
+        done: sessionCount > 0,
         to: firstAgentId
           ? `/sessions?new=1&agent=${encodeURIComponent(firstAgentId)}`
           : "/sessions?new=1",
@@ -103,7 +95,7 @@ export function LaunchWizard() {
         icon: SessionsIcon,
       },
     ];
-  }, [stats, firstAgentId]);
+  }, [stats, agentCount, sessionCount, firstAgentId]);
 
   const nextIdx = steps.findIndex((s) => !s.done && !s.optional);
   const nextOptionalIdx = steps.findIndex((s) => !s.done);
@@ -113,6 +105,42 @@ export function LaunchWizard() {
   const allDone = steps.every((s) => s.done);
 
   const [dismissedOptional, setDismissedOptional] = useState(false);
+
+  // Hide the checklist once a session exists — Overview then leads with
+  // recent work, not a second wizard. Wait for stats so a loading zero
+  // doesn't flash the compact state on a brand-new tenant.
+  if (!statsQ.isLoading && sessionCount > 0) {
+    return (
+      <div className="flex-1 overflow-y-auto">
+        <div
+          className="mx-auto w-full max-w-2xl px-4 py-8 space-y-4"
+          data-testid="launch-wizard-complete"
+        >
+          <header className="space-y-2">
+            <div className="inline-flex items-center gap-2 text-brand">
+              <RocketIcon className="size-5" aria-hidden />
+              <span className="text-[11px] font-semibold uppercase tracking-[0.1em]">
+                Launch
+              </span>
+            </div>
+            <h1 className="font-display text-2xl font-semibold tracking-tight text-fg">
+              You're ready
+            </h1>
+            <p className="text-[14px] text-fg-muted max-w-xl leading-relaxed">
+              A session already exists in this workspace. Open it from Overview or
+              start another from Sessions.
+            </p>
+          </header>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={() => nav("/")}>Back to Overview</Button>
+            <Button variant="secondary" onClick={() => nav("/sessions")}>
+              View sessions
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 overflow-y-auto">

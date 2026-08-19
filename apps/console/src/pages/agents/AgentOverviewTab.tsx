@@ -350,8 +350,17 @@ function AgentRunReadiness({ agent }: { agent: Agent }) {
   const { data: vaultsRes } = useApiQuery<{ data: { id: string }[] }>("/v1/vaults", {
     limit: "1",
   });
+  const { data: sessionsRes, isLoading: sessionsLoading } = useApiQuery<{
+    data: { id: string }[];
+  }>("/v1/sessions", { agent_id: agent.id, limit: "1" });
   const hasAnyEnv = (envsRes?.data?.length ?? 0) > 0;
   const hasAnyVault = (vaultsRes?.data?.length ?? 0) > 0;
+  const hasAgentSession = (sessionsRes?.data?.length ?? 0) > 0;
+
+  // Once this agent has run, the Overview / Sessions list is the next
+  // action — keep this panel off so it isn't a third disagreeing checklist.
+  if (sessionsLoading && !sessionsRes) return null;
+  if (hasAgentSession) return null;
 
   type Row = {
     id: string;
@@ -422,9 +431,6 @@ function AgentRunReadiness({ agent }: { agent: Agent }) {
               : `${blockers.length} item${blockers.length === 1 ? "" : "s"} to fix before a smooth first run.`}
           </p>
         </div>
-        <span className="text-[11px] tabular-nums text-fg-subtle shrink-0">
-          {rows.length - blockers.length}/{rows.length}
-        </span>
       </div>
       <ul className="space-y-2">
         {rows.map((row) => (

@@ -634,6 +634,11 @@ describe("<Dashboard /> — recent sessions table", () => {
     // Closed disclosure still exposes the heading + "Show map" affordance.
     expect(screen.getByText("How it fits together")).toBeInTheDocument();
     expect(screen.getByText(/Show map/i)).toBeInTheDocument();
+    expect(screen.queryByTestId("getting-started-guide")).toBeNull();
+    const recent = screen.getByTestId("recent-sessions");
+    expect(
+      recent.compareDocumentPosition(assembly) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("keeps the architecture map open for a brand-new tenant", async () => {
