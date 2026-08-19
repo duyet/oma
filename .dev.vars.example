@@ -14,6 +14,12 @@ ANTHROPIC_API_KEY=sk-ant-xxx
 # reads the file next to each worker config, not the repo root.
 PLATFORM_ROOT_SECRET=
 
+# Required: better-auth session signing key. Generate with:
+#   openssl rand -hex 32
+# Leave unset and /health returns 503. Do not reuse a value from this
+# public repo (see issue #170).
+BETTER_AUTH_SECRET=
+
 # Optional local-trial escape hatch (Cloudflare wrangler local + self-host
 # Node). AUTH_DISABLED=1 makes every request tenant_id="default" and the
 # Console skips login. Do not use in production.

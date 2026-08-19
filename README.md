@@ -112,7 +112,7 @@ git clone https://github.com/duyet/oma.git && cd oma
 pnpm install
 
 # Local dev (no CF account needed) — wrangler local simulators, no Docker
-cp .dev.vars.example .dev.vars && $EDITOR .dev.vars  # PLATFORM_ROOT_SECRET required; API_KEY prefilled
+cp .dev.vars.example .dev.vars && $EDITOR .dev.vars  # PLATFORM_ROOT_SECRET + BETTER_AUTH_SECRET required; API_KEY prefilled
 pnpm dev   # API + Console → http://localhost:8787
            # predev builds apps/console/dist and copies .dev.vars next to the worker configs
            # optional HMR: pnpm dev:console → http://localhost:5173

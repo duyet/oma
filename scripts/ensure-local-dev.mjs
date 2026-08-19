@@ -67,9 +67,10 @@ export function main(root = repoRootFrom(), log = console) {
   const synced = syncDevVars(root);
   if (!synced) {
     log.warn(
-      "No .dev.vars at the repo root. wrangler will not see PLATFORM_ROOT_SECRET.\n" +
+      "No .dev.vars at the repo root. wrangler will not see PLATFORM_ROOT_SECRET or BETTER_AUTH_SECRET.\n" +
         "  cp .dev.vars.example .dev.vars\n" +
-        "  # then set PLATFORM_ROOT_SECRET=$(openssl rand -base64 32)",
+        "  # then set PLATFORM_ROOT_SECRET=$(openssl rand -base64 32)\n" +
+        "  #      and BETTER_AUTH_SECRET=$(openssl rand -hex 32)",
     );
   }
 }

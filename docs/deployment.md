@@ -206,14 +206,15 @@ network presence.
 
 ```bash
 # Copy secrets next to the wrangler configs (predev also does this)
-cp .dev.vars.example .dev.vars   # set PLATFORM_ROOT_SECRET
+cp .dev.vars.example .dev.vars   # set PLATFORM_ROOT_SECRET + BETTER_AUTH_SECRET
 # $EDITOR .dev.vars
 
 # Start both workers (main + agent). `predev` builds the Console SPA if
 # `apps/console/dist` is missing and copies `.dev.vars` into apps/main
 # and apps/agent (wrangler reads `.dev.vars` next to each config, not
 # the repo root). `--local` keeps always-remote bindings (Workers AI)
-# from prompting for a Cloudflare account.
+# from prompting for a Cloudflare account. Local wrangler.dev.jsonc omits
+# the `containers` array so Docker is not required to boot.
 pnpm dev
 # → main worker on :8787 (API + Console ASSETS), agent worker on :8788
 
@@ -228,9 +229,11 @@ Optional live-reload Console: `pnpm dev:console` → http://localhost:5173.
 - R2 Event Notifications don't fire in dev (CF control-plane feature). Agent
   fs writes to /mnt/memory don't update the SQL memories index in dev mode
   — REST writes still do. This is a CF-side limitation, not OMA's.
-- Container sandboxes are **off** in `wrangler.dev.jsonc`
-  (`dev.enable_containers: false`) so `pnpm dev` does not need Docker.
-  Re-enable and run Docker when you want a local Cloudflare Container sandbox.
+- Container sandboxes are **off** in `wrangler.dev.jsonc`: the `containers`
+  array is omitted. Wrangler 4.83 (the repo pin) always docker-builds
+  declared images — `dev.enable_containers: false` is not enough. Point
+  production `wrangler.jsonc` at `./Dockerfile.sandbox` and run Docker
+  when you want a local Cloudflare Container sandbox.
 - Cron triggers don't fire automatically — use `--test-scheduled`.
 - Workers AI (`env.AI`) is omitted locally — `web_fetch` falls back when
   the binding is unset. No Cloudflare account is required to boot.

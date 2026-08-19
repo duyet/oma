@@ -107,7 +107,7 @@ pnpm install
 
 # 本地开发（不需要 CF 账户）—— wrangler 本地模拟器，不需要 Docker
 cp .dev.vars.example .dev.vars && $EDITOR .dev.vars
-# PLATFORM_ROOT_SECRET 是启动所必需的；API_KEY 已预填一个仅供本地开发的占位值
+# PLATFORM_ROOT_SECRET 和 BETTER_AUTH_SECRET 是启动所必需的；API_KEY 已预填一个仅供本地开发的占位值
 # （dev-test-key-change-me，与 .env.example 相同），下面的冒烟测试可以直接用 —— 一旦不再局限于
 # localhost 就务必修改它。
 pnpm dev

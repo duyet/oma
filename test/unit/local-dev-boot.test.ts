@@ -30,6 +30,7 @@ describe("first-time local boot contracts", () => {
   it("pnpm dev builds console and uses local wrangler configs without a CF account", () => {
     expect(rootPkg.scripts.predev).toBe("node scripts/ensure-local-dev.mjs");
     expect(rootPkg.scripts.dev).toContain("--local");
+    expect(rootPkg.scripts.dev).not.toContain("apps/main/wrangler.jsonc");
     expect(rootPkg.scripts.dev).toContain("apps/main/wrangler.dev.jsonc");
     expect(rootPkg.scripts.dev).toContain("apps/agent/wrangler.dev.jsonc");
     expect(rootPkg.scripts["dev:main"]).toContain("apps/main/wrangler.dev.jsonc");
@@ -44,11 +45,11 @@ describe("first-time local boot contracts", () => {
     expect(mainDev.dev?.enable_containers).toBe(false);
   });
 
-  it("local agent wrangler config skips Docker and points at a repo Dockerfile", () => {
+  it("local agent wrangler config skips Docker and does not declare a container image", () => {
     expect(agentDev.browser).toBeUndefined();
     expect(agentDev.ai).toBeUndefined();
     expect(agentDev.dev?.enable_containers).toBe(false);
-    expect(agentDev.containers?.[0]?.image).toBe("./Dockerfile.sandbox");
+    expect(agentDev.containers).toBeUndefined();
     expect(sandboxDockerfile).toMatch(/^FROM /m);
   });
 
