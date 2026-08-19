@@ -5,14 +5,13 @@
   "compatibility_date": "2025-09-15",
   "compatibility_flags": ["nodejs_compat"],
 
-  "containers": [
-    {
-      "class_name": "Sandbox",
-      "image": "../../node_modules/@cloudflare/sandbox/Dockerfile",
-      "instance_type": "lite",
-      "max_instances": 5
-    }
-  ],
+  // Local `pnpm dev`: do not declare `containers` here. Wrangler 4.83
+  // always tries to docker-build declared container images, and
+  // `dev.enable_containers` / `--enable-containers` landed in later
+  // wrangler. Production wrangler.jsonc uses `./Dockerfile.sandbox`.
+  "dev": {
+    "enable_containers": false
+  },
 
   "durable_objects": {
     "bindings": [
@@ -48,7 +47,8 @@
     { "binding": "MAIN", "service": "oma-managed-agents" }
   ],
 
-  "browser": { "binding": "BROWSER" },
+  // Browser Rendering is always-remote (prompts for a CF account). Omit it
+  // for local simulators; the browser tool is already opt-in in agent config.
 
   "migrations": [
     {

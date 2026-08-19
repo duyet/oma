@@ -7,6 +7,7 @@
  * (agents-store, vaults-store, memory-store, etc.).
  */
 
+import "./lib/load-local-env-register";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";

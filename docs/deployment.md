@@ -159,28 +159,28 @@ notes.
 
 ## CF Local (`wrangler dev`)
 
-**`wrangler dev` on three workers** with local D1 / KV / R2 / DO / Queue
-simulators. Identical-shape to prod; same code, same bindings, just no
-network presence.
+**`wrangler dev --local`** on the main + agent configs with local D1 / KV /
+R2 / DO / Queue simulators. One process, public HTTP on `:8787` only —
+the agent worker is reached via a service binding, not a second port.
+Workers AI, Browser Rendering, and container images are omitted so boot
+does not need a Cloudflare account or Docker.
 
 ```
        ┌── browser / oma CLI ──┐
        │                        │
        ▼                        ▼
   ┌────────────────────┐
-  │ wrangler dev       │   ports 8787 (main), 8788 (agent)
+  │ wrangler dev       │   http://localhost:8787
   │  ├─ apps/main      │
   │  │   └─ Hono routes
   │  │   └─ assets binding → apps/console/dist (SPA)
   │  │   └─ DO: RuntimeRoom
-  │  │   └─ R2 binding (local sim)
-  │  │   └─ KV binding (local sim)
-  │  │   └─ D1 binding (local sim)
+  │  │   └─ R2 / KV / D1 local sims
   │  │   └─ Queue consumers (local sim, no R2 events though)
   │  │   └─ Service binding → SANDBOX_sandbox_default → agent worker
-  │  └─ apps/agent (separate worker process)
-  │      └─ DO: SessionDO + Sandbox (Container)
-  │      └─ Service binding → MAIN_MCP → main worker
+  │  └─ apps/agent (same wrangler process)
+  │      └─ DO: SessionDO + Sandbox (no container image locally)
+  │      └─ Service binding → MAIN → main worker
   └────────────────────┘
 ```
 
@@ -188,12 +188,12 @@ network presence.
 
 | Concern | Implementation |
 |---|---|
-| HTTP server | Workers runtime via wrangler dev, ports 8787/8788 |
+| HTTP server | Workers runtime via wrangler dev, http://localhost:8787 |
 | SQL store | D1 local simulator (sqlite under the hood). Same migration files as prod |
 | KV | wrangler local KV simulator |
 | Blob store | wrangler local R2 simulator |
 | Event log | DO storage SQL (per-DO sqlite namespace) |
-| Sandbox | `@cloudflare/sandbox` Container DO running locally via Docker |
+| Sandbox | SessionDO + local D1/KV/R2 sims. The `containers` array is omitted locally (wrangler 4.83 always docker-builds declared images) so Docker is not required to boot |
 | Auth | `better-auth` against the local D1 simulator |
 | Vault credential injection | `MAIN_MCP.outboundForward` RPC — agent's container HTTPS calls go through main worker which injects header |
 | Memory mount | R2 simulator + sandbox.mountBucket(localBucket: true) sync |
@@ -205,24 +205,38 @@ network presence.
 ### Start
 
 ```bash
-# Build console once
-pnpm build:console
+# Copy secrets next to the wrangler configs (predev also does this)
+cp .dev.vars.example .dev.vars   # set PLATFORM_ROOT_SECRET + BETTER_AUTH_SECRET
+# $EDITOR .dev.vars
 
-# Start both workers (main + agent) — wrangler dev with --persist-to ./.wrangler
+# Start both workers (main + agent). `predev` builds the Console SPA if
+# `apps/console/dist` is missing and copies `.dev.vars` into apps/main
+# and apps/agent (wrangler reads `.dev.vars` next to each config, not
+# the repo root). `--local` keeps always-remote bindings (Workers AI)
+# from prompting for a Cloudflare account. Local wrangler.dev.jsonc omits
+# the `containers` array so Docker is not required to boot.
 pnpm dev
-# → main worker on :8787, agent worker on :8788
+# → http://localhost:8787 (API + Console ASSETS); agent is a local service binding
 
 # Sanity
 curl localhost:8787/health
 ```
+
+Optional live-reload Console: `pnpm dev:console` → http://localhost:5173.
 
 ### Hard limits
 
 - R2 Event Notifications don't fire in dev (CF control-plane feature). Agent
   fs writes to /mnt/memory don't update the SQL memories index in dev mode
   — REST writes still do. This is a CF-side limitation, not OMA's.
-- Container sandboxes need Docker running locally.
+- Container sandboxes are **off** in `wrangler.dev.jsonc`: the `containers`
+  array is omitted. Wrangler 4.83 (the repo pin) always docker-builds
+  declared images — `dev.enable_containers: false` is not enough. Point
+  production `wrangler.jsonc` at `./Dockerfile.sandbox` and run Docker
+  when you want a local Cloudflare Container sandbox.
 - Cron triggers don't fire automatically — use `--test-scheduled`.
+- Workers AI (`env.AI`) is omitted locally — `web_fetch` falls back when
+  the binding is unset. No Cloudflare account is required to boot.
 
 ---
 
@@ -327,13 +341,13 @@ npx wrangler login
 | Blob | LocalFsBlobStore (`./data`) | R2 local sim | R2 buckets |
 | Event log | SqlEventLog (shared SQL) | DO sqlite | DO sqlite |
 | Stream broadcast | InProcessEventStreamHub (sqlite) or PgEventStreamHub (pg, LISTEN/NOTIFY) for SSE | DO WS hibernation → SSE bridge | DO WS hibernation → SSE bridge |
-| Sandbox | subprocess / litebox / daytona / e2b | Container DO via Docker | Container DO on CF Containers |
+| Sandbox | subprocess / litebox / daytona / e2b | SessionDO + sims (containers off by default; no Docker required to boot) | Container DO on CF Containers |
 | Auth | better-auth + sqlite (own file) | better-auth + D1 local sim | better-auth + D1 + Email Workers + OAuth |
 | Vault inject | oma-vault sidecar (mockttp MITM) | MAIN_MCP.outboundForward RPC | MAIN_MCP.outboundForward RPC |
 | Memory mount | symlink to LocalFsBlobStore + chokidar | R2 sim + mountBucket(localBucket:true) | R2 + s3fs + R2 Events → Queue → D1 |
 | Cron | TODO (node-cron) | wrangler dev `--test-scheduled` | One shared CF cron `* * * * *` on main (integrations ticks over the service binding) |
 | Queue | none (chokidar replaces it) | wrangler queue sim | CF Queues + DLQ |
-| Browser tool | not supported | wrangler dev BROWSER sim (limited) | @cloudflare/playwright |
+| Browser tool | not supported | omitted locally (always-remote; no CF account) | @cloudflare/playwright |
 | Email | nodemailer (set SMTP_HOST/PORT/USER/PASS) — null sender mounts no email-bearing better-auth flows | wrangler dev SEND_EMAIL sim | CF Email Workers |
 | Console | embedded in main-node image, served by `serveStatic` on `:8787` (or `vite dev` proxy mode for live-reload) | served by main worker ASSETS | served by main worker ASSETS |
 | Rate limit | in-process token bucket via `@duyet/oma-rate-limit/adapters/memory` (5-bucket bundle) | wrangler dev ratelimits sim | CF Rate Limiting binding |

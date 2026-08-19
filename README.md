@@ -111,9 +111,11 @@ Requires a [Workers Paid plan](https://developers.cloudflare.com/workers/platfor
 git clone https://github.com/duyet/oma.git && cd oma
 pnpm install
 
-# Local dev (no CF account needed) — wrangler dev with simulators
-cp .dev.vars.example .dev.vars && $EDITOR .dev.vars  # PLATFORM_ROOT_SECRET required; API_KEY prefilled
-pnpm dev   # API → http://localhost:8787 · Console → http://localhost:5173
+# Local dev (no CF account needed) — wrangler local simulators, no Docker
+cp .dev.vars.example .dev.vars && $EDITOR .dev.vars  # PLATFORM_ROOT_SECRET + BETTER_AUTH_SECRET required; API_KEY prefilled
+pnpm dev   # API + Console → http://localhost:8787
+           # predev builds apps/console/dist and copies .dev.vars next to the worker configs
+           # optional HMR: pnpm dev:console → http://localhost:5173
 
 # Deploy — one idempotent wizard: provisions D1/KV/R2, sets secrets, applies
 # migrations, deploys all three workers (integrations → agent → main).

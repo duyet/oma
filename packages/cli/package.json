@@ -4,10 +4,11 @@
   "description": "CLI for the oma managed agents platform",
   "type": "module",
   "bin": {
-    "oma": "./dist/index.js"
+    "oma": "./bin/oma.js"
   },
   "files": [
     "dist",
+    "bin",
     "README.md"
   ],
   "engines": {
@@ -15,6 +16,7 @@
   },
   "scripts": {
     "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --banner:js=\"#!/usr/bin/env node\nimport { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);\"",
+    "prepare": "npm run build",
     "dev": "tsx src/index.ts",
     "test": "vitest run --config vitest.config.ts",
     "prepublishOnly": "npm run build"

@@ -7,6 +7,7 @@ Get OMA running on your machine (or in the cloud) and send your first agent mess
 | Path | Best for | Time |
 |------|----------|------|
 | 🐳 **Docker** (recommended) | Trying OMA locally | ~5 min |
+| ⚡ **Local wrangler** | CF simulators, no Docker / no CF account | ~2 min |
 | ☁️ **Cloudflare** | Production deployment | ~10 min |
 | 🚢 **Kubernetes** | Scale-out deployment | ~15 min |
 
@@ -129,6 +130,28 @@ You'll see the agent's reply stream in real-time. A real model key is required f
 
 ---
 
+## ⚡ Local wrangler (no Docker)
+
+Cloudflare Workers + Durable Object simulators. No Docker and no Cloudflare
+account. Container sandboxes and Workers AI are off in this path.
+
+```bash
+git clone https://github.com/duyet/oma.git && cd oma
+pnpm install
+cp .dev.vars.example .dev.vars
+# set PLATFORM_ROOT_SECRET=$(openssl rand -base64 32)
+#     BETTER_AUTH_SECRET=$(openssl rand -hex 32)
+pnpm dev
+# API + Console → http://localhost:8787
+curl localhost:8787/health
+```
+
+`predev` builds `apps/console/dist` if needed and copies `.dev.vars` next to
+the worker configs (wrangler does not read the repo-root file). Details:
+[README](../README.md) · [deployment.md](deployment.md#start).
+
+---
+
 ## ☁️ Cloudflare (Production)
 
 ### 1. Prerequisites
@@ -210,7 +233,8 @@ curl -H "Authorization: Bearer $K8S_BRIDGE_TOKEN" \
 | Symptom | Likely cause | Fix |
 |---------|-------------|-----|
 | `docker compose up` fails | Port 8787 in use | Stop the conflicting process or change port in `docker-compose.yml` |
-| `health` returns 503 | Migrations not finished | Wait 10s and retry, check `docker compose logs oma` |
+| `health` returns 503 | Migrations not finished, or missing `BETTER_AUTH_SECRET` / `PLATFORM_ROOT_SECRET` | Wait 10s and retry; for `pnpm dev`, set both secrets in repo-root `.dev.vars` |
+| `pnpm dev` asks for a Cloudflare account | Always-remote Workers AI binding | Use current `pnpm dev` (`--local` + `wrangler.dev.jsonc`; AI omitted) |
 | Agent creation fails with 401 | `OMA_KEY` does not match `API_KEY` in `.env` | Use `export OMA_KEY="$(grep '^API_KEY=' .env | cut -d= -f2-)"` (`.env.example` ships `dev-test-key-change-me`) |
 | Session create returns 400 `environment_id is required` | No environment on the request | Create one with `POST /v1/environments` and pass `environment_id` (CLI: `--env`) |
 | Session returns no reply | No model card configured | Add a Model Card in Console or set `ANTHROPIC_API_KEY` in `.env` |
