@@ -90,6 +90,57 @@ describe("buildTrajectory", () => {
     expect(t.outcome).toBe("failure");
   });
 
+  it("derives outcome=failure when session.error is followed by status_idle (crash recovery)", async () => {
+    // SessionDO emits session.error then status_idle so the session can
+    // accept another message. The trailing idle must not map to success.
+    const events = [
+      ev(1, "user.message", { content: [] }),
+      ev(2, "session.status_running"),
+      ev(3, "session.error", { error: "No output generated. Check the stream for errors." }),
+      ev(4, "session.status_idle"),
+    ];
+    const t = await buildTrajectory(makeSession(), {
+      fetchAllEvents: async () => events,
+      fetchFullStatus: async () => ({ status: "idle" }),
+    });
+    expect(t.outcome).toBe("failure");
+  });
+
+  it("derives outcome=failure from the latest failed turn even if an earlier turn succeeded", async () => {
+    const events = [
+      ev(1, "user.message"),
+      ev(2, "session.status_running"),
+      ev(3, "agent.message"),
+      ev(4, "session.status_idle"),
+      ev(5, "user.message"),
+      ev(6, "session.status_running"),
+      ev(7, "session.error", { error: "Bad Gateway" }),
+      ev(8, "session.status_idle"),
+    ];
+    const t = await buildTrajectory(makeSession(), {
+      fetchAllEvents: async () => events,
+      fetchFullStatus: async () => ({ status: "idle" }),
+    });
+    expect(t.outcome).toBe("failure");
+  });
+
+  it("derives outcome=success when a later turn succeeds after an earlier error", async () => {
+    const events = [
+      ev(1, "user.message"),
+      ev(2, "session.error", { error: "boom" }),
+      ev(3, "session.status_idle"),
+      ev(4, "user.message"),
+      ev(5, "session.status_running"),
+      ev(6, "agent.message"),
+      ev(7, "session.status_idle"),
+    ];
+    const t = await buildTrajectory(makeSession(), {
+      fetchAllEvents: async () => events,
+      fetchFullStatus: async () => ({ status: "idle" }),
+    });
+    expect(t.outcome).toBe("success");
+  });
+
   it("derives outcome=interrupted on user.interrupt", async () => {
     const events = [ev(1, "user.message"), ev(2, "user.interrupt")];
     const t = await buildTrajectory(makeSession(), {

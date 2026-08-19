@@ -1,3 +1,4 @@
+import type { Event } from "../../lib/events";
 import {
   rewardHeadline,
   outcomeToStatusTone,
@@ -6,6 +7,7 @@ import {
 import { StatusPill } from "../../components/Badge";
 import { Modal } from "../../components/Modal";
 import { Button } from "@/components/ui/button";
+import { displayTrajectoryOutcome } from "./turn-ux";
 
 /**
  * Session-detail trajectory views.
@@ -26,16 +28,20 @@ import { Button } from "@/components/ui/button";
 
 export function TrajectoryOutcomeChip({
   trajectory,
+  events = [],
 }: {
   trajectory: Trajectory | "loading" | "error" | undefined;
+  /** Live event log — wins over a one-shot trajectory fetch so a failed
+   *  turn that returned to idle is not painted as success (#397). */
+  events?: Event[];
 }) {
-  if (!trajectory || trajectory === "loading" || trajectory === "error") return null;
-  if (trajectory.outcome === "running") return null;
-  const tone = outcomeToStatusTone(trajectory.outcome);
+  const outcome = displayTrajectoryOutcome(trajectory, events);
+  if (!outcome || outcome === "running") return null;
+  const tone = outcomeToStatusTone(outcome);
   return (
     <StatusPill
       status={tone}
-      label={`Outcome: ${trajectory.outcome}`}
+      label={`Outcome: ${outcome}`}
     />
   );
 }

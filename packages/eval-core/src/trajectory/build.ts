@@ -60,7 +60,14 @@ function deriveOutcome(events: StoredEvent[], status: string | undefined): Traje
   //   session.status_terminated  → interrupted (operator/user-driven stop;
   //                                NOT a hard failure — distinct from
   //                                session.error which fires on real errors)
-  //   session.status_idle        → success
+  //   session.status_idle        → success, UNLESS this idle is the
+  //                                crash-recovery pair after session.error
+  //                                (or user.interrupt) in the same turn.
+  //                                SessionDO always returns to idle after
+  //                                a failed model turn, so treating the
+  //                                trailing idle as success painted a green
+  //                                "Outcome: success" on Bad Gateway turns
+  //                                (issue #397).
   //   anything else (still running or only saw status_running) → running
   //
   // "timeout" is NOT detectable from the event stream alone — wall-clock
@@ -72,11 +79,38 @@ function deriveOutcome(events: StoredEvent[], status: string | undefined): Traje
     if (t === "session.error") return "failure";
     if (t === "user.interrupt") return "interrupted";
     if (t === "session.status_terminated") return "interrupted";
-    if (t === "session.status_idle") return "success";
+    if (t === "session.status_idle") {
+      const sameTurn = outcomeOfTurnBeforeIdle(events, i);
+      if (sameTurn) return sameTurn;
+      return "success";
+    }
     if (t === "session.status_running") return "running";
   }
   if (status === "running") return "running";
   return "running";
+}
+
+/** Scan back from a status_idle to the previous lifecycle boundary.
+ *  A failed/interrupted turn always emits the terminal event *then*
+ *  status_idle (return-to-idle contract), so the idle itself is not
+ *  the outcome — the event that caused it is. */
+function outcomeOfTurnBeforeIdle(
+  events: StoredEvent[],
+  idleIndex: number,
+): TrajectoryOutcome | undefined {
+  for (let j = idleIndex - 1; j >= 0; j--) {
+    const t = events[j].type;
+    if (t === "session.error") return "failure";
+    if (t === "user.interrupt") return "interrupted";
+    if (
+      t === "session.status_running" ||
+      t === "session.status_idle" ||
+      t === "session.status_terminated"
+    ) {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 function computeSummary(events: StoredEvent[], usage: FullStatus["usage"], startedAt: string, endedAt?: string): TrajectorySummary {

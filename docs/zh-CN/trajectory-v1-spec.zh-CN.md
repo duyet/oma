@@ -73,7 +73,7 @@ export interface Trajectory {
 }
 
 export type TrajectoryOutcome =
-  | "success"          // session.status_idle 且无错
+  | "success"          // 最近一轮到达 session.status_idle 且无 session.error
   | "failure"          // session.error 或 supervisor 失败
   | "timeout"          // 触达墙钟或回合上限
   | "interrupted"      // user.interrupt

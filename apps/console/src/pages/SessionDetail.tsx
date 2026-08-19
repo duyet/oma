@@ -68,6 +68,11 @@ import {
   formatEstCostUsd,
   useSessionAnalytics,
 } from "./session-detail/analytics";
+import {
+  humanizeTurnError,
+  lastUserMessageText,
+  latestLiveAgentStatus,
+} from "./session-detail/turn-ux";
 
 type View = "chat" | "timeline";
 
@@ -407,6 +412,18 @@ export function SessionDetail() {
       // Drop the outbox so the user doesn't see ghosts of inputs that
       // can never run on this session state.
       setPendingByEventId(new Map());
+    }
+
+    // Refresh the trajectory envelope after a turn settles so the
+    // viewer JSON matches the live outcome chip (idle-after-error is
+    // failure, not success). Don't flip the chip to "loading".
+    if (
+      (ev.type === "session.error" || ev.type === "session.status_idle") &&
+      id
+    ) {
+      api<Trajectory>(`/v1/sessions/${id}/trajectory`)
+        .then((t) => setTrajectory(t))
+        .catch(() => { /* keep last known envelope */ });
     }
 
     // AMA-spec pending-queue notifications. The server is authoritative
@@ -916,7 +933,7 @@ export function SessionDetail() {
               finished. While the session is still running we let StatusPill
               carry the "Running…" signal alone (per Phase 3 spec) instead of
               double-pilling. */}
-          <TrajectoryOutcomeChip trajectory={trajectory} />
+          <TrajectoryOutcomeChip trajectory={trajectory} events={events} />
           {/* Reward chip — final_reward + verifier_id tooltip. Hidden when
               the verifier hasn't run (no trajectory.reward) so we don't
               imply "no reward = score 0". */}
@@ -1286,6 +1303,10 @@ export function SessionDetail() {
                       pairedResultIds.add(tuid);
                     }
                   }
+                  const retryText =
+                    e.type === "session.error"
+                      ? lastUserMessageText(filtered, i) || lastSentTextRef.current
+                      : "";
                   return (
                     <EventRender
                       key={stableKey}
@@ -1295,6 +1316,14 @@ export function SessionDetail() {
                       modelErrorCause={
                         e.type === "session.error"
                           ? sessionErrorCause.get((e as { id?: string }).id ?? "")
+                          : undefined
+                      }
+                      onRetry={
+                        e.type === "session.error" &&
+                        retryText &&
+                        status !== "running" &&
+                        !sending
+                          ? () => { void send(retryText); }
                           : undefined
                       }
                     />
@@ -1779,26 +1808,14 @@ function SessionDurationBadge({ events }: { events: Event[] }) {
 
 /**
  * Pinned "latest status" indicator for the `long-running` harness (and any
- * harness that emits `agent.status`). Scans the event log for the most recent
- * `agent.status` and renders a compact progress chip above the conversation —
- * a structured "what step are we on / blocked on what" signal so operators
- * don't have to parse free-text agent.message prose. Renders nothing when no
- * status has been reported.
+ * harness that emits `agent.status`). The chip is live only for the
+ * current turn — `session.error` / `status_idle` / `status_terminated`
+ * after the last report hide it so a failed turn does not leave a green
+ * "working · step 1" pinned (#397).
  */
 function LatestAgentStatus({ events }: { events: Event[] }) {
-  let latest: Event | undefined;
-  let terminatedAfterLatest = false;
-  for (const e of events) {
-    if (e.type === "agent.status") {
-      latest = e;
-      terminatedAfterLatest = false;
-    } else if (e.type === "session.status_terminated") {
-      terminatedAfterLatest = true;
-    }
-  }
-  // No status yet, or the session ended after the last report — a stale
-  // "Working (42s elapsed)" banner on a finished session reads as noise.
-  if (!latest || terminatedAfterLatest) return null;
+  const latest = latestLiveAgentStatus(events);
+  if (!latest) return null;
   const s = latest as unknown as {
     state?: "working" | "blocked" | "waiting";
     summary?: string;
@@ -2067,6 +2084,7 @@ function EventRender({
   livePending = false,
   pairedResult,
   modelErrorCause,
+  onRetry,
 }: {
   event: Event;
   /**
@@ -2100,6 +2118,8 @@ function EventRender({
    * the timeline tab. Only meaningful when `event.type === "session.error"`.
    */
   modelErrorCause?: { error: string; model?: string };
+  /** Resend the user message that started this failed turn. */
+  onRetry?: () => void;
 }) {
   // AMA pending lifecycle (set by event-log adapter from row.processed_at /
   // row.cancelled_at). Cancelled events stay in the log for audit but
@@ -2307,7 +2327,8 @@ function EventRender({
       );
     }
 
-    case "session.error":
+    case "session.error": {
+      const hint = humanizeTurnError(event.error, modelErrorCause?.error);
       return (
         <div className="max-w-2xl bg-danger-subtle rounded-lg px-4 py-2.5 text-sm text-danger">
           <div>Error: {event.error}</div>
@@ -2320,8 +2341,19 @@ function EventRender({
               : {modelErrorCause.error}
             </div>
           )}
+          {hint && (
+            <div className="mt-1.5 text-[12px] text-fg-muted">{hint}</div>
+          )}
+          {onRetry && (
+            <div className="mt-2">
+              <Button size="sm" variant="secondary" onClick={onRetry}>
+                Retry
+              </Button>
+            </div>
+          )}
         </div>
       );
+    }
 
     case "session.warning":
       return (
