@@ -197,7 +197,7 @@ export function AgentsList() {
         accessorKey: "id",
         header: "ID",
         cell: ({ row }) => (
-          <span title={row.original.id} className="font-mono text-xs text-fg-muted">
+          <span title={row.original.id} className="font-mono text-xs text-muted-foreground">
             {row.original.id}
           </span>
         ),
@@ -207,7 +207,7 @@ export function AgentsList() {
         id: "name",
         accessorKey: "name",
         header: "Name",
-        cell: ({ row }) => <span className="font-medium text-fg">{row.original.name}</span>,
+        cell: ({ row }) => <span className="font-medium text-foreground">{row.original.name}</span>,
         enableHiding: false,
       },
       {
@@ -215,14 +215,14 @@ export function AgentsList() {
         accessorFn: (a) => modelStr(a.model),
         header: "Model",
         cell: ({ row }) => (
-          <ModelName model={modelStr(row.original.model)} className="text-fg-muted" />
+          <ModelName model={modelStr(row.original.model)} className="text-muted-foreground" />
         ),
       },
       {
         id: "version",
         accessorFn: (a) => a.version,
         header: "Version",
-        cell: ({ row }) => <span className="text-fg-muted">v{row.original.version}</span>,
+        cell: ({ row }) => <span className="text-muted-foreground">v{row.original.version}</span>,
       },
       {
         id: "runtime",
@@ -247,7 +247,7 @@ export function AgentsList() {
         cell: ({ row }) => {
           const s = quickStats.statsFor(row.original.id);
           if (!s) {
-            return <span className="inline-block h-3 w-16 rounded bg-bg-surface animate-pulse" />;
+            return <span className="inline-block h-3 w-16 rounded bg-muted animate-pulse" />;
           }
           return (
             <div className="flex items-center gap-2.5">
@@ -257,7 +257,7 @@ export function AgentsList() {
                   e.stopPropagation();
                   nav(`/agents/${row.original.id}/sessions`);
                 }}
-                className="rounded hover:text-fg transition-colors duration-[var(--dur-quick)]"
+                className="rounded hover:text-foreground transition-colors duration-[var(--dur-quick)]"
               >
                 <ResourceBadge
                   icon={<MessageSquareIcon className="size-3" />}
@@ -319,7 +319,7 @@ export function AgentsList() {
           <span
             className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full ${
               row.original.archived_at
-                ? "bg-bg-surface text-fg-subtle"
+                ? "bg-muted text-muted-foreground"
                 : "bg-success-subtle text-success"
             }`}
           >
@@ -332,7 +332,7 @@ export function AgentsList() {
         accessorFn: (a) => a.created_at,
         header: "Created",
         cell: ({ row }) => (
-          <span className="text-fg-muted">
+          <span className="text-muted-foreground">
             {new Date(row.original.created_at).toLocaleDateString()}
           </span>
         ),
@@ -344,7 +344,7 @@ export function AgentsList() {
         cell: ({ row }) => {
           const ts = row.original.updated_at || row.original.created_at;
           return (
-            <span className="text-fg-muted" title={new Date(ts).toLocaleString()}>
+            <span className="text-muted-foreground" title={new Date(ts).toLocaleString()}>
               {formatRelative(Date.now() - new Date(ts).getTime())}
             </span>
           );
@@ -514,7 +514,7 @@ export function AgentsList() {
             </p>
             <button
               onClick={() => nav("/")}
-              className="inline-flex items-center min-h-11 sm:min-h-0 mt-3 text-sm text-brand hover:underline"
+              className="inline-flex items-center min-h-11 sm:min-h-0 mt-3 text-sm text-primary hover:underline"
             >
               Get started with the quickstart guide →
             </button>

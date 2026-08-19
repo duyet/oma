@@ -972,7 +972,7 @@ export function SessionDetail() {
               the next message reprovisions it lazily. */}
           {sandboxStatus === "paused" && (
             <span
-              className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border border-border bg-bg-surface text-fg-muted font-medium"
+              className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border border-border bg-muted text-muted-foreground font-medium"
               title="Sandbox container is stopped — not billing for compute."
             >
               Paused — not billing for compute
@@ -989,7 +989,7 @@ export function SessionDetail() {
               <button
                 onClick={() => void interrupt()}
                 disabled={interrupting}
-                className="inline-flex items-center justify-center px-2.5 py-1 min-h-11 sm:min-h-0 rounded-md text-xs font-medium bg-bg-surface/60 text-fg-muted hover:bg-bg-surface hover:text-fg disabled:opacity-50 transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
+                className="inline-flex items-center justify-center px-2.5 py-1 min-h-11 sm:min-h-0 rounded-md text-xs font-medium bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50 transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
                 title="Interrupt the active turn on this thread"
               >
                 {interrupting ? "Stopping…" : "Stop"}
@@ -1003,7 +1003,7 @@ export function SessionDetail() {
               <button
                 onClick={() => void resumeSandbox()}
                 disabled={resuming}
-                className="inline-flex items-center justify-center px-2.5 py-1 min-h-11 sm:min-h-0 rounded-md text-xs font-medium bg-bg-surface/60 text-fg-muted hover:bg-bg-surface hover:text-fg disabled:opacity-50 transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
+                className="inline-flex items-center justify-center px-2.5 py-1 min-h-11 sm:min-h-0 rounded-md text-xs font-medium bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50 transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
                 title="Reprovision the sandbox and resume"
               >
                 {resuming ? "Resuming…" : "Resume"}
@@ -1012,7 +1012,7 @@ export function SessionDetail() {
               <button
                 onClick={() => void pauseSandbox()}
                 disabled={pausing || status === "running"}
-                className="inline-flex items-center justify-center px-2.5 py-1 min-h-11 sm:min-h-0 rounded-md text-xs font-medium bg-bg-surface/60 text-fg-muted hover:bg-bg-surface hover:text-fg disabled:opacity-50 transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
+                className="inline-flex items-center justify-center px-2.5 py-1 min-h-11 sm:min-h-0 rounded-md text-xs font-medium bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50 transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
                 title={
                   status === "running"
                     ? "Wait for the agent to finish its current step, then pause."
@@ -1028,8 +1028,8 @@ export function SessionDetail() {
               }
               className={`inline-flex items-center justify-center px-2.5 py-1 min-h-11 sm:min-h-0 rounded-md text-xs font-medium transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)] ${
                 showInspector && inspectorTab === "files"
-                  ? "bg-bg-surface text-fg"
-                  : "bg-bg-surface/60 text-fg-muted hover:bg-bg-surface hover:text-fg"
+                  ? "bg-muted text-foreground"
+                  : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
               title="Files the agent wrote to /mnt/session/outputs/"
             >
@@ -1040,8 +1040,8 @@ export function SessionDetail() {
               aria-pressed={showInspector}
               className={`inline-flex items-center justify-center px-2.5 py-1 min-h-11 sm:min-h-0 rounded-md text-xs font-medium transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)] ${
                 showInspector
-                  ? "bg-bg-surface text-fg"
-                  : "bg-bg-surface/60 text-fg-muted hover:bg-bg-surface hover:text-fg"
+                  ? "bg-muted text-foreground"
+                  : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
               title="Model, sandbox, usage and tool telemetry for this session"
             >

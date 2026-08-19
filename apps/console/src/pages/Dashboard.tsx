@@ -165,7 +165,7 @@ export function Dashboard() {
     {
       label: "Sandbox time",
       icon: TimerIcon,
-      iconTone: "bg-brand-subtle text-brand",
+      iconTone: "bg-primary/10 text-primary",
       value: statsQuery.error ? "—" : formatSandboxTime(stats?.total_sandbox_seconds),
       caption: statsQuery.error
         ? "Couldn't load"
@@ -196,10 +196,10 @@ export function Dashboard() {
       label: "Active sessions",
       icon: ActivityIcon,
       iconTone: runningSessionsQuery.error
-        ? "bg-bg-surface text-fg-subtle"
+        ? "bg-muted text-muted-foreground"
         : (runningCount ?? 0) > 0
           ? "bg-success-subtle text-success"
-          : "bg-bg-surface text-fg-muted",
+          : "bg-muted text-muted-foreground",
       value: runningSessionsQuery.error
         ? "—"
         : `${runningCount ?? 0}${runningHasMore ? "+" : ""}`,
@@ -293,10 +293,10 @@ export function Dashboard() {
             operator always knows where they are. Subtitle is the next-action
             line for new tenants, a pulse summary for returning ones. */}
         <header>
-          <h1 className="font-display text-[32px] leading-tight font-semibold tracking-tight text-fg">
+          <h1 className="font-display text-[32px] leading-tight font-semibold tracking-tight text-foreground">
             {header.title}
           </h1>
-          <p className="mt-1.5 max-w-2xl text-[15px] text-fg-muted">
+          <p className="mt-1.5 max-w-2xl text-[15px] text-muted-foreground">
             {header.subtitle}
           </p>
         </header>
@@ -323,7 +323,7 @@ export function Dashboard() {
               />
             </div>
           ) : null}
-          <div className="grid grid-cols-2 lg:grid-cols-4 rounded-xl border border-border bg-bg-surface/40 divide-y divide-border lg:divide-y-0 lg:divide-x max-lg:[&>*:nth-child(odd)]:border-r max-lg:[&>*:nth-child(odd)]:border-border">
+          <div className="grid grid-cols-2 lg:grid-cols-4 rounded-2xl border border-border bg-card divide-y divide-border lg:divide-y-0 lg:divide-x max-lg:[&>*:nth-child(odd)]:border-r max-lg:[&>*:nth-child(odd)]:border-border">
             {metrics.map((m) => {
               const Icon = m.icon;
               const interactive = Boolean(m.href) && !m.isLoading;
@@ -334,7 +334,7 @@ export function Dashboard() {
                   className={cn(
                     "px-5 py-4 outline-none transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]",
                     interactive &&
-                      "cursor-pointer hover:bg-bg-surface/70 focus-visible:bg-bg-surface/70 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/40",
+                      "cursor-pointer hover:bg-muted/70 focus-visible:bg-muted/70 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40",
                   )}
                   role={interactive ? "link" : undefined}
                   tabIndex={interactive ? 0 : undefined}
@@ -364,7 +364,7 @@ export function Dashboard() {
                       <Icon className="size-[18px]" strokeWidth={1.75} />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] text-fg-muted font-medium">
+                      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] text-muted-foreground font-medium">
                         {m.label}
                         {m.isLive ? (
                           <span
@@ -379,7 +379,7 @@ export function Dashboard() {
                         <div
                           className={cn(
                             "mt-1.5 font-display text-[26px] leading-none font-semibold tabular-nums",
-                            m.isError ? "text-fg-subtle" : "text-fg",
+                            m.isError ? "text-muted-foreground" : "text-foreground",
                           )}
                         >
                           {m.value}
@@ -388,7 +388,7 @@ export function Dashboard() {
                       <div
                         className={cn(
                           "mt-1 text-[12px]",
-                          m.isError ? "text-danger" : "text-fg-subtle",
+                          m.isError ? "text-danger" : "text-muted-foreground",
                         )}
                       >
                         {m.caption}
@@ -407,14 +407,14 @@ export function Dashboard() {
         {showAnalytics ? (
           <section aria-label="Usage summary">
             <div className="mb-3 flex items-baseline justify-between gap-3">
-              <h2 className="font-display text-lg font-semibold text-fg inline-flex items-center gap-2">
-                <ChartColumnIcon className="size-[18px] text-fg-muted" aria-hidden />
+              <h2 className="font-display text-lg font-semibold text-foreground inline-flex items-center gap-2">
+                <ChartColumnIcon className="size-[18px] text-muted-foreground" aria-hidden />
                 Activity
               </h2>
               <button
                 type="button"
                 onClick={() => nav("/usage")}
-                className="group/cta inline-flex items-center gap-1 min-h-11 sm:min-h-0 text-[13px] text-fg-muted hover:text-brand transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
+                className="group/cta inline-flex items-center gap-1 min-h-11 sm:min-h-0 text-[13px] text-muted-foreground hover:text-primary transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
               >
                 Full usage
                 <span className="transition-transform duration-[var(--dur-quick)] ease-[var(--ease-soft)] group-hover/cta:translate-x-0.5">
@@ -439,7 +439,7 @@ export function Dashboard() {
                 ) : usage && usage.daily.length > 0 ? (
                   <MiniSparkline data={usage.daily.slice(-7)} />
                 ) : (
-                  <div className="flex h-[120px] items-center justify-center text-sm text-fg-subtle">
+                  <div className="flex h-[120px] items-center justify-center text-sm text-muted-foreground">
                     No sessions in the last 7 days.
                   </div>
                 )}
@@ -461,7 +461,7 @@ export function Dashboard() {
                 ) : usage ? (
                   <MiniTokenBar usage={usage} />
                 ) : (
-                  <div className="flex h-[120px] items-center justify-center text-sm text-fg-subtle">
+                  <div className="flex h-[120px] items-center justify-center text-sm text-muted-foreground">
                     No token usage recorded.
                   </div>
                 )}
@@ -476,14 +476,14 @@ export function Dashboard() {
         <section data-testid="recent-sessions">
 
           <div className="flex items-baseline justify-between mb-3">
-            <h2 className="font-display text-lg font-semibold text-fg inline-flex items-center gap-2">
-              <HistoryIcon className="size-[18px] text-fg-muted" aria-hidden />
+            <h2 className="font-display text-lg font-semibold text-foreground inline-flex items-center gap-2">
+              <HistoryIcon className="size-[18px] text-muted-foreground" aria-hidden />
               Recent sessions
             </h2>
             <button
               type="button"
               onClick={() => nav("/sessions")}
-              className="group/cta inline-flex items-center gap-1 min-h-11 sm:min-h-0 text-[13px] text-fg-muted hover:text-brand transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
+              className="group/cta inline-flex items-center gap-1 min-h-11 sm:min-h-0 text-[13px] text-muted-foreground hover:text-primary transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
             >
               View all
               <span className="transition-transform duration-[var(--dur-quick)] ease-[var(--ease-soft)] group-hover/cta:translate-x-0.5">
@@ -557,11 +557,11 @@ export function Dashboard() {
                     className: "max-w-[22rem]",
                     cell: (s) => (
                       <span
-                        className="block truncate text-fg"
+                        className="block truncate text-foreground"
                         title={s.title || undefined}
                       >
                         {s.title || (
-                          <span className="text-fg-subtle">Untitled</span>
+                          <span className="text-muted-foreground">Untitled</span>
                         )}
                       </span>
                     ),
@@ -581,7 +581,7 @@ export function Dashboard() {
                       const agentName = agentNameById.get(s.agent_id);
                       return (
                         <span
-                          className="block truncate text-fg-muted text-[12px]"
+                          className="block truncate text-muted-foreground text-[12px]"
                           title={
                             agentName
                               ? `${agentName} (${s.agent_id})`
@@ -605,10 +605,10 @@ export function Dashboard() {
                     cell: (s) => {
                       const isRunning = s.status === "running";
                       return (
-                        <span className="text-fg-muted text-[12px] whitespace-nowrap">
+                        <span className="text-muted-foreground text-[12px] whitespace-nowrap">
                           {formatSessionDuration(s.stats?.duration_seconds)}
                           {isRunning && s.stats?.duration_seconds != null ? (
-                            <span className="text-fg-subtle" title="Still running">
+                            <span className="text-muted-foreground" title="Still running">
                               +
                             </span>
                           ) : null}
@@ -624,7 +624,7 @@ export function Dashboard() {
                     className: "hidden md:table-cell",
                     cell: (s) => (
                       <span
-                        className="text-fg-muted text-[12px]"
+                        className="text-muted-foreground text-[12px]"
                         title={
                           s.message_count
                             ? `${s.message_count.toLocaleString()} agent messages`
@@ -643,7 +643,7 @@ export function Dashboard() {
                     className: "hidden md:table-cell",
                     cell: (s) => (
                       <span
-                        className="text-fg-muted text-[12px]"
+                        className="text-muted-foreground text-[12px]"
                         title={
                           s.tool_call_count
                             ? `${s.tool_call_count.toLocaleString()} tool calls`
@@ -666,7 +666,7 @@ export function Dashboard() {
                       const totalTok = inTok + outTok;
                       return (
                         <span
-                          className="text-fg-muted text-[12px]"
+                          className="text-muted-foreground text-[12px]"
                           title={
                             totalTok
                               ? `${inTok.toLocaleString()} in · ${outTok.toLocaleString()} out`
@@ -684,7 +684,7 @@ export function Dashboard() {
                     accessor: (s) => s.created_at,
                     className: "hidden lg:table-cell",
                     cell: (s) => (
-                      <span className="text-fg-muted text-[12px] whitespace-nowrap">
+                      <span className="text-muted-foreground text-[12px] whitespace-nowrap">
                         {new Date(s.created_at).toLocaleDateString()}
                       </span>
                     ),
@@ -723,10 +723,10 @@ function MiniCard({
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-bg-surface/30 p-4">
-      <h3 className="font-display text-sm font-semibold text-fg mb-3 inline-flex items-center gap-2">
+    <div className="rounded-2xl border border-border bg-card p-4">
+      <h3 className="font-display text-sm font-semibold text-foreground mb-3 inline-flex items-center gap-2">
         {Icon ? (
-          <Icon className="size-4 text-fg-muted" aria-hidden strokeWidth={1.75} />
+          <Icon className="size-4 text-muted-foreground" aria-hidden strokeWidth={1.75} />
         ) : null}
         {title}
       </h3>
@@ -750,7 +750,7 @@ function kindValue(byKind: UsageByKind[], kind: string): number {
  *  drives off active_seconds only. */
 function MiniSparkline({ data }: { data: DailyBucket[] }) {
   const n = data.length;
-  if (n === 0) return <p className="text-sm text-fg-subtle">No data.</p>;
+  if (n === 0) return <p className="text-sm text-muted-foreground">No data.</p>;
 
   const max = Math.max(1, ...data.map((d) => d.active_seconds));
   const viewW = DAILY_CHART_VIEW_W;
@@ -834,7 +834,7 @@ function MiniTokenBar({ usage }: { usage: UsageSummary }) {
   const reasoning = kindValue(usage.by_kind, "model_reasoning_tokens");
   const total = input + output + reasoning;
   if (total === 0)
-    return <p className="text-sm text-fg-subtle">No token usage recorded.</p>;
+    return <p className="text-sm text-muted-foreground">No token usage recorded.</p>;
 
   const W = 100;
   const H = 12;
@@ -885,7 +885,7 @@ function MiniTokenBar({ usage }: { usage: UsageSummary }) {
           return el;
         })}
       </svg>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-fg-subtle">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
           <span
             className="size-2 rounded-sm"
@@ -909,7 +909,7 @@ function MiniTokenBar({ usage }: { usage: UsageSummary }) {
             Reason {fmtTokenValue(reasoning)}
           </span>
         )}
-        <span className="text-fg-muted tabular-nums ml-auto">
+        <span className="text-muted-foreground tabular-nums ml-auto">
           {fmtTokenValue(total)} total
         </span>
       </div>
