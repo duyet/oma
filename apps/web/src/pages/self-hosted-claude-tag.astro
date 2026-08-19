@@ -68,11 +68,11 @@ const schemas = [
   schemas={schemas}
 >
   <section class="border-b border-[var(--color-border)]">
-    <div class="max-w-5xl mx-auto px-4 py-16 md:py-24">
+    <div class="max-w-5xl mx-auto px-4 py-10 md:py-12">
       <p class="text-sm font-mono uppercase tracking-wider text-[var(--color-fg-subtle)] mb-4">
         Self-hosted Claude Tag
       </p>
-      <h1 class="font-display text-4xl sm:text-5xl font-bold tracking-tight max-w-4xl mb-6">
+      <h1 class="font-display text-3xl sm:text-4xl font-bold tracking-tight max-w-4xl mb-6">
         Build a Claude Tag-style workflow on an open-source runtime
       </h1>
       <p class="text-lg text-[var(--color-fg-muted)] leading-relaxed max-w-3xl">
@@ -85,13 +85,13 @@ const schemas = [
       <div class="mt-8 flex flex-wrap gap-3">
         <a
           href="https://docs.oma.duyet.net/console/integrations/"
-          class="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-2xl border border-transparent text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px bg-primary text-primary-foreground hover:bg-primary/80 [&_svg:not([class*=size-])]:size-4"
+          class="inline-flex items-center justify-center gap-1.5 min-h-11 px-4 rounded-md border border-transparent text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px bg-primary text-primary-foreground hover:bg-primary/80 [&_svg:not([class*=size-])]:size-4"
         >
           Read integration docs
         </a>
         <a
           href="/claude-tag-open-source/"
-          class="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-2xl border border-border bg-background text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px hover:bg-muted hover:text-foreground dark:bg-transparent dark:hover:bg-input/30 [&_svg:not([class*=size-])]:size-4"
+          class="inline-flex items-center justify-center gap-1.5 min-h-11 px-4 rounded-md border border-border bg-background text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px hover:bg-muted hover:text-foreground dark:bg-transparent dark:hover:bg-input/30 [&_svg:not([class*=size-])]:size-4"
         >
           Open-source Claude Tag
         </a>
@@ -99,7 +99,7 @@ const schemas = [
     </div>
   </section>
 
-  <section class="max-w-5xl mx-auto px-4 py-16" data-reveal>
+  <section class="max-w-5xl mx-auto px-4 py-10" data-reveal>
     <h2 class="font-display text-3xl font-bold mb-4">The self-hosted architecture</h2>
     <p class="text-[var(--color-fg-muted)] leading-relaxed mb-8 max-w-3xl">
       The public product surface can still be Slack, because that is where
@@ -115,11 +115,11 @@ const schemas = [
   </section>
 
   <section class="border-y border-[var(--color-border)] bg-[var(--color-bg-surface)]" data-reveal>
-    <div class="max-w-5xl mx-auto px-4 py-16">
+    <div class="max-w-5xl mx-auto px-4 py-10">
       <h2 class="font-display text-3xl font-bold mb-8">Setup path</h2>
       <ol class="grid md:grid-cols-5 gap-4">
         {setupSteps.map((step, index) => (
-          <li class="rounded-xl border border-[var(--color-border)] bg-card p-4">
+          <li class="rounded-md border border-[var(--color-border)] bg-card p-4">
             <div class="font-mono text-xs text-[var(--color-fg-subtle)] mb-3">Step {index + 1}</div>
             <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed">{step}</p>
           </li>
@@ -128,7 +128,7 @@ const schemas = [
     </div>
   </section>
 
-  <section class="max-w-5xl mx-auto px-4 py-16" data-reveal>
+  <section class="max-w-5xl mx-auto px-4 py-10" data-reveal>
     <h2 class="font-display text-3xl font-bold mb-4">Why self-host the Tag pattern</h2>
     <div class="grid md:grid-cols-2 gap-x-10 gap-y-8">
       <article>
@@ -164,9 +164,9 @@ const schemas = [
   </section>
 
   <section class="border-t border-[var(--color-border)]" data-reveal>
-    <div class="max-w-5xl mx-auto px-4 py-16">
+    <div class="max-w-5xl mx-auto px-4 py-10">
       <h2 class="font-display text-3xl font-bold mb-8">FAQ</h2>
-      <div class="grid md:grid-cols-2 gap-8">
+      <div class="grid md:grid-cols-2 gap-4">
         {faqItems.map((item) => (
           <article>
             <h3 class="font-semibold text-lg mb-2">{item.question}</h3>

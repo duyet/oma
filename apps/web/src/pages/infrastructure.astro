@@ -78,11 +78,11 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
 >
   <!-- Page hero -->
   <section class="border-b border-[var(--color-border)]">
-    <div class="max-w-5xl mx-auto px-4 py-14 md:py-16">
+    <div class="max-w-5xl mx-auto px-4 py-8 md:py-10">
       <p class="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
         <Icon name="server" size={14} class="text-[var(--color-brand)]" /> Infrastructure
       </p>
-      <h1 class="font-display text-4xl md:text-5xl font-bold mb-4 tracking-tight">
+      <h1 class="font-display text-3xl md:text-4xl font-bold mb-3 tracking-tight">
         Run fleets on any sandbox, anywhere
       </h1>
       <p class="text-lg text-[var(--color-fg-muted)] max-w-2xl leading-relaxed">
@@ -94,7 +94,7 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
 
   <!-- Deployment topology: two parallel paths, not a pipeline -->
   <section class="border-b border-[var(--color-border)] bg-[var(--color-bg-surface)]" data-reveal id="topology">
-    <div class="max-w-5xl mx-auto px-4 py-14 md:py-16">
+    <div class="max-w-5xl mx-auto px-4 py-8 md:py-10">
       <p class="flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
         <Icon name="layers" size={14} class="text-[var(--color-brand)]" /> Deployment
       </p>
@@ -172,17 +172,17 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
 
   <!-- Fleet operations -->
   <section class="border-b border-[var(--color-border)]" data-reveal id="fleets">
-    <div class="max-w-5xl mx-auto px-4 py-16 md:py-20 text-center">
+    <div class="max-w-5xl mx-auto px-4 py-10 md:py-12 text-center">
       <p class="flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
         <Icon name="server" size={14} class="text-[var(--color-brand)]" /> Fleets
       </p>
-      <h2 class="font-display text-3xl md:text-4xl font-bold mb-4 tracking-tight">Built for multi-agent fleets</h2>
+      <h2 class="font-display text-2xl md:text-3xl font-bold mb-4 tracking-tight">Built for multi-agent fleets</h2>
       <p class="text-[var(--color-fg-muted)] leading-relaxed mb-10 max-w-2xl mx-auto">
         Concurrent sub-agent delegation, liveness heartbeats, and native webhook
         notifications to GitHub, Slack, and Matrix.
       </p>
-      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12 text-left">
-        <article data-lift class="rounded-xl border border-[var(--color-border)] bg-card p-5 hover:border-[var(--color-border-strong)]">
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8 text-left">
+        <article data-lift class="rounded-md border border-[var(--color-border)] bg-card p-4 hover:border-[var(--color-border-strong)]">
           <span class="arch-badge arch-badge-green mb-3">any sandbox</span>
           <h3 class="font-display text-base font-semibold mb-2 tracking-tight">Run on any sandbox</h3>
           <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed">
@@ -190,7 +190,7 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
             swappable without touching agents.
           </p>
         </article>
-        <article data-lift class="rounded-xl border border-[var(--color-border)] bg-card p-5 hover:border-[var(--color-border-strong)]">
+        <article data-lift class="rounded-md border border-[var(--color-border)] bg-card p-4 hover:border-[var(--color-border-strong)]">
           <span class="arch-badge arch-badge-orange mb-3">cost control</span>
           <h3 class="font-display text-base font-semibold mb-2 tracking-tight">Pause &amp; resume</h3>
           <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed">
@@ -198,7 +198,7 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
             restores it exactly, so idle agents cost nothing.
           </p>
         </article>
-        <article data-lift class="rounded-xl border border-[var(--color-border)] bg-card p-5 hover:border-[var(--color-border-strong)]">
+        <article data-lift class="rounded-md border border-[var(--color-border)] bg-card p-4 hover:border-[var(--color-border-strong)]">
           <span class="arch-badge arch-badge-blue mb-3">coding agents</span>
           <h3 class="font-display text-base font-semibold mb-2 tracking-tight">Coding agents inside</h3>
           <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed">
@@ -206,7 +206,7 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
             sandbox, one Docker image per runtime.
           </p>
         </article>
-        <article data-lift class="rounded-xl border border-[var(--color-border)] bg-card p-5 hover:border-[var(--color-border-strong)]">
+        <article data-lift class="rounded-md border border-[var(--color-border)] bg-card p-4 hover:border-[var(--color-border-strong)]">
           <span class="arch-badge arch-badge-green mb-3">delegation</span>
           <h3 class="font-display text-base font-semibold mb-2 tracking-tight">Cross-sandbox sub-agents</h3>
           <p class="text-sm text-[var(--color-fg-muted)] leading-relaxed">
@@ -244,14 +244,14 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
   </section>
 
   <!-- Any sandbox provider -->
-  <section class="max-w-5xl mx-auto px-4 py-16 md:py-20" data-reveal id="sandboxes">
+  <section class="max-w-5xl mx-auto px-4 py-10 md:py-12" data-reveal id="sandboxes">
     <p class="flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
       <Icon name="box" size={14} class="text-[var(--color-brand)]" /> Sandboxes
     </p>
-    <h2 class="font-display text-3xl md:text-4xl font-bold mb-4 text-center tracking-tight">
+    <h2 class="font-display text-2xl md:text-3xl font-bold mb-4 text-center tracking-tight">
       Connect any sandbox provider
     </h2>
-    <p class="text-center text-[var(--color-fg-muted)] max-w-2xl mx-auto mb-12 leading-relaxed">
+    <p class="text-center text-[var(--color-fg-muted)] max-w-2xl mx-auto mb-8 leading-relaxed">
       One <code class="font-mono text-sm">SandboxExecutor</code> interface, a dozen adapters.
       Pick a provider per environment — agents and sessions never notice the difference.
     </p>
@@ -285,21 +285,21 @@ const fleetLogos: { label: string; mode: "fill" | "stroke"; inner: string }[] = 
 
   <!-- Bridge: connect your own machine -->
   <section class="border-t border-[var(--color-border)]" data-reveal id="bridge">
-    <div class="max-w-5xl mx-auto px-4 py-16 md:py-20">
+    <div class="max-w-5xl mx-auto px-4 py-10 md:py-12">
       <p class="flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
         <Icon name="terminal" size={14} class="text-[var(--color-brand)]" /> Bridge
       </p>
-      <h2 class="font-display text-3xl md:text-4xl font-bold mb-4 text-center tracking-tight">
+      <h2 class="font-display text-2xl md:text-3xl font-bold mb-4 text-center tracking-tight">
         Connect your own machine
       </h2>
-      <p class="text-center text-[var(--color-fg-muted)] max-w-2xl mx-auto mb-12 leading-relaxed">
+      <p class="text-center text-[var(--color-fg-muted)] max-w-2xl mx-auto mb-8 leading-relaxed">
         One command pairs a laptop, workstation, or homelab box with your OMA
         deployment. Agents then run on hardware you already own.
       </p>
 
-      <div class="grid lg:grid-cols-2 gap-8 items-stretch">
+      <div class="grid lg:grid-cols-2 gap-4 items-stretch">
         <!-- CLI demo -->
-        <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] overflow-hidden">
+        <div class="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] overflow-hidden">
           <div class="flex items-center gap-1.5 px-4 py-2.5 border-b border-[var(--color-border)]">
             <span class="w-2.5 h-2.5 rounded-full bg-[var(--color-border-strong)]"></span>
             <span class="w-2.5 h-2.5 rounded-full bg-[var(--color-border-strong)]"></span>
@@ -326,7 +326,7 @@ Sandbox Runtime page.</span></code></pre>
         </div>
 
         <!-- How the bridge connects -->
-        <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5 flex flex-col">
+        <div class="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-5 flex flex-col">
           <h3 class="font-display text-lg font-semibold mb-4 tracking-tight">How the bridge connects</h3>
           <!-- viz: machine → outbound wss → OMA -->
           <div class="flex items-center justify-between gap-2 font-mono text-[11px] mb-5">

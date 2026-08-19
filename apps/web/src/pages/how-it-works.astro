@@ -102,11 +102,11 @@ const lifecycle = [
 >
   <!-- Page hero -->
   <section class="border-b border-[var(--color-border)]">
-    <div class="max-w-5xl mx-auto px-4 py-14 md:py-16">
+    <div class="max-w-5xl mx-auto px-4 py-8 md:py-10">
       <p class="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
         <Icon name="layers" size={14} class="text-[var(--color-brand)]" /> How it works
       </p>
-      <h1 class="font-display text-4xl md:text-5xl font-bold mb-4 tracking-tight">
+      <h1 class="font-display text-3xl md:text-4xl font-bold mb-3 tracking-tight">
         How Open Managed Agents works
       </h1>
       <p class="text-lg text-[var(--color-fg-muted)] max-w-2xl leading-relaxed">
@@ -119,7 +119,7 @@ const lifecycle = [
 
   <!-- Request flow diagram -->
   <section class="border-b border-[var(--color-border)] bg-[var(--color-bg-surface)]" data-reveal id="request-flow">
-    <div class="max-w-5xl mx-auto px-4 py-14 md:py-16">
+    <div class="max-w-5xl mx-auto px-4 py-8 md:py-10">
       <p class="flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
         <Icon name="arrowRight" size={14} class="text-[var(--color-brand)]" /> Request flow
       </p>
@@ -177,17 +177,17 @@ const lifecycle = [
     data-reveal
     id="how-designed"
   >
-    <div class="max-w-5xl mx-auto px-4 py-16 md:py-20">
-      <h2 class="font-display text-3xl md:text-4xl font-bold mb-4 text-center tracking-tight">
+    <div class="max-w-5xl mx-auto px-4 py-10 md:py-12">
+      <h2 class="font-display text-2xl md:text-3xl font-bold mb-4 text-center tracking-tight">
         How it is designed
       </h2>
-      <p class="text-center text-[var(--color-fg-muted)] max-w-2xl mx-auto mb-12 leading-relaxed">
+      <p class="text-center text-[var(--color-fg-muted)] max-w-2xl mx-auto mb-8 leading-relaxed">
         The platform owns <em>what</em> an agent has; a harness owns <em>how</em> the model loop
         runs — swappable by name.
       </p>
 
-      <div class="meta-harness-split mb-14">
-        <div class="rounded-xl border-2 border-[var(--color-brand)] bg-[var(--color-bg)] p-6">
+      <div class="meta-harness-split mb-8">
+        <div class="rounded-md border-2 border-[var(--color-brand)] bg-[var(--color-bg)] p-4">
           <span class="arch-badge arch-badge-orange mb-3">Platform owns</span>
           <h3 class="font-display text-lg font-semibold mb-3">What the agent has</h3>
           <ul class="space-y-2 text-sm text-[var(--color-fg-muted)] leading-relaxed list-disc pl-5">
@@ -200,7 +200,7 @@ const lifecycle = [
           </ul>
         </div>
         <div class="meta-harness-vs py-2 md:py-0" aria-hidden="true">vs</div>
-        <div class="rounded-xl border-2 border-[var(--color-blue)] bg-[var(--color-bg)] p-6">
+        <div class="rounded-md border-2 border-[var(--color-blue)] bg-[var(--color-bg)] p-4">
           <span class="arch-badge arch-badge-blue mb-3">Harness owns</span>
           <h3 class="font-display text-lg font-semibold mb-3">How the loop runs</h3>
           <ul class="space-y-2 text-sm text-[var(--color-fg-muted)] leading-relaxed list-disc pl-5">
@@ -247,18 +247,18 @@ const lifecycle = [
   </section>
 
   <!-- Durable lifecycle visualization -->
-  <section class="max-w-5xl mx-auto px-4 py-16 md:py-20" data-reveal id="lifecycle">
+  <section class="max-w-5xl mx-auto px-4 py-10 md:py-12" data-reveal id="lifecycle">
     <p class="flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-widest text-[var(--color-fg-subtle)] mb-3">
       <Icon name="repeat" size={14} class="text-[var(--color-brand)]" /> Runtime
     </p>
-    <h2 class="font-display text-3xl md:text-4xl font-bold mb-4 text-center tracking-tight">
+    <h2 class="font-display text-2xl md:text-3xl font-bold mb-4 text-center tracking-tight">
       Durable lifecycle loop
     </h2>
-    <p class="text-center text-[var(--color-fg-muted)] max-w-2xl mx-auto mb-12 leading-relaxed">
+    <p class="text-center text-[var(--color-fg-muted)] max-w-2xl mx-auto mb-8 leading-relaxed">
       Every turn is events-first: persist, then broadcast. That ordering is why a
       crash loses no work and a new process resumes mid-run.
     </p>
-    <div class="mb-12">
+    <div class="mb-8">
       <DurableLoopDiagram />
     </div>
     <div class="lifecycle-track" role="list" aria-label="Durable session lifecycle steps">
@@ -267,7 +267,7 @@ const lifecycle = [
           <div
             role="listitem"
             data-lift
-            class="lifecycle-step rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5 shadow-2xs hover:border-[var(--color-border-strong)]"
+            class="lifecycle-step rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-4 hover:border-[var(--color-border-strong)]"
           >
             <div class="flex items-center justify-between mb-3">
               <span class="lifecycle-num font-mono text-sm font-bold text-[var(--color-brand)]">{step.n}</span>

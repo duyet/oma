@@ -94,13 +94,13 @@ const schemas = [
   schemas={schemas}
 >
   <section class="border-b border-[var(--color-border)]">
-    <div class="max-w-5xl mx-auto px-4 py-16 md:py-24">
+    <div class="max-w-5xl mx-auto px-4 py-10 md:py-12">
       <p class="text-sm font-mono uppercase tracking-wider text-[var(--color-fg-subtle)] mb-4">
         Open Tag
       </p>
-      <div class="grid lg:grid-cols-[1.15fr_0.85fr] gap-10 items-start">
+      <div class="grid lg:grid-cols-[1.15fr_0.85fr] gap-6 items-start">
         <div>
-          <h1 class="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-6">
+          <h1 class="font-display text-3xl sm:text-4xl font-bold tracking-tight mb-6">
             Open-source, self-hosted foundation for Claude Tag-style agents
           </h1>
           <p class="text-lg text-[var(--color-fg-muted)] leading-relaxed">
@@ -116,13 +116,13 @@ const schemas = [
               href="https://github.com/duyet/oma"
               target="_blank"
               rel="noopener noreferrer"
-              class="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-2xl border border-transparent text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px bg-primary text-primary-foreground hover:bg-primary/80 [&_svg:not([class*=size-])]:size-4"
+              class="inline-flex items-center justify-center gap-1.5 min-h-11 px-4 rounded-md border border-transparent text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px bg-primary text-primary-foreground hover:bg-primary/80 [&_svg:not([class*=size-])]:size-4"
             >
               Star on GitHub
             </a>
             <a
               href="/self-hosted-claude-tag/"
-              class="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-2xl border border-border bg-background text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px hover:bg-muted hover:text-foreground dark:bg-transparent dark:hover:bg-input/30 [&_svg:not([class*=size-])]:size-4"
+              class="inline-flex items-center justify-center gap-1.5 min-h-11 px-4 rounded-md border border-border bg-background text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px hover:bg-muted hover:text-foreground dark:bg-transparent dark:hover:bg-input/30 [&_svg:not([class*=size-])]:size-4"
             >
               Self-hosted Claude Tag
             </a>
@@ -140,7 +140,7 @@ const schemas = [
     </div>
   </section>
 
-  <section class="max-w-5xl mx-auto px-4 py-16" data-reveal>
+  <section class="max-w-5xl mx-auto px-4 py-10" data-reveal>
     <h2 class="font-display text-3xl font-bold mb-4">Claude Tag vs Open Managed Agents</h2>
     <p class="text-[var(--color-fg-muted)] leading-relaxed mb-8 max-w-3xl">
       Open Managed Agents should not be positioned as a generic workplace bot.
@@ -171,9 +171,9 @@ const schemas = [
   </section>
 
   <section class="border-y border-[var(--color-border)] bg-[var(--color-bg-surface)]" data-reveal>
-    <div class="max-w-5xl mx-auto px-4 py-16">
+    <div class="max-w-5xl mx-auto px-4 py-10">
       <h2 class="font-display text-3xl font-bold mb-4">What is covered today</h2>
-      <div class="grid md:grid-cols-3 gap-6 text-sm">
+      <div class="grid md:grid-cols-3 gap-3 text-sm">
         <div>
           <h3 class="font-semibold text-lg mb-2">Tag-style channel runtime</h3>
           <p class="text-[var(--color-fg-muted)] leading-relaxed">
@@ -199,7 +199,7 @@ const schemas = [
     </div>
   </section>
 
-  <section class="max-w-5xl mx-auto px-4 py-16" data-reveal>
+  <section class="max-w-5xl mx-auto px-4 py-10" data-reveal>
     <h2 class="font-display text-3xl font-bold mb-4">Roadmap to Tag-level polish</h2>
     <ol class="space-y-4 text-[var(--color-fg-muted)] leading-relaxed list-decimal pl-5">
       <li><strong class="text-[var(--color-fg)]">Claude Tag setup console:</strong> workspace pairing, channel enablement, publication binding, and health checks.</li>
@@ -212,9 +212,9 @@ const schemas = [
   </section>
 
   <section class="border-t border-[var(--color-border)]" data-reveal>
-    <div class="max-w-5xl mx-auto px-4 py-16">
+    <div class="max-w-5xl mx-auto px-4 py-10">
       <h2 class="font-display text-3xl font-bold mb-8">FAQ</h2>
-      <div class="grid md:grid-cols-2 gap-8">
+      <div class="grid md:grid-cols-2 gap-4">
         {faqItems.map((item) => (
           <article>
             <h3 class="font-semibold text-lg mb-2">{item.question}</h3>

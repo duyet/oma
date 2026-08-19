@@ -48,13 +48,13 @@ const schemas = [
   schemas={schemas}
 >
   <section class="border-b border-[var(--color-border)]">
-    <div class="max-w-5xl mx-auto px-4 py-20 md:py-32">
+    <div class="max-w-5xl mx-auto px-4 py-10 md:py-14">
       <p class="text-sm font-mono uppercase tracking-wider text-[var(--color-fg-subtle)] mb-4">
         Local Machine
       </p>
-      <div class="grid lg:grid-cols-[1.15fr_0.85fr] gap-10 items-start">
+      <div class="grid lg:grid-cols-[1.15fr_0.85fr] gap-6 items-start">
         <div>
-          <h1 class="font-display text-5xl sm:text-6xl md:text-7xl font-bold tracking-tight mb-6 leading-[1.02]">
+          <h1 class="font-display text-3xl sm:text-4xl font-bold tracking-tight mb-3 leading-tight">
             Wire your own machine into the platform
           </h1>
           <p class="text-lg text-[var(--color-fg-muted)] leading-relaxed">
@@ -68,13 +68,13 @@ const schemas = [
               href="https://github.com/duyet/oma"
               target="_blank"
               rel="noopener noreferrer"
-              class="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-2xl border border-transparent text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px bg-primary text-primary-foreground hover:bg-primary/80 [&_svg:not([class*=size-])]:size-4"
+              class="inline-flex items-center justify-center gap-1.5 min-h-11 px-4 rounded-md border border-transparent text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px bg-primary text-primary-foreground hover:bg-primary/80 [&_svg:not([class*=size-])]:size-4"
             >
               Star on GitHub
             </a>
             <a
               href="/docs/"
-              class="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-2xl border border-border bg-background text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px hover:bg-muted hover:text-foreground dark:bg-transparent dark:hover:bg-input/30 [&_svg:not([class*=size-])]:size-4"
+              class="inline-flex items-center justify-center gap-1.5 min-h-11 px-4 rounded-md border border-border bg-background text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px hover:bg-muted hover:text-foreground dark:bg-transparent dark:hover:bg-input/30 [&_svg:not([class*=size-])]:size-4"
             >
               Read the docs
             </a>
@@ -104,7 +104,7 @@ const schemas = [
     </div>
   </section>
 
-  <section class="max-w-5xl mx-auto px-4 py-16" data-reveal>
+  <section class="max-w-5xl mx-auto px-4 py-10" data-reveal>
     <h2 class="font-display text-3xl font-bold mb-4">How it works</h2>
     <p class="text-[var(--color-fg-muted)] leading-relaxed mb-8 max-w-3xl">
       A lightweight bridge daemon pairs your machine with your tenant. From
@@ -115,7 +115,7 @@ const schemas = [
       works identically behind NAT, a home router, or a locked-down
       corporate firewall.
     </p>
-    <div class="grid md:grid-cols-3 gap-6 text-sm">
+    <div class="grid md:grid-cols-3 gap-3 text-sm">
       <div>
         <h3 class="font-semibold text-lg mb-2">Outbound-only</h3>
         <p class="text-[var(--color-fg-muted)] leading-relaxed">
@@ -141,9 +141,9 @@ const schemas = [
   </section>
 
   <section class="border-y border-[var(--color-border)] bg-[var(--color-bg-surface)]" data-reveal>
-    <div class="max-w-5xl mx-auto px-4 py-16">
+    <div class="max-w-5xl mx-auto px-4 py-10">
       <h2 class="font-display text-3xl font-bold mb-8 text-center">Pair a machine</h2>
-      <div class="max-w-2xl mx-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] overflow-hidden">
+      <div class="max-w-2xl mx-auto rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] overflow-hidden">
         <div class="flex items-center gap-1.5 px-4 py-2.5 border-b border-[var(--color-border)]">
           <span class="w-2.5 h-2.5 rounded-full bg-[var(--color-border-strong)]"></span>
           <span class="w-2.5 h-2.5 rounded-full bg-[var(--color-border-strong)]"></span>
@@ -173,9 +173,9 @@ manual server to run.</span></code></pre>
     </div>
   </section>
 
-  <section class="max-w-5xl mx-auto px-4 py-16" data-reveal>
+  <section class="max-w-5xl mx-auto px-4 py-10" data-reveal>
     <h2 class="font-display text-3xl font-bold mb-4">What you get, and what's still missing</h2>
-    <div class="grid md:grid-cols-2 gap-8">
+    <div class="grid md:grid-cols-2 gap-4">
       <div>
         <h3 class="font-semibold text-lg mb-3">What you get</h3>
         <ul class="space-y-2.5 text-sm text-[var(--color-fg-muted)] leading-relaxed list-disc pl-5">
@@ -198,9 +198,9 @@ manual server to run.</span></code></pre>
   </section>
 
   <section class="border-t border-[var(--color-border)]" data-reveal>
-    <div class="max-w-5xl mx-auto px-4 py-16">
+    <div class="max-w-5xl mx-auto px-4 py-10">
       <h2 class="font-display text-3xl font-bold mb-8">FAQ</h2>
-      <div class="grid md:grid-cols-2 gap-8">
+      <div class="grid md:grid-cols-2 gap-4">
         {faqItems.map((item) => (
           <article>
             <h3 class="font-semibold text-lg mb-2">{item.question}</h3>

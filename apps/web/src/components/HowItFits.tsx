@@ -722,7 +722,7 @@ export default function HowItFits() {
         aria-labelledby="fits-dialog-title"
         className={`fixed inset-0 m-auto h-fit max-h-[calc(100dvh-3rem)] w-[calc(100vw-2.5rem)] ${
           dialog?.image ? "max-w-4xl" : "max-w-lg"
-        } overflow-y-auto rounded-[10px] border border-border bg-bg p-0 text-fg backdrop:bg-bg/60 backdrop:backdrop-blur-[10px]`}
+        } overflow-y-auto rounded-md border border-border bg-bg p-0 text-fg backdrop:bg-bg/70`}
         onClick={(e) => {
           if (e.target === dialogRef.current) dialogRef.current?.close();
         }}

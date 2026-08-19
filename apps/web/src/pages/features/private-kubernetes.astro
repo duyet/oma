@@ -55,9 +55,9 @@ const schemas = [
 ];
 
 const btnPrimary =
-  "inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-2xl border border-transparent text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px bg-primary text-primary-foreground hover:bg-primary/80 [&_svg:not([class*=size-])]:size-4";
+  "inline-flex items-center justify-center gap-1.5 min-h-11 px-4 rounded-md border border-transparent text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px bg-primary text-primary-foreground hover:bg-primary/80 [&_svg:not([class*=size-])]:size-4";
 const btnOutline =
-  "inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-2xl border border-border bg-background text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px hover:bg-muted hover:text-foreground dark:bg-transparent dark:hover:bg-input/30 [&_svg:not([class*=size-])]:size-4";
+  "inline-flex items-center justify-center gap-1.5 min-h-11 px-4 rounded-md border border-border bg-background text-sm font-medium whitespace-nowrap transition-all select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px hover:bg-muted hover:text-foreground dark:bg-transparent dark:hover:bg-input/30 [&_svg:not([class*=size-])]:size-4";
 ---
 
 <Base
@@ -68,13 +68,13 @@ const btnOutline =
   schemas={schemas}
 >
   <section class="border-b border-[var(--color-border)]">
-    <div class="max-w-5xl mx-auto px-4 py-16 md:py-24">
+    <div class="max-w-5xl mx-auto px-4 py-10 md:py-12">
       <p class="text-sm font-mono uppercase tracking-wider text-[var(--color-fg-subtle)] mb-4">
         Features / Private Kubernetes
       </p>
-      <div class="grid lg:grid-cols-[1.15fr_0.85fr] gap-10 items-start">
+      <div class="grid lg:grid-cols-[1.15fr_0.85fr] gap-6 items-start">
         <div>
-          <h1 class="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-6">
+          <h1 class="font-display text-3xl sm:text-4xl font-bold tracking-tight mb-6">
             Connect your private Kubernetes cluster
           </h1>
           <p class="text-lg text-[var(--color-fg-muted)] leading-relaxed">
@@ -126,7 +126,7 @@ const btnOutline =
     </div>
   </section>
 
-  <section class="max-w-5xl mx-auto px-4 py-16" data-reveal id="how">
+  <section class="max-w-5xl mx-auto px-4 py-10" data-reveal id="how">
     <h2 class="font-display text-3xl font-bold mb-3">How it fits</h2>
     <p class="text-[var(--color-fg-muted)] leading-relaxed mb-8 max-w-3xl">
       Sessions, history, vault credentials, and the model loop stay on the
@@ -137,10 +137,10 @@ const btnOutline =
   </section>
 
   <section class="border-y border-[var(--color-border)] bg-[var(--color-bg-surface)]" data-reveal id="paths">
-    <div class="max-w-5xl mx-auto px-4 py-16">
+    <div class="max-w-5xl mx-auto px-4 py-10">
       <h2 class="font-display text-3xl font-bold mb-8">Three Helm charts</h2>
-      <div class="grid md:grid-cols-3 gap-6">
-        <article class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5">
+      <div class="grid md:grid-cols-3 gap-3">
+        <article class="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-5">
           <p class="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-brand)] mb-2">
             Sandbox worker
           </p>
@@ -154,7 +154,7 @@ const btnOutline =
             provider: subprocess · openshell
           </p>
         </article>
-        <article class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5">
+        <article class="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-5">
           <p class="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-brand)] mb-2">
             HTTP gateway
           </p>
@@ -169,7 +169,7 @@ const btnOutline =
             secrets: K8S_SANDBOX_GATEWAY_URL
           </p>
         </article>
-        <article class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5">
+        <article class="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-5">
           <p class="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-brand)] mb-2">
             Full plane
           </p>
@@ -187,15 +187,15 @@ const btnOutline =
     </div>
   </section>
 
-  <section class="max-w-5xl mx-auto px-4 py-16" data-reveal id="install">
+  <section class="max-w-5xl mx-auto px-4 py-10" data-reveal id="install">
     <h2 class="font-display text-3xl font-bold mb-3">Install the bridge worker</h2>
     <p class="text-[var(--color-fg-muted)] leading-relaxed mb-8 max-w-3xl">
       Most common path: keep the hosted control plane, put sandboxes on your
       private cluster. Pair once, ship credentials as a Secret, Helm install.
     </p>
 
-    <div class="grid lg:grid-cols-2 gap-8">
-      <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] overflow-hidden">
+    <div class="grid lg:grid-cols-2 gap-4">
+      <div class="rounded-md border border-[var(--color-border)] bg-[var(--color-bg-surface)] overflow-hidden">
         <div class="flex items-center gap-1.5 px-4 py-2.5 border-b border-[var(--color-border)]">
           <span class="w-2.5 h-2.5 rounded-full bg-[var(--color-border-strong)]"></span>
           <span class="w-2.5 h-2.5 rounded-full bg-[var(--color-border-strong)]"></span>
@@ -211,7 +211,7 @@ const btnOutline =
     --from-file=machine-id=$HOME/.oma/bridge/machine-id</code></pre>
       </div>
 
-      <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] overflow-hidden">
+      <div class="rounded-md border border-[var(--color-border)] bg-[var(--color-bg-surface)] overflow-hidden">
         <div class="flex items-center gap-1.5 px-4 py-2.5 border-b border-[var(--color-border)]">
           <span class="w-2.5 h-2.5 rounded-full bg-[var(--color-border-strong)]"></span>
           <span class="w-2.5 h-2.5 rounded-full bg-[var(--color-border-strong)]"></span>
@@ -228,7 +228,7 @@ const btnOutline =
       </div>
     </div>
 
-    <div class="mt-10 rounded-xl border border-[var(--color-border)] overflow-hidden">
+    <div class="mt-10 rounded-md border border-[var(--color-border)] overflow-hidden">
       <div class="flex items-center gap-1.5 px-4 py-2.5 border-b border-[var(--color-border)] bg-[var(--color-bg-surface)]">
         <span class="w-2.5 h-2.5 rounded-full bg-[var(--color-border-strong)]"></span>
         <span class="w-2.5 h-2.5 rounded-full bg-[var(--color-border-strong)]"></span>
@@ -254,9 +254,9 @@ const btnOutline =
   </section>
 
   <section class="border-y border-[var(--color-border)] bg-[var(--color-bg-surface)]" data-reveal id="compare">
-    <div class="max-w-5xl mx-auto px-4 py-16">
+    <div class="max-w-5xl mx-auto px-4 py-10">
       <h2 class="font-display text-3xl font-bold mb-8">Cluster vs laptop vs full self-host</h2>
-      <div class="overflow-x-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)]">
+      <div class="overflow-x-auto rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]">
         <table class="w-full text-sm text-left">
           <thead class="border-b border-[var(--color-border)] text-[var(--color-fg-subtle)] font-mono text-[11px] uppercase tracking-wider">
             <tr>
@@ -293,9 +293,9 @@ const btnOutline =
     </div>
   </section>
 
-  <section class="max-w-5xl mx-auto px-4 py-16" data-reveal id="faq">
+  <section class="max-w-5xl mx-auto px-4 py-10" data-reveal id="faq">
     <h2 class="font-display text-3xl font-bold mb-8">FAQ</h2>
-    <div class="grid md:grid-cols-2 gap-8">
+    <div class="grid md:grid-cols-2 gap-4">
       {
         faqItems.map((item) => (
           <article>
