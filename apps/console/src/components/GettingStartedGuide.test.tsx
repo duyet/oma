@@ -53,12 +53,13 @@ describe("GettingStartedGuide", () => {
     sessionStorage.clear();
   });
 
-  it("renders all four onboarding steps", async () => {
+  it("renders all four onboarding steps in dependency order", async () => {
     mockDeps();
     renderGuide();
 
     expect(await screen.findByTestId("getting-started-guide")).toBeTruthy();
-    for (const id of ["agent", "session", "environment", "vault"]) {
+    // agent → environment → vault → session (env before session for cloud)
+    for (const id of ["agent", "environment", "vault", "session"]) {
       expect(screen.getByTestId(`guide-step-${id}`)).toBeTruthy();
     }
     expect(screen.getByText("Getting started")).toBeTruthy();
@@ -73,13 +74,16 @@ describe("GettingStartedGuide", () => {
     await waitFor(() => {
       expect(screen.getByTestId("guide-step-agent").dataset.done).toBe("true");
     });
+    // Session can be done without env in stats, but env/vault still open.
     expect(screen.getByTestId("guide-step-session").dataset.done).toBe("true");
     expect(screen.getByTestId("guide-step-environment").dataset.done).toBe("false");
+    expect(screen.getByTestId("guide-step-vault").dataset.done).toBe("false");
     expect(screen.getByText("2/4 done")).toBeTruthy();
   });
 
   // First incomplete step is the only "Next" target — equal-weight rows
   // made operators scan without a clear primary action.
+  // With agent done, Next is environment (not session) even if sessions exist.
   it("marks the first incomplete step as Next", async () => {
     mockDeps({ agents: 2, sessions: 1 });
     renderGuide();
@@ -89,7 +93,26 @@ describe("GettingStartedGuide", () => {
     });
     expect(screen.getByTestId("guide-step-agent").dataset.next).toBe("false");
     expect(screen.getByTestId("guide-step-vault").dataset.next).toBe("false");
+    expect(screen.getByTestId("guide-step-session").dataset.next).toBe("false");
     expect(screen.getByText("Next")).toBeTruthy();
+  });
+
+  it("does not complete the vault step via integrations alone", async () => {
+    // Vault done only when stats.vaults > 0 — channel installs don't count.
+    mockDeps({ agents: 1, environments: 1, vaults: 0, sessions: 0 });
+    server.use(
+      http.get("/v1/integrations/github/installations", () =>
+        HttpResponse.json({ data: [{ id: "gh_1" }] }),
+      ),
+    );
+    renderGuide();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("guide-step-agent").dataset.done).toBe("true");
+    });
+    expect(screen.getByTestId("guide-step-environment").dataset.done).toBe("true");
+    expect(screen.getByTestId("guide-step-vault").dataset.done).toBe("false");
+    expect(screen.getByTestId("guide-step-vault").dataset.next).toBe("true");
   });
 
   it("reports completion when every step is satisfied", async () => {
@@ -150,7 +173,8 @@ describe("GettingStartedGuide", () => {
     expect(screen.getByText("Step 1 of 4")).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Next" }));
-    expect(await screen.findByTestId("tour-step-session")).toBeTruthy();
+    // Tour order: agent → environment → vault → session
+    expect(await screen.findByTestId("tour-step-environment")).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Back" }));
     expect(await screen.findByTestId("tour-step-agent")).toBeTruthy();

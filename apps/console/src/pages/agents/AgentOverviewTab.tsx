@@ -1,6 +1,14 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
-import { BookOpenIcon, ChevronDownIcon, PlugZapIcon, UsersIcon, WrenchIcon } from "lucide-react";
+import {
+  BookOpenIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  CircleAlertIcon,
+  PlugZapIcon,
+  UsersIcon,
+  WrenchIcon,
+} from "lucide-react";
 
 import { useApiQuery } from "../../lib/useApiQuery";
 import { RuntimeKindBadge, agentRuntimeKind } from "../../lib/runtime-kind";
@@ -19,7 +27,7 @@ import {
 import { AgentWebhooks } from "./AgentWebhooks";
 import { useAgentHub } from "../AgentDetail";
 import type { AgentRecord as Agent } from "../../types/agent";
-import { rowActivateKeyDown } from "@/lib/utils";
+import { cn, rowActivateKeyDown } from "@/lib/utils";
 import { harnessLabel, harnessOption } from "./harness-options";
 
 /** Shared publication shape across Linear / GitHub / Slack. */
@@ -99,6 +107,9 @@ export function AgentOverviewTab() {
           </div>
         )}
       </div>
+
+      {/* Run readiness — env / MCP vaults / first session CTAs */}
+      {!isViewingOld && <AgentRunReadiness agent={agent} />}
 
       {/* Properties grid — reflects the version being viewed. */}
       <div className="grid grid-cols-[140px_1fr] gap-x-4 gap-y-2 max-w-2xl text-sm">
@@ -315,6 +326,147 @@ export function AgentOverviewTab() {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Compact "ready to run?" checklist for the latest agent version.
+ * Surfaces missing environment, MCP-without-vaults, and a deep-link to
+ * session create. Works for both CF Containers and k3s/self-host providers
+ * (environment + vault attach is the same control plane on both).
+ */
+function AgentRunReadiness({ agent }: { agent: Agent }) {
+  const isLocal = !!agent.runtime_binding || !!agent._oma?.runtime_binding;
+  const defaultEnvId =
+    typeof agent.metadata?.[DEFAULT_ENV_METADATA_KEY] === "string"
+      ? (agent.metadata[DEFAULT_ENV_METADATA_KEY] as string)
+      : "";
+  const mcpServers = (agent.mcp_servers ?? []) as Array<{ name?: string; url?: string }>;
+  const mcpCount = mcpServers.length;
+
+  const { data: envsRes } = useApiQuery<{ data: { id: string }[] }>("/v1/environments", {
+    limit: "1",
+  });
+  const { data: vaultsRes } = useApiQuery<{ data: { id: string }[] }>("/v1/vaults", {
+    limit: "1",
+  });
+  const hasAnyEnv = (envsRes?.data?.length ?? 0) > 0;
+  const hasAnyVault = (vaultsRes?.data?.length ?? 0) > 0;
+
+  type Row = {
+    id: string;
+    ok: boolean;
+    label: string;
+    hint: string;
+    to?: string;
+    cta?: string;
+  };
+
+  const rows: Row[] = [
+    {
+      id: "env",
+      ok: isLocal || !!defaultEnvId || hasAnyEnv,
+      label: isLocal ? "Local runtime (no cloud environment required)" : "Sandbox environment",
+      hint: isLocal
+        ? "ACP child runs on the paired machine."
+        : defaultEnvId
+          ? `Default environment ${defaultEnvId.slice(0, 12)}…`
+          : hasAnyEnv
+            ? "Tenant has environments — pick one when starting a session."
+            : "Create an environment before cloud sessions (CF Containers, k3s, …).",
+      to: isLocal ? undefined : hasAnyEnv ? undefined : "/environments",
+      cta: isLocal || hasAnyEnv ? undefined : "Create environment",
+    },
+    {
+      id: "mcp-vault",
+      ok: mcpCount === 0 || hasAnyVault,
+      label:
+        mcpCount === 0
+          ? "No MCP servers (vaults optional)"
+          : "Vaults for MCP credentials",
+      hint:
+        mcpCount === 0
+          ? "Add MCP servers in Edit → MCP, then attach matching vault credentials on session create."
+          : hasAnyVault
+            ? `${mcpCount} MCP server(s) configured — attach vaults that cover those hosts when starting a session.`
+            : `${mcpCount} MCP server(s) but no vaults yet — sessions will dial unauthenticated.`,
+      to: mcpCount > 0 && !hasAnyVault ? "/vaults" : undefined,
+      cta: mcpCount > 0 && !hasAnyVault ? "Open vaults" : undefined,
+    },
+    {
+      id: "session",
+      ok: true,
+      label: "Start a session",
+      hint: "Attach environment + vaults on create so tools and MCP authenticate.",
+      to: `/sessions?new=1&agent=${encodeURIComponent(agent.id)}`,
+      cta: "New session",
+    },
+  ];
+
+  const readyCount = rows.filter((r) => r.ok || r.id === "session").length;
+  // Session row is always "ok" as a CTA — readiness is env + vault rows.
+  const blockers = rows.filter((r) => r.id !== "session" && !r.ok);
+
+  return (
+    <section
+      data-testid="agent-run-readiness"
+      aria-label="Run readiness"
+      className="rounded-xl border border-border bg-bg-surface/40 p-4 max-w-2xl"
+    >
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <h2 className="font-display text-base font-semibold text-fg">Run readiness</h2>
+          <p className="text-[12px] text-fg-muted mt-0.5">
+            {blockers.length === 0
+              ? "Prerequisites look good — start a session when you're ready."
+              : `${blockers.length} item${blockers.length === 1 ? "" : "s"} to fix before a smooth first run.`}
+          </p>
+        </div>
+        <span className="text-[11px] tabular-nums text-fg-subtle shrink-0">
+          {rows.length - blockers.length}/{rows.length}
+        </span>
+      </div>
+      <ul className="space-y-2">
+        {rows.map((row) => (
+          <li
+            key={row.id}
+            data-testid={`readiness-${row.id}`}
+            data-ok={row.ok ? "true" : "false"}
+            className={cn(
+              "flex items-start gap-2.5 rounded-lg border px-3 py-2",
+              row.ok ? "border-border/60 bg-transparent" : "border-warning/30 bg-warning/5",
+            )}
+          >
+            <span
+              className={cn(
+                "mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-md",
+                row.ok ? "bg-success/15 text-success" : "bg-warning/15 text-warning",
+              )}
+            >
+              {row.ok ? (
+                <CheckIcon className="size-3" aria-hidden />
+              ) : (
+                <CircleAlertIcon className="size-3" aria-hidden />
+              )}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-[13px] font-medium text-fg">{row.label}</div>
+              <p className="text-[11px] text-fg-subtle mt-0.5 leading-relaxed">{row.hint}</p>
+            </div>
+            {row.to && row.cta ? (
+              <Link
+                to={row.to}
+                className="shrink-0 text-[12px] text-brand hover:underline whitespace-nowrap"
+              >
+                {row.cta} →
+              </Link>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      {/* silence unused readyCount in production builds without eslint noise */}
+      <span className="sr-only">{readyCount} readiness rows</span>
+    </section>
   );
 }
 

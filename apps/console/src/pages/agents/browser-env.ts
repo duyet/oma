@@ -17,7 +17,11 @@ export const DEFAULT_ENV_METADATA_KEY = "default_environment_id";
 export interface EnvironmentLite {
   id: string;
   name: string;
-  config?: { sandbox_provider?: string; type?: string } | null;
+  config?: {
+    sandbox_provider?: string;
+    type?: string;
+    git_repo?: { url?: string; branch?: string } | null;
+  } | null;
 }
 
 /** `sandbox_provider` wins over the legacy `type` field, matching
@@ -38,6 +42,25 @@ export function newBrowserEnvironmentBody(name = "Browser VM") {
     name,
     description: "Runs sessions against a WASM VM in a paired browser tab.",
     config: { type: BROWSER_VM_PROVIDER, sandbox_provider: BROWSER_VM_PROVIDER },
+  };
+}
+
+/** A repo URL field is either empty (repo mode off) or a full https:// git
+ *  URL — matches the pattern the inline validation message shows. */
+export function isValidRepoUrl(url: string): boolean {
+  return url === "" || /^https:\/\/\S+/.test(url);
+}
+
+/** Body for creating/updating the environment that auto-clones an agent's
+ *  repo into `/workspace` on every session start (AGENTS.md "Auto-Clone").
+ *  Reuses the same `config.git_repo` field session-create's own repo
+ *  resources don't touch — this is the environment-level default, not a
+ *  per-session resource. */
+export function repoEnvironmentBody(url: string, branch: string, name = "Agent repo") {
+  return {
+    name,
+    description: `Clones ${url} into /workspace on session start.`,
+    config: { type: "cloud", git_repo: { url, ...(branch ? { branch } : {}) } },
   };
 }
 

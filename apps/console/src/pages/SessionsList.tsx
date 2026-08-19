@@ -538,6 +538,8 @@ export function SessionsList() {
   // Reset the form to its initial state and clear modal-scoped derived
   // state (agent detail / MCP URLs / vault cred cache / reveal toggles).
   // Called from Modal onClose (X button, click-away, Esc, Cancel).
+  // Also strips ?new= / ?agent= deep-link params so a re-open requires an
+  // explicit CTA (Getting Started / Overview use `?new=1`).
   const closeModal = useCallback(() => {
     setShowCreate(false);
     reset(INITIAL_FORM_VALUES);
@@ -545,23 +547,58 @@ export function SessionsList() {
     setAgentMcpUrls([]);
     setVaultCredHosts({});
     setRevealedSecrets(new Set());
-  }, [reset]);
+    setSearchParams(
+      (prev) => {
+        if (!prev.has("new") && !prev.has("agent")) return prev;
+        const sp = new URLSearchParams(prev);
+        sp.delete("new");
+        sp.delete("agent");
+        return sp;
+      },
+      { replace: true },
+    );
+  }, [reset, setSearchParams]);
 
   // Open the modal with sensible defaults populated. Reset first so any
   // residual state from a prior open (e.g. a successful create that closed
-  // the modal) doesn't leak across opens.
-  const openModal = useCallback(() => {
-    reset({
-      ...INITIAL_FORM_VALUES,
-      agent: agents[0]?.id ?? "",
-      environment_id: envs[0]?.id ?? "",
-    });
-    setSelectedAgentDetail(null);
-    setAgentMcpUrls([]);
-    setVaultCredHosts({});
-    setRevealedSecrets(new Set());
-    setShowCreate(true);
-  }, [reset, agents, envs]);
+  // the modal) doesn't leak across opens. `preferredAgentId` comes from
+  // `?agent=` deep-links (agent hub, launch wizard, readiness CTA).
+  const openModal = useCallback(
+    (preferredAgentId?: string | null) => {
+      const agentId =
+        (preferredAgentId && agents.some((a) => a.id === preferredAgentId)
+          ? preferredAgentId
+          : null) ??
+        agents[0]?.id ??
+        preferredAgentId ??
+        "";
+      reset({
+        ...INITIAL_FORM_VALUES,
+        agent: agentId,
+        environment_id: envs[0]?.id ?? "",
+      });
+      setSelectedAgentDetail(
+        agentId ? (agents.find((a) => a.id === agentId) ?? null) : null,
+      );
+      setAgentMcpUrls([]);
+      setVaultCredHosts({});
+      setRevealedSecrets(new Set());
+      setShowCreate(true);
+    },
+    [reset, agents, envs],
+  );
+
+  // Deep-link: `/sessions?new=1` or `/sessions?new=1&agent=agent_xxx` opens
+  // the create modal once aux lists are ready (Getting Started step 4,
+  // launch wizard, agent readiness).
+  useEffect(() => {
+    if (showCreate) return;
+    const wantNew =
+      searchParams.get("new") === "1" || searchParams.get("new") === "true";
+    if (!wantNew) return;
+    // Wait until aux load attempted so agent/env defaults are available.
+    openModal(searchParams.get("agent"));
+  }, [searchParams, showCreate, openModal]);
 
   const onSubmit = async (data: FormValues) => {
     try {

@@ -584,6 +584,87 @@ describe("Built-in tool execution", () => {
     }
   });
 
+  it("web_fetch retries on transient 5xx then succeeds without falling back to curl", async () => {
+    const ORIGINAL_FETCH = globalThis.fetch;
+    try {
+      let attempts = 0;
+      const fetchMock = vi.fn(async () => {
+        attempts++;
+        if (attempts < 3) return new Response("upstream hiccup", { status: 503 });
+        return new Response("<html>ok</html>", { status: 200 });
+      });
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      let execCalled = false;
+      const sandbox: any = {
+        exec: async () => { execCalled = true; return "exit=0\nshould not run"; },
+        readFile: async () => "",
+        writeFile: async () => "ok",
+      };
+      const tools = await buildTools(makeAgentConfig(), sandbox, {
+        toMarkdown: async () => ({ format: "markdown", data: "clean markdown" }),
+      });
+
+      const result = await tools.web_fetch.execute({ url: "https://example.com/flaky" }, TOOL_EXEC_OPTS);
+
+      expect(attempts).toBe(3);
+      expect(result).toContain("clean markdown");
+      // The curl fallback is a last resort — retries should have avoided it.
+      expect(execCalled).toBe(false);
+    } finally {
+      globalThis.fetch = ORIGINAL_FETCH;
+    }
+  }, 10000);
+
+  it("web_fetch falls back to raw curl after exhausting retries on persistent 5xx", async () => {
+    const ORIGINAL_FETCH = globalThis.fetch;
+    try {
+      const fetchMock = vi.fn(async () => new Response("still down", { status: 503 }));
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      const sandbox: any = {
+        exec: async () => "exit=0\n[NOTE curl fallback content]",
+        readFile: async () => "",
+        writeFile: async () => "ok",
+      };
+      const tools = await buildTools(makeAgentConfig(), sandbox, {
+        toMarkdown: async () => ({ format: "markdown", data: "should not be reached" }),
+      });
+
+      const result = await tools.web_fetch.execute({ url: "https://example.com/down" }, TOOL_EXEC_OPTS);
+
+      // 3 attempts against the harness-side fetch (initial + 2 retries) before giving up.
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(result).toContain("markdown extraction unavailable");
+      expect(result).toContain("curl fallback content");
+    } finally {
+      globalThis.fetch = ORIGINAL_FETCH;
+    }
+  }, 10000);
+
+  it("web_fetch does not retry a non-retryable 404", async () => {
+    const ORIGINAL_FETCH = globalThis.fetch;
+    try {
+      const fetchMock = vi.fn(async () => new Response("not found", { status: 404 }));
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      const sandbox: any = {
+        exec: async () => "exit=0\n[NOTE curl fallback content]",
+        readFile: async () => "",
+        writeFile: async () => "ok",
+      };
+      const tools = await buildTools(makeAgentConfig(), sandbox, {
+        toMarkdown: async () => ({ format: "markdown", data: "should not be reached" }),
+      });
+
+      await tools.web_fetch.execute({ url: "https://example.com/missing" }, TOOL_EXEC_OPTS);
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.fetch = ORIGINAL_FETCH;
+    }
+  });
+
   it("web_fetch WEB_FETCH_ALLOW_PRIVATE escape hatch lets the harness-side fetch reach a private target", async () => {
     const ORIGINAL_FETCH = globalThis.fetch;
     try {
@@ -628,6 +709,93 @@ describe("Built-in tool execution", () => {
     expect(tools.web_search).toBeDefined();
     expect(typeof tools.web_search).toBe("object");
   });
+
+  it("web_search (DDG) retries with backoff on rate limiting then succeeds", async () => {
+    const ORIGINAL_FETCH = globalThis.fetch;
+    try {
+      let ddgSearchCalls = 0;
+      const fetchMock = vi.fn(async (url: string) => {
+        if (url.includes("duckduckgo.com/?")) {
+          return new Response("vqd='1234-5678'", { status: 200 });
+        }
+        // links.duckduckgo.com/d.js — rate limited twice, then succeed
+        ddgSearchCalls++;
+        if (ddgSearchCalls < 3) {
+          return new Response("DDG.deep.anomalyDetectionBlock", { status: 200 });
+        }
+        return new Response(
+          "DDG.pageLayout.load('d',[{\"t\":\"Title\",\"u\":\"https://example.com\",\"a\":\"desc\"}]);DDG.duckbar.load",
+          { status: 200 }
+        );
+      });
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      const sandbox = new TestSandbox();
+      const tools = await buildTools(makeAgentConfig(), sandbox, {});
+
+      const result = await tools.web_search.execute({ query: "test" }, TOOL_EXEC_OPTS);
+
+      expect(ddgSearchCalls).toBe(3);
+      expect(result).toContain("https://example.com");
+      expect(result).not.toContain("rate limited");
+    } finally {
+      globalThis.fetch = ORIGINAL_FETCH;
+    }
+  });
+
+  it("web_search (DDG) falls back to Tavily when DDG stays rate limited", async () => {
+    const ORIGINAL_FETCH = globalThis.fetch;
+    try {
+      const fetchMock = vi.fn(async (url: string) => {
+        if (url.includes("duckduckgo.com/?")) {
+          return new Response("vqd='1234-5678'", { status: 200 });
+        }
+        if (url.includes("links.duckduckgo.com")) {
+          return new Response("DDG.deep.anomalyDetectionBlock", { status: 200 });
+        }
+        if (url.includes("api.tavily.com")) {
+          return new Response(
+            JSON.stringify({ results: [{ title: "T", url: "https://tavily.example.com", content: "c" }] }),
+            { status: 200 }
+          );
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      });
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      const sandbox = new TestSandbox();
+      const tools = await buildTools(makeAgentConfig(), sandbox, { TAVILY_API_KEY: "tvly-test-key" });
+
+      const result = await tools.web_search.execute({ query: "test" }, TOOL_EXEC_OPTS);
+
+      expect(result).toContain("tavily.example.com");
+    } finally {
+      globalThis.fetch = ORIGINAL_FETCH;
+    }
+  }, 10000);
+
+  it("web_search (DDG) returns an actionable error when rate limited and no Tavily key is configured", async () => {
+    const ORIGINAL_FETCH = globalThis.fetch;
+    try {
+      const fetchMock = vi.fn(async (url: string) => {
+        if (url.includes("duckduckgo.com/?")) {
+          return new Response("vqd='1234-5678'", { status: 200 });
+        }
+        return new Response("DDG.deep.anomalyDetectionBlock", { status: 200 });
+      });
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      const sandbox = new TestSandbox();
+      const tools = await buildTools(makeAgentConfig(), sandbox, {});
+
+      const result = await tools.web_search.execute({ query: "test" }, TOOL_EXEC_OPTS);
+
+      expect(result).toContain("rate limited");
+      expect(result).toContain("Try again in a moment");
+    } finally {
+      globalThis.fetch = ORIGINAL_FETCH;
+    }
+  }, 10000);
 });
 
 // ============================================================

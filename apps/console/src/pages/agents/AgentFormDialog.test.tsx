@@ -10,9 +10,11 @@ import {
   INITIAL_FORM,
   acpBindingFor,
   acpModelOptionsFor,
+  configToForm,
   formToConfig,
   type FormState,
 } from "./AgentFormDialog";
+import { isValidRepoUrl } from "./browser-env";
 
 /** BasicTab loads the environment list for the Browser runtime mode, so it
  *  needs a query client the same way the session dialogs' tests do. */
@@ -127,6 +129,73 @@ describe("<BasicTab /> harness picker", () => {
     // Local mode replaces the cloud harness block with the connect-a-machine state.
     expect(screen.queryByRole("radio", { name: "OMA Standard" })).toBeNull();
     expect(screen.getByText(/No runtimes registered/i)).toBeTruthy();
+  });
+
+  it("shows the Repository fields only in Cloud mode", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    expect(screen.getByLabelText("Repository URL")).toBeTruthy();
+
+    await user.click(screen.getByRole("radio", { name: /Local/ }));
+    expect(screen.queryByLabelText("Repository URL")).toBeNull();
+
+    await user.click(screen.getByRole("radio", { name: /Browser/ }));
+    expect(screen.queryByLabelText("Repository URL")).toBeNull();
+  });
+
+  it("flags a repo URL that isn't a full https:// git URL", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.type(screen.getByLabelText("Repository URL"), "git@github.com:owner/repo.git");
+    expect(screen.getByText(/Enter a full https:\/\/ git URL/i)).toBeTruthy();
+  });
+});
+
+describe("isValidRepoUrl", () => {
+  it("accepts empty (repo mode off) and full https URLs", () => {
+    expect(isValidRepoUrl("")).toBe(true);
+    expect(isValidRepoUrl("https://github.com/owner/repo")).toBe(true);
+  });
+
+  it("rejects non-https and malformed URLs", () => {
+    expect(isValidRepoUrl("git@github.com:owner/repo.git")).toBe(false);
+    expect(isValidRepoUrl("http://github.com/owner/repo")).toBe(false);
+  });
+});
+
+describe("repo form ⇄ config conversion", () => {
+  it("formToConfig serializes repoEnvId as the agent's default environment", () => {
+    const form: FormState = { ...INITIAL_FORM, repoEnvId: "env_repo" };
+    const config = formToConfig(form);
+    expect(config.metadata).toEqual({ default_environment_id: "env_repo" });
+    expect(config._oma).toBeUndefined();
+  });
+
+  it("browserEnvId wins over repoEnvId if both were somehow set", () => {
+    const form: FormState = { ...INITIAL_FORM, browserEnvId: "env_browser", repoEnvId: "env_repo" };
+    const config = formToConfig(form);
+    expect(config.metadata).toEqual({
+      default_environment_id: "env_browser",
+      runtime_kind: "browser",
+    });
+  });
+
+  it("configToForm hydrates repoEnvId (not browserEnvId) from a plain default environment", () => {
+    const form = configToForm({
+      name: "x",
+      metadata: { default_environment_id: "env_repo" },
+    });
+    expect(form.repoEnvId).toBe("env_repo");
+    expect(form.browserEnvId).toBe("");
+  });
+
+  it("configToForm hydrates browserEnvId (not repoEnvId) when runtime_kind is browser", () => {
+    const form = configToForm({
+      name: "x",
+      metadata: { default_environment_id: "env_browser", runtime_kind: "browser" },
+    });
+    expect(form.browserEnvId).toBe("env_browser");
+    expect(form.repoEnvId).toBe("");
   });
 });
 

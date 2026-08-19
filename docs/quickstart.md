@@ -57,7 +57,13 @@ Expected response:
 
 ### 4. Create Your First Agent
 
-Open [http://localhost:8787](http://localhost:8787) in your browser, sign up, and use the Console to create an agent — or use the CLI:
+Open [http://localhost:8787](http://localhost:8787) in your browser, sign up, and use the Console:
+
+- **Launch wizard** at `/launch` — ordered path: model access → environment (sandbox) → vault → agent → session. Same control plane on Docker/self-host **k3s** and **Cloudflare Workers**; only the sandbox provider differs.
+- **Overview** Getting Started checklist uses the same order (environment and vault before the first session).
+- Or create ad-hoc via **New Agent** / API (below).
+
+CLI:
 
 ```bash
 export OMA_BASE="http://localhost:8787"

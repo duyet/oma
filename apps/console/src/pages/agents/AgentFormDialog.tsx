@@ -42,7 +42,9 @@ import { harnessOption } from "./harness-options";
 import {
   DEFAULT_ENV_METADATA_KEY,
   browserVmEnvironments,
+  isValidRepoUrl,
   newBrowserEnvironmentBody,
+  repoEnvironmentBody,
   type EnvironmentLite,
 } from "./browser-env";
 import { useApiQuery } from "../../lib/useApiQuery";
@@ -274,6 +276,31 @@ export function buildToolsField(form: FormState) {
   ];
 }
 
+/**
+ * Create or update the environment backing `form.repoUrl`/`repoBranch`, and
+ * return the form patched with the resulting `repoEnvId` — or `form`
+ * unchanged when `repoUrl` is empty. Both `create()` and the edit dialog's
+ * `save()` call this before `formToConfig`, since minting/patching an
+ * environment is an API call `formToConfig` (pure) can't make itself.
+ */
+export async function syncRepoEnvironment(
+  api: <T>(path: string, init?: RequestInit) => Promise<T>,
+  form: FormState,
+): Promise<FormState> {
+  if (!form.repoUrl) return form;
+  const body = repoEnvironmentBody(form.repoUrl, form.repoBranch);
+  const env = form.repoEnvId
+    ? await api<{ id: string }>(`/v1/environments/${form.repoEnvId}`, {
+        method: "PUT",
+        body: JSON.stringify(body),
+      })
+    : await api<{ id: string }>("/v1/environments", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+  return { ...form, repoEnvId: env.id };
+}
+
 /** Convert a form state to an agent config payload (create/update body). */
 export function formToConfig(form: FormState) {
   const config: Record<string, unknown> = {
@@ -324,6 +351,13 @@ export function formToConfig(form: FormState) {
       // runtime kind would otherwise need the environment list.
       [RUNTIME_KIND_METADATA_KEY]: "browser",
     };
+  } else if (form.repoEnvId) {
+    // Repo mode: the environment carrying `config.git_repo` must already
+    // exist (created/updated by the submit handler before this runs, since
+    // that's an async API call this pure function can't make) — same
+    // metadata.default_environment_id field browser mode uses, minus the
+    // runtime-kind marker since it's still a plain cloud sandbox.
+    config.metadata = { [DEFAULT_ENV_METADATA_KEY]: form.repoEnvId };
   }
   return config;
 }
@@ -394,9 +428,22 @@ export function configToForm(parsed: Record<string, unknown>): FormState {
     acpAgentId: rb?.acp_agent_id ?? "claude-agent-acp",
     browserEnvId: (() => {
       const meta = parsed.metadata as Record<string, unknown> | undefined;
+      if (meta?.[RUNTIME_KIND_METADATA_KEY] !== "browser") return "";
       const id = meta?.[DEFAULT_ENV_METADATA_KEY];
       return typeof id === "string" ? id : "";
     })(),
+    // The repo-carrying environment's id, when the default environment
+    // isn't the browser-vm one — repoUrl/repoBranch text fields are
+    // hydrated separately (async, from the environment record) by whatever
+    // host has the environments list, since this converter is pure.
+    repoEnvId: (() => {
+      const meta = parsed.metadata as Record<string, unknown> | undefined;
+      if (meta?.[RUNTIME_KIND_METADATA_KEY] === "browser") return "";
+      const id = meta?.[DEFAULT_ENV_METADATA_KEY];
+      return typeof id === "string" ? id : "";
+    })(),
+    repoUrl: "",
+    repoBranch: "",
     // Preserve whatever the agent already declares, including harnesses the
     // picker no longer offers — editing an agent must never rewrite it. A
     // config with no `_oma.harness` really is the server default.
@@ -435,6 +482,15 @@ export const INITIAL_FORM = {
   // When set, the agent runs in Browser mode: its sessions default to this
   // browser-vm environment. Mutually exclusive with runtimeId in the UI.
   browserEnvId: "",
+  // Optional repo to auto-clone into /workspace on every session (Cloud
+  // mode only). On save, these back a dedicated environment carrying
+  // `config.git_repo`, set as the agent's default environment via
+  // metadata.default_environment_id — see browser-env.ts. repoEnvId tracks
+  // that environment's id once created, so editing updates it in place
+  // instead of leaking a new environment per save.
+  repoUrl: "",
+  repoBranch: "",
+  repoEnvId: "",
   // Cloud harness — ignored (implicitly "acp-proxy") whenever runtimeId is
   // set. "default" emits no _oma.harness at all (server default) and is the
   // create default so Cloudflare Console agents get a loop that works there.
@@ -631,12 +687,13 @@ export function AgentCreateForm({
   const create = async () => {
     setCreateError("");
     try {
+      const resolvedForm = await syncRepoEnvironment(api, form);
       const payload: Record<string, unknown> = {
-        name: form.name,
-        model: form.model,
-        system: form.system || undefined,
-        description: form.description || undefined,
-        tools: buildToolsField(form),
+        name: resolvedForm.name,
+        model: resolvedForm.model,
+        system: resolvedForm.system || undefined,
+        description: resolvedForm.description || undefined,
+        tools: buildToolsField(resolvedForm),
       };
       if (form.mcpServers.length) payload.mcp_servers = form.mcpServers;
       if (form.skills.length) payload.skills = form.skills;
@@ -678,6 +735,8 @@ export function AgentCreateForm({
           [DEFAULT_ENV_METADATA_KEY]: form.browserEnvId,
           [RUNTIME_KIND_METADATA_KEY]: "browser",
         };
+      } else if (resolvedForm.repoEnvId) {
+        payload.metadata = { [DEFAULT_ENV_METADATA_KEY]: resolvedForm.repoEnvId };
       }
 
       const agent = await api<Agent>("/v1/agents", {
@@ -698,6 +757,7 @@ export function AgentCreateForm({
     if (form.mcpServers.some((m) => m.url === entry.url)) return;
     setForm({
       ...form,
+      // AMA remote servers use type "url" (streamable HTTP / SSE) — see docs/mcp-servers.md.
       mcpServers: [...form.mcpServers, { name: entry.id, type: "url", url: entry.url }],
     });
   };
@@ -1129,7 +1189,10 @@ export function AgentCreateForm({
                     Cancel
                   </Button>
                   {createMode === "form" ? (
-                    <Button onClick={create} disabled={!form.name}>
+                    <Button
+                      onClick={create}
+                      disabled={!form.name || !isValidRepoUrl(form.repoUrl)}
+                    >
                       Create Agent
                     </Button>
                   ) : (
@@ -1528,6 +1591,42 @@ export function BasicTab({
                 to the deployment's environment (<code>ANTHROPIC_API_KEY</code> or{" "}
                 <code>CLAUDE_CODE_OAUTH_TOKEN</code>, plus{" "}
                 <code>ANTHROPIC_BASE_URL</code>).
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Cloud only: optional repo auto-cloned into /workspace on every
+            session start (AGENTS.md "Auto-Clone"). Backed by a dedicated
+            environment carrying `config.git_repo`, minted/patched on save
+            and set as this agent's default environment — see browser-env.ts. */}
+        {runtimeMode === "cloud" && (
+          <div className="mt-3">
+            <label className="text-sm text-fg-muted block mb-1">
+              Repository <span className="text-xs text-fg-subtle">(optional)</span>
+            </label>
+            <p className="text-xs text-fg-subtle mb-2">
+              Clone a repo into <code>/workspace</code> at the start of every session.
+            </p>
+            <div className="flex gap-2">
+              <input
+                aria-label="Repository URL"
+                value={form.repoUrl}
+                onChange={(e) => setForm({ ...form, repoUrl: e.target.value })}
+                className={`${inputCls} flex-1`}
+                placeholder="https://github.com/owner/repo"
+              />
+              <input
+                aria-label="Branch"
+                value={form.repoBranch}
+                onChange={(e) => setForm({ ...form, repoBranch: e.target.value })}
+                className={`${inputCls} w-32`}
+                placeholder="main"
+              />
+            </div>
+            {!isValidRepoUrl(form.repoUrl) && (
+              <p className="text-xs text-danger mt-1">
+                Enter a full https:// git URL, e.g. https://github.com/owner/repo
               </p>
             )}
           </div>
@@ -2080,7 +2179,14 @@ export function SkillsTab({
         ) : (
           <p className="text-xs text-fg-subtle">
             No custom skills registered.{" "}
-            <a href="/skills" className="underline hover:text-fg-muted">
+            <a
+              href={`/skills?new=1&return=${encodeURIComponent(
+                typeof window !== "undefined"
+                  ? `${window.location.pathname}${window.location.search}`
+                  : "/agents/new",
+              )}`}
+              className="underline hover:text-fg-muted"
+            >
               Create one
             </a>
             .
@@ -2110,7 +2216,12 @@ export function McpTab({
     <div className="space-y-3">
       <p className="text-xs text-fg-subtle leading-relaxed">
         MCP servers connect the agent to external tools and data — GitHub, Slack, your own
-        APIs — via the Model Context Protocol.
+        APIs — via the Model Context Protocol. Credentials stay in a{" "}
+        <a href="/vaults" className="underline hover:text-fg-muted">
+          vault
+        </a>{" "}
+        and are injected by the outbound proxy (never into the sandbox). Works the same on
+        Cloudflare Workers and self-host (k3s / Node).
       </p>
       <div className="flex items-center justify-between mb-1">
         <label className="text-sm font-medium text-fg">MCP Servers</label>
@@ -2129,50 +2240,70 @@ export function McpTab({
           </button>
         </div>
       </div>
-      {form.mcpServers.map((mcp, i) => (
-        <div key={i} className="border border-border rounded-lg p-3 space-y-2">
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <label htmlFor={`mcp-name-${i}`} className="text-xs text-fg-muted block mb-0.5">
-                Name
+      {form.mcpServers.map((mcp, i) => {
+        let hostHint = "";
+        try {
+          if (mcp.url) hostHint = new URL(mcp.url).hostname;
+        } catch {
+          /* ignore */
+        }
+        return (
+          <div key={i} className="border border-border rounded-lg p-3 space-y-2">
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label htmlFor={`mcp-name-${i}`} className="text-xs text-fg-muted block mb-0.5">
+                  Name
+                </label>
+                <input
+                  id={`mcp-name-${i}`}
+                  value={mcp.name}
+                  onChange={(e) => updateMcp(i, "name", e.target.value)}
+                  className={inputCls}
+                  placeholder="github"
+                />
+              </div>
+              <div className="w-28">
+                <label className="text-xs text-fg-muted block mb-0.5">Type</label>
+                <Select value={mcp.type || "url"} onValueChange={(v) => updateMcp(i, "type", v)}>
+                  {/* "url" = remote HTTP/SSE (AMA wire name). Label shows http for operators. */}
+                  <SelectOption value="url">url (http)</SelectOption>
+                  <SelectOption value="sse">sse</SelectOption>
+                  <SelectOption value="stdio">stdio</SelectOption>
+                </Select>
+              </div>
+              <button
+                onClick={() => removeMcp(i)}
+                aria-label={`Remove MCP server ${mcp.name || i + 1}`}
+                className="self-end inline-flex items-center justify-center min-w-11 min-h-11 sm:min-w-0 sm:min-h-0 px-2 py-2 text-fg-subtle hover:text-danger transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
+              >
+                ×
+              </button>
+            </div>
+            <div>
+              <label htmlFor={`mcp-url-${i}`} className="text-xs text-fg-muted block mb-0.5">
+                URL
               </label>
               <input
-                id={`mcp-name-${i}`}
-                value={mcp.name}
-                onChange={(e) => updateMcp(i, "name", e.target.value)}
+                id={`mcp-url-${i}`}
+                value={mcp.url}
+                onChange={(e) => updateMcp(i, "url", e.target.value)}
                 className={inputCls}
-                placeholder="github"
+                placeholder="https://mcp.github.com/mcp"
               />
             </div>
-            <div className="w-24">
-              <label className="text-xs text-fg-muted block mb-0.5">Type</label>
-              <Select value={mcp.type} onValueChange={(v) => updateMcp(i, "type", v)}>
-                <SelectOption value="sse">sse</SelectOption>
-                <SelectOption value="stdio">stdio</SelectOption>
-              </Select>
-            </div>
-            <button
-              onClick={() => removeMcp(i)}
-              aria-label={`Remove MCP server ${mcp.name || i + 1}`}
-              className="self-end inline-flex items-center justify-center min-w-11 min-h-11 sm:min-w-0 sm:min-h-0 px-2 py-2 text-fg-subtle hover:text-danger transition-colors duration-[var(--dur-quick)] ease-[var(--ease-soft)]"
-            >
-              ×
-            </button>
+            {hostHint ? (
+              <p className="text-[11px] text-fg-subtle">
+                Add a vault credential for{" "}
+                <span className="font-mono text-fg-muted">{hostHint}</span> so session runs can
+                authenticate.{" "}
+                <a href="/vaults" className="underline hover:text-fg-muted">
+                  Open vaults
+                </a>
+              </p>
+            ) : null}
           </div>
-          <div>
-            <label htmlFor={`mcp-url-${i}`} className="text-xs text-fg-muted block mb-0.5">
-              URL
-            </label>
-            <input
-              id={`mcp-url-${i}`}
-              value={mcp.url}
-              onChange={(e) => updateMcp(i, "url", e.target.value)}
-              className={inputCls}
-              placeholder="https://mcp.github.com/sse"
-            />
-          </div>
-        </div>
-      ))}
+        );
+      })}
       {form.mcpServers.length === 0 && (
         <div className="text-center py-8 text-fg-subtle">
           <p className="text-sm">No MCP servers configured.</p>

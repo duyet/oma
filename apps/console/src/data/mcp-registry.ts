@@ -52,6 +52,12 @@ export const MCP_REGISTRY: McpRegistryEntry[] = [
   //   ↑ disabled: requires Feishu Partner allowlist for a https redirect URI; DCR returns
   //     invalid_redirect_uri for app.oma.duyet.net. Re-enable after registering oma.duyet.net as
   //     Feishu partner OR pushing FEISHU_OAUTH_CLIENT_ID/SECRET from a manually-registered App.
+  // Firecrawl's docs explicitly warn against embedding the API key in the MCP
+  // URL ("never put it in an MCP URL, an agent conversation, or a committed
+  // project file") — use their OAuth endpoint instead of the keyless
+  // `/v2/mcp` URL, so credentials flow through the same discovery/DCR path
+  // as every other registry entry rather than a raw path-embedded key.
+  { id: "firecrawl", name: "Firecrawl", url: "https://mcp.firecrawl.dev/v2/mcp-oauth", icon: favicon("firecrawl.dev") },
   { id: "github", name: "GitHub", url: "https://api.githubcopilot.com/mcp/", icon: favicon("github.com") },
   // { id: "intercom", name: "Intercom", url: "https://mcp.intercom.com/mcp", icon: favicon("intercom.com") },
   //   ↑ disabled: same as Atlassian — no PRM published, OAuth discovery 404s.

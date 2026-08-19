@@ -13,6 +13,7 @@
  * single source). */
 export const ROUTE_CHORDS: Record<string, string> = {
   "/":              "d",
+  "/launch":        "l",
   "/agents":        "a",
   "/sessions":      "s",
   "/kanban":        "b",

@@ -152,6 +152,110 @@ export function proxiedAssetUrl(absoluteUrl: string): string {
   return "/sandbox-tab/asset?url=" + encodeURIComponent(absoluteUrl);
 }
 
+// ── Embedded-mode stats parsing (mirrors the page-side helpers used by the
+// oma-bvm:stats-request handler). Pure, no DOM — see PURE_HELPERS_START in
+// the inline script for the duplicated copy.
+
+/** Parse a `/proc/stat` first line (`cpu  user nice system idle …`) into ticks. */
+export function parseCpuTicks(line: string): { total: number; idle: number } | null {
+  const m = String(line || "").match(/^cpu\s+(.+)$/m);
+  if (!m) return null;
+  const ticks = m[1].trim().split(/\s+/).map(Number);
+  const idle = (ticks[3] || 0) + (ticks[4] || 0);
+  const total = ticks.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
+  return { total, idle };
+}
+
+/** CPU busy percentage between two `/proc/stat` samples, or null if unusable. */
+export function cpuPctFromSamples(
+  prev: { total: number; idle: number } | null,
+  cur: { total: number; idle: number } | null,
+): number | null {
+  if (!prev || !cur) return null;
+  const dTotal = cur.total - prev.total;
+  const dIdle = cur.idle - prev.idle;
+  if (dTotal <= 0) return null;
+  return Math.max(0, Math.min(100, 100 * (1 - dIdle / dTotal)));
+}
+
+/** Parse `/proc/meminfo` into total/used KB. Null when MemTotal is missing. */
+export function parseMeminfoKb(text: string): { totalKb: number; usedKb: number | null } | null {
+  const t = String(text || "");
+  const totalM = t.match(/MemTotal:\s+(\d+)/);
+  if (!totalM) return null;
+  const totalKb = parseInt(totalM[1], 10);
+  const availM = t.match(/MemAvailable:\s+(\d+)/) || t.match(/MemFree:\s+(\d+)/);
+  const usedKb = availM ? totalKb - parseInt(availM[1], 10) : null;
+  return { totalKb, usedKb };
+}
+
+/** Parse `/proc/uptime` (`<uptime> <idle>`) into seconds, or null. */
+export function parseUptimeSeconds(text: string): number | null {
+  const m = String(text || "").match(/^([\d.]+)/m);
+  return m ? parseFloat(m[1]) : null;
+}
+
+/**
+ * Parse `ps` output into `{pid, comm}` pairs. Defensive against both
+ * busybox's headerless PID/USER/TIME/COMMAND layout and procps' PID
+ * ... COMMAND layout — takes the first numeric token as pid and the last
+ * whitespace-separated field as comm.
+ */
+export function parseBusyboxPs(text: string): Array<{ pid: string; comm: string }> {
+  const rows: Array<{ pid: string; comm: string }> = [];
+  for (const raw of String(text || "").split("\n")) {
+    const line = raw.trim();
+    if (!line || /^PID\b/i.test(line)) continue;
+    const parts = line.split(/\s+/);
+    const pid = parts[0];
+    if (!/^\d+$/.test(pid)) continue;
+    const comm = parts[parts.length - 1];
+    rows.push({ pid, comm });
+  }
+  return rows;
+}
+
+function splitOnceForStats(s: string, marker: string): [string, string] {
+  const i = s.indexOf(marker);
+  if (i === -1) return [s, ""];
+  return [s.slice(0, i), s.slice(i + marker.length)];
+}
+
+/**
+ * Parse the combined guest snapshot the oma-bvm:stats-request handler
+ * requests (two /proc/stat samples ~500ms apart, /proc/meminfo,
+ * /proc/uptime, ps — separated by `---S1---`/`---S2---`/`---MEM---`/`---UP---`
+ * markers). Defensive: any missing/malformed section yields null fields
+ * rather than throwing (guest may not be booted, or ps/meminfo may be
+ * absent on a minimal image).
+ */
+export function parseStatsSnapshot(stdout: string): {
+  cpu_pct: number | null;
+  mem_used_kb: number | null;
+  mem_total_kb: number | null;
+  uptime_s: number | null;
+  processes: Array<{ pid: string; comm: string }>;
+} {
+  const s = String(stdout || "");
+  const [s1Part, rest1] = splitOnceForStats(s, "---S1---");
+  const [s2Part, rest2] = splitOnceForStats(rest1, "---S2---");
+  const [memPart, rest3] = splitOnceForStats(rest2, "---MEM---");
+  const [upPart, psPart] = splitOnceForStats(rest3, "---UP---");
+
+  const cpu_pct = cpuPctFromSamples(parseCpuTicks(s1Part), parseCpuTicks(s2Part));
+  const mem = parseMeminfoKb(memPart);
+  const uptime_s = parseUptimeSeconds(upPart);
+  const processes = parseBusyboxPs(psPart);
+
+  return {
+    cpu_pct,
+    mem_used_kb: mem ? mem.usedKb : null,
+    mem_total_kb: mem ? mem.totalKb : null,
+    uptime_s,
+    processes,
+  };
+}
+
 // ── The page ────────────────────────────────────────────────────────────
 //
 // Deliberately a single inline document: no bundler step exists for
@@ -290,6 +394,11 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
     background: var(--mon-primary); color: var(--mon-primary-fg); border: none;
     border-radius: var(--mon-radius-sm); padding: 0 14px; cursor: pointer; }
   .term-in button:disabled { opacity: 0.5; cursor: default; }
+  /* Embedded mode (?embedded=1): the Console loads this page in a hidden
+     same-origin iframe and drives it entirely over postMessage. All visible
+     chrome is hidden but stays mounted in the DOM (v86's screen_container
+     element lives outside <main> and is unaffected either way). */
+  body.embedded main { display: none; }
 </style>
 </head>
 <body>
@@ -414,14 +523,21 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
   const HEARTBEAT_MS = 25000;
   const VERSION = "browser-vm-host/2";
   const PAGE_LOADED_AT = Date.now();
+  // Embedded mode: the Console loads this page in a hidden same-origin
+  // iframe with ?embedded=1 and drives it over postMessage (oma-bvm:*).
+  // Hide the chrome and never steal focus — see handleParentMessage below.
+  const EMBEDDED = qs.get("embedded") === "1";
+  if (EMBEDDED) document.body.classList.add("embedded");
 
   // ── tiny UI helpers ──────────────────────────────────────────────────
   const $ = (id) => document.getElementById(id);
   const sysState = { reg: "pending", ws: "pending", vm: "pending" };
+  let lastErrorDetail = null;
   function setStatus(which, cls, text) {
     const dot = $("d-" + which), span = $("s-" + which);
     if (dot) dot.className = "dot" + (cls ? " " + cls : "");
     if (span) span.textContent = text;
+    if (cls === "err") lastErrorDetail = text;
     if (which in sysState) { sysState[which] = cls || "pending"; renderBanner(); }
   }
   // One headline verdict so a broken tab never *looks* fine while the agent
@@ -452,6 +568,7 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
       bgBadge.className = "badge bg";
     }
     updateBackgroundStatus();
+    emitEmbeddedStatus(false);
   }
   function updateBackgroundStatus() {
     if (!$("s-bg")) return;
@@ -469,6 +586,39 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
     log.appendChild(el);
     while (log.childNodes.length > 500) log.removeChild(log.firstChild);
     log.scrollTop = log.scrollHeight;
+    if (EMBEDDED) postToParent({ type: "oma-bvm:log", line: text, ts: Date.now() });
+  }
+
+  // ── Embedded protocol: postMessage(oma-bvm:*) with the Console parent ──
+  // See docs/browser-vm-sandbox.md (embedded host protocol). Both sides
+  // verify event.origin === location.origin; only posts when actually
+  // embedded (window.parent !== window).
+  function postToParent(data) {
+    if (!EMBEDDED) return;
+    if (window.parent === window) return;
+    try { window.parent.postMessage(data, location.origin); } catch { /* parent gone */ }
+  }
+  // reg/ws/vm → pairing/booting/online/error/offline. "offline" is emitted
+  // explicitly on pagehide (below) rather than derived here.
+  function embeddedStatusValue() {
+    if (sysState.reg === "err" || sysState.ws === "err" || sysState.vm === "err") return "error";
+    if (sysState.vm === "ok" && sysState.ws === "ok") return "online";
+    if (sysState.reg === "pending") return "pairing";
+    return "booting";
+  }
+  let lastEmittedEmbeddedStatus = null;
+  function emitEmbeddedStatus(force) {
+    if (!EMBEDDED) return;
+    const status = embeddedStatusValue();
+    if (!force && status === lastEmittedEmbeddedStatus) return;
+    lastEmittedEmbeddedStatus = status;
+    postToParent({
+      type: "oma-bvm:status",
+      status,
+      runtime_id: currentRecord ? currentRecord.runtime_id : null,
+      engine: monitor.engineName || null,
+      detail: status === "error" ? (lastErrorDetail || undefined) : undefined,
+    });
   }
 
   // ── Monitor panel: VM vitals, guest processes, sessions, activity ────
@@ -1452,6 +1602,7 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
       }));
       startHeartbeat(socket);
       void requestWakeLock();
+      emitEmbeddedStatus(true);
     };
     socket.onmessage = (ev) => {
       let msg;
@@ -1528,11 +1679,21 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
     }
     stopSocketTimers();
     try { wakeLock && wakeLock.release(); } catch { /* */ }
+    // The parent can't otherwise tell a hard-closed tab from a slow one —
+    // announce it explicitly rather than relying on the (now-stopped)
+    // heartbeat to go silent.
+    postToParent({
+      type: "oma-bvm:status",
+      status: "offline",
+      runtime_id: currentRecord ? currentRecord.runtime_id : null,
+      engine: monitor.engineName || null,
+    });
     try { ws && ws.close(1001, "sandbox tab closing"); } catch { /* already */ }
   });
 
   async function handleOp(msg) {
     const startedAt = Date.now();
+    if (EMBEDDED) postToParent({ type: "oma-bvm:op", op: msg.op, phase: "start", ts: startedAt });
     if (msg.session_id) {
       const s = monitor.sessions.get(msg.session_id) || { count: 0, lastOp: null, lastAt: null };
       s.count++; s.lastOp = msg.op; s.lastAt = startedAt;
@@ -1559,6 +1720,7 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
       else frame.error = error;
       try { ws.send(JSON.stringify(frame)); } catch { /* socket died */ }
       recordActivity({ at: startedAt, op: msg.op, sessionId: msg.session_id, ok, durationMs: Date.now() - startedAt });
+      if (EMBEDDED) postToParent({ type: "oma-bvm:op", op: msg.op, phase: ok ? "done" : "error", ts: Date.now() });
     };
     logLine(msg.op + " " + (msg.command || msg.path || ""), "op");
     try {
@@ -1605,6 +1767,131 @@ const HOST_PAGE_HTML = /* html */ `<!doctype html>
       reply(false, null, e.message || String(e));
     }
   }
+
+  // ── Embedded protocol: parent-driven stats + shell (guest exec goes
+  // through engine.exec, which is already serialized via V86Engine#enqueue
+  // — the same queue relayed sandbox ops and the terminal REPL use).
+  // PURE_HELPERS_START — duplicated from the exported TS helpers above.
+  function parseCpuTicks(line) {
+    const m = String(line || "").match(/^cpu\\s+(.+)$/m);
+    if (!m) return null;
+    const ticks = m[1].trim().split(/\\s+/).map(Number);
+    const idle = (ticks[3] || 0) + (ticks[4] || 0);
+    const total = ticks.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
+    return { total, idle };
+  }
+  function cpuPctFromSamples(prev, cur) {
+    if (!prev || !cur) return null;
+    const dTotal = cur.total - prev.total;
+    const dIdle = cur.idle - prev.idle;
+    if (dTotal <= 0) return null;
+    return Math.max(0, Math.min(100, 100 * (1 - dIdle / dTotal)));
+  }
+  function parseMeminfoKb(text) {
+    const t = String(text || "");
+    const totalM = t.match(/MemTotal:\\s+(\\d+)/);
+    if (!totalM) return null;
+    const totalKb = parseInt(totalM[1], 10);
+    const availM = t.match(/MemAvailable:\\s+(\\d+)/) || t.match(/MemFree:\\s+(\\d+)/);
+    const usedKb = availM ? totalKb - parseInt(availM[1], 10) : null;
+    return { totalKb, usedKb };
+  }
+  function parseUptimeSeconds(text) {
+    const m = String(text || "").match(/^([\\d.]+)/m);
+    return m ? parseFloat(m[1]) : null;
+  }
+  function parseBusyboxPs(text) {
+    const rows = [];
+    for (const raw of String(text || "").split("\\n")) {
+      const line = raw.trim();
+      if (!line || /^PID\\b/i.test(line)) continue;
+      const parts = line.split(/\\s+/);
+      const pid = parts[0];
+      if (!/^\\d+$/.test(pid)) continue;
+      const comm = parts[parts.length - 1];
+      rows.push({ pid, comm });
+    }
+    return rows;
+  }
+  function splitOnceForStats(s, marker) {
+    const i = s.indexOf(marker);
+    if (i === -1) return [s, ""];
+    return [s.slice(0, i), s.slice(i + marker.length)];
+  }
+  function parseStatsSnapshot(stdout) {
+    const s = String(stdout || "");
+    const [s1Part, rest1] = splitOnceForStats(s, "---S1---");
+    const [s2Part, rest2] = splitOnceForStats(rest1, "---S2---");
+    const [memPart, rest3] = splitOnceForStats(rest2, "---MEM---");
+    const [upPart, psPart] = splitOnceForStats(rest3, "---UP---");
+    const cpu_pct = cpuPctFromSamples(parseCpuTicks(s1Part), parseCpuTicks(s2Part));
+    const mem = parseMeminfoKb(memPart);
+    const uptime_s = parseUptimeSeconds(upPart);
+    const processes = parseBusyboxPs(psPart);
+    return {
+      cpu_pct,
+      mem_used_kb: mem ? mem.usedKb : null,
+      mem_total_kb: mem ? mem.totalKb : null,
+      uptime_s,
+      processes,
+    };
+  }
+  const EMPTY_STATS = { cpu_pct: null, mem_used_kb: null, mem_total_kb: null, uptime_s: null, processes: [] };
+
+  async function handleStatsRequest() {
+    if (!engine || !vmReady) {
+      postToParent(Object.assign({ type: "oma-bvm:stats", ts: Date.now() }, EMPTY_STATS));
+      return;
+    }
+    try {
+      const r = await engine.exec(
+        "cat /proc/stat 2>/dev/null | head -1; echo ---S1---; " +
+        "sleep 0.5; " +
+        "cat /proc/stat 2>/dev/null | head -1; echo ---S2---; " +
+        "cat /proc/meminfo 2>/dev/null | head -5; echo ---MEM---; " +
+        "cat /proc/uptime 2>/dev/null; echo ---UP---; " +
+        "ps 2>/dev/null",
+        8000,
+      );
+      const stats = parseStatsSnapshot(r.stdout || "");
+      postToParent(Object.assign({ type: "oma-bvm:stats", ts: Date.now() }, stats));
+    } catch {
+      postToParent(Object.assign({ type: "oma-bvm:stats", ts: Date.now() }, EMPTY_STATS));
+    }
+  }
+
+  const SHELL_OUTPUT_CAP = 64 * 1024;
+  async function handleShellRequest(req) {
+    const id = req.id;
+    if (!engine || !vmReady) {
+      postToParent({ type: "oma-bvm:shell-output", id, chunk: "", done: true, error: "VM not ready" });
+      return;
+    }
+    try {
+      const r = await engine.exec(String(req.command || ""), 30000);
+      let out = (r.stdout || "") + (r.stderr ? "\\n" + r.stderr : "");
+      let truncated = false;
+      if (out.length > SHELL_OUTPUT_CAP) {
+        out = out.slice(out.length - SHELL_OUTPUT_CAP);
+        truncated = true;
+      }
+      const chunk = (truncated ? "[...truncated to last " + SHELL_OUTPUT_CAP + " bytes...]\\n" : "") + out;
+      postToParent({ type: "oma-bvm:shell-output", id, chunk, done: true });
+    } catch (e) {
+      postToParent({ type: "oma-bvm:shell-output", id, chunk: "", done: true, error: e.message || String(e) });
+    }
+  }
+
+  window.addEventListener("message", (ev) => {
+    if (!EMBEDDED) return;
+    if (ev.source !== window.parent) return;
+    if (ev.origin !== location.origin) return;
+    const data = ev.data;
+    if (!data || typeof data.type !== "string" || data.type.indexOf("oma-bvm:") !== 0) return;
+    if (data.type === "oma-bvm:hello") emitEmbeddedStatus(true);
+    else if (data.type === "oma-bvm:stats-request") void handleStatsRequest();
+    else if (data.type === "oma-bvm:shell") void handleShellRequest(data);
+  });
 
   // ── Self-test: real guest exec after boot (not just agent-driven ops) ─
   async function runSelfTest() {

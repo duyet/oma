@@ -42,6 +42,11 @@ function mountHubHandlers() {
     http.get("/v1/sessions", () => HttpResponse.json({ data: [] })),
     http.get("/v1/deployments", () => HttpResponse.json({ data: [] })),
     http.get("/v1/agents/agent_1/publications", () => HttpResponse.json({ data: [] })),
+    // AgentRunReadiness checklist probes.
+    http.get("/v1/environments", () =>
+      HttpResponse.json({ data: [{ id: "env_1", name: "Default" }] }),
+    ),
+    http.get("/v1/vaults", () => HttpResponse.json({ data: [] })),
   );
 }
 
@@ -67,6 +72,14 @@ function renderHub(initial = "/agents/agent_1") {
 
 describe("<AgentDetail /> hub layout", () => {
   beforeEach(mountHubHandlers);
+
+  it("renders run readiness with a deep-link to session create", async () => {
+    renderHub();
+    expect(await screen.findByTestId("agent-run-readiness")).toBeInTheDocument();
+    const sessionCta = await screen.findByRole("link", { name: /new session/i });
+    expect(sessionCta.getAttribute("href")).toContain("/sessions?new=1");
+    expect(sessionCta.getAttribute("href")).toContain("agent=agent_1");
+  });
 
   it("renders the header + tab strip once the agent loads", async () => {
     renderHub();

@@ -54,8 +54,11 @@ import {
   PromptInputTools,
   PromptInputSubmit,
   PromptInputButton,
+  PromptInputAttachments,
+  PromptInputAttachment,
   usePromptInputAttachments,
 } from "../components/ai-elements/prompt-input";
+import { Suggestion, Suggestions } from "../components/ai-elements/suggestion";
 import { CodeBlock } from "../components/ai-elements/code-block";
 import { renderToolCall, getToolTitle } from "../components/ai-elements/tool-renderers";
 import { Attachment, type ContentBlockLike } from "../components/ai-elements/attachment";
@@ -1394,18 +1397,10 @@ export function SessionDetail() {
             <ConversationScrollButton />
           </Conversation>
 
-          {/* Prompt input. ai-elements <PromptInput> wraps a <form> with
-              an InputGroup-based textarea + attachment lifecycle; we
-              hand it our own onSubmit so the existing send() (POST
-              /events) stays the source of truth. The + button only
-              accepts images — they go inline to the model as vision
-              inputs. Non-image attachments belong on the mount-based
-              session resources path, not this button.
-
-              Wireless treatment: composer sits flush against the
-              conversation above on a `bg-bg` (white) surface — no
-              line, no top padding, just `pb-4` for breathing room
-              below. */}
+          {/* Composer: rounded-xl bordered shell with auto-growing
+              textarea, attachment chips, model pill, and send/stop.
+              ai-elements <PromptInput> owns file pick/drop/paste + Enter
+              submit; send() stays the source of truth for POST /events. */}
           {needsSandboxTab && (
             <div className="mx-3 mb-2 rounded-lg border border-border bg-bg-surface px-4 py-3 text-sm text-fg-muted flex items-center gap-3 shrink-0">
               <span className="flex-1">
@@ -1430,6 +1425,17 @@ export function SessionDetail() {
             </div>
           )}
           <div className="pl-3 pr-4 pb-4 bg-bg shrink-0">
+            {/* Quick-action suggestion chips sit above the composer shell
+                (Claude/Linear style) — not a floating overlay. */}
+            {status === "idle" && !sending && events.some((e) => e.type === "agent.message") && (
+              <Suggestions className="mb-2">
+                <Suggestion
+                  suggestion="Continue"
+                  onClick={(s) => void send(s)}
+                  className="h-7 rounded-full px-3 text-xs font-medium"
+                />
+              </Suggestions>
+            )}
             <PromptInput
               accept="image/*"
               multiple
@@ -1443,43 +1449,73 @@ export function SessionDetail() {
                 // form.reset() before this handler runs. send() owns
                 // clearing the mirrored `input` state, the optimistic
                 // outbox slot, and the file uploads.
-                const rawFiles = files
-                  .map((f) => (f as { file?: File }).file)
-                  .filter((f): f is File => f instanceof File);
+                // Prefer an original File when present; otherwise rebuild
+                // from the blob/data URL so drag-drop / paste still upload.
+                const rawFiles: File[] = [];
+                for (const f of files) {
+                  const maybe = (f as { file?: File }).file;
+                  if (maybe instanceof File) {
+                    rawFiles.push(maybe);
+                    continue;
+                  }
+                  if (!f.url) continue;
+                  try {
+                    const res = await fetch(f.url);
+                    const blob = await res.blob();
+                    rawFiles.push(
+                      new File([blob], f.filename || "image.png", {
+                        type: f.mediaType || blob.type || "image/png",
+                      }),
+                    );
+                  } catch {
+                    // skip unreadable attachment
+                  }
+                }
                 await send(text, rawFiles);
               }}
             >
+              <PromptInputAttachments>
+                {(file) => <PromptInputAttachment data={file} />}
+              </PromptInputAttachments>
               <PromptInputTextarea
-                placeholder="Send a message…  (drag an image in or click ＋)"
+                placeholder="Send a message…"
                 disabled={sending}
                 onChange={(e) => setInput(e.currentTarget.value)}
               />
-              <PromptInputFooter>
-                <PromptInputTools>
+              <PromptInputFooter className="border-0 px-2.5 pb-2 pt-1">
+                <PromptInputTools className="gap-1.5">
                   <AttachButton />
                   <PromptInputButton
                     type="button"
+                    size="sm"
                     onClick={() => setShowRuntimeSettings(true)}
-                    title="Switch the model or reasoning effort for this session"
+                    tooltip="Switch the model or reasoning effort for this session"
                     aria-label="Session model settings"
+                    className="h-7 max-w-[min(100%,28ch)] gap-1.5 rounded-full border border-border/80 bg-bg px-2.5 text-xs font-medium text-fg-muted hover:bg-bg-surface hover:text-fg dark:bg-bg/40"
                   >
-                    <span className="font-mono text-[11px] max-w-[14ch] truncate">
-                      {modelOverride ??
+                    <ModelName
+                      model={
+                        modelOverride ??
                         (typeof sessionMeta.agentSnapshot?.model === "string"
                           ? sessionMeta.agentSnapshot.model
                           : sessionMeta.agentSnapshot?.model?.id) ??
-                        "model"}
-                    </span>
+                        "model"
+                      }
+                      className="min-w-0 text-[11px] font-medium text-fg-muted [&_span]:truncate"
+                    />
                   </PromptInputButton>
                   {effectiveEffort && (
-                    <span className="text-[11px] text-fg-subtle px-1 self-center">
+                    <span className="inline-flex items-center rounded-full border border-border/60 bg-bg-surface/60 px-2 py-0.5 text-[11px] text-fg-subtle self-center">
                       {effectiveEffort}
                     </span>
                   )}
                 </PromptInputTools>
-                <PromptInputSubmit
-                  status={sending ? "submitted" : undefined}
-                  disabled={sending}
+                <ComposerSubmit
+                  input={input}
+                  sending={sending}
+                  running={status === "running"}
+                  interrupting={interrupting}
+                  onStop={() => void interrupt()}
                 />
               </PromptInputFooter>
             </PromptInput>
@@ -1985,13 +2021,44 @@ function AttachButton() {
     <PromptInputButton
       type="button"
       onClick={() => attachments.openFileDialog()}
-      aria-label="Add image"
-      title="Add image"
+      aria-label="Attach image"
+      tooltip="Attach image"
+      className="size-8 rounded-full text-fg-muted hover:text-fg"
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M12 5v14M5 12h14" />
       </svg>
     </PromptInputButton>
+  );
+}
+
+/**
+ * Send button when idle (disabled while empty); stop/interrupt while the
+ * agent is running. Lives inside PromptInput so it can read attachment
+ * count for the empty-state gate.
+ */
+function ComposerSubmit({
+  input,
+  sending,
+  running,
+  interrupting,
+  onStop,
+}: {
+  input: string;
+  sending: boolean;
+  running: boolean;
+  interrupting: boolean;
+  onStop: () => void;
+}) {
+  const attachments = usePromptInputAttachments();
+  const empty = !input.trim() && attachments.files.length === 0;
+  return (
+    <PromptInputSubmit
+      status={running ? "streaming" : sending ? "submitted" : undefined}
+      onStop={running ? onStop : undefined}
+      disabled={running ? interrupting : sending || empty}
+      className="size-8 rounded-full shadow-none"
+    />
   );
 }
 
