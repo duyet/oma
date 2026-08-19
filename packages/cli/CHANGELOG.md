@@ -1,5 +1,43 @@
 # @getoma/cli
 
+## [0.7.2](https://github.com/duyet/oma/compare/cli-v0.7.1...cli-v0.7.2) (2026-08-19)
+
+
+### ✨ Features
+
+* agent schedules visibility — Console UI, CLI, and docs ([#172](https://github.com/duyet/oma/issues/172)) ([#264](https://github.com/duyet/oma/issues/264)) ([beec4d2](https://github.com/duyet/oma/commit/beec4d269353ad8c84145cc56fa34cb29887dddf))
+* **bridge:** inject vault credentials for relayed sandbox ops ([#330](https://github.com/duyet/oma/issues/330)) ([db536d2](https://github.com/duyet/oma/commit/db536d27d29005d22828c674b689a14af2b95523))
+* browser-vm sandbox + AnyRouter landing restyle ([#297](https://github.com/duyet/oma/issues/297)) ([86a03bb](https://github.com/duyet/oma/commit/86a03bb913c3aee9e1888faea030d4dd4bcd2f72))
+* CLI banner/interactive/telemetry + telemetry API + public stats (agent worktree merge) ([9ff7cef](https://github.com/duyet/oma/commit/9ff7cef9360d03aa79778bc1cde06a26e0372e23))
+* **cli,charts:** non-interactive k8s pairing (OMA_PAIRING_CODE + oma bridge pair) ([#360](https://github.com/duyet/oma/issues/360)) ([0685800](https://github.com/duyet/oma/commit/0685800c49b168848efd417e244d59b5eae0cd7e))
+* **cli:** add `oma bridge start/stop/restart` daemon controls ([10f14e9](https://github.com/duyet/oma/commit/10f14e9044ce3dd832f2f3ad7e8b9c829eff4227))
+* **cli:** add best-effort ACP agent version detector ([493285c](https://github.com/duyet/oma/commit/493285ce6be9752f24b444d98045795edf04678a))
+* **cli:** add headless device-code + paste-token login flows ([12661af](https://github.com/duyet/oma/commit/12661af59ebe4c5f3d2f205fadc432316dfa0c5a))
+* **cli:** add raw coding-agent runtime PATH detection ([c816b2e](https://github.com/duyet/oma/commit/c816b2e745a754accd751b5714975a90f3b09bea))
+* **cli:** agent version probing in bridge runtime roster (agent worktree merge) ([48a1095](https://github.com/duyet/oma/commit/48a109543b75eb4534f743ce506211a0334094fb))
+* **cli:** anonymous opt-out telemetry + local usage counters ([5759b2c](https://github.com/duyet/oma/commit/5759b2c7512328901809ed3dbf9d76ccf19bae6b))
+* **cli:** ASCII logo banner, interactive menu, telemetry commands ([1d9d45f](https://github.com/duyet/oma/commit/1d9d45f5b2851aa171182d908151c2bfb3e84bf0))
+* **cli:** brand-mark bridge banner; regenerate root logo.svg from 2026 mark; v0.1.2–0.1.3 ([f22fb31](https://github.com/duyet/oma/commit/f22fb3162f9d7b06756a94f2a29e1544c3d8a33c))
+* **cli:** harden bridge daemon reliability + richer status ([182a3b1](https://github.com/duyet/oma/commit/182a3b1a93d2c9c4e0f2548f07a7e2a69d211e11))
+* **cli:** optional OpenShell sandbox backend for the bridge daemon ([#296](https://github.com/duyet/oma/issues/296)) ([fee5ad3](https://github.com/duyet/oma/commit/fee5ad3c6db1474d2085434c24b812790ef1b493))
+* **cli:** report detected ACP agent versions in runtime hello manifest ([ed4b9d9](https://github.com/duyet/oma/commit/ed4b9d9e4fd53664e2a84c5e8c577b0c69cd7e3c))
+* **cli:** resolve spawn cwd with working-dir/branch/worktree in bridge daemon ([46881a3](https://github.com/duyet/oma/commit/46881a3e9fba43e0bd905d8ade30c09df45e8e56))
+* **cli:** show running sessions on this runtime in bridge status ([25459ed](https://github.com/duyet/oma/commit/25459edae5ddbcc488f8fdeb8baeb8c33944f910))
+* **console, sandbox-sdk:** review fixes — sync dialog mode, async copy, binary-safe fake, recording installOptional ([41934c6](https://github.com/duyet/oma/commit/41934c648e2996ee9823c109fee3a1298858d813))
+* **harness:** honor per-agent model/reasoning override in ACP proxy (closes [#269](https://github.com/duyet/oma/issues/269)) ([c777868](https://github.com/duyet/oma/commit/c77786874d9eef2551955455e6bb54953859881e))
+* **packages:** rescope public npm packages to [@getoma](https://github.com/getoma) org ([7c3512a](https://github.com/duyet/oma/commit/7c3512a010e1da331256f995f1e9777c4d8c97d6))
+* **sandbox:** relay local (subprocess) environments to a paired bridge runtime on CF ([8ebbfa3](https://github.com/duyet/oma/commit/8ebbfa3c5bef3c76b2e61958a97d3d2884c9e1f6))
+* **sandbox:** rename @duyet/oma-sandbox → @getoma/sandbox-sdk (issue [#348](https://github.com/duyet/oma/issues/348)) ([04628d8](https://github.com/duyet/oma/commit/04628d8088fad43cc5b3d8a5e6d7f77bcf32f2d5))
+
+
+### 🐛 Bug Fixes
+
+* **cli:** point API defaults at app.oma.duyet.net, not apex ([af773bc](https://github.com/duyet/oma/commit/af773bc4c7734a45929b4a2252f382a73c47d697))
+* **cli:** show brand banner on bare `oma bridge` help; v0.1.4 ([c9a0c7e](https://github.com/duyet/oma/commit/c9a0c7ed080d9c81c1efac72b5afbc59512a1ff3))
+* **dev:** make first-time `pnpm install && pnpm dev` boot locally ([#394](https://github.com/duyet/oma/issues/394)) ([16d0571](https://github.com/duyet/oma/commit/16d0571076bf8e3ac4ce686b54d132a74c01897a))
+* **sdk,cli:** drop inherited npm deprecated flag; npx-first CLI README; combine changelog history; v0.1.1 ([e147da8](https://github.com/duyet/oma/commit/e147da80bf2fda4807ad9b45058f3846c51cc820))
+* **telemetry:** wire tasks stat to deployments+schedules, safe active-agents fallback; dedupe worktree dir naming ([7326df9](https://github.com/duyet/oma/commit/7326df99fb175b39eb45b15d92edee9f695e745d))
+
 ## 0.1.10
 
 ### Patch Changes
