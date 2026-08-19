@@ -2,6 +2,7 @@
 
 | Workflow | Purpose |
 |---|---|
+| `automerge.yml` | squash-merges open PRs when CI (`typecheck` + `test`) succeeds on the PR head (via `workflow_run`; also covers bot release PRs verified in `release.yml` / `release-please.yml`) |
 | `release.yml` | changeset-driven npm publish for the SDK / CLI packages |
 | `build-sandbox-image.yml` | builds the agent sandbox container image and pushes to GHCR for OSS users to pull |
 | `build-example-images.yml` | builds/pushes the `examples/**` demo images to GHCR |

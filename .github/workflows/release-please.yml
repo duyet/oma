@@ -33,7 +33,7 @@ jobs:
   release-please:
     name: release-please
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - name: Run release-please
         id: release
@@ -42,3 +42,63 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           config-file: .github/release-please-config.json
           manifest-file: .github/.release-please-manifest.json
+
+      # Same approval-gate gap as changesets Version Packages PRs — CI does
+      # not run on the release-please branch, so verify and merge here.
+      - name: Checkout for verify
+        if: steps.release.outputs.prs_created == 'true'
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        if: steps.release.outputs.prs_created == 'true'
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        if: steps.release.outputs.prs_created == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Verify release-please PR
+        if: steps.release.outputs.prs_created == 'true'
+        env:
+          PR_NUMBER: ${{ fromJSON(steps.release.outputs.pr || '{}').number }}
+        run: |
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No release-please PR number in action output; skipping verify/merge"
+            exit 0
+          fi
+          git fetch origin pull/${PR_NUMBER}/head:release-please-pr
+          git checkout release-please-pr
+          pnpm install --frozen-lockfile
+          pnpm typecheck && pnpm test
+
+      - name: Squash-merge release-please PR
+        if: success() && steps.release.outputs.prs_created == 'true' && fromJSON(steps.release.outputs.pr || '{}').number
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ fromJSON(steps.release.outputs.pr || '{}').number }}
+        with:
+          script: |
+            const prNumber = parseInt(process.env.PR_NUMBER, 10);
+            if (!prNumber) {
+              core.info("No release-please PR number; skipping merge");
+              return;
+            }
+            try {
+              await github.rest.pulls.merge({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber,
+                merge_method: "squash",
+              });
+              core.info(`Squash-merged release-please PR #${prNumber}`);
+            } catch (err) {
+              if (err.status === 405 || err.status === 409) {
+                core.info(`PR #${prNumber} already merged or not mergeable: ${err.message}`);
+                return;
+              }
+              throw err;
+            }

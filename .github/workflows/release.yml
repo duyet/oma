@@ -91,6 +91,40 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Bot Version Packages PRs sit in action_required (approval gate) so CI
+      # never runs typecheck/test on them. Verify here, then squash-merge.
+      - name: Verify Version Packages PR
+        if: steps.changesets.outputs.hasChangesets == 'true' && steps.changesets.outputs.pullRequestNumber != ''
+        env:
+          PR_NUMBER: ${{ steps.changesets.outputs.pullRequestNumber }}
+        run: |
+          git fetch origin pull/${PR_NUMBER}/head:version-packages-pr
+          git checkout version-packages-pr
+          pnpm install --frozen-lockfile
+          pnpm typecheck && pnpm test
+
+      - name: Squash-merge Version Packages PR
+        if: success() && steps.changesets.outputs.hasChangesets == 'true' && steps.changesets.outputs.pullRequestNumber != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = parseInt("${{ steps.changesets.outputs.pullRequestNumber }}", 10);
+            try {
+              await github.rest.pulls.merge({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber,
+                merge_method: "squash",
+              });
+              core.info(`Squash-merged Version Packages PR #${prNumber}`);
+            } catch (err) {
+              if (err.status === 405 || err.status === 409) {
+                core.info(`PR #${prNumber} already merged or not mergeable: ${err.message}`);
+                return;
+              }
+              throw err;
+            }
+
   publish:
     needs: version-pr
     # Only fire when version-pr reports there are no pending changesets,
