@@ -4,6 +4,12 @@ import { useApiQuery } from "../../lib/useApiQuery";
 import { EmptyState } from "../../components/EmptyState";
 import { cn } from "@/lib/utils";
 import { formatCompact, formatSandboxTime, formatUsd } from "../../lib/format";
+import {
+  DAILY_CHART_VIEW_W,
+  dailyActivityBarWidth,
+  dailyActivitySlot,
+  dailyActivityTickIndices,
+} from "../../lib/daily-activity-chart";
 import { useAgentHub } from "../AgentDetail";
 
 // ── Analytics wire shape — mirrors SessionAnalytics
@@ -199,13 +205,16 @@ function ActivityChart({ data }: { data: Array<{ date: string; count: number }> 
   if (n === 0) return <p className="text-sm text-fg-subtle">No data.</p>;
 
   const max = Math.max(1, ...data.map((d) => d.count));
-  const slot = 12; // user units per bucket
-  const barW = 8;
+  const viewW = DAILY_CHART_VIEW_W;
+  const slot = dailyActivitySlot(n, viewW);
+  const barW = dailyActivityBarWidth(slot);
+  const tickSet = new Set(dailyActivityTickIndices(n, slot));
+  const rotate = slot < 28;
   const chartTop = 8;
-  const chartH = 100; // plot area height
+  const chartH = 100;
   const baseline = chartTop + chartH;
-  const labelStep = Math.max(1, Math.round(n / 6));
-  const totalW = n * slot;
+  const labelH = rotate ? 36 : 22;
+  const viewH = baseline + labelH;
 
   const fmtDate = (iso: string) => {
     const d = new Date(iso);
@@ -213,12 +222,11 @@ function ActivityChart({ data }: { data: Array<{ date: string; count: number }> 
   };
 
   return (
-    <div className="overflow-x-auto">
+    <div className="w-full">
       <svg
-        viewBox={`0 0 ${totalW} ${baseline + 22}`}
+        viewBox={`0 0 ${viewW} ${viewH}`}
         width="100%"
-        height={baseline + 22}
-        preserveAspectRatio="none"
+        preserveAspectRatio="xMidYMid meet"
         role="img"
         aria-label="Daily session activity"
       >
@@ -226,7 +234,7 @@ function ActivityChart({ data }: { data: Array<{ date: string; count: number }> 
         <line
           x1={0}
           y1={baseline}
-          x2={totalW}
+          x2={viewW}
           y2={baseline}
           stroke="var(--color-border)"
           strokeWidth={1}
@@ -235,6 +243,8 @@ function ActivityChart({ data }: { data: Array<{ date: string; count: number }> 
           const h = max > 0 ? (d.count / max) * chartH : 0;
           const x = i * slot + (slot - barW) / 2;
           const y = baseline - h;
+          const cx = i * slot + slot / 2;
+          const labelY = baseline + 14;
           return (
             <g key={d.date}>
               <rect
@@ -242,19 +252,20 @@ function ActivityChart({ data }: { data: Array<{ date: string; count: number }> 
                 y={y}
                 width={barW}
                 height={Math.max(h, d.count > 0 ? 1 : 0)}
-                rx={1.5}
+                rx={Math.min(1.5, barW / 2)}
                 fill="var(--color-brand)"
                 opacity={0.85}
               >
                 <title>{`${fmtDate(d.date)}: ${d.count} session${d.count === 1 ? "" : "s"}`}</title>
               </rect>
-              {i % labelStep === 0 && (
+              {tickSet.has(i) && (
                 <text
-                  x={i * slot + slot / 2}
-                  y={baseline + 14}
-                  textAnchor="middle"
+                  x={cx}
+                  y={labelY}
+                  textAnchor={rotate ? "end" : "middle"}
                   fontSize={7}
                   fill="var(--color-fg-subtle)"
+                  transform={rotate ? `rotate(-40 ${cx} ${labelY})` : undefined}
                 >
                   {fmtDate(d.date)}
                 </text>
