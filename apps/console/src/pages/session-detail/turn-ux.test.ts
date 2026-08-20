@@ -171,4 +171,13 @@ describe("humanizeTurnError", () => {
       /no output/i,
     );
   });
+
+  it("maps AnyRouter/hoian Gemini tool-combo 400 to a gateway routing line", () => {
+    const line = humanizeTurnError(
+      "No output generated. Check the stream for errors.",
+      'Cause(anyrouter/free): Upstream provider "hoian" returned 400 — Please enable tool_config.include_server_side_tool_invocations to use Built-in tools with Function calling. [400]',
+    );
+    expect(line).toMatch(/gateway routed/i);
+    expect(line).toMatch(/tool-capable model/i);
+  });
 });
