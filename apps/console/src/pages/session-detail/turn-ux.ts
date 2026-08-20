@@ -144,6 +144,16 @@ export function humanizeTurnError(error?: string, cause?: string): string | unde
     return "The provider rate-limited or overloaded this request. Wait and retry.";
   }
 
+  // AnyRouter/requesty (hoian) wrapping Gemini's built-in+function-tools
+  // rejection. Not a missing key — the free-chain hop cannot combine tools
+  // until the gateway fails over (or you pin a tool-capable model).
+  if (
+    /include_server_side_tool_invocations/.test(lower) ||
+    /built-in tools with function calling/.test(lower)
+  ) {
+    return "The gateway routed this turn to an upstream that cannot combine built-in tools with function calling. Retry, or set the agent to a tool-capable model (not a free auto-route hop).";
+  }
+
   if (/no output generated/.test(lower)) {
     return "The model returned no output. This is usually a provider outage or missing model credentials — retry, or check the agent's model setup.";
   }
