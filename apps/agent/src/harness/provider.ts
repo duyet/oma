@@ -39,7 +39,9 @@ export interface DefaultProviderCreds {
  *      `resolveModel` maps BYOK-only sonnet handles to `anyrouter/free`
  *      because AnyRouter aliases hyphenated `anthropic/claude-sonnet-4-6`
  *      to dotted `anthropic/claude-sonnet-4.6`. That mapping is the HTTP
- *      `model` field, not only the GET /v1/model_cards row.
+ *      `model` field on **both** `openai.chat` (`/chat/completions`) and
+ *      `anthropic()` (`/messages`) — an `ANTHROPIC_API_KEY` + AnyRouter
+ *      `ANTHROPIC_BASE_URL` deploy never hits the OpenAI branch.
  *
  * Returns null when neither is configured — callers fall through to their
  * existing "no credentials" behavior unchanged.
@@ -133,6 +135,7 @@ async function observingFetch(url: RequestInfo | URL, init?: RequestInit): Promi
     res.headers.get("x-ratelimit-reset-tokens") ??
     res.headers.get("x-ratelimit-reset");
   const interesting = status >= 400 || retryAfter || (limitRemaining && parseInt(limitRemaining, 10) < 5);
+  const requestModel = peekRequestModel(init);
   if (interesting) {
     let bodyPreview = "";
     if (status >= 400) {
@@ -142,6 +145,7 @@ async function observingFetch(url: RequestInfo | URL, init?: RequestInit): Promi
     }
     console.warn(
       `[provider.fetch] ${method} ${urlStr} → ${status} (${elapsed}ms)` +
+        (requestModel ? ` request_model=${requestModel}` : "") +
         (retryAfter ? ` retry-after=${retryAfter}` : "") +
         (limitRemaining ? ` remaining=${limitRemaining}` : "") +
         (limitReset ? ` reset=${limitReset}` : "") +
@@ -158,6 +162,43 @@ function useOpenAI(compat: ApiCompat): boolean {
   return compat === "oai" || compat === "oai-compatible";
 }
 
+/** Anthropic `/messages` wants a bare Claude id; strip a `provider/` prefix. */
+function anthropicModelId(modelString: string): string {
+  return modelString.includes("/")
+    ? modelString.split("/").slice(1).join("/")
+    : modelString;
+}
+
+/**
+ * JSON `model` field for the outbound HTTP body.
+ *
+ * AnyRouter aliases hyphenated sonnet onto dotted BYOK-only
+ * `anthropic/claude-sonnet-4.6`. That alias is independent of wire
+ * format — `#455` remapped `openai.chat(...)` only, so
+ * `return anthropic(modelId)` still sent the stripped agent handle on
+ * `POST …/messages` (live recert after worker 33803740383). Both
+ * branches go through this helper so they cannot drift.
+ */
+function wireModelIdFor(
+  modelString: string,
+  baseURL: string | undefined,
+  compat: ApiCompat,
+): string {
+  if (isAnyRouterBaseUrl(baseURL)) return toAnyRouterCallableModelId(modelString);
+  if (useOpenAI(compat)) return toGatewayModelId(modelString);
+  return anthropicModelId(modelString);
+}
+
+function peekRequestModel(init?: RequestInit): string | undefined {
+  if (typeof init?.body !== "string") return undefined;
+  try {
+    const parsed = JSON.parse(init.body) as { model?: unknown };
+    return typeof parsed.model === "string" ? parsed.model : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function resolveModel(
   model: string | { id: string; speed?: "standard" | "fast" },
   apiKey: string,
@@ -166,13 +207,8 @@ export function resolveModel(
   customHeaders?: Record<string, string>,
 ): LanguageModel {
   const modelString = typeof model === "string" ? model : model.id;
-
-  // Strip provider prefix if present: "anthropic/claude-sonnet-4-6" → "claude-sonnet-4-6"
-  const modelId = modelString.includes("/")
-    ? modelString.split("/").slice(1).join("/")
-    : modelString;
-
   const effectiveCompat = compat || "ant";
+  const wireId = wireModelIdFor(modelString, baseURL, effectiveCompat);
 
   // Identify OMA to a gateway's dashboard (AnyRouter / OpenRouter) instead of
   // landing in its raw user-agent bucket. Caller-supplied headers still win,
@@ -204,15 +240,12 @@ export function resolveModel(
     // JSON `model` field SessionDO and Node both go through) sends
     // `anyrouter/free` instead. OpenRouter and other hosts keep
     // toGatewayModelId.
-    return openai.chat(
-      isAnyRouterBaseUrl(baseURL)
-        ? toAnyRouterCallableModelId(modelString)
-        : toGatewayModelId(modelString),
-    );
+    return openai.chat(wireId);
   }
 
-  // ant / ant-compatible
-  const isKnownClaude = modelId.startsWith(KNOWN_CLAUDE_PREFIX);
+  // ant / ant-compatible. Known-Claude max_tokens defaults follow the
+  // *wire* id so a remapped `anyrouter/free` is not treated as Claude.
+  const isKnownClaude = anthropicModelId(wireId).startsWith(KNOWN_CLAUDE_PREFIX);
 
   const headers: Record<string, string> = {};
   if (baseURL) headers["X-Sub-Module"] = "managed-agents";
@@ -239,5 +272,5 @@ export function resolveModel(
     fetch: isKnownClaude ? observingFetch : setMaxTokensFetch,
   });
 
-  return anthropic(modelId);
+  return anthropic(wireId);
 }

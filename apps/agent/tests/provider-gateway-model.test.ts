@@ -14,29 +14,58 @@ afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
-async function captureBody(model: ReturnType<typeof resolveModel>): Promise<Record<string, unknown>> {
-  let body: Record<string, unknown> | undefined;
-  globalThis.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+async function parseOutgoingBody(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Record<string, unknown>> {
+  if (typeof init?.body === "string") {
     try {
-      body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      return JSON.parse(init.body) as Record<string, unknown>;
     } catch {
-      body = {};
+      return {};
     }
+  }
+  if (typeof input === "object" && input !== null && "clone" in input) {
+    try {
+      return (await (input as Request).clone().json()) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+const GENERATE_CALL = {
+  prompt: [{ role: "user" as const, content: [{ type: "text" as const, text: "hi" }] }],
+};
+
+async function captureBody(
+  model: ReturnType<typeof resolveModel>,
+  method: "doGenerate" | "doStream" = "doGenerate",
+): Promise<Record<string, unknown>> {
+  let body: Record<string, unknown> | undefined;
+  globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    body = await parseOutgoingBody(input, init);
     return new Response(JSON.stringify({ error: { message: "stub" } }), {
       status: 500,
       headers: { "content-type": "application/json" },
     });
   }) as unknown as typeof fetch;
 
-  const call = {
-    prompt: [{ role: "user" as const, content: [{ type: "text" as const, text: "hi" }] }],
+  const m = model as unknown as {
+    doGenerate: (o: unknown) => Promise<unknown>;
+    doStream: (o: unknown) => Promise<unknown>;
   };
-  await (model as unknown as { doGenerate: (o: unknown) => Promise<unknown> })
-    .doGenerate(call)
-    .catch(() => {});
+  await m[method](GENERATE_CALL).catch(() => {});
 
   if (!body) throw new Error("provider never issued a request");
   return body;
+}
+
+function expectAnyRouterFree(body: Record<string, unknown>): void {
+  expect(body.model).toBe(ANYROUTER_FREE_MODEL_ID);
+  expect(String(body.model)).not.toContain("claude-sonnet-4.6");
+  expect(String(body.model)).not.toContain("claude-sonnet-4-6");
 }
 
 describe("OpenAI-compat gateway model ids", () => {
@@ -81,8 +110,75 @@ describe("OpenAI-compat gateway model ids", () => {
         "oai",
       ),
     );
-    expect(body.model).toBe(ANYROUTER_FREE_MODEL_ID);
-    expect(String(body.model)).not.toContain("claude-sonnet-4.6");
-    expect(String(body.model)).not.toContain("claude-sonnet-4-6");
+    expectAnyRouterFree(body);
+  });
+});
+
+// #456: live recert after #455 still 404'd dotted anthropic/claude-sonnet-4.6.
+// #455 only remapped openai.chat(...). SessionDO with ANTHROPIC_API_KEY set
+// (or Node with OMA_API_COMPAT unset) calls resolveModel with default/ant
+// compat, and `return anthropic(modelId)` sent the stripped agent handle.
+describe("Anthropic-compat AnyRouter model ids", () => {
+  it("default ant compat (ANTHROPIC_API_KEY + AnyRouter base) sends anyrouter/free", async () => {
+    const body = await captureBody(
+      resolveModel("claude-sonnet-4-6", "sk-ant-test", ANYROUTER_API_BASE),
+    );
+    expectAnyRouterFree(body);
+  });
+
+  it("explicit ant sends anyrouter/free, not the stripped claude handle", async () => {
+    const body = await captureBody(
+      resolveModel("claude-sonnet-4-6", "sk-ant-test", ANYROUTER_API_BASE, "ant"),
+    );
+    expectAnyRouterFree(body);
+  });
+
+  it("ant-compatible sends anyrouter/free", async () => {
+    const body = await captureBody(
+      resolveModel("claude-sonnet-4-6", "sk-ar-test", ANYROUTER_API_BASE, "ant-compatible"),
+    );
+    expectAnyRouterFree(body);
+  });
+
+  it("does not strip a SessionDO-mapped anyrouter/free down to free", async () => {
+    const body = await captureBody(
+      resolveModel(ANYROUTER_FREE_MODEL_ID, "sk-ant-test", ANYROUTER_API_BASE, "ant"),
+    );
+    expectAnyRouterFree(body);
+  });
+
+  it("ANTHROPIC_BASE_URL=/v1 (not /api/v1) still remaps — hostname is AnyRouter", async () => {
+    const body = await captureBody(
+      resolveModel("claude-sonnet-4-6", "sk-ant-test", "https://anyrouter.dev/v1", "ant"),
+    );
+    expectAnyRouterFree(body);
+  });
+
+  it("doStream body.model is anyrouter/free too (the harness turn path)", async () => {
+    const body = await captureBody(
+      resolveModel("claude-sonnet-4-6", "sk-ant-test", ANYROUTER_API_BASE, "ant"),
+      "doStream",
+    );
+    expectAnyRouterFree(body);
+  });
+
+  it("OpenRouter ant-compatible keeps the hyphenated Claude id", async () => {
+    const body = await captureBody(
+      resolveModel("claude-sonnet-4-6", "sk-or-test", OPENROUTER_API_BASE, "ant-compatible"),
+    );
+    expect(body.model).toBe("claude-sonnet-4-6");
+    expect(body.model).not.toBe(ANYROUTER_FREE_MODEL_ID);
+  });
+
+  it("direct Anthropic (no gateway base) is unchanged", async () => {
+    const body = await captureBody(
+      resolveModel("claude-sonnet-4-6", "sk-ant-test", undefined, "ant"),
+    );
+    expect(body.model).toBe("claude-sonnet-4-6");
+  });
+
+  it("LanguageModel.modelId is the wire id (span.model_request_start reads this)", () => {
+    const model = resolveModel("claude-sonnet-4-6", "sk-ant-test", ANYROUTER_API_BASE, "ant");
+    expect((model as { modelId: string }).modelId).toBe(ANYROUTER_FREE_MODEL_ID);
   });
 });
