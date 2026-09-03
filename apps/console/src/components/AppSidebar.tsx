@@ -8,6 +8,7 @@ import {
   SquareKanbanIcon,
   CircleCheckBigIcon,
   ChartColumnIcon,
+  ActivityIcon,
   UsersIcon,
   BlocksIcon,
   FolderIcon,
@@ -152,6 +153,7 @@ export function buildNavGroups(): NavGroup[] {
         },
         { to: "/", label: "Overview", icon: DashboardIcon, end: true },
         { to: "/usage", label: "Usage", icon: ChartColumnIcon },
+        { to: "/analytics", label: "Analytics", icon: ActivityIcon },
         {
           to: "/environments",
           label: "Resources",

@@ -26,7 +26,7 @@ import {
   SkillsIcon,
   VaultIcon,
 } from "./icons";
-import { BlocksIcon } from "lucide-react";
+import { BlocksIcon, ChartColumnIcon } from "lucide-react";
 
 interface NavCommand {
   label: string;
@@ -44,6 +44,7 @@ interface NavCommand {
 const COMMANDS: NavCommand[] = [
   { label: "Overview",           to: "/",                          group: "Overview",       icon: DashboardIcon },
   { label: "Launch wizard",      to: "/launch",                    group: "Overview",       icon: DashboardIcon, aliases: "onboarding get started setup" },
+  { label: "Analytics",          to: "/analytics",                 group: "Overview",       icon: ChartColumnIcon, aliases: "cost tokens spend usage" },
   { label: "Agents",             to: "/agents",                    group: "Managed Agents", icon: AgentIcon },
   { label: "Sessions",           to: "/sessions",                  group: "Managed Agents", icon: SessionsIcon },
   { label: "Kanban Board",       to: "/kanban/agent",              group: "Managed Agents", icon: SessionsIcon, aliases: "board queued running blocked done" },

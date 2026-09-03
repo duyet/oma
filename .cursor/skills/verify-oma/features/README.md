@@ -29,6 +29,7 @@ This directory is the maintained source for verifying user-facing behavior of Op
 - Report an unreachable path with the attempted command and the unmet precondition.
 - Do not report a skipped entry point as verified through a different path.
 - `console-agents` is unreachable without a real session. Skip it when no auth exists. Do not mint one.
+- `console-analytics` is the same gate. A login redirect from `/analytics` is proof of the auth wall, not of spend charts.
 
 ## Feature entry contract
 
@@ -46,3 +47,4 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 - [Console login](./console-login.md) covers the unauthenticated Console sign-in screen.
 - [Console login (mobile)](./console-login-mobile.md) covers the same form at viewport 390×844.
 - [Console agents](./console-agents.md) covers the agents list. Requires a real session. Skip when none exists.
+- [Console analytics](./console-analytics.md) covers `/analytics`. Requires a real session for charts. Skip signed-in paths when none exists.

@@ -39,6 +39,7 @@ import { SessionsList } from "./pages/SessionsList";
 import { AgentSessionBoard, KanbanBoard } from "./pages/KanbanBoard";
 import { GitHubIssuesBoard } from "./components/GitHubIssuesBoard";
 import { Usage } from "./pages/Usage";
+import { Analytics } from "./pages/Analytics";
 import { FilesList } from "./pages/FilesList";
 import { EnvironmentsList } from "./pages/EnvironmentsList";
 import { EnvironmentDetail } from "./pages/EnvironmentDetail";
@@ -231,6 +232,7 @@ const protectedRoutes: RouteObject[] = [
   // isn't wrapped in a tab hub (that produced a duplicated header). Reached
   // via the sidebar's daily path.
   { path: "usage", element: <Usage />, handle: { crumb: "Usage" } },
+  { path: "analytics", element: <Analytics />, handle: { crumb: "Analytics" } },
   // Session detail — full-page, no hub tabs. Pathless parent carries the
   // `Sessions` crumb (linking back to the list) so the breadcrumb reads
   // `Sessions › sess-xxx` as before.

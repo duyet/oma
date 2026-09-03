@@ -125,10 +125,9 @@ function formatKindTotal(kind: string, value: number): string {
 }
 
 /**
- * Tenant-wide usage & cost analytics (issue #174). There's no dedicated
- * top-level "Analytics" nav destination (the sidebar daily path is Agents,
- * Sessions, Overview, Usage, plus nested Resources / Settings — see
- * AppSidebar.tsx), so this page is the Usage item on that path.
+ * Tenant-wide usage & cost tables (issue #174). Cross-agent spend charts
+ * live on `/analytics` (issue #344). This page stays the all-time tables
+ * plus Cloudflare infra cost.
  *
  * Consumes:
  *   - GET /v1/usage?days=0&group_by=agent — the "All time" stat tiles,

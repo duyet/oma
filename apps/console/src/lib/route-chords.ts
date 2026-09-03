@@ -16,6 +16,7 @@ export const ROUTE_CHORDS: Record<string, string> = {
   "/launch":        "l",
   "/agents":        "a",
   "/sessions":      "s",
+  "/analytics":     "y", // g+u unused; Usage has no chord
   "/kanban":        "b",
   "/files":         "f",
   "/environments":  "e",
