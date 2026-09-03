@@ -3,7 +3,7 @@
 | Workflow | Purpose |
 |---|---|
 | `ci.yml` | PR + main gate — `pnpm typecheck` and `pnpm test` |
-| `automerge.yml` | Squash-merge PRs after CI succeeds (bot release PRs use inline verify in `release.yml` / `release-please.yml`) |
+| `automerge.yml` | Squash-merge PRs after CI succeeds. Skips release-please and changeset version PRs (`scripts/should-skip-automerge.mjs`). Those PRs use inline verify in `release.yml` / `release-please.yml`. |
 | `release.yml` | changeset npm publish for `@getoma/cli` / `@getoma/sdk`; inline CI + auto-merge on the Version Packages PR |
 | `release-please.yml` | Conventional-commit bumps for root / web / docker; inline CI + auto-merge on the release-please PR. `@getoma/cli` / `@getoma/sdk` stay on `release.yml` (changesets). |
 | `build-sandbox-image.yml` | builds the agent sandbox container image and pushes to GHCR for OSS users to pull |
