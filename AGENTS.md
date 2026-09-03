@@ -223,6 +223,10 @@ Set permission policies:
 }
 ```
 
+When `always_ask` pauses a Cloudflare session (`stop_reason.action_type: "tool_confirmation"`), the Console session page pins an **Approval required** card above the composer. Deny and Approve POST `user.tool_confirmation` to `/v1/sessions/:id/events`. **Approve and don't ask again this session** stores that tool name in `sessionStorage` (`oma.hitl.allow:<sessionId>`) and auto-allows later asks in that browser tab only. It is not an agent-config `default_tool_policy`, and there is no timeout auto-deny yet.
+
+The AppShell bell lists a 24h in-tab window of session alerts (pending approvals, errors, completions). Desktop `Notification` alerts are opt-in from that menu (no Service Worker, no Settings page). Inspector, Resource, and Timeline side panels use a 60vh bottom sheet on tablet (768–1023 px) and a full-screen overlay below 768 px. The session list and Overview recent-sessions panel switch to cards on a phone viewport.
+
 ### Custom Tools
 
 Define tools with JSON Schema input validation. Custom tools pause the session with `stop_reason: { type: "requires_action", action_type: "custom_tool_result" }` and wait for the client to provide the result:

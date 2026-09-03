@@ -214,7 +214,7 @@ function parseArgs(argv) {
   return out;
 }
 
-async function withPage(fn) {
+async function withPage(fn, viewport = { width: 1280, height: 800 }) {
   if (!chromePath) die("CHROME_PATH / google-chrome not found");
   let chromium;
   try {
@@ -232,7 +232,7 @@ async function withPage(fn) {
     executablePath: chromePath,
     args: ["--no-sandbox", "--disable-dev-shm-usage", "--headless=new"],
   });
-  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  const page = await browser.newPage({ viewport });
   try {
     return await fn(page);
   } finally {
@@ -438,11 +438,60 @@ async function driveConsoleAgents(page, dir, state) {
   };
 }
 
+async function driveConsoleLoginMobile(page, dir, state) {
+  const origin = originOf(state);
+  await page.goto(origin + "/login", { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "Welcome back" }).waitFor({ timeout: 30_000 });
+  const before = join(dir, "before.png");
+  await page.screenshot({ path: before, fullPage: false });
+  publishArtifact(before);
+  const heading = page.getByRole("heading", { name: "Welcome back" });
+  const box = await heading.boundingBox();
+  const assertions = [
+    {
+      id: "login-load",
+      ok: await heading.isVisible(),
+      detail: "Welcome back",
+    },
+    {
+      id: "login-email",
+      ok: await page.locator("#auth-email").isVisible(),
+      detail: "#auth-email",
+    },
+    {
+      id: "login-submit",
+      ok: await page.getByRole("button", { name: "Sign in" }).first().isVisible(),
+      detail: "Sign in",
+    },
+    {
+      id: "login-fits-viewport",
+      ok: !!box && box.x >= 0 && box.x + box.width <= 390,
+      detail: box ? JSON.stringify(box) : "no bounding box",
+    },
+  ];
+  await writeProof(page, dir, {});
+  await page.goto(origin + "/", { waitUntil: "networkidle" });
+  await page.waitForTimeout(500);
+  const gated = page.url().includes("/login");
+  assertions.push({ id: "login-gate", ok: gated, detail: page.url() });
+  return {
+    feature: "console-login-mobile",
+    url: page.url(),
+    assertions,
+    ok: assertions.every((a) => a.ok),
+  };
+}
+
 const DRIVES = {
   "landing-home": driveLandingHome,
   "landing-features": driveLandingFeatures,
   "console-login": driveConsoleLogin,
+  "console-login-mobile": driveConsoleLoginMobile,
   "console-agents": driveConsoleAgents,
+};
+
+const DRIVE_VIEWPORTS = {
+  "console-login-mobile": { width: 390, height: 844 },
 };
 
 async function cmdDrive(argv) {
@@ -451,7 +500,8 @@ async function cmdDrive(argv) {
   await cmdDoctor();
   const state = readState();
   const dir = evidenceDir(feature);
-  const report = await withPage((page) => DRIVES[feature](page, dir, state));
+  const viewport = DRIVE_VIEWPORTS[feature] || { width: 1280, height: 800 };
+  const report = await withPage((page) => DRIVES[feature](page, dir, state), viewport);
   report.artifacts = dir;
   report.at = new Date().toISOString();
   writeReport(dir, report);

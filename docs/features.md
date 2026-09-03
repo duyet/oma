@@ -54,6 +54,8 @@ Monitor the state of all active sessions across your agent fleet. The status boa
 
 Because the board is derived directly from the SQLite event log, there is no extra backend database state to sync.
 
+The Console also has a compact operator layout for a phone or tablet. Session list rows become cards below 768 px. Overview hides the architecture map and uses the same cards for recent sessions. A session that paused on `always_ask` pins an approval card above the composer (POST `user.tool_confirmation`). The header bell keeps a 24h in-tab notice list; desktop alerts use the browser `Notification` API after an explicit opt-in. "Don't ask again this session" is tab-local `sessionStorage`, not a stored agent policy.
+
 ---
 
 ## 3. Parallel Sub-Agent Delegation
