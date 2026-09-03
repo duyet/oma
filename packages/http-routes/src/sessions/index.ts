@@ -30,6 +30,16 @@ import type {
   UserMessageEvent,
 } from "@duyet/oma-shared";
 import {
+  type InjectionCommand,
+  type SessionInjectionOverlay,
+  METADATA_KEY,
+  applyInjectionCommand,
+  configUpdatedEvent,
+  injectionCommandSchema,
+  overlayFromMetadata,
+  stripInjectionsFromMetadata,
+} from "@duyet/oma-api-types";
+import {
   SessionArchivedError,
   SessionMemoryStoreMaxExceededError,
   SessionNotFoundError,
@@ -38,7 +48,7 @@ import {
 } from "@duyet/oma-sessions-store";
 import type { SessionRouter, SessionInitParams } from "@duyet/oma-session-runtime";
 import type { SessionSecretService } from "@duyet/oma-session-secrets-store";
-import type { RouteServicesArg } from "../types";
+import type { RouteServices, RouteServicesArg } from "../types";
 import { resolveSessionEnvironmentId } from "./resolve-environment";
 import { redactMcpServers } from "../mcp-server-redaction";
 import { resolveServices } from "../types";
@@ -312,7 +322,7 @@ function toApiSession(row: {
     agent_id,
     agent: snapshotToSessionAgent(agent_id, agent_snapshot ?? null),
     vault_ids: vault_ids ?? [],
-    metadata: metadata ?? {},
+    metadata: stripInjectionsFromMetadata(metadata ?? {}),
     input_tokens: input_tokens ?? 0,
     output_tokens: output_tokens ?? 0,
     message_count: message_count ?? 0,
@@ -322,6 +332,145 @@ function toApiSession(row: {
     usage: {} as Record<string, unknown>,
     stats: durationSeconds !== undefined ? { duration_seconds: durationSeconds } : {},
   };
+}
+
+function credentialIdFromCommand(command: InjectionCommand): string | undefined {
+  switch (command.type) {
+    case "credential_inject":
+      return command.credential_id;
+    case "mcp_server_add":
+      return command.credential_id;
+    case "system_prompt_append":
+    case "tools_update":
+      return undefined;
+    default: {
+      const _exhaustive: never = command;
+      return _exhaustive;
+    }
+  }
+}
+
+async function credentialInSessionVaults(
+  services: RouteServices,
+  tenantId: string,
+  vaultIds: string[] | null | undefined,
+  credentialId: string,
+): Promise<boolean> {
+  const ids = vaultIds ?? [];
+  if (ids.length === 0) return false;
+  const grouped = await services.credentials
+    .listByVaults({ tenantId, vaultIds: ids })
+    .catch(() => []);
+  for (const g of grouped) {
+    for (const c of g.credentials) {
+      if (c.id === credentialId && !c.archived_at) return true;
+    }
+  }
+  return false;
+}
+
+function optionalStringList(
+  rec: Record<string, unknown>,
+  key: string,
+): string[] | undefined | "invalid" {
+  if (!(key in rec) || rec[key] === undefined) return undefined;
+  const v = rec[key];
+  if (!Array.isArray(v) || v.some((x) => typeof x !== "string")) return "invalid";
+  return v.map((s) => s.trim()).filter(Boolean);
+}
+
+/** Map PATCH /tools `{ enabled, disabled }` or `{ enabled_tools, disabled_tools }` to a command. */
+function toolsPatchToCommand(body: unknown): InjectionCommand | { error: string } {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { error: "Invalid tools patch" };
+  }
+  const rec = body as Record<string, unknown>;
+  const enabledRaw = optionalStringList(rec, "enabled");
+  const disabledRaw = optionalStringList(rec, "disabled");
+  const enabled = enabledRaw === undefined ? optionalStringList(rec, "enabled_tools") : enabledRaw;
+  const disabled = disabledRaw === undefined ? optionalStringList(rec, "disabled_tools") : disabledRaw;
+  if (enabled === "invalid" || disabled === "invalid") {
+    return { error: "enabled/disabled must be arrays of strings" };
+  }
+  const parsed = injectionCommandSchema.safeParse({
+    type: "tools_update",
+    ...(enabled ? { enabled } : {}),
+    ...(disabled ? { disabled } : {}),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "enabled or disabled must list at least one tool" };
+  }
+  return parsed.data;
+}
+
+type InjectionApplyResult =
+  | { status: 404; body: { error: string } }
+  | {
+      status: 422;
+      body: { type: "error"; error: { type: "invalid_request_error"; message: string } };
+    }
+  | { status: 200; body: SessionInjectionOverlay };
+
+async function applySessionInjection(opts: {
+  services: RouteServices;
+  router: SessionRouter;
+  tenantId: string;
+  sessionId: string;
+  command: InjectionCommand;
+}): Promise<InjectionApplyResult> {
+  const sess = await opts.services.sessions.get({
+    tenantId: opts.tenantId,
+    sessionId: opts.sessionId,
+  });
+  if (!sess) return { status: 404, body: { error: "Session not found" } };
+
+  const credId = credentialIdFromCommand(opts.command);
+  if (credId) {
+    const ok = await credentialInSessionVaults(
+      opts.services,
+      opts.tenantId,
+      (sess as { vault_ids?: string[] | null }).vault_ids,
+      credId,
+    );
+    if (!ok) {
+      return {
+        status: 422,
+        body: {
+          type: "error",
+          error: {
+            type: "invalid_request_error",
+            message: "credential_id is not in this session's vaults",
+          },
+        },
+      };
+    }
+  }
+
+  const injectionId = `inj_${nanoid()}`;
+  const nowIso = new Date().toISOString();
+  const current = overlayFromMetadata(
+    (sess as { metadata?: Record<string, unknown> | null }).metadata,
+  );
+  const nextOverlay = applyInjectionCommand(current, opts.command, nowIso, injectionId);
+
+  await opts.services.sessions.update({
+    tenantId: opts.tenantId,
+    sessionId: opts.sessionId,
+    metadata: { [METADATA_KEY]: nextOverlay },
+  });
+
+  if (opts.router.recordConfigUpdated) {
+    try {
+      await opts.router.recordConfigUpdated(
+        opts.sessionId,
+        configUpdatedEvent(opts.command, injectionId),
+      );
+    } catch {
+      // Overlay is already on the session row; the audit event is observational.
+    }
+  }
+
+  return { status: 200, body: nextOverlay };
 }
 
 export function buildSessionRoutes(deps: SessionRoutesDeps) {
@@ -388,7 +537,9 @@ export function buildSessionRoutes(deps: SessionRoutesDeps) {
     ) {
       return c.json({ error: "metadata must be a plain object" }, 400);
     }
-    const metadata = body.metadata;
+    const metadata = body.metadata
+      ? stripInjectionsFromMetadata(body.metadata)
+      : undefined;
 
     const memCount = (body.resources ?? []).filter((r) => r.type === "memory_store").length;
     if (memCount > 8) {
@@ -863,6 +1014,97 @@ export function buildSessionRoutes(deps: SessionRoutesDeps) {
     });
   });
 
+  app.get("/:id/injections", async (c) => {
+    const services = resolveServices(deps.services, c);
+    const sessionId = c.req.param("id");
+    const sess = await services.sessions.get({
+      tenantId: c.var.tenant_id,
+      sessionId,
+    });
+    if (!sess) return c.json({ error: "Session not found" }, 404);
+    const overlay = overlayFromMetadata(
+      (sess as { metadata?: Record<string, unknown> | null }).metadata,
+    );
+    return c.json(overlay);
+  });
+
+  app.post("/:id/injections", async (c) => {
+    const services = resolveServices(deps.services, c);
+    const router = resolveRouter(deps.router, c);
+    const sessionId = c.req.param("id");
+
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json(
+        { type: "error", error: { type: "invalid_request_error", message: "Invalid JSON body" } },
+        400,
+      );
+    }
+    const parsed = injectionCommandSchema.safeParse(body);
+    if (!parsed.success) {
+      const first = parsed.error.issues[0];
+      return c.json(
+        {
+          type: "error",
+          error: {
+            type: "invalid_request_error",
+            message: first?.message ?? "Invalid injection command",
+          },
+        },
+        422,
+      );
+    }
+
+    const result = await applySessionInjection({
+      services,
+      router,
+      tenantId: c.var.tenant_id,
+      sessionId,
+      command: parsed.data,
+    });
+    return c.json(result.body, result.status);
+  });
+
+  // Thin alias for the issue #346 tool-toggle contract. Same overlay write as
+  // POST /injections { type: "tools_update" }; accepts either `enabled`/`disabled`
+  // or `enabled_tools`/`disabled_tools`.
+  app.patch("/:id/tools", async (c) => {
+    const services = resolveServices(deps.services, c);
+    const router = resolveRouter(deps.router, c);
+    const sessionId = c.req.param("id");
+
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json(
+        { type: "error", error: { type: "invalid_request_error", message: "Invalid JSON body" } },
+        400,
+      );
+    }
+    const command = toolsPatchToCommand(body);
+    if ("error" in command) {
+      return c.json(
+        {
+          type: "error",
+          error: { type: "invalid_request_error", message: command.error },
+        },
+        422,
+      );
+    }
+
+    const result = await applySessionInjection({
+      services,
+      router,
+      tenantId: c.var.tenant_id,
+      sessionId,
+      command,
+    });
+    return c.json(result.body, result.status);
+  });
+
   app.post("/:id/archive", async (c) => {
     const services = resolveServices(deps.services, c);
     try {
@@ -887,7 +1129,9 @@ export function buildSessionRoutes(deps: SessionRoutesDeps) {
         tenantId: c.var.tenant_id,
         sessionId: c.req.param("id"),
         title: body.title,
-        metadata: body.metadata,
+        metadata: body.metadata
+          ? stripInjectionsFromMetadata(body.metadata)
+          : body.metadata,
       });
       return c.json(toApiSession(updated as never));
     } catch (err) {

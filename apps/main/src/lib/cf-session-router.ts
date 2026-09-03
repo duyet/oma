@@ -131,6 +131,25 @@ export class CfSessionRouter implements SessionRouter {
     return { status: res.status, body: await res.text() };
   }
 
+  async recordConfigUpdated(
+    sessionId: string,
+    event: Parameters<NonNullable<SessionRouter["recordConfigUpdated"]>>[1],
+  ): Promise<{ status: number; body: string }> {
+    const binding = await this.bindingForSession(sessionId);
+    if (!binding) {
+      return { status: 503, body: JSON.stringify({ error: "sandbox binding unavailable" }) };
+    }
+    const res = await binding.fetch(
+      `https://sandbox/sessions/${sessionId}/config-updated`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(event),
+      },
+    );
+    return { status: res.status, body: await res.text() };
+  }
+
   async appendEvent(
     sessionId: string,
     event: SessionEvent,

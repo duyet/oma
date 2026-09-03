@@ -33,5 +33,12 @@ optionally pinning a vault `credential_id`) and reference it from any agent by
 wins; `GET /v1/mcp-proxy/_health/:sid` reports per-server credential
 resolution for the sandbox status page.
 
+**Session injection.** An operator can mount an extra MCP server (or bind a
+vault credential to a host) on a *running* session via
+`POST /v1/sessions/:id/injections` without changing the agent config. The
+MCP proxy and outbound resolver re-read the session overlay on every call,
+so the mount takes effect immediately. Overlay, events, and Console UI carry
+`credential_id` + host only — tokens never enter the sandbox.
+
 See also: [MCP & Vault Credential Architecture](mcp-credential-architecture.md)
 for how credential resolution and the outbound proxy work under the hood.

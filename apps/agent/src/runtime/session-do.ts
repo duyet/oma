@@ -47,7 +47,13 @@ import {
 } from "@duyet/oma-session-runtime";
 import { CfD1SqlClient } from "@duyet/oma-sql-client/adapters/cf-d1";
 import { cfWorkersAiToMarkdown } from "@duyet/oma-markdown";
-import { isSpecEvent } from "@duyet/oma-api-types";
+import {
+  isSpecEvent,
+  applyOverlayToAgent,
+  emptyInjectionOverlay,
+  injectionReminders,
+  overlayFromMetadata,
+} from "@duyet/oma-api-types";
 import { ANYROUTER_API_COMPAT, toAnyRouterCallableModelId } from "@duyet/oma-anyrouter";
 import type {
   AgentConfig,
@@ -1878,6 +1884,33 @@ export class SessionDO extends DurableObject<Env> {
         model: next.model_override ?? null,
         reasoning_effort: next.reasoning_effort_override ?? null,
       });
+    }
+
+    // POST /config-updated — persist + broadcast a session.config_updated
+    // audit event after an operator injection. Overlay state lives on the
+    // session row (not DO state); this is observational. Next-turn for
+    // prompt/tools, so no 409 while a turn is in flight.
+    if (request.method === "POST" && url.pathname === "/config-updated") {
+      if (!this.state.session_id) {
+        return new Response(JSON.stringify({ error: "session not initialized" }), {
+          status: 404,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      let body: SessionEvent;
+      try {
+        body = (await request.json()) as SessionEvent;
+      } catch {
+        return new Response(
+          JSON.stringify({
+            type: "error",
+            error: { type: "invalid_request_error", message: "Invalid JSON body" },
+          }),
+          { status: 400, headers: { "content-type": "application/json" } },
+        );
+      }
+      this.persistAndBroadcastEvent(body);
+      return Response.json({ ok: true });
     }
 
     // POST /pause — snapshot + destroy the sandbox container to save cost
@@ -5476,11 +5509,16 @@ export class SessionDO extends DurableObject<Env> {
       access: "read_write" | "read_only";
       instructions?: string;
     }> = [];
+    let overlay = emptyInjectionOverlay();
     if (sessionId) {
       // listResourcesBySession queries the session_id column directly — no
       // tenant-prefix mismatch, no JSON.parse loop. Replaces the prior
       // CONFIG_KV.list scan that tripped over staging KV namespaces.
       const services = await getCfServicesForTenant(this.env, this.state.tenant_id);
+      const sessionRow = await services.sessions
+        .get({ tenantId: this.state.tenant_id, sessionId })
+        .catch(() => null);
+      overlay = overlayFromMetadata(sessionRow?.metadata);
       const rows = await services.sessions.listResourcesBySession({ sessionId });
       for (const row of rows) {
         if (row.type === "memory_store" && row.resource.type === "memory_store" && row.resource.memory_store_id) {
@@ -5497,6 +5535,7 @@ export class SessionDO extends DurableObject<Env> {
       }
     }
     const memoryStoreIds = memoryAttachments.map((a) => a.store_id);
+    const injectedAgent = applyOverlayToAgent(agent, overlay);
 
     // Resolve harness via registry — SessionDO never imports a concrete harness.
     // Harness-to-environment migration: harness is now selected from the
@@ -5533,7 +5572,7 @@ export class SessionDO extends DurableObject<Env> {
       });
     }
 
-    const allTools = await buildTools(this.applyMcpUrlFixups(agent), sandbox, {
+    const allTools = await buildTools(this.applyMcpUrlFixups(injectedAgent), sandbox, {
       ANTHROPIC_API_KEY: this.env.ANTHROPIC_API_KEY,
       ANTHROPIC_BASE_URL: this.env.ANTHROPIC_BASE_URL,
       TAVILY_API_KEY: this.env.TAVILY_API_KEY,
@@ -5770,6 +5809,7 @@ export class SessionDO extends DurableObject<Env> {
         text: memoryPrompts[i],
       });
     }
+    platformReminders.push(...injectionReminders(overlay));
 
     // Create an abort controller for this execution. Stall detection now
     // lives inside default-loop.ts (in-closure setTimeout next to the
@@ -5815,7 +5855,7 @@ export class SessionDO extends DurableObject<Env> {
 
     // --- Harness receives a fully-prepared context ---
     const ctx: HarnessContext = {
-      agent,
+      agent: injectedAgent,
       userMessage,
       session_id: this.state.session_id,
       tenant_id: this.state.tenant_id,

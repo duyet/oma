@@ -24,6 +24,7 @@ const VAULT = "vlt_test";
 function makeServices(opts: {
   vaultIds: string[];
   archived?: boolean;
+  metadata?: Record<string, unknown>;
 }): { services: Services; credService: ReturnType<typeof createInMemoryCredentialService>["service"] } {
   const { service: credService } = createInMemoryCredentialService();
   // Minimal sessions service stub; only `get` is used by the resolver.
@@ -35,6 +36,7 @@ function makeServices(opts: {
         tenant_id: TENANT,
         vault_ids: opts.vaultIds,
         archived_at: opts.archived ? new Date().toISOString() : null,
+        metadata: opts.metadata,
       };
     },
   };
@@ -220,5 +222,57 @@ describe("resolveOutboundCredentialByHost — cap_cli", () => {
     expect(target!.upstreamToken).toBe("linear_at");
     // Legacy mcp_oauth path also surfaces refresh metadata.
     expect(target!.refresh).toBeDefined();
+  });
+});
+
+describe("resolveOutboundCredentialByHost — session injection overlay", () => {
+  it("overlay host map wins over cap_cli hostname match", async () => {
+    const { service: credService } = createInMemoryCredentialService();
+    const overlayCred = await credService.create({
+      tenantId: TENANT,
+      vaultId: VAULT,
+      displayName: "Pinned",
+      auth: {
+        type: "static_bearer",
+        token: "pinned_overlay_token",
+        mcp_server_url: "https://api.github.com",
+      } as never,
+    });
+    await credService.create({
+      tenantId: TENANT,
+      vaultId: VAULT,
+      displayName: "GH",
+      auth: { type: "cap_cli", cli_id: "gh", token: "ghp_real_xyz" } as never,
+    });
+    const sessions = {
+      get: async (q: { tenantId: string; sessionId: string }) => {
+        if (q.tenantId !== TENANT || q.sessionId !== SESSION) return null;
+        return {
+          id: SESSION,
+          tenant_id: TENANT,
+          vault_ids: [VAULT],
+          archived_at: null,
+          metadata: {
+            _oma_injections: {
+              prompt_appends: [],
+              mcp_servers: [],
+              tool_overrides: {},
+              credentials: [{ host: "api.github.com", credential_id: overlayCred.id }],
+            },
+          },
+        };
+      },
+    };
+    const services = { credentials: credService, sessions } as unknown as Services;
+
+    const target = await resolveOutboundCredentialByHost(
+      {} as never,
+      services,
+      TENANT,
+      SESSION,
+      "api.github.com",
+    );
+    expect(target).not.toBeNull();
+    expect(target!.upstreamToken).toBe("pinned_overlay_token");
   });
 });

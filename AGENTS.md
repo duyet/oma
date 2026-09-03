@@ -320,6 +320,56 @@ sandbox warms lazily on first use, same as a fresh session) — an explicit
 `/resume` call is only needed to pay the cold-start cost up front instead
 of on the next message.
 
+### Runtime injection
+
+Operators can intervene in a live session without mutating the agent record
+or restarting: append a system-prompt correction, mount an extra MCP server,
+toggle tools, or bind a vault credential to a newly discovered host. The
+overlay lives on the session row (`metadata._oma_injections`, stripped from
+`GET /v1/sessions` so caller metadata stays caller-owned) and is
+**session-scoped**.
+
+```bash
+# Read the current overlay (never includes tokens)
+curl -s $BASE/v1/sessions/$ID/injections -H "x-api-key: $KEY"
+
+# Append a system-prompt correction (applies on the next turn)
+curl -s -X POST $BASE/v1/sessions/$ID/injections \
+  -H "x-api-key: $KEY" -H "content-type: application/json" \
+  -d '{"type":"system_prompt_append","text":"Prefer the test suite under /workspace/tests."}'
+
+# Mount an MCP server (applies immediately — the proxy reads the session row live)
+curl -s -X POST $BASE/v1/sessions/$ID/injections \
+  -H "x-api-key: $KEY" -H "content-type: application/json" \
+  -d '{"type":"mcp_server_add","name":"linear","url":"https://mcp.linear.app/mcp"}'
+
+# Toggle tools (applies on the next turn). `PATCH /v1/sessions/:id/tools` is
+# a thin alias for the same overlay write.
+curl -s -X POST $BASE/v1/sessions/$ID/injections \
+  -H "x-api-key: $KEY" -H "content-type: application/json" \
+  -d '{"type":"tools_update","enabled":["browser"],"disabled":["web_search"]}'
+# equivalent:
+# curl -s -X PATCH $BASE/v1/sessions/$ID/tools \
+#   -H "x-api-key: $KEY" -H "content-type: application/json" \
+#   -d '{"enabled":["browser"],"disabled":["web_search"]}'
+
+# Bind a vault credential to a host (applies immediately; token never enters the sandbox)
+curl -s -X POST $BASE/v1/sessions/$ID/injections \
+  -H "x-api-key: $KEY" -H "content-type: application/json" \
+  -d '{"type":"credential_inject","host":"api.example.com","credential_id":"cred_xxx"}'
+```
+
+Prompt appends and tool overrides take effect on the **next turn**. MCP
+server mounts and host→credential bindings take effect **immediately**
+because the MCP proxy and outbound resolver re-read the session row on
+every call. Credentials are referenced by id only — overlay, events,
+`GET` bodies, and the Console Inject tab never carry tokens. The Console
+Inspector **Inject** tab POSTs one command per action.
+
+Each successful POST also appends a `session.config_updated` audit event
+(observational; crash recovery does not replay it — the overlay on the
+row is the source of truth).
+
 ### Event Types
 
 Sessions communicate through a typed event log. Events fall into four categories:
@@ -358,6 +408,7 @@ Sessions communicate through a typed event log. Events fall into four categories
 | `session.status_terminated` | Session ended |
 | `session.sandbox_paused` | Sandbox snapshotted + destroyed via `POST /pause`. OMA extension. |
 | `session.sandbox_resumed` | Sandbox reprovisioned via `POST /resume`. OMA extension. |
+| `session.config_updated` | Operator injection overlay changed (`POST /injections`). OMA extension — audit only; overlay on the session row is the source of truth. |
 | `session.error` | Error occurred (may be retryable) |
 
 **Observability events** (spans):

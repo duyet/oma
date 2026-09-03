@@ -48,6 +48,11 @@
 import { Hono } from "hono";
 import type { Env, AgentConfig, CredentialConfig } from "@duyet/oma-shared";
 import { log, logWarn } from "@duyet/oma-shared";
+import {
+  credentialIdForHost,
+  overlayFromMetadata,
+  pickMcpServer,
+} from "@duyet/oma-api-types";
 import type { Services } from "@duyet/oma-services";
 import type { KvStore } from "@duyet/oma-kv-store";
 import { builtinSpecs, createSpecRegistry } from "@duyet/oma-cap";
@@ -127,13 +132,17 @@ export async function resolveProxyTargetByTenant(
     archived_at?: string | null;
     vault_ids?: string[] | null;
     agent_snapshot?: AgentConfig;
+    metadata?: Record<string, unknown> | null;
   };
   if (sessionAny.archived_at) return null;
 
-  // 2. agent_snapshot must declare the requested mcp server.
+  // 2. agent_snapshot must declare the requested mcp server, OR the
+  //    session overlay must have mounted it (issue #346). Overlay wins
+  //    on name clash. Overlay credential_id is a pin, like a registry pin.
   const agent = sessionAny.agent_snapshot;
   if (!agent) return null;
-  const server = (agent.mcp_servers ?? []).find((s) => s.name === serverName);
+  const overlay = overlayFromMetadata(sessionAny.metadata);
+  const server = pickMcpServer(agent.mcp_servers, overlay, serverName);
   if (!server) return null;
 
   // Resolve the upstream URL. An entry may either carry an inline `url` or
@@ -141,13 +150,13 @@ export async function resolveProxyTargetByTenant(
   // Phase 3). When both are present, inline `url` wins. A registry entry
   // may also pin a specific vault credential id to inject.
   let upstreamUrl = server.url;
-  let pinnedCredentialId: string | undefined;
-  const registryId = (server as { registry_id?: string }).registry_id;
+  let pinnedCredentialId: string | undefined = server.credential_id;
+  const registryId = server.registry_id;
   if (!upstreamUrl && registryId) {
     const registered = await resolveRegisteredMcpServer(services.kv, tenantId, registryId);
     if (registered) {
       upstreamUrl = registered.url;
-      pinnedCredentialId = registered.credential_id;
+      if (!pinnedCredentialId) pinnedCredentialId = registered.credential_id;
     }
   }
   if (!upstreamUrl) return null;
@@ -238,6 +247,7 @@ export async function resolveOutboundCredentialByHost(
   const sessionAny = session as {
     archived_at?: string | null;
     vault_ids?: string[] | null;
+    metadata?: Record<string, unknown> | null;
   };
   if (sessionAny.archived_at) return null;
 
@@ -246,6 +256,26 @@ export async function resolveOutboundCredentialByHost(
   const grouped = await services.credentials
     .listByVaults({ tenantId, vaultIds })
     .catch(() => []);
+
+  const overlay = overlayFromMetadata(sessionAny.metadata);
+  const overlayCredId = credentialIdForHost(overlay, hostname);
+  if (overlayCredId) {
+    for (const g of grouped) {
+      for (const c of g.credentials) {
+        if ((c as { archived_at?: string | null }).archived_at) continue;
+        if ((c as { id: string }).id !== overlayCredId) continue;
+        const auth = (c as unknown as CredentialConfig).auth as
+          | { bearer_token?: string; token?: string; access_token?: string }
+          | undefined;
+        const token = auth?.bearer_token ?? auth?.token ?? auth?.access_token;
+        if (!token) continue;
+        return {
+          upstreamUrl: `https://${hostname}/`,
+          upstreamToken: token,
+        };
+      }
+    }
+  }
 
   // First pass: cap_cli credentials matched via cap's spec registry.
   // Cap owns the per-CLI knowledge — endpoints (`api.github.com`,

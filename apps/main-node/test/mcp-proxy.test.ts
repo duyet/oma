@@ -242,6 +242,96 @@ describe("buildNodeMcpBinding", () => {
     expect(res.status).toBe(403);
   });
 
+  it("overlay MCP server wins over the agent snapshot", async () => {
+    upstream = await startUpstream();
+    const { sessions, credentials, kv } = makeServices();
+
+    await credentials.create({
+      tenantId: TENANT,
+      vaultId: "vault_1",
+      displayName: "overlay",
+      auth: { type: "static_bearer", mcp_server_url: upstream.url, token: "overlay-token" },
+    });
+
+    const { session } = await sessions.create({
+      tenantId: TENANT,
+      agentId: "agent_1",
+      environmentId: "env_1",
+      vaultIds: ["vault_1"],
+      agentSnapshot: baseAgent([
+        { name: "linear", type: "http", url: "http://should-not-be-used.invalid/mcp" },
+      ]),
+    });
+    await sessions.update({
+      tenantId: TENANT,
+      sessionId: session.id,
+      metadata: {
+        _oma_injections: {
+          prompt_appends: [],
+          mcp_servers: [{ name: "linear", url: upstream.url }],
+          tool_overrides: {},
+          credentials: [],
+        },
+      },
+    });
+
+    const binding = buildNodeMcpBinding({ sessions, credentials, kv });
+    const req = new Request("http://ignored/", {
+      headers: {
+        "x-oma-tenant": TENANT,
+        "x-oma-session": session.id,
+        "x-oma-mcp-server": "linear",
+      },
+    });
+    const res = await binding.fetch(req);
+    expect(res.status).toBe(200);
+    expect(upstream.lastAuth()).toBe("Bearer overlay-token");
+  });
+
+  it("overlay can mount an MCP server the agent did not declare", async () => {
+    upstream = await startUpstream();
+    const { sessions, credentials, kv } = makeServices();
+
+    await credentials.create({
+      tenantId: TENANT,
+      vaultId: "vault_1",
+      displayName: "overlay",
+      auth: { type: "static_bearer", mcp_server_url: upstream.url, token: "mounted-token" },
+    });
+
+    const { session } = await sessions.create({
+      tenantId: TENANT,
+      agentId: "agent_1",
+      environmentId: "env_1",
+      vaultIds: ["vault_1"],
+      agentSnapshot: baseAgent([]),
+    });
+    await sessions.update({
+      tenantId: TENANT,
+      sessionId: session.id,
+      metadata: {
+        _oma_injections: {
+          prompt_appends: [],
+          mcp_servers: [{ name: "linear", url: upstream.url }],
+          tool_overrides: {},
+          credentials: [],
+        },
+      },
+    });
+
+    const binding = buildNodeMcpBinding({ sessions, credentials, kv });
+    const req = new Request("http://ignored/", {
+      headers: {
+        "x-oma-tenant": TENANT,
+        "x-oma-session": session.id,
+        "x-oma-mcp-server": "linear",
+      },
+    });
+    const res = await binding.fetch(req);
+    expect(res.status).toBe(200);
+    expect(upstream.lastAuth()).toBe("Bearer mounted-token");
+  });
+
   it("returns 400 when routing headers are missing", async () => {
     const { sessions, credentials, kv } = makeServices();
     const binding = buildNodeMcpBinding({ sessions, credentials, kv });

@@ -11,3 +11,4 @@ export * from "./declared-outputs";
 export * from "./notify-schema";
 export * from "./mcp-servers-schema";
 export * from "./hooks-schema";
+export * from "./session-injections";

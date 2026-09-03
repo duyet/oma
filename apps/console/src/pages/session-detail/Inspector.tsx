@@ -19,6 +19,7 @@ import {
   useSessionAnalytics,
   type SessionAnalytics,
 } from "./analytics";
+import { InjectPanel } from "./InjectPanel";
 
 /**
  * Right-rail session Inspector.
@@ -38,18 +39,26 @@ import {
  *      sandbox provider, packages, networking).
  */
 
-export type InspectorTab = "overview" | "usage" | "tools" | "sandbox" | "files" | "artifacts";
+export type InspectorTab =
+  | "overview"
+  | "usage"
+  | "tools"
+  | "sandbox"
+  | "inject"
+  | "artifacts"
+  | "files";
 
 const TABS: Array<{ id: InspectorTab; label: string }> = [
   { id: "overview", label: "Overview" },
   { id: "usage", label: "Usage" },
   { id: "tools", label: "Tools" },
   { id: "sandbox", label: "Sandbox" },
+  { id: "inject", label: "Inject" },
   { id: "artifacts", label: "Artifacts" },
   { id: "files", label: "Files" },
 ];
 
-interface AgentRecord {
+export interface AgentRecord {
   id?: string;
   name?: string;
   description?: string;
@@ -923,7 +932,7 @@ export function SessionInspector({
         </button>
       </div>
 
-      <div role="tablist" aria-label="Inspector section" className="px-2 flex gap-0.5 shrink-0">
+      <div role="tablist" aria-label="Inspector section" className="px-2 flex flex-wrap gap-0.5 shrink-0">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -957,6 +966,9 @@ export function SessionInspector({
         {tab === "tools" && <ToolsTab analytics={analytics} />}
         {tab === "sandbox" && (
           <SandboxTab meta={meta} environment={environment} sandboxStatus={sandboxStatus} />
+        )}
+        {tab === "inject" && (
+          <InjectPanel sessionId={sessionId} agent={agent} vaultIds={meta.vaultIds} />
         )}
         {tab === "artifacts" && <DeclaredOutputsList events={events} />}
         {tab === "files" && <FilesTab sessionId={sessionId} />}
