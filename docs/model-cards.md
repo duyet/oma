@@ -8,8 +8,11 @@ read-only `source: "platform"` row for the inherited deployment fallback
 `oma models list` therefore always has a model id to pass. Mutating that
 row returns 403; it is never written to storage. With no card match, the
 agent worker uses `ANTHROPIC_API_KEY`, or `ANYROUTER_API_KEY` when Anthropic
-is unset — bare `claude-*` handles are rewritten to `anthropic/claude-*` on
-the AnyRouter OpenAI-compat path.
+is unset. Bare `claude-*` handles are rewritten to `anthropic/claude-*` on
+the AnyRouter OpenAI-compat path. AnyRouter aliases hyphenated
+`anthropic/claude-sonnet-4-6` to dotted BYOK-only
+`anthropic/claude-sonnet-4.6`, so the env-fallback sends `anyrouter/free`
+instead. Never send the dotted 4.6 slug.
 
 Providers (wire tag → request shape):
 

@@ -16,6 +16,8 @@ import {
   parsePresetsResponse,
   parseRegisterResponse,
   parseTokenResponse,
+  ANYROUTER_FREE_MODEL_ID,
+  toAnyRouterCallableModelId,
   toGatewayModelId,
 } from "../src/index";
 
@@ -251,5 +253,28 @@ describe("@duyet/oma-anyrouter — toGatewayModelId", () => {
   it("leaves provider/model ids and non-Claude handles unchanged", () => {
     expect(toGatewayModelId("google/gemini-2.5-flash")).toBe("google/gemini-2.5-flash");
     expect(toGatewayModelId("gpt-4o")).toBe("gpt-4o");
+  });
+});
+
+describe("@duyet/oma-anyrouter — toAnyRouterCallableModelId", () => {
+  it("rewrites BYOK-only sonnet handles to anyrouter/free", () => {
+    expect(toAnyRouterCallableModelId("claude-sonnet-4-6")).toBe(ANYROUTER_FREE_MODEL_ID);
+    expect(toAnyRouterCallableModelId("anthropic/claude-sonnet-4-6")).toBe(ANYROUTER_FREE_MODEL_ID);
+  });
+
+  it("never emits the dotted BYOK catalog slug", () => {
+    expect(toAnyRouterCallableModelId("claude-sonnet-4-6")).not.toContain("claude-sonnet-4.6");
+    expect(toAnyRouterCallableModelId("anthropic/claude-sonnet-4-6")).not.toContain("claude-sonnet-4.6");
+    expect(toAnyRouterCallableModelId("anthropic/claude-sonnet-4.6")).toBe(ANYROUTER_FREE_MODEL_ID);
+    expect(toAnyRouterCallableModelId("claude-sonnet-4.6")).toBe(ANYROUTER_FREE_MODEL_ID);
+  });
+
+  it("still prefixes other bare claude-* handles", () => {
+    expect(toAnyRouterCallableModelId("claude-haiku-4-5")).toBe("anthropic/claude-haiku-4-5");
+  });
+
+  it("leaves already-callable catalog ids unchanged", () => {
+    expect(toAnyRouterCallableModelId(ANYROUTER_FREE_MODEL_ID)).toBe(ANYROUTER_FREE_MODEL_ID);
+    expect(toAnyRouterCallableModelId("google/gemini-2.5-flash")).toBe("google/gemini-2.5-flash");
   });
 });

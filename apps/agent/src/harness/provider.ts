@@ -35,7 +35,10 @@ export interface DefaultProviderCreds {
  *      OAuth-connected AnyRouter provider uses — see
  *      apps/main-node/src/lib/anyrouter-provider.ts). Bare `claude-*`
  *      handles are rewritten to `anthropic/claude-*` on this path
- *      (`toGatewayModelId`); do not convert hyphens to dots.
+ *      (`toGatewayModelId`). The SessionDO env-fallback then maps
+ *      BYOK-only sonnet handles to `anyrouter/free` because AnyRouter
+ *      aliases hyphenated `anthropic/claude-sonnet-4-6` to dotted
+ *      `anthropic/claude-sonnet-4.6`.
  *
  * Returns null when neither is configured — callers fall through to their
  * existing "no credentials" behavior unchanged.

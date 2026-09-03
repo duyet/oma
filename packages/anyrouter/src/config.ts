@@ -3,7 +3,7 @@
 //
 // AnyRouter is an OpenAI-compatible LLM gateway: `POST /chat/completions`
 // (OpenAI wire format) and `POST /messages` (Anthropic wire format), model
-// ids shaped "provider/model" (e.g. "anthropic/claude-sonnet-4-6"), and
+// ids shaped "provider/model" (e.g. "anthropic/claude-haiku-4.5"), and
 // inference API keys prefixed "sk-ar-".
 
 export const ANYROUTER_ORIGIN = "https://anyrouter.dev";
@@ -41,12 +41,54 @@ export const ANYROUTER_API_COMPAT = "oai" as const;
  * unchanged. Hyphens are kept — rewriting them to dots produces
  * `anthropic/claude-sonnet-4.6`, which those catalogs treat as BYOK-only
  * and 404 with `model_unavailable`.
+ *
+ * This is the OpenRouter / generic-gateway mapper. AnyRouter itself
+ * canonicalizes hyphenated Anthropic ids onto dotted catalog slugs
+ * (`GET /api/v1/models/anthropic/claude-sonnet-4-6` returns
+ * `id: anthropic/claude-sonnet-4.6`). Use `toAnyRouterCallableModelId`
+ * on the AnyRouter env-fallback path so that alias never leaves OMA.
  */
 export function toGatewayModelId(handle: string): string {
   const trimmed = handle.trim();
   if (trimmed.includes("/")) return trimmed;
   if (trimmed.startsWith("claude-")) return `anthropic/${trimmed}`;
   return trimmed;
+}
+
+/**
+ * Platform-routed AnyRouter catalog id. Present on anonymous
+ * `GET /api/v1/models` (not BYOK). Used when the requested Claude handle
+ * would alias to a BYOK-only dotted slug.
+ */
+export const ANYROUTER_FREE_MODEL_ID = "anyrouter/free";
+
+function anyRouterModelSlug(id: string): string {
+  const slash = id.indexOf("/");
+  return slash === -1 ? id : id.slice(slash + 1);
+}
+
+function isAnyRouterByokSonnet(id: string): boolean {
+  const slug = anyRouterModelSlug(id);
+  return slug === "claude-sonnet-4-6" || slug === "claude-sonnet-4.6";
+}
+
+/**
+ * Wire id to send to AnyRouter on the env-fallback path.
+ *
+ * AnyRouter aliases `anthropic/claude-sonnet-4-6` (and the bare
+ * `claude-sonnet-4-6` handle) to canonical `anthropic/claude-sonnet-4.6`,
+ * whose providers are all `*-byok`. The platform `ANYROUTER_API_KEY` has
+ * no Anthropic BYOK, so that alias 404s `model_unavailable` (#452 leftover
+ * of #439). `anyrouter/free` is the live non-BYOK catalog id.
+ *
+ * Tenant Model Cards keep `toGatewayModelId` / `card.model`: a card whose
+ * AnyRouter key has Anthropic BYOK still needs the hyphenated id so the
+ * gateway can alias it onto BYOK sonnet. Never emit the dotted 4.6 slug.
+ */
+export function toAnyRouterCallableModelId(handle: string): string {
+  const trimmed = handle.trim();
+  if (isAnyRouterByokSonnet(trimmed)) return ANYROUTER_FREE_MODEL_ID;
+  return toGatewayModelId(trimmed);
 }
 
 /** OAuth scope bundle to request. AnyRouter's consent screen lets the user

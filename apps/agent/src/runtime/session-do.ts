@@ -48,6 +48,7 @@ import {
 import { CfD1SqlClient } from "@duyet/oma-sql-client/adapters/cf-d1";
 import { cfWorkersAiToMarkdown } from "@duyet/oma-markdown";
 import { isSpecEvent } from "@duyet/oma-api-types";
+import { ANYROUTER_API_COMPAT, toAnyRouterCallableModelId } from "@duyet/oma-anyrouter";
 import type {
   AgentConfig,
   EnvironmentConfig,
@@ -4423,6 +4424,11 @@ export class SessionDO extends DurableObject<Env> {
         apiKey = fallback.apiKey;
         baseURL = fallback.baseURL;
         provider = fallback.apiCompat;
+        // AnyRouter aliases hyphenated claude-sonnet-4-6 to dotted BYOK-only
+        // anthropic/claude-sonnet-4.6 (#452). Tenant cards keep card.model.
+        if (fallback.apiCompat === ANYROUTER_API_COMPAT) {
+          wireModel = toAnyRouterCallableModelId(handle);
+        }
       }
     }
 
