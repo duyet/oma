@@ -6,8 +6,8 @@
  * obviously-fake token; never put a real credential in this file.
  */
 
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import type { AddressInfo } from "node:net";
+import { createServer, request as httpRequest, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { createConnection, type AddressInfo } from "node:net";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -131,6 +131,32 @@ describe("URL → credential matching", () => {
     await fetch(`${proxy.baseUrl}/__oma_outbound/http/${upstream.host}/b`);
     expect(calls).toBe(1);
   });
+
+  it("injects via the forward-proxy absolute-form HTTP_PROXY clients emit", async () => {
+    const upstream = await startUpstream();
+    cleanups.push(upstream.close);
+    const proxy = await startProxy(async (host) => (host === "127.0.0.1" ? FAKE_TOKEN : null));
+    const proxyUrl = new URL(proxy.baseUrl);
+
+    const status = await new Promise<number>((resolve, reject) => {
+      const req = httpRequest(
+        {
+          hostname: proxyUrl.hostname,
+          port: proxyUrl.port,
+          method: "GET",
+          path: `${upstream.url}/thing`,
+        },
+        (res) => {
+          resolve(res.statusCode ?? 0);
+          res.resume();
+        },
+      );
+      req.on("error", reject);
+      req.end();
+    });
+    expect(status).toBe(200);
+    expect(upstream.seen.at(-1)?.headers.authorization).toBe(`Bearer ${FAKE_TOKEN}`);
+  });
 });
 
 describe("unresolvable credential (documented fail-open policy)", () => {
@@ -203,5 +229,61 @@ describe("git config generation", () => {
     const contents = buildGitConfig(proxy, ["github.com"])!;
     expect(contents).toContain("[include]");
     expect(contents).toContain(".gitconfig");
+  });
+});
+
+describe("gh cap_cli host aliases (github.com git vs api.github.com)", () => {
+  it("uses an api.github.com token for github.com when github.com itself has none", async () => {
+    const seen: string[] = [];
+    const proxy = await startProxy(async (host) => {
+      seen.push(host);
+      return host === "api.github.com" ? FAKE_TOKEN : null;
+    });
+    expect(await proxy.credentialFor("github.com")).toBe(FAKE_TOKEN);
+    expect(seen).toEqual(["github.com", "api.github.com"]);
+  });
+
+  it("prefers an exact-host token over the API alias", async () => {
+    const seen: string[] = [];
+    const proxy = await startProxy(async (host) => {
+      seen.push(host);
+      if (host === "github.com") return "git-spec-token";
+      if (host === "api.github.com") return FAKE_TOKEN;
+      return null;
+    });
+    expect(await proxy.credentialFor("github.com")).toBe("git-spec-token");
+    expect(seen).toEqual(["github.com"]);
+  });
+
+  it("writes the git insteadOf rewrite when only the gh API host matches", async () => {
+    const proxy = await startProxy(async (host) => (host === "api.github.com" ? FAKE_TOKEN : null));
+    const dir = mkdtempSync(join(tmpdir(), "oma-credproxy-"));
+    const env = await prepareGitConfig(proxy, dir, ["github.com"]);
+    expect(env.GIT_CONFIG_GLOBAL).toBe(join(dir, ".oma-gitconfig"));
+    const contents = readFileSync(env.GIT_CONFIG_GLOBAL!, "utf8");
+    expect(contents).toContain("insteadOf = https://github.com/");
+    expect(contents).not.toContain(FAKE_TOKEN);
+  });
+});
+
+describe("CONNECT (HTTPS_PROXY / own-TLS clients)", () => {
+  it("answers 405 so a CONNECT client cannot pretend the proxy MITMs TLS", async () => {
+    const proxy = await startProxy(async () => FAKE_TOKEN);
+    const { port } = new URL(proxy.baseUrl);
+    const statusLine = await new Promise<string>((resolve, reject) => {
+      const socket = createConnection({ host: "127.0.0.1", port: Number(port) });
+      let buf = "";
+      socket.on("data", (c) => {
+        buf += c.toString("utf8");
+        const end = buf.indexOf("\r\n");
+        if (end !== -1) {
+          socket.destroy();
+          resolve(buf.slice(0, end));
+        }
+      });
+      socket.on("error", reject);
+      socket.write("CONNECT github.com:443 HTTP/1.1\r\nHost: github.com:443\r\n\r\n");
+    });
+    expect(statusLine).toBe("HTTP/1.1 405 Method Not Allowed");
   });
 });
