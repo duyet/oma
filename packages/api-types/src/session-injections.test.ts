@@ -236,6 +236,8 @@ describe("applyOverlayToAgent", () => {
     system: "s",
     tools: [{ type: "agent_toolset_20260401" }],
     mcp_servers: [{ name: "existing", type: "url", url: "https://old.example/mcp" }],
+    version: 1,
+    created_at: now,
   });
 
   it("adds mcp_servers without mutating the input", () => {

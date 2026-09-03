@@ -47,12 +47,13 @@
 
 import { Hono } from "hono";
 import type { Env, AgentConfig, CredentialConfig } from "@duyet/oma-shared";
-import { log, logWarn } from "@duyet/oma-shared";
 import {
+  log,
+  logWarn,
   credentialIdForHost,
   overlayFromMetadata,
   pickMcpServer,
-} from "@duyet/oma-api-types";
+} from "@duyet/oma-shared";
 import type { Services } from "@duyet/oma-services";
 import type { KvStore } from "@duyet/oma-kv-store";
 import { builtinSpecs, createSpecRegistry } from "@duyet/oma-cap";

@@ -276,7 +276,7 @@ export function mergeMcpServers<T extends { name: string }>(
       ...(s.url !== undefined ? { url: s.url } : {}),
       ...(s.registry_id !== undefined ? { registry_id: s.registry_id } : {}),
       ...(s.credential_id !== undefined ? { credential_id: s.credential_id } : {}),
-    } as T);
+    } as unknown as T);
   }
   return [...byName.values()];
 }
