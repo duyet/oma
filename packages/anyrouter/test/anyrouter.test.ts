@@ -16,6 +16,7 @@ import {
   parsePresetsResponse,
   parseRegisterResponse,
   parseTokenResponse,
+  toGatewayModelId,
 } from "../src/index";
 
 describe("@duyet/oma-anyrouter — pkce", () => {
@@ -234,5 +235,21 @@ describe("@duyet/oma-anyrouter — model catalog", () => {
   it("parsePresetsResponse tolerates a response with no presets field", () => {
     const presets = parsePresetsResponse(JSON.stringify({ data: [{ id: "openai/gpt-5" }] }));
     expect(presets).toEqual([]);
+  });
+});
+
+describe("@duyet/oma-anyrouter — toGatewayModelId", () => {
+  it("prefixes a bare claude-* handle with anthropic/", () => {
+    expect(toGatewayModelId("claude-sonnet-4-6")).toBe("anthropic/claude-sonnet-4-6");
+  });
+
+  it("does not convert hyphens to dots", () => {
+    expect(toGatewayModelId("claude-sonnet-4-6")).not.toContain("claude-sonnet-4.6");
+    expect(toGatewayModelId("anthropic/claude-sonnet-4-6")).toBe("anthropic/claude-sonnet-4-6");
+  });
+
+  it("leaves provider/model ids and non-Claude handles unchanged", () => {
+    expect(toGatewayModelId("google/gemini-2.5-flash")).toBe("google/gemini-2.5-flash");
+    expect(toGatewayModelId("gpt-4o")).toBe("gpt-4o");
   });
 });

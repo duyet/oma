@@ -1539,6 +1539,7 @@ export function BasicTab({
                       <ModelProviderMark modelId={mc.model ?? mc.model_id} />
                       {mc.is_default ? "★ " : ""}
                       {mc.model_id}
+                      {mc.source === "platform" ? " (platform)" : ""}
                       {mc.model !== mc.model_id && (
                         <span className="text-fg-subtle text-[12px]"> ({mc.model})</span>
                       )}
@@ -1546,8 +1547,8 @@ export function BasicTab({
                   )}
                   getTextLabel={(mc) =>
                     `${mc.is_default ? "★ " : ""}${mc.model_id}${
-                      mc.model !== mc.model_id ? ` (${mc.model})` : ""
-                    }`
+                      mc.source === "platform" ? " (platform)" : ""
+                    }${mc.model !== mc.model_id ? ` (${mc.model})` : ""}`
                   }
                   placeholder={
                     !selectedCardId && form.model

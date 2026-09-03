@@ -32,6 +32,23 @@ export const ANYROUTER_KEY_PREFIX = "sk-ar-";
  *  ApiCompat union in apps/agent/src/harness/provider.ts. */
 export const ANYROUTER_API_COMPAT = "oai" as const;
 
+/**
+ * Map an agent model handle onto the `provider/model` id AnyRouter and
+ * OpenRouter expect on the OpenAI-compat path.
+ *
+ * Bare `claude-*` handles (the seeded General agent, AGENTS.md examples)
+ * become `anthropic/claude-*`. Ids that already contain `/` are returned
+ * unchanged. Hyphens are kept — rewriting them to dots produces
+ * `anthropic/claude-sonnet-4.6`, which those catalogs treat as BYOK-only
+ * and 404 with `model_unavailable`.
+ */
+export function toGatewayModelId(handle: string): string {
+  const trimmed = handle.trim();
+  if (trimmed.includes("/")) return trimmed;
+  if (trimmed.startsWith("claude-")) return `anthropic/${trimmed}`;
+  return trimmed;
+}
+
 /** OAuth scope bundle to request. AnyRouter's consent screen lets the user
  *  downgrade to a narrower bundle regardless of what's requested; "standard"
  *  covers inference + key/preset management, which is what an agent runtime

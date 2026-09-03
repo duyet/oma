@@ -1376,9 +1376,15 @@ deployment falls back to static env-var secrets, in order:
    default.
 2. `ANYROUTER_API_KEY` — routes through [AnyRouter](https://anyrouter.dev),
    an OpenAI-compatible LLM gateway, only when `ANTHROPIC_API_KEY` is unset.
-   AnyRouter addresses models as `provider/model` (e.g.
-   `anthropic/claude-sonnet-4-6`), so `agent.model` must be set accordingly
-   to use this fallback.
+   Bare `claude-*` handles (including the seeded General agent,
+   `claude-sonnet-4-6`) are rewritten to `anthropic/claude-*` on this path.
+   Do not send the dotted alias (`anthropic/claude-sonnet-4.6`) — AnyRouter
+   treats that catalog entry as BYOK-only and returns `model_unavailable`.
+
+`GET /v1/model_cards` injects a read-only `source: "platform"` row for that
+inherited handle when the tenant has no cards, so `oma models list` has a
+model id to pass. The row is HTTP-only (not persisted); mutate routes return
+403.
 
 **Gateway app attribution.** Whenever the resolved base URL points at
 `anyrouter.dev` or `openrouter.ai` (env fallback, OAuth-connected card, or any

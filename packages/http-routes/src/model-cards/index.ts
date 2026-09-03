@@ -15,6 +15,12 @@ import {
 } from "@duyet/oma-model-cards-store";
 import type { RouteServicesArg } from "../types";
 import { resolveServices } from "../types";
+import {
+  PLATFORM_DEFAULT_CARD_ID,
+  buildPlatformDefaultCard,
+  shouldInjectPlatformDefault,
+  type ModelCardPlatformEnv,
+} from "./platform-default";
 
 interface Vars {
   Variables: { tenant_id: string };
@@ -22,6 +28,10 @@ interface Vars {
 
 export interface ModelCardRoutesDeps {
   services: RouteServicesArg;
+  /** Process-visible provider keys. Optional — improves the synthetic
+   *  platform-default card's provider/wire fields when this runtime can
+   *  see them. Hosted main often cannot see ANYROUTER_API_KEY. */
+  platformEnv?: ModelCardPlatformEnv;
 }
 
 /**
@@ -177,8 +187,16 @@ async function probeModelCard(opts: {
   }
 }
 
+function platformReadOnly(c: Context) {
+  return c.json(
+    { error: "Platform default model card is read-only" },
+    403,
+  );
+}
+
 export function buildModelCardRoutes(deps: ModelCardRoutesDeps) {
   const app = new Hono<Vars>();
+  const platformEnv = deps.platformEnv;
 
   // POST /v1/model_cards — create
   app.post("/", async (c) => {
@@ -199,6 +217,9 @@ export function buildModelCardRoutes(deps: ModelCardRoutesDeps) {
 
     if (!body.model_id || !body.provider || !body.api_key) {
       return c.json({ error: "model_id, provider, and api_key are required" }, 400);
+    }
+    if (body.model_id === PLATFORM_DEFAULT_CARD_ID) {
+      return c.json({ error: "platform_default is a reserved model_id" }, 400);
     }
     try {
       const card = await services.modelCards.create({
@@ -293,9 +314,10 @@ export function buildModelCardRoutes(deps: ModelCardRoutesDeps) {
     const createdBeforeRes = parseMs(c.req.query("created_before"), "created_before");
     if (createdBeforeRes.err) return createdBeforeRes.err;
 
+    const pageQuery = parsePageQuery(c);
     const page = await services.modelCards.listPage({
       tenantId: c.get("tenant_id"),
-      ...parsePageQuery(c),
+      ...pageQuery,
       ...(provider !== undefined ? { provider } : {}),
       ...(createdAfterRes.value !== undefined
         ? { createdAfter: createdAfterRes.value }
@@ -307,6 +329,21 @@ export function buildModelCardRoutes(deps: ModelCardRoutesDeps) {
     // Hide archived cards (forward-compat with soft-delete; today archived_at
     // is always null but the legacy KV path also filtered, so preserve parity).
     const filteredItems = page.items.filter((card) => card.archived_at === null);
+    const hasTenantCards = filteredItems.length > 0 || Boolean(page.nextCursor);
+    const platformCard = buildPlatformDefaultCard({ hasTenantCards, platformEnv });
+    if (
+      shouldInjectPlatformDefault({
+        cursor: pageQuery.cursor,
+        q: pageQuery.q,
+        provider,
+        createdAfter: createdAfterRes.value,
+        createdBefore: createdBeforeRes.value,
+        hasTenantCards,
+        card: platformCard,
+      })
+    ) {
+      return c.json({ data: [platformCard] });
+    }
     return jsonPage(c, { items: filteredItems, nextCursor: page.nextCursor }, toApiShape);
   });
 
@@ -315,9 +352,16 @@ export function buildModelCardRoutes(deps: ModelCardRoutesDeps) {
     const services = resolveServices(deps.services, c);
     if (!services.modelCards) return c.json({ error: "model cards not configured" }, 501);
     const t = c.get("tenant_id");
+    const id = c.req.param("id");
+    if (id === PLATFORM_DEFAULT_CARD_ID) {
+      const page = await services.modelCards.listPage({ tenantId: t, limit: 1 });
+      const hasTenantCards =
+        page.items.some((row) => row.archived_at === null) || Boolean(page.nextCursor);
+      return c.json(buildPlatformDefaultCard({ hasTenantCards, platformEnv }));
+    }
     const card = await services.modelCards.get({
       tenantId: t,
-      cardId: c.req.param("id"),
+      cardId: id,
     });
     if (!card) return c.json({ error: "Model card not found" }, 404);
     return c.json(toApiShape(card));
@@ -329,6 +373,7 @@ export function buildModelCardRoutes(deps: ModelCardRoutesDeps) {
     if (!services.modelCards) return c.json({ error: "model cards not configured" }, 501);
     const t = c.get("tenant_id");
     const id = c.req.param("id");
+    if (id === PLATFORM_DEFAULT_CARD_ID) return platformReadOnly(c);
     const body = await c.req.json<{
       model_id?: string;
       model?: string;
@@ -373,6 +418,7 @@ export function buildModelCardRoutes(deps: ModelCardRoutesDeps) {
     if (!services.modelCards) return c.json({ error: "model cards not configured" }, 501);
     const t = c.get("tenant_id");
     const id = c.req.param("id");
+    if (id === PLATFORM_DEFAULT_CARD_ID) return platformReadOnly(c);
     try {
       await services.modelCards.delete({ tenantId: t, cardId: id });
       return c.json({ type: "model_card_deleted", id });
@@ -390,6 +436,7 @@ export function buildModelCardRoutes(deps: ModelCardRoutesDeps) {
     if (!services.modelCards) return c.json({ error: "model cards not configured" }, 501);
     const t = c.get("tenant_id");
     const id = c.req.param("id");
+    if (id === PLATFORM_DEFAULT_CARD_ID) return platformReadOnly(c);
     const apiKey = await services.modelCards.getApiKey({ tenantId: t, cardId: id });
     if (apiKey === null) return c.json({ error: "Key not found" }, 404);
     return c.json({ api_key: apiKey });

@@ -6,13 +6,20 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { Hono } from "hono";
+import { ANYROUTER_API_COMPAT, toGatewayModelId } from "@duyet/oma-anyrouter";
+import { DEFAULT_AGENT_MODEL } from "@duyet/oma-agents-store";
 import { buildModelCardRoutes } from "./index";
+import { PLATFORM_DEFAULT_CARD_ID } from "./platform-default";
+import type { ModelCardPlatformEnv } from "./platform-default";
 import { createInMemoryModelCardService } from "@duyet/oma-model-cards-store/test-fakes";
 import type { RouteServices } from "../types";
 
 const TENANT = "tn_test";
 
-function makeApp(modelCards: ReturnType<typeof createInMemoryModelCardService>["service"] | undefined) {
+function makeApp(
+  modelCards: ReturnType<typeof createInMemoryModelCardService>["service"] | undefined,
+  platformEnv?: ModelCardPlatformEnv,
+) {
   const app = new Hono<{ Variables: { tenant_id: string } }>();
   app.use("*", async (c, next) => {
     c.set("tenant_id", TENANT);
@@ -20,6 +27,7 @@ function makeApp(modelCards: ReturnType<typeof createInMemoryModelCardService>["
   });
   const routes = buildModelCardRoutes({
     services: { modelCards } as unknown as RouteServices,
+    platformEnv,
   });
   app.route("/", routes);
   return app;
@@ -142,5 +150,67 @@ describe("model_cards routes", () => {
       ).status,
     ).toBe(501);
     expect((await bareApp.request("/mc_x")).status).toBe(501);
+  });
+
+  describe("platform default card", () => {
+    it("injects a source:platform row when the tenant has no cards", async () => {
+      const res = await app.request("/");
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.data).toHaveLength(1);
+      const card = json.data[0];
+      expect(card.id).toBe(PLATFORM_DEFAULT_CARD_ID);
+      expect(card.model_id).toBe(DEFAULT_AGENT_MODEL);
+      expect(card.model).toBe(toGatewayModelId(DEFAULT_AGENT_MODEL));
+      expect(card.model).not.toContain("claude-sonnet-4.6");
+      expect(card.provider).toBe(ANYROUTER_API_COMPAT);
+      expect(card.source).toBe("platform");
+      expect(card.is_default).toBe(true);
+    });
+
+    it("uses the Anthropic wire form when ANTHROPIC_API_KEY is visible", async () => {
+      const keyed = makeApp(modelCards, { ANTHROPIC_API_KEY: "sk-ant-test" });
+      const json = await (await keyed.request("/")).json();
+      expect(json.data[0].provider).toBe("ant");
+      expect(json.data[0].model).toBe(DEFAULT_AGENT_MODEL);
+      expect(json.data[0].model_id).toBe(DEFAULT_AGENT_MODEL);
+    });
+
+    it("does not inject once the tenant has a real card", async () => {
+      await post("/", { model_id: "a", provider: "custom", api_key: "sk-a" });
+      const json = await (await app.request("/")).json();
+      expect(json.data.map((c: { model_id: string }) => c.model_id)).toEqual(["a"]);
+      expect(json.data[0].source).toBeUndefined();
+    });
+
+    it("omits the platform card when the provider filter does not match", async () => {
+      const res = await app.request("/?provider=ant");
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.data).toEqual([]);
+    });
+
+    it("GET /platform_default returns the synthetic card", async () => {
+      const res = await app.request(`/${PLATFORM_DEFAULT_CARD_ID}`);
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.source).toBe("platform");
+      expect(json.model_id).toBe(DEFAULT_AGENT_MODEL);
+    });
+
+    it("refuses update, delete, and key read on the platform card", async () => {
+      expect((await post(`/${PLATFORM_DEFAULT_CARD_ID}`, { model_id: "x" })).status).toBe(403);
+      expect((await app.request(`/${PLATFORM_DEFAULT_CARD_ID}`, { method: "DELETE" })).status).toBe(403);
+      expect((await app.request(`/${PLATFORM_DEFAULT_CARD_ID}/key`)).status).toBe(403);
+    });
+
+    it("rejects creating a card with the reserved platform_default handle", async () => {
+      const res = await post("/", {
+        model_id: PLATFORM_DEFAULT_CARD_ID,
+        provider: "custom",
+        api_key: "sk-x",
+      });
+      expect(res.status).toBe(400);
+    });
   });
 });
