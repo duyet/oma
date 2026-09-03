@@ -3,6 +3,7 @@ import {
   formatCompact,
   formatDuration,
   formatRelative,
+  formatRelativeSigned,
   formatSandboxTime,
   formatSessionDuration,
   formatUsd,
@@ -58,6 +59,15 @@ describe("formatRelative", () => {
     expect(formatRelative(2 * 86_400_000)).toBe("2d ago");
     expect(formatRelative(45 * 86_400_000)).toBe("1mo ago");
     expect(formatRelative(400 * 86_400_000)).toBe("1y ago");
+  });
+});
+
+describe("formatRelativeSigned", () => {
+  it("keeps past diffs as ago", () => {
+    expect(formatRelativeSigned(3 * 3_600_000)).toBe("3h ago");
+  });
+  it("renders future diffs as in N", () => {
+    expect(formatRelativeSigned(-6 * 3_600_000)).toBe("in 6h");
   });
 });
 

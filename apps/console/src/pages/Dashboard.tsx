@@ -19,6 +19,7 @@ import { StackedAssembly } from "../components/StackedAssembly";
 import { GettingStartedGuide } from "../components/GettingStartedGuide";
 import { Button } from "@/components/ui/button";
 import { formatCompact, formatSandboxTime, formatSessionDuration } from "../lib/format";
+import { dashboardActiveSessionsHref } from "./agents/agent-health";
 import {
   DAILY_CHART_VIEW_W,
   dailyActivityBarWidth,
@@ -207,8 +208,7 @@ export function Dashboard() {
       isLoading: runningSessionsQuery.isLoading,
       isError: !!runningSessionsQuery.error,
       isLive: !runningSessionsQuery.error && (runningCount ?? 0) > 0,
-      // Deep-link into SessionsList with the running status chip pre-applied.
-      href: "/sessions?status=running",
+      href: dashboardActiveSessionsHref(runningSessionsQuery.data?.data ?? []),
     },
     {
       label: "Agents",

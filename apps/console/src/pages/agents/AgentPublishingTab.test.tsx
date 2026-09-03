@@ -49,6 +49,14 @@ function mountAgentHandlers() {
   server.use(
     http.get("/v1/agents/agent_1", () => HttpResponse.json(agent)),
     http.get("/v1/agents/agent_1/versions", () => HttpResponse.json({ data: [agent] })),
+    http.get("/v1/agents/agent_1/schedules", () => HttpResponse.json({ data: [] })),
+    http.get("/v1/sessions", () => HttpResponse.json({ data: [] })),
+    http.get("/v1/agents/agent_1/stats", () =>
+      HttpResponse.json({ sessions: 0, est_model_cost_usd: 0 }),
+    ),
+    http.get("/v1/agents/agent_1/analytics", () =>
+      HttpResponse.json({ completed_sessions: 0, error_count: 0 }),
+    ),
   );
 }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../mocks/server";
@@ -610,6 +610,51 @@ describe("<Dashboard /> — recent sessions table", () => {
     // router can observe it; the href lives in the onClick closure. Smoke
     // the interactive contract here.
     await user.tab(); // smoke: card is in the tab order somewhere
+  });
+
+  it("sends Active sessions to the agent's Monitor tab when exactly one session is running", async () => {
+    mockAssemblyDeps();
+    mockStats();
+    mockSessions({
+      recent: [],
+      running: [
+        {
+          id: "sess_only",
+          title: "Live digest",
+          agent_id: "agent_digest",
+          status: "running",
+          created_at: "2026-09-03T18:00:00.000Z",
+        },
+      ],
+    });
+
+    function PathProbe() {
+      const loc = useLocation();
+      return <div data-testid="path">{`${loc.pathname}${loc.search}`}</div>;
+    }
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const user = userEvent.setup();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/"]}>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="*" element={<PathProbe />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(metricCard("Active sessions").getByText("1")).toBeInTheDocument(),
+    );
+    await user.click(screen.getByTestId("metric-card-Active sessions"));
+    expect(await screen.findByTestId("path")).toHaveTextContent(
+      "/agents/agent_digest/monitor",
+    );
   });
 
   it("collapses the architecture map once the tenant has agents and sessions", async () => {
