@@ -1705,7 +1705,13 @@ v1.route("/environments", buildEnvironmentRoutes({ services }));
 // per-tenant CF Rate Limiting binding to back an upload-frequency gate, so
 // uploads soft-pass per @duyet/oma-quotas' "absent primitive = no reject"
 // contract.
-v1.route("/model_cards", buildModelCardRoutes({ services }));
+v1.route("/model_cards", buildModelCardRoutes({
+  services,
+  platformEnv: {
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    ANYROUTER_API_KEY: process.env.ANYROUTER_API_KEY,
+  },
+}));
 v1.route("/stats", buildStatsRoutes({ services }));
 v1.route("/usage", buildUsageRoutes({ services }));
 v1.route("/skills", buildSkillRoutes({ services }));
@@ -2352,7 +2358,13 @@ app.route("/v1/oma/evals", buildEvalRoutes({
 }));
 // model_cards is in CF's /v1/oma list (apps/main/src/index.ts) — mirror it
 // here too.
-app.route("/v1/oma/model_cards", buildModelCardRoutes({ services }));
+app.route("/v1/oma/model_cards", buildModelCardRoutes({
+  services,
+  platformEnv: {
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    ANYROUTER_API_KEY: process.env.ANYROUTER_API_KEY,
+  },
+}));
 
 // /v1/oma/integrations mirror — same factory used twice. New OMA-only
 // endpoints (if any) get added in the package, not here.

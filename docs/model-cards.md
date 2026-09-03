@@ -2,6 +2,15 @@
 
 Per-tenant LLM credentials. An agent references one by setting `agent.model = "<model_id>"` — the worker looks up the card and signs the outbound request with its api_key, base_url, and headers. This is the canonical replacement for the global `ANTHROPIC_API_KEY` env var.
 
+When a tenant has **no** cards, `GET /v1/model_cards` still returns a
+read-only `source: "platform"` row for the inherited deployment fallback
+(handle `claude-sonnet-4-6`, the same id the seeded General agent uses).
+`oma models list` therefore always has a model id to pass. Mutating that
+row returns 403; it is never written to storage. With no card match, the
+agent worker uses `ANTHROPIC_API_KEY`, or `ANYROUTER_API_KEY` when Anthropic
+is unset — bare `claude-*` handles are rewritten to `anthropic/claude-*` on
+the AnyRouter OpenAI-compat path.
+
 Providers (wire tag → request shape):
 
 | tag | shape | typical use |

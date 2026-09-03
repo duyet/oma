@@ -1,7 +1,7 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
-import { ANYROUTER_API_BASE, ANYROUTER_API_COMPAT } from "@duyet/oma-anyrouter";
+import { ANYROUTER_API_BASE, ANYROUTER_API_COMPAT, toGatewayModelId } from "@duyet/oma-anyrouter";
 import { attributionHeadersFor } from "./attribution";
 
 /**
@@ -33,9 +33,9 @@ export interface DefaultProviderCreds {
  *      @duyet/oma-anyrouter's constants so every OMA surface pointed at
  *      AnyRouter agrees on both (same pairing apps/main-node's
  *      OAuth-connected AnyRouter provider uses — see
- *      apps/main-node/src/lib/anyrouter-provider.ts). AnyRouter addresses
- *      models as "provider/model" (e.g. "anthropic/claude-sonnet-4-6"); an
- *      agent relying on this fallback must set `model` accordingly.
+ *      apps/main-node/src/lib/anyrouter-provider.ts). Bare `claude-*`
+ *      handles are rewritten to `anthropic/claude-*` on this path
+ *      (`toGatewayModelId`); do not convert hyphens to dots.
  *
  * Returns null when neither is configured — callers fall through to their
  * existing "no credentials" behavior unchanged.
@@ -194,8 +194,9 @@ export function resolveModel(
     // Keep the FULL model string (e.g. "google/gemini-2.5-flash") for
     // OpenAI-compatible gateways — AnyRouter/OpenRouter address models as
     // "provider/model", so stripping the prefix yields "model_unavailable".
-    // Bare ids (direct OpenAI) have no "/" and are unaffected.
-    return openai.chat(modelString);
+    // Bare `claude-*` handles (seeded General agent) become
+    // `anthropic/claude-*`; other bare ids (direct OpenAI) are unchanged.
+    return openai.chat(toGatewayModelId(modelString));
   }
 
   // ant / ant-compatible

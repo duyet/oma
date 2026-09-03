@@ -14,6 +14,12 @@ export interface ModelCard {
   created_at: string;
   updated_at?: string;
   archived_at?: string;
+  /**
+   * Present on the synthetic inherited/platform-default card injected by
+   * GET /v1/model_cards when the tenant has no D1 rows. HTTP-only — never
+   * persisted. Mutate routes refuse it.
+   */
+  source?: "platform";
 }
 
 // --- Agent ---

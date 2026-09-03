@@ -826,7 +826,14 @@ export function ModelCardsList() {
         header: "Model ID",
         cell: ({ row }) => (
           <>
-            <div className="font-medium text-fg">{row.original.model_id}</div>
+            <div className="font-medium text-fg inline-flex items-center gap-1.5">
+              {row.original.model_id}
+              {row.original.source === "platform" && (
+                <span className="text-xs text-fg-muted bg-bg-surface px-1.5 py-0.5 rounded font-normal">
+                  platform
+                </span>
+              )}
+            </div>
             <div className="text-xs text-fg-subtle font-mono">{row.original.id}</div>
           </>
         ),
@@ -857,11 +864,14 @@ export function ModelCardsList() {
         id: "api_key",
         accessorFn: (c) => c.api_key_preview ?? "",
         header: "API Key",
-        cell: ({ row }) => (
-          <span className="font-mono text-xs text-fg-subtle">
-            ****{row.original.api_key_preview}
-          </span>
-        ),
+        cell: ({ row }) =>
+          row.original.source === "platform" ? (
+            <span className="text-xs text-fg-subtle">environment</span>
+          ) : (
+            <span className="font-mono text-xs text-fg-subtle">
+              ****{row.original.api_key_preview ?? ""}
+            </span>
+          ),
       },
       {
         id: "base_url",
@@ -886,11 +896,14 @@ export function ModelCardsList() {
         id: "created",
         accessorFn: (c) => c.created_at,
         header: "Created",
-        cell: ({ row }) => (
-          <span className="text-fg-muted">
-            {new Date(row.original.created_at).toLocaleDateString()}
-          </span>
-        ),
+        cell: ({ row }) =>
+          row.original.source === "platform" ? (
+            <span className="text-fg-subtle">—</span>
+          ) : (
+            <span className="text-fg-muted">
+              {new Date(row.original.created_at).toLocaleDateString()}
+            </span>
+          ),
       },
     ],
     // Intentionally empty: startEdit + remove close over `form`/`api`
@@ -963,7 +976,10 @@ export function ModelCardsList() {
       error={fetchError}
       onRetry={load}
       errorTitle="Couldn't load model cards"
-      onRowClick={(c) => startEdit(c)}
+      onRowClick={(c) => {
+        if (c.source === "platform") return;
+        startEdit(c);
+      }}
       getRowId={(c) => c.id}
       hasMore={hasMore}
       loadingMore={isLoadingMore}
@@ -987,7 +1003,8 @@ export function ModelCardsList() {
               one to configure API credentials for your agents.
             </p>
             <p className="text-xs mt-3">
-              Without model cards, agents use the environment ANTHROPIC_API_KEY.
+              Without tenant model cards, agents use the deployment fallback
+              (<code>ANTHROPIC_API_KEY</code> or <code>ANYROUTER_API_KEY</code>).
             </p>
           </>
         )

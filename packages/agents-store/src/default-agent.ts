@@ -15,7 +15,7 @@ const DEFAULT_TOOLSET_TYPE = "agent_toolset_20260401";
 
 /** Platform default model — kept in sync with the CLI's own default
  *  (packages/cli/src/index.ts). */
-const DEFAULT_AGENT_MODEL = "claude-sonnet-4-6";
+export const DEFAULT_AGENT_MODEL = "claude-sonnet-4-6";
 
 export const DEFAULT_AGENT_INPUT: NewAgentInput = {
   name: "General",

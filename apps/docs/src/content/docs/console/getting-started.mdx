@@ -42,7 +42,7 @@ The left sidebar groups everything into three areas:
 
 2. Fill in:
    - **Name** — anything. Visible to integrations later.
-   - **Model** — pick from your Model Cards. If the platform was bootstrapped with `ANTHROPIC_API_KEY`, an Anthropic Claude entry is available out of the box; otherwise add a Model Card first under **Settings → Model Cards**.
+   - **Model** — pick from your Model Cards. A platform-default Claude handle (`claude-sonnet-4-6`) is listed when the tenant has no cards of its own (deployment `ANTHROPIC_API_KEY` or `ANYROUTER_API_KEY` fallback). Add a Model Card under **Settings → Model Cards** to bind a different provider or key.
    - **System prompt** — what the agent is for.
    - **Tools** — leave default (built-in toolset) for now.
 

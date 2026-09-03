@@ -25,5 +25,6 @@ export {
 
 export {
   DEFAULT_AGENT_INPUT,
+  DEFAULT_AGENT_MODEL,
   seedDefaultAgent,
 } from "./default-agent";

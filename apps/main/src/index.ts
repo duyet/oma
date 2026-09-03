@@ -445,7 +445,12 @@ const analyticsRoutes = new Hono<{ Bindings: Env; Variables: { tenant_id: string
 
 const modelCardsRoutes = new Hono<{ Bindings: Env; Variables: { tenant_id: string } }>().all("*", (c) => {
   const ctx = c as unknown as AppCtx;
-  const app = buildModelCardRoutes({ services: () => cfRouteServicesFromCtx(ctx) });
+  const app = buildModelCardRoutes({
+    services: () => cfRouteServicesFromCtx(ctx),
+    platformEnv: {
+      ANTHROPIC_API_KEY: c.env.ANTHROPIC_API_KEY,
+    },
+  });
   return invokePackage(c, app);
 });
 
