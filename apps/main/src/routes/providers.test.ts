@@ -40,9 +40,11 @@ function makeWorker() {
   });
   outer.route("/v1/providers/anyrouter", providersRoutes);
   const ctx = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
+  const env = { BETTER_AUTH_URL: "https://api.test" };
   return {
+    kv,
     request: (path: string) =>
-      outer.fetch(new Request(`https://api.test${path}`), {}, ctx),
+      outer.fetch(new Request(`https://api.test${path}`), env, ctx),
   };
 }
 
@@ -51,5 +53,30 @@ describe("CF AnyRouter provider wrapper (issue #434)", () => {
     const res = await makeWorker().request("/v1/providers/anyrouter/status");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ connected: false });
+  });
+
+  it("GET /connect returns 302 to AnyRouter authorize, not 404", async () => {
+    const worker = makeWorker();
+    // Seed DCR so this assertion does not hit the live register endpoint.
+    await worker.kv.put(
+      "anyrouter:oauth_client",
+      JSON.stringify({
+        clientId: "mcpc_wrapper",
+        redirectUri: "https://api.test/v1/providers/anyrouter/callback",
+      }),
+    );
+    const res = await worker.request("/v1/providers/anyrouter/connect");
+    expect(res.status).toBe(302);
+    const location = new URL(res.headers.get("location")!);
+    expect(location.origin + location.pathname).toBe(
+      "https://anyrouter.dev/api/v1/mcp/oauth/authorize",
+    );
+    expect(location.searchParams.get("client_id")).toBe("mcpc_wrapper");
+    expect(location.searchParams.get("redirect_uri")).toBe(
+      "https://api.test/v1/providers/anyrouter/callback",
+    );
+    expect(location.searchParams.get("response_type")).toBe("code");
+    expect(location.searchParams.get("code_challenge_method")).toBe("S256");
+    expect(location.searchParams.get("state")).toBeTruthy();
   });
 });
