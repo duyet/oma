@@ -1,8 +1,8 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
-import { ANYROUTER_API_BASE, ANYROUTER_API_COMPAT, toGatewayModelId } from "@duyet/oma-anyrouter";
-import { attributionHeadersFor } from "./attribution";
+import { ANYROUTER_API_BASE, ANYROUTER_API_COMPAT, toAnyRouterCallableModelId, toGatewayModelId } from "@duyet/oma-anyrouter";
+import { attributionHeadersFor, isAnyRouterBaseUrl } from "./attribution";
 
 /**
  * API compatibility types:
@@ -34,11 +34,12 @@ export interface DefaultProviderCreds {
  *      AnyRouter agrees on both (same pairing apps/main-node's
  *      OAuth-connected AnyRouter provider uses — see
  *      apps/main-node/src/lib/anyrouter-provider.ts). Bare `claude-*`
- *      handles are rewritten to `anthropic/claude-*` on this path
- *      (`toGatewayModelId`). The SessionDO env-fallback then maps
- *      BYOK-only sonnet handles to `anyrouter/free` because AnyRouter
- *      aliases hyphenated `anthropic/claude-sonnet-4-6` to dotted
- *      `anthropic/claude-sonnet-4.6`.
+ *      handles become `anthropic/claude-*` on generic OpenAI-compat
+ *      gateways (`toGatewayModelId`). When the request goes to AnyRouter,
+ *      `resolveModel` maps BYOK-only sonnet handles to `anyrouter/free`
+ *      because AnyRouter aliases hyphenated `anthropic/claude-sonnet-4-6`
+ *      to dotted `anthropic/claude-sonnet-4.6`. That mapping is the HTTP
+ *      `model` field, not only the GET /v1/model_cards row.
  *
  * Returns null when neither is configured — callers fall through to their
  * existing "no credentials" behavior unchanged.
@@ -197,9 +198,17 @@ export function resolveModel(
     // Keep the FULL model string (e.g. "google/gemini-2.5-flash") for
     // OpenAI-compatible gateways — AnyRouter/OpenRouter address models as
     // "provider/model", so stripping the prefix yields "model_unavailable".
-    // Bare `claude-*` handles (seeded General agent) become
-    // `anthropic/claude-*`; other bare ids (direct OpenAI) are unchanged.
-    return openai.chat(toGatewayModelId(modelString));
+    // Bare `claude-*` handles become `anthropic/claude-*` on generic
+    // gateways. AnyRouter aliases hyphenated sonnet-4-6 onto dotted
+    // BYOK-only `anthropic/claude-sonnet-4.6`, so this call site (the
+    // JSON `model` field SessionDO and Node both go through) sends
+    // `anyrouter/free` instead. OpenRouter and other hosts keep
+    // toGatewayModelId.
+    return openai.chat(
+      isAnyRouterBaseUrl(baseURL)
+        ? toAnyRouterCallableModelId(modelString)
+        : toGatewayModelId(modelString),
+    );
   }
 
   // ant / ant-compatible
