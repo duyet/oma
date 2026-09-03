@@ -1,9 +1,3 @@
-// Bare `claude-*` handles (seeded General agent) must go to OpenAI-compat
-// gateways as `anthropic/claude-*`. AnyRouter then aliases hyphenated
-// sonnet-4-6 to dotted BYOK-only `anthropic/claude-sonnet-4.6` (#452), so
-// the env-fallback path runs `toAnyRouterCallableModelId` first and sends
-// `anyrouter/free`. Tenant cards still hit resolveModel with card.model.
-
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { resolveModel } from "../src/harness/provider";
 import { ANYROUTER_API_BASE, ANYROUTER_FREE_MODEL_ID, toAnyRouterCallableModelId } from "@duyet/oma-anyrouter";

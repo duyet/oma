@@ -33,12 +33,7 @@ export interface DefaultProviderCreds {
  *      @duyet/oma-anyrouter's constants so every OMA surface pointed at
  *      AnyRouter agrees on both (same pairing apps/main-node's
  *      OAuth-connected AnyRouter provider uses — see
- *      apps/main-node/src/lib/anyrouter-provider.ts). Bare `claude-*`
- *      handles are rewritten to `anthropic/claude-*` on this path
- *      (`toGatewayModelId`). The SessionDO env-fallback then maps
- *      BYOK-only sonnet handles to `anyrouter/free` because AnyRouter
- *      aliases hyphenated `anthropic/claude-sonnet-4-6` to dotted
- *      `anthropic/claude-sonnet-4.6`.
+ *      apps/main-node/src/lib/anyrouter-provider.ts).
  *
  * Returns null when neither is configured — callers fall through to their
  * existing "no credentials" behavior unchanged.
