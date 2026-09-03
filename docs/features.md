@@ -58,7 +58,25 @@ The Console also has a compact operator layout for a phone or tablet. Session li
 
 ---
 
-## 3. Parallel Sub-Agent Delegation
+## 3. Console Analytics
+
+The Console **Analytics** page (`/analytics`) summarizes estimated spend, tokens, and declared delegation across agents in a workspace.
+
+It reads existing `GET /v1/usage?group_by=agent` and `GET /v1/agents`. There is no new analytics endpoint.
+
+The page shows:
+
+* Estimated spend at Sonnet-class rates (input $3 / output $15 per million tokens). Cache and reasoning tokens count in totals but are not priced.
+* Token mix by kind (input, output, cache read, cache write, reasoning). `usage_events` has no model id, so this is not a by-model chart.
+* Cost by agent (top 10 plus Others).
+* Daily sandbox-active seconds for the selected range (1d, 7d, or 30d; default 7d).
+* Declared delegation: `multiagent` / `callable_agents` roster edges such as Lead → Researcher. This is configuration, not observed call counts. Call-count graphs need event-log aggregation (a follow-up).
+
+The Usage page and per-agent Observability tab are unchanged.
+
+---
+
+## 4. Parallel Sub-Agent Delegation
 
 The default delegation tool `call_agent_*` blocks the parent session until the child reaches `idle`.
 The `call_agents_parallel` tool allows parent agents to fan out concurrent child requests and aggregate results in parallel.
@@ -91,7 +109,7 @@ Aggregated response output:
 
 ---
 
-## 4. Structured Progress for Long-Running Tasks
+## 5. Structured Progress for Long-Running Tasks
 
 For tasks that run for minutes or hours, standard text messages are hard to parse. The `agent.status` event sends structured heartbeats directly from the loop controller:
 
@@ -113,7 +131,7 @@ For tasks that run for minutes or hours, standard text messages are hard to pars
 
 ---
 
-## 5. Outbound Notification Dispatcher
+## 6. Outbound Notification Dispatcher
 
 Agents can post status transitions (e.g. session done, error, blocked) to external communication channels. Add the `notify` field to your agent configuration:
 

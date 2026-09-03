@@ -225,23 +225,50 @@ export function deriveAnalyticsSnapshot(
   };
 }
 
+interface PathPoint {
+  x: number;
+  y: number;
+}
+
+function seriesPoints(
+  values: number[],
+  width: number,
+  height: number,
+): PathPoint[] {
+  const n = values.length;
+  const max = Math.max(1, ...values);
+  const step = n === 1 ? 0 : width / (n - 1);
+  return values.map((v, i) => ({
+    x: n === 1 ? width / 2 : i * step,
+    y: height - (v / max) * height,
+  }));
+}
+
+function fmtPoint(p: PathPoint): string {
+  return `${p.x.toFixed(2)},${p.y.toFixed(2)}`;
+}
+
 /** Closed SVG area path for a series of non-negative values. y=0 is the
- *  baseline; larger values go up. Empty / all-zero series returns "". */
+ *  baseline; larger values go up. Empty series returns "". */
 export function areaPath(
   values: number[],
   width: number,
   height: number,
 ): string {
-  const n = values.length;
-  if (n === 0) return "";
-  const max = Math.max(1, ...values);
-  const step = n === 1 ? 0 : width / (n - 1);
-  const points = values.map((v, i) => {
-    const x = n === 1 ? width / 2 : i * step;
-    const y = height - (v / max) * height;
-    return `${x.toFixed(2)},${y.toFixed(2)}`;
-  });
-  const lastX = n === 1 ? width / 2 : (n - 1) * step;
-  const firstX = n === 1 ? width / 2 : 0;
-  return `M${firstX.toFixed(2)},${height.toFixed(2)} L${points.join(" L")} L${lastX.toFixed(2)},${height.toFixed(2)} Z`;
+  if (values.length === 0) return "";
+  const points = seriesPoints(values, width, height);
+  const firstX = points[0]!.x;
+  const lastX = points[points.length - 1]!.x;
+  return `M${firstX.toFixed(2)},${height.toFixed(2)} L${points.map(fmtPoint).join(" L")} L${lastX.toFixed(2)},${height.toFixed(2)} Z`;
+}
+
+/** Open SVG polyline through the same points as `areaPath`. Empty series
+ *  returns "". */
+export function linePath(
+  values: number[],
+  width: number,
+  height: number,
+): string {
+  if (values.length === 0) return "";
+  return `M${seriesPoints(values, width, height).map(fmtPoint).join(" L")}`;
 }

@@ -7,6 +7,7 @@ import {
   deriveDelegationEdges,
   deriveTokenMix,
   estimateSonnetUsd,
+  linePath,
   sumTokenKinds,
   type UsageByAgent,
   type UsageSummary,
@@ -207,5 +208,16 @@ describe("areaPath", () => {
 
   it("is empty for no points", () => {
     expect(areaPath([], 100, 10)).toBe("");
+  });
+});
+
+describe("linePath", () => {
+  it("traces the series without a baseline close", () => {
+    const d = linePath([0, 50, 100], 100, 10);
+    expect(d).toBe("M0.00,10.00 L50.00,5.00 L100.00,0.00");
+  });
+
+  it("is empty for no points", () => {
+    expect(linePath([], 100, 10)).toBe("");
   });
 });

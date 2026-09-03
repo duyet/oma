@@ -69,6 +69,7 @@ describe("buildNavGroups", () => {
       "Sessions",
       "Overview",
       "Usage",
+      "Analytics",
       "Resources",
       "Settings",
     ]);
@@ -132,7 +133,7 @@ describe("<AppSidebar />", () => {
     expect(await screen.findByTestId("sidebar-item-Agents")).toBeInTheDocument();
     expect(screen.getByTestId("sidebar-item-Sessions")).toBeInTheDocument();
 
-    const daily = ["Agents", "Sessions", "Overview", "Usage", "Resources", "Settings"];
+    const daily = ["Agents", "Sessions", "Overview", "Usage", "Analytics", "Resources", "Settings"];
     const hrefs = daily.map((label) =>
       screen.getByTestId(`sidebar-item-${label}`).getAttribute("href"),
     );
@@ -141,6 +142,7 @@ describe("<AppSidebar />", () => {
       "/sessions",
       "/",
       "/usage",
+      "/analytics",
       "/environments",
       "/members",
     ]);

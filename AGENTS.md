@@ -376,7 +376,10 @@ kinds: `model_input_tokens`, `model_output_tokens`, `model_cache_read_tokens`,
 (tenant, `?group_by=agent`) and `GET /v1/agents/:id/stats` (per-agent, incl.
 `cache_hit_ratio`) aggregate these without replaying the DO event log; the
 Console **Usage** and per-agent **Observability** pages render the 4-way split
-plus cache hit ratio.
+plus cache hit ratio. Console **Analytics** (`/analytics`) charts estimated
+spend, token mix by kind, and declared sub-agent rosters across agents.
+Cost is a Sonnet-class estimate (`usage_events` has no model id); token mix
+is by kind, not by model; delegation is the agent roster, not call counts.
 
 ### Streaming
 
