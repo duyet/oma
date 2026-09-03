@@ -14,9 +14,10 @@ export default defineConfig({
   test: {
     pool: "threads",
     include: ["test/**/*.test.ts"],
-    // Each test spawns + kills a real main-node process — give them
-    // headroom on slow CI.
+    // Most files spawn at most one main-node process. crash-recovery.test.ts
+    // overrides to 180s (2–3 sequential tsx boots per case).
     testTimeout: 60_000,
+    hookTimeout: 15_000,
     // Run sequentially so two tests don't race for the same port or
     // sqlite file.
     fileParallelism: false,

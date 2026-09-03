@@ -3,6 +3,10 @@ name: Automerge
 # Squash-merge open PRs once CI (typecheck + test) succeeds on the PR head.
 # Runs from workflow_run so it can write/merge without the approval gate that
 # blocks pull_request workflows on bot/open PRs (action_required, no jobs).
+#
+# Release-please and changeset Version Packages PRs are excluded here. Those
+# are verified and squash-merged by release-please.yml / release.yml. Skip
+# rules live in scripts/should-skip-automerge.mjs (tested).
 
 on:
   workflow_run:
@@ -20,10 +24,25 @@ jobs:
       github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
     steps:
+      # workflow_run executes this file from the default branch. Checkout
+      # that same ref (not the PR head) so a PR cannot swap the skip rules.
+      - name: Checkout skip rules
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
       - name: Squash-merge when checks are green
         uses: actions/github-script@v7
         with:
           script: |
+            const path = require("path");
+            const { pathToFileURL } = require("url");
+            const { releasePrSkipReason } = await import(
+              pathToFileURL(
+                path.join(process.env.GITHUB_WORKSPACE, "scripts/should-skip-automerge.mjs"),
+              ).href,
+            );
+
             const run = context.payload.workflow_run;
             const { owner, repo } = context.repo;
 
@@ -54,6 +73,14 @@ jobs:
             }
             if (pr.labels.some((l) => l.name === "do-not-merge")) {
               core.info(`PR #${prNumber} has do-not-merge label; skipping`);
+              return;
+            }
+            const skip = releasePrSkipReason({
+              headBranch: pr.head.ref || run.head_branch || "",
+              title: pr.title || "",
+            });
+            if (skip) {
+              core.info(`PR #${prNumber} skipped (${skip})`);
               return;
             }
             if (pr.head.sha !== run.head_sha) {
