@@ -1444,14 +1444,16 @@ deployment falls back to static env-var secrets, in order:
    default.
 2. `ANYROUTER_API_KEY` — routes through [AnyRouter](https://anyrouter.dev),
    an OpenAI-compatible LLM gateway, only when `ANTHROPIC_API_KEY` is unset.
-   Bare `claude-*` handles are rewritten to `anthropic/claude-*` on this path.
-   AnyRouter then aliases hyphenated `anthropic/claude-sonnet-4-6` to the
-   dotted BYOK-only catalog slug `anthropic/claude-sonnet-4.6` (confirmed by
+   Bare `claude-*` handles are rewritten to `anthropic/claude-*` on generic
+   OpenAI-compat gateways (`toGatewayModelId`). AnyRouter aliases hyphenated
+   `anthropic/claude-sonnet-4-6` to dotted BYOK-only
+   `anthropic/claude-sonnet-4.6` (confirmed by
    `GET /api/v1/models/anthropic/claude-sonnet-4-6` returning that id). The
-   env-fallback therefore sends the live non-BYOK catalog id `anyrouter/free`
-   for those sonnet handles (`toAnyRouterCallableModelId`). Never send the
-   dotted 4.6 slug. Tenant Model Cards keep `card.model` so an AnyRouter key
-   with Anthropic BYOK can still alias hyphenated sonnet onto BYOK.
+   outbound call site is `resolveModel` → `openai.chat(...)` (Cloudflare
+   SessionDO and Node `buildModel` both go through it). When `baseURL` is
+   AnyRouter it sends `anyrouter/free` for those sonnet handles
+   (`toAnyRouterCallableModelId`). Never send the dotted 4.6 slug. Tenant
+   cards keep `card.model` for every other handle.
 
 `GET /v1/model_cards` injects a read-only `source: "platform"` row for that
 inherited handle when the tenant has no cards, so `oma models list` has a

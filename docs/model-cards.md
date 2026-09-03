@@ -9,10 +9,11 @@ read-only `source: "platform"` row for the inherited deployment fallback
 row returns 403; it is never written to storage. With no card match, the
 agent worker uses `ANTHROPIC_API_KEY`, or `ANYROUTER_API_KEY` when Anthropic
 is unset. Bare `claude-*` handles are rewritten to `anthropic/claude-*` on
-the AnyRouter OpenAI-compat path. AnyRouter aliases hyphenated
+generic OpenAI-compat gateways. AnyRouter aliases hyphenated
 `anthropic/claude-sonnet-4-6` to dotted BYOK-only
-`anthropic/claude-sonnet-4.6`, so the env-fallback sends `anyrouter/free`
-instead. Never send the dotted 4.6 slug.
+`anthropic/claude-sonnet-4.6`, so `resolveModel` (the HTTP body both
+SessionDO and Node send) uses `anyrouter/free` when the request goes to
+AnyRouter. Never send the dotted 4.6 slug.
 
 Providers (wire tag → request shape):
 

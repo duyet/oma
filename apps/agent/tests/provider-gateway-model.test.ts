@@ -1,12 +1,12 @@
-// Bare `claude-*` handles (seeded General agent) must go to OpenAI-compat
-// gateways as `anthropic/claude-*`. AnyRouter then aliases hyphenated
-// sonnet-4-6 to dotted BYOK-only `anthropic/claude-sonnet-4.6` (#452), so
-// the env-fallback path runs `toAnyRouterCallableModelId` first and sends
-// `anyrouter/free`. Tenant cards still hit resolveModel with card.model.
+// captureBody reads the JSON `model` field resolveModel puts on the wire.
+// #453 asserted anyrouter/free only after pre-applying toAnyRouterCallableModelId,
+// so resolveModel("claude-sonnet-4-6", …) still sent hyphenated sonnet (#454).
 
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { resolveModel } from "../src/harness/provider";
 import { ANYROUTER_API_BASE, ANYROUTER_FREE_MODEL_ID, toAnyRouterCallableModelId } from "@duyet/oma-anyrouter";
+
+const OPENROUTER_API_BASE = "https://openrouter.ai/api/v1";
 
 const realFetch = globalThis.fetch;
 
@@ -40,19 +40,21 @@ async function captureBody(model: ReturnType<typeof resolveModel>): Promise<Reco
 }
 
 describe("OpenAI-compat gateway model ids", () => {
-  it("rewrites a bare claude-* handle to anthropic/claude-*", async () => {
+  it("AnyRouter env-fallback sonnet body is anyrouter/free, not a pre-mapped id", async () => {
     const body = await captureBody(
       resolveModel("claude-sonnet-4-6", "sk-ar-test", ANYROUTER_API_BASE, "oai"),
     );
-    expect(body.model).toBe("anthropic/claude-sonnet-4-6");
+    expect(body.model).toBe(ANYROUTER_FREE_MODEL_ID);
     expect(String(body.model)).not.toContain("claude-sonnet-4.6");
+    expect(String(body.model)).not.toContain("claude-sonnet-4-6");
   });
 
-  it("keeps an already-prefixed id unchanged", async () => {
+  it("AnyRouter remaps a prefixed sonnet handle too (hyphen still aliases to dotted 4.6)", async () => {
     const body = await captureBody(
       resolveModel("anthropic/claude-sonnet-4-6", "sk-ar-test", ANYROUTER_API_BASE, "oai"),
     );
-    expect(body.model).toBe("anthropic/claude-sonnet-4-6");
+    expect(body.model).toBe(ANYROUTER_FREE_MODEL_ID);
+    expect(String(body.model)).not.toContain("claude-sonnet-4.6");
   });
 
   it("does not rewrite a bare OpenAI id", async () => {
@@ -62,7 +64,15 @@ describe("OpenAI-compat gateway model ids", () => {
     expect(body.model).toBe("gpt-4o");
   });
 
-  it("env-fallback sonnet is anyrouter/free, never dotted 4.6", async () => {
+  it("OpenRouter keeps hyphenated anthropic/claude-* (not an AnyRouter catalog id)", async () => {
+    const body = await captureBody(
+      resolveModel("claude-sonnet-4-6", "sk-or-test", OPENROUTER_API_BASE, "oai"),
+    );
+    expect(body.model).toBe("anthropic/claude-sonnet-4-6");
+    expect(body.model).not.toBe(ANYROUTER_FREE_MODEL_ID);
+  });
+
+  it("mapping twice is a no-op (SessionDO rewrite then resolveModel)", async () => {
     const body = await captureBody(
       resolveModel(
         toAnyRouterCallableModelId("claude-sonnet-4-6"),
