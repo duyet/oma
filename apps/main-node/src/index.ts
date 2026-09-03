@@ -90,6 +90,7 @@ import {
 import {
   buildAgentRoutes,
   buildScheduleRoutes,
+  buildDailySummaryRoutes,
   buildTenantScheduleRoutes,
   buildVaultRoutes,
   buildMcpServerRoutes,
@@ -1410,6 +1411,7 @@ const federationCrypto = platformRootSecret
 const telemetryGates = buildMemoryGates();
 
 // Mount route bundles. Same paths CF uses; behavior preserved.
+v1.route("/agents", buildDailySummaryRoutes({ services, controlPlaneDb: sql }));
 v1.route("/agents", buildAgentRoutes({ services, federationCrypto }));
 // Agent schedules CRUD (issue #262) — shared http-routes builder, mounted on
 // the same /agents prefix (CF mounts it the same way). Node's control-plane

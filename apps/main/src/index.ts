@@ -24,6 +24,7 @@ import {
   buildTelemetryRoutes,
   buildScheduleRoutes,
   buildTenantScheduleRoutes,
+  buildDailySummaryRoutes,
   buildModelCardRoutes,
   buildStatsRoutes,
   buildUsageRoutes,
@@ -851,6 +852,16 @@ app.route(
 // mount so GET /v1/agents/:id/stats matches here deterministically instead
 // of falling into buildAgentRoutes' GET /:id.
 app.route("/v1/agents", agentStatsRoutes);
+// Daily Summary — same direct-mount pattern as schedules. Do not wrap in
+// invokePackage + `.all("*")`: that catch-all would steal every /v1/agents
+// request and 404 anything that isn't daily-summary.
+app.route(
+  "/v1/agents",
+  buildDailySummaryRoutes({
+    services: (c) => cfRouteServicesFromCtx(c as unknown as AppCtx),
+    controlPlaneDb: (c) => new CfD1SqlClient((c.env as Env).MAIN_DB),
+  }),
+);
 app.route("/v1/agents", agentsRoutes);
 
 // Published-agent management API (issue #72) — tenant-authed. Mounted
