@@ -157,6 +157,7 @@ export default defineConfig({
       { find: "@duyet/oma-blob-store", replacement: "./packages/blob-store/src/index.ts" },
 
       // ─── auth / auth-config / email / kv-store / quotas / rate-limit / vault-forward / schema / http-routes / install-bridge ─
+      { find: "@duyet/oma-auth/timing-safe-equal", replacement: "./packages/auth/src/timing-safe-equal.ts" },
       { find: "@duyet/oma-auth", replacement: "./packages/auth/src/index.ts" },
       { find: "@duyet/oma-auth-config", replacement: "./packages/auth-config/src/index.ts" },
       { find: "@duyet/oma-email/adapters/nodemailer", replacement: "./packages/email/src/adapters/nodemailer.ts" },

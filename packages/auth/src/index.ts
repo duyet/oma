@@ -35,6 +35,8 @@ export {
   type TrustedProxyIdentity,
 } from "./trusted-proxy";
 
+export { timingSafeEqualStr } from "./timing-safe-equal";
+
 export interface AuthSession {
   userId: string;
   email?: string | null;

@@ -10,6 +10,7 @@
     "@duyet/oma-agents-store": "workspace:*",
     "@duyet/oma-anyrouter": "workspace:*",
     "@duyet/oma-api-types": "workspace:*",
+    "@duyet/oma-auth": "workspace:*",
     "@duyet/oma-blob-store": "workspace:*",
     "@duyet/oma-browser-harness": "workspace:*",
     "@duyet/oma-credentials-store": "workspace:*",

@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./timing-safe-equal": "./src/timing-safe-equal.ts"
   },
   "dependencies": {
     "hono": "^4.7.0"
