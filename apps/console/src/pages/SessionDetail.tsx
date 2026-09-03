@@ -10,8 +10,15 @@ import { ResourceBadge } from "@/components/ResourceBadge";
 import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { AgentIcon, ClockIcon, DurationIcon, EnvIcon, VaultIcon } from "../components/icons";
+import { ApprovalCard } from "../components/ApprovalCard";
+import { useConsoleNotices } from "../components/NotificationCenter";
 import { ResourcePanel } from "./session-detail/Panels";
 import { SessionInspector, type InspectorTab } from "./session-detail/Inspector";
+import {
+  allowToolThisSession,
+  isToolAllowedThisSession,
+} from "../lib/hitl-session-policy";
+import { derivePendingApprovals } from "../lib/pending-approvals";
 import { RuntimeSettingsDialog } from "./session-detail/RuntimeSettings";
 import {
   TrajectoryOutcomeChip,
@@ -93,6 +100,7 @@ interface PendingEntry {
 export function SessionDetail() {
   const { id } = useParams();
   const { api, streamEvents } = useApi();
+  const { publish: publishNotice } = useConsoleNotices();
   const [events, setEvents] = useState<Event[]>([]);
   /** In-flight assistant streams keyed by message_id. Each entry holds
    *  the deltas accumulated so far. Wiped on the matching agent.message
@@ -156,7 +164,10 @@ export function SessionDetail() {
    *  hiding it is a deliberate "give me the full-width transcript" choice. */
   const [showInspector, setShowInspector] = useState<boolean>(() => {
     try {
-      return localStorage.getItem("oma.session.inspector") !== "hidden";
+      const stored = localStorage.getItem("oma.session.inspector");
+      if (stored === "hidden") return false;
+      if (stored === "shown") return true;
+      return window.innerWidth >= 768;
     } catch {
       return true;
     }
@@ -884,6 +895,107 @@ export function SessionDetail() {
     setInterrupting(false);
   };
 
+  const pendingApprovals = useMemo(
+    () =>
+      derivePendingApprovals(events).filter(
+        (p) => p.sessionThreadId === activeThreadId,
+      ),
+    [events, activeThreadId],
+  );
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const autoAllowedRef = useRef(new Set<string>());
+
+  const confirmTool = async (
+    approval: (typeof pendingApprovals)[number],
+    result: "allow" | "deny",
+    remember = false,
+  ) => {
+    if (!id) return;
+    setConfirmingId(approval.toolUseId);
+    try {
+      await api(`/v1/sessions/${id}/events`, {
+        method: "POST",
+        body: JSON.stringify({
+          events: [{
+            type: "user.tool_confirmation",
+            tool_use_id: approval.toolUseId,
+            result,
+            ...(activeThreadId !== "sthr_primary"
+              ? { session_thread_id: activeThreadId }
+              : {}),
+          }],
+        }),
+      });
+      if (remember) allowToolThisSession(id, approval.toolName);
+    } catch (e) {
+      console.error("tool confirmation failed", e);
+      autoAllowedRef.current.delete(approval.toolUseId);
+    }
+    setConfirmingId(null);
+  };
+
+  useEffect(() => {
+    if (!id) return;
+    for (const approval of pendingApprovals) {
+      if (!isToolAllowedThisSession(id, approval.toolName)) continue;
+      if (autoAllowedRef.current.has(approval.toolUseId)) continue;
+      autoAllowedRef.current.add(approval.toolUseId);
+      void confirmTool(approval, "allow");
+    }
+  }, [id, pendingApprovals]);
+
+  useEffect(() => {
+    if (!id) return;
+    if (pendingApprovals.length === 0) return;
+    const first = pendingApprovals[0];
+    publishNotice({
+      kind: "approval",
+      sessionId: id,
+      title: "Approval required",
+      body: `${first.toolName} on ${id}`,
+      href: `/sessions/${id}`,
+      createdAt: Date.now(),
+    });
+  }, [id, pendingApprovals, publishNotice]);
+
+  const noticedIdleTailRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    noticedIdleTailRef.current = undefined;
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    const lastError = [...events].reverse().find((e) => e.type === "session.error");
+    if (!lastError) return;
+    publishNotice({
+      kind: "error",
+      sessionId: id,
+      title: "Session error",
+      body: lastError.error || "The agent hit an error.",
+      href: `/sessions/${id}`,
+      createdAt: Date.now(),
+    });
+  }, [id, events, publishNotice]);
+
+  useEffect(() => {
+    if (!id || events.length === 0) return;
+    const tail = events[events.length - 1];
+    const prevTail = noticedIdleTailRef.current;
+    noticedIdleTailRef.current = tail.type;
+    if (tail.type !== "session.status_idle") return;
+    if (prevTail === undefined) return;
+    const stop = tail.stop_reason as { type?: string } | undefined;
+    if (stop?.type === "requires_action") return;
+    publishNotice({
+      kind: "completion",
+      sessionId: id,
+      title: "Session finished",
+      body: `${id} returned to idle`,
+      href: `/sessions/${id}`,
+      createdAt: Date.now(),
+    });
+  }, [id, events, publishNotice]);
+
   // Pause / Resume — snapshot + destroy (or reprovision) the sandbox
   // container to stop billing for compute while the session sits idle.
   // Pause 409s while the agent is mid-run (server won't tear down a live
@@ -1426,6 +1538,17 @@ export function SessionDetail() {
             </ConversationContent>
             <ConversationScrollButton />
           </Conversation>
+
+          {pendingApprovals.map((approval) => (
+            <ApprovalCard
+              key={approval.toolUseId}
+              approval={approval}
+              busy={confirmingId === approval.toolUseId}
+              onAllow={() => { void confirmTool(approval, "allow"); }}
+              onDeny={() => { void confirmTool(approval, "deny"); }}
+              onAllowAndRemember={() => { void confirmTool(approval, "allow", true); }}
+            />
+          ))}
 
           {/* Composer: rounded-xl bordered shell with auto-growing
               textarea, attachment chips, model pill, and send/stop.
@@ -2281,9 +2404,14 @@ function EventRender({
       const errorText = isError
         ? (typeof rawContent === "string" ? rawContent : JSON.stringify(rawContent ?? null))
         : undefined;
+      const awaitingConfirm =
+        !pairedResult &&
+        (event as { evaluated_permission?: string }).evaluated_permission === "ask";
       const state = pairedResult
         ? (isError ? "output-error" : "output-available")
-        : "input-available";
+        : awaitingConfirm
+          ? "approval-requested"
+          : "input-available";
       return (
         <Tool>
           <ToolHeader type="dynamic-tool" toolName={title} state={state} />

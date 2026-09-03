@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { formatDuration, pickTickStep } from "../../lib/format";
 import type { Event } from "../../lib/events";
 import { rowActivateKeyDown } from "@/lib/utils";
+import { ResponsiveRail } from "@/components/ResponsiveRail";
 import { bucketIntoTurns, deriveSpans } from "./derive";
 import {
   DURATION_COL_W,
@@ -12,7 +13,6 @@ import {
   FAMILY_LABEL,
   FAMILY_ORDER,
   LABEL_COL_W,
-  SIDE_PANEL_W,
   STATUS_BADGE,
   TRIGGER_DOT,
   TRIGGER_LABEL,
@@ -153,10 +153,14 @@ function DetailPanel({
   onClose: () => void;
 }) {
   return (
-    <aside
-      className="shrink-0 border-l border-border bg-bg flex flex-col min-h-0"
-      style={{ width: SIDE_PANEL_W }}
+    <ResponsiveRail
+      open
+      onClose={onClose}
+      title={selection.spanLabel}
+      label="Timeline detail"
+      desktopClassName="shrink-0 border-l border-border bg-bg flex flex-col min-h-0 w-[420px]"
     >
+      <div className="flex min-h-0 flex-1 flex-col">
       <div className="px-4 py-3 border-b border-border flex items-center gap-3 shrink-0">
         <div className="min-w-0 flex-1">
           <div className="text-[10px] uppercase tracking-wide text-fg-subtle font-mono">
@@ -192,7 +196,8 @@ function DetailPanel({
           </div>
         ))}
       </div>
-    </aside>
+      </div>
+    </ResponsiveRail>
   );
 }
 

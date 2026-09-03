@@ -18,6 +18,7 @@ import { AppBreadcrumb } from "./AppBreadcrumb";
 import { BrandLoader } from "./BrandLoader";
 import { CommandPalette } from "./CommandPalette";
 import { NavigationProgress } from "./NavigationProgress";
+import { NotificationBell, NotificationProvider } from "./NotificationCenter";
 
 /**
  * AppShell — sidebar + main outlet (anyrouter-aligned inset density).
@@ -84,7 +85,8 @@ export function AppShell() {
 
   return (
     <TooltipProvider delayDuration={250}>
-      <SidebarProvider
+      <NotificationProvider>
+        <SidebarProvider
         className="h-svh overflow-hidden"
         style={{
           "--sidebar-width": "14rem",
@@ -129,6 +131,9 @@ export function AppShell() {
             <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
             <Separator orientation="vertical" className="mx-1 h-4" />
             <AppBreadcrumb />
+            <div className="ml-auto">
+              <NotificationBell />
+            </div>
           </header>
 
           <div
@@ -159,7 +164,8 @@ export function AppShell() {
             <Outlet context={outletContext} />
           </main>
         </SidebarInset>
-      </SidebarProvider>
+        </SidebarProvider>
+      </NotificationProvider>
     </TooltipProvider>
   );
 }
