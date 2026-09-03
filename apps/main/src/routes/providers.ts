@@ -26,8 +26,10 @@ type Vars = {
 };
 
 const app = new Hono<Vars>().all("*", (c) => {
-  const env = c.env as Record<string, string | undefined>;
-  const publicOrigin = (env.BETTER_AUTH_URL ?? `https://${c.req.header("host")}`).replace(/\/+$/, "");
+  const publicOrigin = (c.env.BETTER_AUTH_URL ?? `https://${c.req.header("host")}`).replace(
+    /\/+$/,
+    "",
+  );
   const inner = buildAnyRouterRoutes({
     services: () => cfRouteServices(c as never),
     publicOrigin,
