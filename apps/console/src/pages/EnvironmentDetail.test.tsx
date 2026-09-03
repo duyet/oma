@@ -124,6 +124,13 @@ describe("getProviderGuidance", () => {
     expect(getProviderGuidance("local")).toEqual(getProviderGuidance("subprocess"));
   });
 
+  it("documents loopback vault injection and the remaining own-TLS gap for subprocess", () => {
+    const limitations = getProviderGuidance("subprocess")?.limitations ?? [];
+    expect(limitations.join("\n")).toMatch(/git HTTPS/);
+    expect(limitations.join("\n")).toMatch(/does not install a CA/);
+    expect(limitations.join("\n")).not.toMatch(/outbound HTTP is un-injected/);
+  });
+
   it("defaults to 'cloud' guidance when no provider id is given", () => {
     expect(getProviderGuidance(undefined)?.cf.status).toBe("default");
   });

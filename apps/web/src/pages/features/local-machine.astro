@@ -26,7 +26,7 @@ const faqItems = [
   {
     question: "What doesn't work yet on a bridged machine?",
     answer:
-      "Two gaps today: outbound requests from the sandbox aren't routed through the vault credential proxy (so vault-injected auth headers don't reach local calls), and memory-store mounts aren't wired for bridged sandboxes. Both work normally on Cloudflare or Docker-hosted sandboxes.",
+      "The subprocess relay injects vault credentials for git over HTTPS and plain http:// calls via a loopback proxy. Tools that open their own TLS session (gh, curl https://…) still use this machine's credentials, because OMA does not install a machine-wide CA. Memory-store mounts are not wired for bridged sandboxes.",
   },
 ];
 
@@ -192,7 +192,7 @@ manual server to run.</span></code></pre>
       <div>
         <h3 class="font-semibold text-lg mb-3">Known limitations</h3>
         <ul class="space-y-2.5 text-sm text-[var(--color-fg-muted)] leading-relaxed list-disc pl-5">
-          <li>No outbound vault-credential proxy on the user's machine yet — outbound HTTP from a bridged sandbox is not auth-injected.</li>
+          <li>git over HTTPS and plain http:// calls are vault-injected via a loopback proxy. gh, curl https://…, and other own-TLS tools still use the machine's credentials (OMA does not install a CA).</li>
           <li>Memory-store and session-outputs mounts aren't wired for bridged sandboxes.</li>
           <li>If no runtime is online, the first sandbox op fails clearly with a session.error rather than queuing silently.</li>
         </ul>
