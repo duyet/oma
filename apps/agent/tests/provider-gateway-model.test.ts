@@ -176,4 +176,9 @@ describe("Anthropic-compat AnyRouter model ids", () => {
     );
     expect(body.model).toBe("claude-sonnet-4-6");
   });
+
+  it("LanguageModel.modelId is the wire id (span.model_request_start reads this)", () => {
+    const model = resolveModel("claude-sonnet-4-6", "sk-ant-test", ANYROUTER_API_BASE, "ant");
+    expect((model as { modelId: string }).modelId).toBe(ANYROUTER_FREE_MODEL_ID);
+  });
 });

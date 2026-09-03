@@ -13,7 +13,10 @@ generic OpenAI-compat gateways. AnyRouter aliases hyphenated
 `anthropic/claude-sonnet-4-6` to dotted BYOK-only
 `anthropic/claude-sonnet-4.6`, so `resolveModel` (the HTTP body both
 SessionDO and Node send) uses `anyrouter/free` when the request goes to
-AnyRouter. Never send the dotted 4.6 slug.
+AnyRouter — on `openai.chat` (`/chat/completions`) **and** on
+`anthropic()` (`/messages`). An `ANTHROPIC_API_KEY` plus AnyRouter
+`ANTHROPIC_BASE_URL` deploy never hits the OpenAI branch. Never send the
+dotted 4.6 slug.
 
 Providers (wire tag → request shape):
 

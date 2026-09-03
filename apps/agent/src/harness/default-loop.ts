@@ -134,6 +134,12 @@ export function resolvedModelOf(
   return reported;
 }
 
+/** Wire id on the LanguageModel (HTTP `body.model`), not the agent handle. */
+export function wireModelIdOf(model: { modelId?: string }, fallback: string): string {
+  const id = model.modelId?.trim();
+  return id && id.length > 0 ? id : fallback;
+}
+
 /**
  * Map a tool-result (or tool-error) ContentPart to a wire event,
  * normalizing the AI SDK's ToolResultOutput union into the wire's
@@ -367,12 +373,12 @@ export class DefaultHarness implements HarnessInterface {
 
     // 4. Resolve model id (used by per-step span events emitted via the
     //    streamText `start-step`/`finish-step` chunk + onStepFinish hooks).
-    //    The OUTER span.model_request_start/end pair around streamText() that
-    //    used to live here was removed: ai-sdk's streamText loops internally
-    //    (one call per tool round-trip), so a single outer span hid the actual
-    //    per-call timing + per-call usage that Anthropic's Managed Agents wire
-    //    spec exposes.
-    const modelId = typeof agent.model === "string" ? agent.model : agent.model.id;
+    //    LanguageModel.modelId is the HTTP JSON `model` field. The agent
+    //    handle (`claude-sonnet-4-6`) is not what went on the wire — live
+    //    recert after #455 logged the handle while anthropic() sent it
+    //    unchanged and AnyRouter 404'd the dotted BYOK alias.
+    const agentModelId = typeof agent.model === "string" ? agent.model : agent.model.id;
+    const modelId = wireModelIdOf(model as { modelId?: string }, agentModelId);
 
     // 5. Run agent loop with retry + timeout + prompt caching.
     //
