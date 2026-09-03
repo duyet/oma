@@ -156,6 +156,11 @@ describe("GET /v1/providers/anyrouter/status (two-segment mount, e2e)", () => {
       if (!tenantId) return c.json({ error: "authentication required" }, 401);
       return c.json({ connected: false });
     });
+    pkg.get("/connect", (c) => {
+      const tenantId = c.get("tenant_id");
+      if (!tenantId) return c.json({ error: "authentication required" }, 401);
+      return c.redirect("https://anyrouter.dev/oauth", 302);
+    });
     const outer = new Hono();
     outer.use("*", async (c, next) => {
       c.set("tenant_id" as never, "tenant-a" as never);
@@ -181,5 +186,13 @@ describe("GET /v1/providers/anyrouter/status (two-segment mount, e2e)", () => {
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ connected: false });
+  });
+
+  it("reaches /connect as a 302 when mountPath names both segments", async () => {
+    const res = await makeWorker({ mountPath: "/providers/anyrouter" }).request(
+      "/v1/providers/anyrouter/connect",
+    );
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("https://anyrouter.dev/oauth");
   });
 });
