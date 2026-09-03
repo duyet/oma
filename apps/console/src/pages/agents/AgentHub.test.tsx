@@ -12,6 +12,7 @@ import { AgentOverviewTab } from "./AgentOverviewTab";
 import { AgentSessionsTab } from "./AgentSessionsTab";
 import { AgentDeploymentsTab } from "./AgentDeploymentsTab";
 import { AgentPublishingTab } from "./AgentPublishingTab";
+import { AgentMonitorTab } from "./AgentMonitorTab";
 
 const agentV2 = {
   id: "agent_1",
@@ -42,6 +43,40 @@ function mountHubHandlers() {
     http.get("/v1/sessions", () => HttpResponse.json({ data: [] })),
     http.get("/v1/deployments", () => HttpResponse.json({ data: [] })),
     http.get("/v1/agents/agent_1/publications", () => HttpResponse.json({ data: [] })),
+    http.get("/v1/agents/agent_1/schedules", () => HttpResponse.json({ data: [] })),
+    http.get("/v1/agents/agent_1/stats", () =>
+      HttpResponse.json({
+        sessions: 0,
+        est_model_cost_usd: 0,
+        input_tokens: 0,
+        output_tokens: 0,
+        sandbox_seconds: 0,
+        est_sandbox_cost_usd: 0,
+      }),
+    ),
+    http.get("/v1/agents/agent_1/analytics", () =>
+      HttpResponse.json({
+        range: "30d",
+        total_sessions: 0,
+        completed_sessions: 0,
+        error_count: 0,
+        error_rate: 0,
+        tokens: {
+          input: 0,
+          output: 0,
+          total: 0,
+          per_session: {
+            input: { p50: 0, p90: 0, p95: 0 },
+            output: { p50: 0, p90: 0, p95: 0 },
+            total: { p50: 0, p90: 0, p95: 0 },
+          },
+        },
+        total_turns: 0,
+        turns_per_session: { p50: 0, p90: 0, p95: 0 },
+        total_tool_calls: 0,
+        sessions_over_time: [],
+      }),
+    ),
     // AgentRunReadiness checklist probes.
     http.get("/v1/environments", () =>
       HttpResponse.json({ data: [{ id: "env_1", name: "Default" }] }),
@@ -62,6 +97,7 @@ function renderHub(initial = "/agents/agent_1") {
               <Route path="sessions" element={<AgentSessionsTab />} />
               <Route path="deployments" element={<AgentDeploymentsTab />} />
               <Route path="publishing" element={<AgentPublishingTab />} />
+              <Route path="monitor" element={<AgentMonitorTab />} />
             </Route>
           </Routes>
         </MemoryRouter>
@@ -99,6 +135,7 @@ describe("<AgentDetail /> hub layout", () => {
     expect(screen.getByRole("link", { name: "Agent" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Sessions" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Deployments" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Monitor" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Observability" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Publishing" })).toBeInTheDocument();
     // Active tab (Agent) shows the config view.
@@ -131,6 +168,15 @@ describe("<AgentDetail /> hub layout", () => {
     expect(
       screen.getByText("Publish this agent to share a public chat page, embed widget, or QR code."),
     ).toBeInTheDocument();
+  });
+
+  it("navigates to the Monitor tab and shows the empty-run state", async () => {
+    renderHub();
+    await screen.findByRole("heading", { name: "My Agent" });
+    await userEvent.click(screen.getByRole("link", { name: "Monitor" }));
+    expect(await screen.findByText("No runs yet")).toBeInTheDocument();
+    expect(await screen.findByText("never run")).toBeInTheDocument();
+    expect(screen.getByTestId("agent-health-strip")).toHaveTextContent("Last run");
   });
 });
 

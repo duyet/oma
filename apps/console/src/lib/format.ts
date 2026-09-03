@@ -105,6 +105,13 @@ export function formatRelative(diffMs: number): string {
   return `${Math.floor(mo / 12)}y ago`;
 }
 
+/** `3h ago` when `diffMs` is `now - then` in the past; `in 6h` when then is ahead. */
+export function formatRelativeSigned(diffMs: number): string {
+  const past = formatRelative(diffMs);
+  if (diffMs >= 0) return past;
+  return `in ${past.replace(/ ago$/, "")}`;
+}
+
 /**
  * Truncate a long ID like `agt_01ABCDEF...XYZ` to a few-char prefix +
  * ellipsis + suffix, used as a fallback label when the resource's

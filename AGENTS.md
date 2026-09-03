@@ -334,7 +334,7 @@ Sessions communicate through a typed event log. Events fall into four categories
 | `agent.custom_tool_use` | Agent calls a custom tool (pauses session) |
 | `agent.mcp_tool_use` | Agent calls an MCP server tool |
 | `agent.mcp_tool_result` | Result from an MCP tool |
-| `agent.status` | Structured progress heartbeat (`state`, `summary`, `step`, `total_steps`, `blocked_on`) for long-running work. OMA extension — purely observational, excluded from model context. Emitted per model turn by `default`, and on a fixed cadence by the `long-running` harness. |
+| `agent.status` | Structured progress heartbeat (`state`, `summary`, `step`, `total_steps`, `blocked_on`) for long-running work. OMA extension — purely observational, excluded from model context. Emitted per model turn by `default`, and on a fixed cadence by the `long-running` harness. The Console **Monitor** tab on an agent (`/agents/:id/monitor`) surfaces these as a live step bar, blocked-on warning, and heartbeat log. The agent header health strip shows last/next run, success rate, and cost/run from schedules + session stats. |
 
 **Session events** (lifecycle signals):
 

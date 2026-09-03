@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/useConfirm";
 import { NewSessionDialog } from "../components/NewSessionDialog";
 import { AgentEditDialog } from "./agents/AgentEditDialog";
+import { AgentHealthStrip } from "./agents/AgentHealthStrip";
 import type { AppOutletContext } from "../components/AppShell";
 import type { AgentRecord as Agent } from "../types/agent";
 
@@ -42,6 +43,7 @@ const TABS: { label: string; to: string; end?: boolean }[] = [
   { label: "Sessions", to: "sessions" },
   { label: "Deployments", to: "deployments" },
   { label: "Schedules", to: "schedules" },
+  { label: "Monitor", to: "monitor" },
   { label: "Observability", to: "observability" },
   { label: "Publishing", to: "publishing" },
 ];
@@ -159,6 +161,7 @@ export function AgentDetail() {
               </>
             )}
           </div>
+          <AgentHealthStrip agentId={agent.id} />
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Button variant="default" size="sm" onClick={() => setNewSessionOpen(true)}>

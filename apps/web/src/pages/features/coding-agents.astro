@@ -16,7 +16,7 @@ const faqItems = [
   {
     question: "How do I watch progress on a multi-hour run?",
     answer:
-      "The harness emits agent.status heartbeats — state, a summary, step/total_steps, and blocked_on when it's waiting on something — on a fixed cadence, purely observational and excluded from model context. The Console surfaces these as a live progress feed.",
+      "The harness emits agent.status heartbeats — state, a summary, step/total_steps, and blocked_on when it's waiting on something — on a fixed cadence, purely observational and excluded from model context. The Console Agent → Monitor tab is the live progress feed (step bar, heartbeat log, lag warning).",
   },
   {
     question: "How do I keep costs down while an agent works for hours?",
@@ -129,8 +129,9 @@ const schemas = [
         <p class="text-[var(--color-fg-muted)] leading-relaxed">
           agent.status events carry state, a summary, step/total_steps, and
           blocked_on — a machine-readable signal, not just free-text
-          messages. Purely observational, excluded from model context, so
-          it never perturbs the prompt cache.
+          messages. The Console Agent → Monitor tab renders the live step
+          bar, blocked-on warning, and heartbeat log. Purely observational,
+          excluded from model context, so it never perturbs the prompt cache.
         </p>
       </div>
       <div>

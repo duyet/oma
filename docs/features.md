@@ -105,6 +105,7 @@ For tasks that run for minutes or hours, standard text messages are hard to pars
 ```
 
 * **Heartbeat interval**: Fires on every model turn. The `long-running` harness fires wall-clock heartbeats (default every 60s) to indicate liveness during slow tool runs.
+* **Console Monitor tab**: Agent detail (`/agents/:id/monitor`) renders the current or last session, a `step / total_steps` progress bar, an amber **Waiting for:** line when `blocked_on` is set, and a heartbeat log. Heartbeat lag warns when the gap exceeds 2× the expected interval (default 5 minutes). The agent header health strip shows last/next run, uptime, success rate, avg duration, and cost/run.
 * **Cache optimization**: These heartbeats are stored in the Durable Object log but excluded from prompt context history. This avoids polluting prompt-cache keys or triggering premature token compaction.
 * **Crash recovery**: Re-instantiating the session DO automatically parses the log and catches up step counters without duplicates.
 
