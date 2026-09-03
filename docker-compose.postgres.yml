@@ -103,7 +103,9 @@ services:
       DATABASE_URL: postgres://oma:oma@postgres:5432/oma
       OMA_VAULT_CA_DIR: /app/data/oma-vault-ca
       OMA_VAULT_PORT: "14322"
-      OMA_TENANT: ${OMA_TENANT:-*}
+      # Unset/empty/"*" is wildcard (fail-closed when credentials span
+      # more than one tenant). Set OMA_TENANT=tn_xxx for multi-user.
+      OMA_TENANT: ${OMA_TENANT:-}
     volumes:
       - ./data:/app/data
     depends_on:

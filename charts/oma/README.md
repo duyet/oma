@@ -107,7 +107,7 @@ curl localhost:8787/health
 | `config.k8s.image` | `node:22-slim` | Container image for sandbox pods |
 | `config.k8s.cpu` / `.memory` | `500m` / `512Mi` | Sandbox pod resource requests |
 | `config.k8s.serviceAccount` | `""` (→ main SA) | ServiceAccount sandbox pods run as |
-| `vault.databasePath` / `.caDir` / `.port` / `.tenant` | `/app/data/oma.db` / `/app/data/oma-vault-ca` / `14322` / `*` | oma-vault sidecar env |
+| `vault.databasePath` / `.caDir` / `.port` / `.tenant` | `/app/data/oma.db` / `/app/data/oma-vault-ca` / `14322` / `""` | oma-vault sidecar env. Empty tenant is wildcard (fail-closed when credentials span >1 tenant). Set `vault.tenant` to a `tn_*` id for multi-user. |
 | `vault.resources` | `50m/128Mi` requests, `512Mi` limits | oma-vault container resources |
 | `service.type` / `.port` / `.vaultPort` | `ClusterIP` / `8787` / `14322` | Cluster Service ports |
 | `ingress.enabled` / `.className` / `.host` | `false` / `traefik` / `app.oma.duyet.net` | Public Ingress (override host per-deploy) |

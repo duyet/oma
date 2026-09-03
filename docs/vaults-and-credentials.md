@@ -32,3 +32,5 @@ Three credential types share one resolver:
 | `cap_cli` | sandbox CLI invocations match `cli_id` in the cap registry (`gh`, `glab`, `aws`, …) | per-CLI |
 
 Max 20 credentials per vault. Each forward emits a structured `op:"mcp_proxy.forward"` log. Full design: [`mcp-credential-architecture.md`](mcp-credential-architecture.md), [docs.oma.duyet.net/build/vault-and-mcp](https://docs.oma.duyet.net/build/vault-and-mcp/).
+
+**Self-host `oma-vault` tenant scope.** The sidecar matches by hostname under `OMA_TENANT`. Unset / empty / `*` is wildcard and **refuses to start** when `credentials` has more than one distinct `tenant_id` (single-operator still boots). Set `OMA_TENANT=tn_xxx` (compose `.env`) or `vault.tenant` (Helm) for multi-user. Compose and the chart do not default to `*`.

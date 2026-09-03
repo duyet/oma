@@ -735,6 +735,15 @@ The CA at `./data/oma-vault-ca/ca.crt` is regenerated on first vault
 start and persisted across restarts. Sandboxes mounted with the shared
 `./data` volume pick it up automatically through `OMA_VAULT_CA_CERT`.
 
+**Tenant scope (`OMA_TENANT`).** Unset, empty, or `*` is wildcard: the
+sidecar matches credentials by hostname across tenants. That is safe for
+a single-operator install (zero or one `tenant_id` in `credentials`).
+If the table has more than one distinct `tenant_id`, oma-vault **refuses
+to start** rather than injecting the first matching token. For a
+multi-user deploy set `OMA_TENANT=tn_xxx` in `.env` (compose) or
+`vault.tenant` (Helm) so lookup cannot cross tenants. Compose and the
+chart no longer default to `*`.
+
 ## Architecture
 
 ```

@@ -608,6 +608,8 @@ curl -s $BASE/v1/vaults/$VAULT_ID/credentials \
 6. Request reaches the external service with credentials
 7. Sandbox never sees the raw token
 
+Self-host `oma-vault` matches by hostname under `OMA_TENANT`. Unset / empty / `*` is wildcard and refuses to start when `credentials` has more than one distinct `tenant_id` (single-operator still boots). Set `OMA_TENANT=tn_xxx` (compose) or `vault.tenant` (Helm) for multi-user. Compose and the chart do not default to `*`.
+
 ---
 
 ## MCP Servers
@@ -1514,7 +1516,9 @@ manifests at `infra/homelab/oma/` and speaks the same `SANDBOX_PROVIDER=k8s`
 path the Node runtime resolves through the full `SandboxProviderRegistry`.
 See [`charts/oma/README.md`](charts/oma/README.md) and
 [`docs/self-host.md`](docs/self-host.md#quick-start-kubernetes--helm) for
-install + values reference.
+install + values reference. `vault.tenant` defaults to empty (wildcard);
+set it to a `tn_*` id on multi-user installs so outbound matching cannot
+cross tenants (issue #428).
 
 ---
 
