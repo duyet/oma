@@ -17,6 +17,7 @@ import {
   useSessionAnalytics,
   type SessionAnalytics,
 } from "./analytics";
+import { ArtifactsPanel } from "./ArtifactsPanel";
 
 /**
  * Right-rail session Inspector.
@@ -36,7 +37,7 @@ import {
  *      sandbox provider, packages, networking).
  */
 
-export type InspectorTab = "overview" | "usage" | "tools" | "sandbox" | "files";
+export type InspectorTab = "overview" | "usage" | "tools" | "sandbox" | "files" | "artifacts";
 
 const TABS: Array<{ id: InspectorTab; label: string }> = [
   { id: "overview", label: "Overview" },
@@ -44,6 +45,7 @@ const TABS: Array<{ id: InspectorTab; label: string }> = [
   { id: "tools", label: "Tools" },
   { id: "sandbox", label: "Sandbox" },
   { id: "files", label: "Files" },
+  { id: "artifacts", label: "Artifacts" },
 ];
 
 interface AgentRecord {
@@ -865,7 +867,7 @@ export function SessionInspector({
         </button>
       </div>
 
-      <div role="tablist" aria-label="Inspector section" className="px-2 flex gap-0.5 shrink-0">
+      <div role="tablist" aria-label="Inspector section" className="px-2 flex flex-wrap gap-0.5 shrink-0">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -901,6 +903,7 @@ export function SessionInspector({
           <SandboxTab meta={meta} environment={environment} sandboxStatus={sandboxStatus} />
         )}
         {tab === "files" && <FilesTab sessionId={sessionId} />}
+        {tab === "artifacts" && <ArtifactsPanel sessionId={sessionId} events={events} />}
       </div>
     </aside>
   );

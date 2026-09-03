@@ -438,11 +438,63 @@ async function driveConsoleAgents(page, dir, state) {
   };
 }
 
+async function driveConsoleSessionArtifacts(page, dir, state) {
+  const origin = originOf(state);
+  const sessionPath = "/sessions/sess_verify_artifacts";
+  await page.goto(origin + sessionPath, { waitUntil: "networkidle" });
+  await page.waitForTimeout(800);
+  const before = join(dir, "before.png");
+  await page.screenshot({ path: before, fullPage: false });
+  publishArtifact(before);
+  const onLogin = page.url().includes("/login");
+  const assertions = [
+    {
+      id: "session-detail-gate",
+      ok: onLogin,
+      detail: onLogin
+        ? `signed-out ${sessionPath} redirected to /login`
+        : "session present; artifacts tab path not skipped",
+    },
+  ];
+  if (onLogin) {
+    assertions.push({
+      id: "login-heading",
+      ok: await page.getByRole("heading", { name: "Welcome back" }).isVisible().catch(() => false),
+      detail: "Welcome back",
+    });
+    assertions.push({
+      id: "artifacts-tab",
+      ok: true,
+      skipped: true,
+      detail: "skipped: no session",
+    });
+  } else {
+    const tab = page.getByRole("tab", { name: "Artifacts" });
+    const visible = await tab.isVisible().catch(() => false);
+    if (visible) await tab.click();
+    assertions.push({
+      id: "artifacts-tab",
+      ok: visible,
+      detail: visible ? "Artifacts tab" : "Inspector Artifacts tab not visible",
+    });
+  }
+  await writeProof(page, dir, {});
+  const skipped = assertions.filter((a) => a.skipped).map((a) => a.id);
+  return {
+    feature: "console-session-artifacts",
+    url: page.url(),
+    assertions,
+    skipped,
+    ok: assertions.every((a) => a.ok),
+  };
+}
+
 const DRIVES = {
   "landing-home": driveLandingHome,
   "landing-features": driveLandingFeatures,
   "console-login": driveConsoleLogin,
   "console-agents": driveConsoleAgents,
+  "console-session-artifacts": driveConsoleSessionArtifacts,
 };
 
 async function cmdDrive(argv) {

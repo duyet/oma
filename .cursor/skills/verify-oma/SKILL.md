@@ -145,6 +145,6 @@ If launch failed partway, still run cleanup.
 | `status` | Print state.json |
 | `cleanup` | Stop what launch started |
 
-Feature ids: `landing-home`, `landing-features`, `console-login`, `console-agents`.
+Feature ids: `landing-home`, `landing-features`, `console-login`, `console-agents`, `console-session-artifacts`.
 
 Keep the map honest with `/maintain-verification-skill` when routes, headings, or launch commands drift.

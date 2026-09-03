@@ -150,3 +150,19 @@ Agents can post status transitions (e.g. session done, error, blocked) to extern
 * **Slack**: Formatted using Slack mrkdwn and emoji blocks.
 * **Matrix**: Sent via Matrix Client-Server API room messages.
 * **Email**: Subject = optional `subject_prefix` + agent/session/status; body = the same status summary line, the final agent message, and the session link. Delivered through the deployment's email sender (Cloudflare `SEND_EMAIL` binding, or `SMTP_HOST` + friends on self-host Node) — with no sender configured the target is skipped with a logged warning.
+
+---
+
+## 6. Console Artifacts panel
+
+Session detail's Inspector rail has an **Artifacts** tab next to Overview / Usage / Tools / Sandbox / Files. It is a client-side aggregation, not a new store:
+
+| Source | What shows up |
+|---|---|
+| `agent.tool_use` for `write` / `edit` / `output_file` | Target path, inline text/code preview from `input.content` |
+| `agent.tool_result` image/document blocks | Thumbnails / file cards (including `is_error` results) |
+| `user.message` attachments | The same I/O set as the chat transcript |
+| `GET /v1/sessions/:id/outputs` | Session output files the Files tab already lists; listing-only rows need size ≥ 1 KB and a previewable type |
+
+Grid/list toggle, source + extension filters, image lightbox, PDF iframe, and `CodeBlock` for text/code all run against that derived list. SSE appends recompute the list with no extra polling.
+
