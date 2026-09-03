@@ -48,6 +48,17 @@ const MAIN_NODE_ENTRY = join(REPO_ROOT, "apps/main-node/src/index.ts");
 // most portable fix.
 const TSX_BIN = join(REPO_ROOT, "apps/main-node/node_modules/.bin/tsx");
 
+// Each case does 2–3 full tsx boots. A hung fetch() with no abort, or a
+// leaked child after SIGKILL, used to eat the whole 60s vitest budget
+// before startMainNode could throw. Track every spawn so afterEach can
+// still reap a child whose handle was never assigned (timeout mid-boot).
+const liveChildren = new Set<ChildProcess>();
+
+const HEALTH_WAIT_MS = 45_000;
+const HEALTH_FETCH_MS = 1_500;
+const RECOVERY_WAIT_MS = 10_000;
+const KILL_WAIT_MS = 3_000;
+
 async function startMainNode(opts: { dataDir: string }): Promise<ProcessHandle> {
   // Run the real binary via tsx (same toolchain `pnpm start` uses).
   // ANTHROPIC_API_KEY is intentionally unset — we never trigger a real
@@ -63,22 +74,38 @@ async function startMainNode(opts: { dataDir: string }): Promise<ProcessHandle> 
     [MAIN_NODE_ENTRY],
     {
       cwd: REPO_ROOT,
+      // New process group so killHard can SIGKILL tsx *and* its node
+      // descendant. A SIGKILL of only the wrapper left a live sqlite
+      // holder and the next boot hung in drizzle migrate.
+      detached: true,
       env: {
         ...process.env,
         PORT: String(port),
+        // Bind + probe IPv4 loopback. `localhost` can stick on ::1 while
+        // the server is on 0.0.0.0, and fetch() has no default timeout.
+        HOST: "127.0.0.1",
         DATABASE_PATH: join(opts.dataDir, "oma.db"),
         AUTH_DATABASE_PATH: join(opts.dataDir, "auth.db"),
         SANDBOX_WORKDIR: join(opts.dataDir, "sandboxes"),
         MEMORY_BLOB_DIR: join(opts.dataDir, "memory-blobs"),
+        FILES_BLOB_DIR: join(opts.dataDir, "files-blobs"),
+        SESSION_OUTPUTS_DIR: join(opts.dataDir, "outputs"),
         AUTH_DISABLED: "1",
         BETTER_AUTH_SECRET: "test-secret-only-for-vitest-do-not-deploy",
         PLATFORM_ROOT_SECRET: "test-root-secret-only-for-vitest",
-        // Quiet — too much log noise in test output otherwise.
+        // Pin the cheap local adapter so bootstrap's per-orphan
+        // getOrCreate() cannot inherit a gateway probe from the parent env.
+        SANDBOX_PROVIDER: "subprocess",
+        DATABASE_URL: "",
+        OPENSHELL_GATEWAY_ENDPOINT: "",
+        OTEL_EXPORTER_OTLP_ENDPOINT: "",
         NODE_ENV: "test",
       },
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
+  liveChildren.add(child);
+  child.once("exit", () => liveChildren.delete(child));
 
   // Buffer logs in case a test fails — print them on demand. We don't
   // fail the test if main-node logs warnings; only health/HTTP probes
@@ -95,43 +122,114 @@ async function startMainNode(opts: { dataDir: string }): Promise<ProcessHandle> 
     if (DEBUG) process.stderr.write(`[main-node:${port}] ${s}`);
   });
 
-  // Wait for /health to respond. 60s — pino + prom-client + OTel SDK
-  // init add a few seconds to cold-start vs the pre-P6 boot path.
-  const deadline = Date.now() + 60_000;
+  let spawnErr: Error | null = null;
+  child.once("error", (err: Error) => {
+    spawnErr = err;
+    logBuf.push(String(err));
+  });
+
+  // Per-spawn wait is below the suite timeout on purpose: a hung boot
+  // must throw *this* error (with logs) instead of a generic vitest 60s
+  // timeout. Double-crash does 3 boots, so the describe timeout is 180s.
+  const deadline = Date.now() + HEALTH_WAIT_MS;
   while (Date.now() < deadline) {
+    if (spawnErr) {
+      await killProcessTree(child);
+      throw new Error(`main-node failed to spawn: ${spawnErr.message}\n${logBuf.join("")}`);
+    }
+    if (child.exitCode !== null || child.signalCode !== null) {
+      throw new Error(
+        `main-node exited before /health (code=${child.exitCode}, signal=${child.signalCode}). Logs:\n${logBuf.join("")}`,
+      );
+    }
     try {
-      const res = await fetch(`http://localhost:${port}/health`);
+      const res = await fetch(`http://127.0.0.1:${port}/health`, {
+        signal: AbortSignal.timeout(HEALTH_FETCH_MS),
+      });
       if (res.ok) {
-        // Bootstrap runs *after* /health starts answering on some boot
-        // orderings; give it a beat to drain orphan recovery before the
-        // test reads SQL. ~250ms is enough for a few-row scan; if the
-        // recovery is still in flight by then the test's readiness
-        // assertion will fail loudly anyway.
-        await sleep(300);
+        // Bootstrap currently runs before listen, but poll anyway so a
+        // boot-order change can't race the SQL assertions below.
+        await waitUntilNoRunning(join(opts.dataDir, "oma.db"), RECOVERY_WAIT_MS);
         return { child, port, dataDir: opts.dataDir, logBuf };
       }
     } catch {
-      // not ready yet
+      // not ready yet (or fetch aborted)
     }
-    await sleep(200);
+    await sleep(100);
   }
-  // Timeout — print buffered logs to help debug.
   // eslint-disable-next-line no-console
   console.error("main-node never became ready. Logs:\n" + logBuf.join(""));
-  child.kill("SIGKILL");
-  throw new Error(`main-node didn't respond on /health within 60s`);
+  await killProcessTree(child);
+  throw new Error(`main-node didn't respond on /health within ${HEALTH_WAIT_MS}ms`);
+}
+
+function killProcessTree(child: ChildProcess): Promise<void> {
+  return new Promise((res) => {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      liveChildren.delete(child);
+      return res();
+    }
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      liveChildren.delete(child);
+      res();
+    };
+    child.once("exit", finish);
+    const pid = child.pid;
+    try {
+      if (pid) process.kill(-pid, "SIGKILL");
+    } catch {
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        /* already dead */
+      }
+    }
+    const timer = setTimeout(() => {
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        /* already dead */
+      }
+      finish();
+    }, KILL_WAIT_MS);
+  });
 }
 
 function killHard(handle: ProcessHandle): Promise<void> {
-  return new Promise((res) => {
-    if (handle.child.exitCode !== null) return res();
-    handle.child.once("exit", () => res());
-    handle.child.kill("SIGKILL");
-  });
+  return killProcessTree(handle.child);
 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+async function waitUntilNoRunning(dbPath: string, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let last: number | null = null;
+  while (Date.now() < deadline) {
+    try {
+      const db = new Database(dbPath, { readonly: true, fileMustExist: true });
+      try {
+        const row = db
+          .prepare(`SELECT COUNT(*) AS n FROM sessions WHERE status = 'running'`)
+          .get() as { n: number };
+        last = Number(row.n);
+        if (last === 0) return;
+      } finally {
+        db.close();
+      }
+    } catch {
+      // migrate still in flight, or sqlite briefly busy after SIGKILL
+    }
+    await sleep(50);
+  }
+  throw new Error(
+    `orphan recovery did not drain status='running' within ${timeoutMs}ms (n=${last})`,
+  );
 }
 
 function pickPort(): Promise<number> {
@@ -156,7 +254,7 @@ function pickPort(): Promise<number> {
   });
 }
 
-describe("main-node crash recovery (real process, SIGKILL)", () => {
+describe("main-node crash recovery (real process, SIGKILL)", { timeout: 180_000 }, () => {
   let dataDir: string;
   let h: ProcessHandle | null = null;
 
@@ -170,6 +268,9 @@ describe("main-node crash recovery (real process, SIGKILL)", () => {
       await killHard(h).catch(() => {});
       h = null;
     }
+    const leftover = [...liveChildren];
+    liveChildren.clear();
+    await Promise.all(leftover.map((c) => killProcessTree(c).catch(() => {})));
     try {
       rmSync(dataDir, { recursive: true, force: true });
     } catch {
