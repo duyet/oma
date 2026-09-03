@@ -724,6 +724,9 @@ importers:
       '@duyet/oma-session-runtime':
         specifier: workspace:*
         version: link:../../packages/session-runtime
+      '@duyet/oma-session-secrets-store':
+        specifier: workspace:*
+        version: link:../../packages/session-secrets-store
       '@duyet/oma-sessions-store':
         specifier: workspace:*
         version: link:../../packages/sessions-store
@@ -1280,6 +1283,9 @@ importers:
       '@duyet/oma-session-runtime':
         specifier: workspace:*
         version: link:../session-runtime
+      '@duyet/oma-session-secrets-store':
+        specifier: workspace:*
+        version: link:../session-secrets-store
       '@duyet/oma-sessions-store':
         specifier: workspace:*
         version: link:../sessions-store

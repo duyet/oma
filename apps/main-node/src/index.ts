@@ -183,6 +183,10 @@ import { BetterSqlite3SqlClient } from "@duyet/oma-sql-client/adapters/better-sq
 import { senderFromEnv } from "@duyet/oma-email/adapters/nodemailer";
 import { SqlKvStore } from "@duyet/oma-kv-store/adapters/sql";
 import {
+  KvSessionSecretRepo,
+  SessionSecretService,
+} from "@duyet/oma-session-secrets-store";
+import {
   selectBrowserHarness,
   buildSelectedBrowserHarness,
 } from "@duyet/oma-browser-harness/select";
@@ -1111,6 +1115,9 @@ const services: RouteServices = {
   modelCards: modelCardsService,
   filesBlob,
   kv,
+  sessionSecrets: new SessionSecretService({
+    repo: new KvSessionSecretRepo(kv),
+  }),
   newEventLog,
   hub: {
     publish: (sid, ev) => hub.publish(sid, ev as SessionEvent),

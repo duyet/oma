@@ -26,6 +26,7 @@ import type {
   Tracer,
 } from "@duyet/oma-observability";
 import type { BrowserHarness } from "@duyet/oma-browser-harness";
+import type { SessionSecretService } from "@duyet/oma-session-secrets-store";
 
 export interface BackgroundRunner {
   /** Fire-and-forget on Node (with logged error handler), waitUntil on CF. */
@@ -123,6 +124,8 @@ export interface RouteServices {
   // backend configured — routes that need it (skills) 500 with an explicit
   // "FILES_BUCKET binding not configured" message rather than throwing. ──
   filesBlob?: BlobStore | null;
+  /** Per-session env / github secret payloads. Optional for legacy fixtures. */
+  sessionSecrets?: SessionSecretService;
 }
 
 /** Per-request services accessor. CF passes a callback that resolves

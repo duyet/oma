@@ -16,8 +16,23 @@ import type { Env } from "@duyet/oma-shared";
 import type { SessionSecretRepo } from "../ports";
 import { SessionSecretService } from "../service";
 
+/**
+ * Minimal KV surface the adapter needs. Cloudflare `KVNamespace` and the
+ * runtime-agnostic `KvStore` (SQL-backed on self-host) both satisfy this.
+ */
+export interface SessionSecretKv {
+  get(key: string): Promise<string | null>;
+  put(key: string, value: string): Promise<void>;
+  delete(key: string): Promise<void>;
+  list(opts: { prefix: string; cursor?: string }): Promise<{
+    keys: Array<{ name: string }>;
+    list_complete: boolean;
+    cursor?: string;
+  }>;
+}
+
 export class KvSessionSecretRepo implements SessionSecretRepo {
-  constructor(private readonly kv: KVNamespace) {}
+  constructor(private readonly kv: SessionSecretKv) {}
 
   async put(
     tenantId: string,
@@ -98,6 +113,6 @@ export function createCfSessionSecretService(
   env: Pick<Env, "CONFIG_KV">,
 ): SessionSecretService {
   return new SessionSecretService({
-    repo: new KvSessionSecretRepo(env.CONFIG_KV),
+    repo: new KvSessionSecretRepo(env.CONFIG_KV as unknown as SessionSecretKv),
   });
 }

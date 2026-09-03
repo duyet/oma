@@ -28,6 +28,7 @@
     "@duyet/oma-quotas": "workspace:*",
     "@duyet/oma-scheduler": "workspace:*",
     "@duyet/oma-session-runtime": "workspace:*",
+    "@duyet/oma-session-secrets-store": "workspace:*",
     "@duyet/oma-sessions-store": "workspace:*",
     "@duyet/oma-shared": "workspace:*",
     "@duyet/oma-sql-client": "workspace:*",

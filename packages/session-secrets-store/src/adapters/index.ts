@@ -3,4 +3,8 @@
 // callers in apps/main and apps/agent (via packages/services) use to
 // instantiate the service.
 
-export { KvSessionSecretRepo, createCfSessionSecretService } from "./cf";
+export {
+  KvSessionSecretRepo,
+  createCfSessionSecretService,
+} from "./cf";
+export type { SessionSecretKv } from "./cf";
