@@ -52,6 +52,7 @@
     "@duyet/oma-scheduler": "workspace:*",
     "@duyet/oma-schema": "workspace:*",
     "@duyet/oma-session-runtime": "workspace:*",
+    "@duyet/oma-session-secrets-store": "workspace:*",
     "@duyet/oma-sessions-store": "workspace:*",
     "@duyet/oma-shared": "workspace:*",
     "@duyet/oma-slack": "workspace:*",

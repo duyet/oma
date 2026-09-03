@@ -47,6 +47,7 @@ function buildRouteServices(services: Services, sql: CfD1SqlClient): RouteServic
     environments: services.environments,
     kv: services.kv,
     filesBlob: services.filesBlob,
+    sessionSecrets: services.sessionSecrets,
     newEventLog: () => ({
       appendAsync: async () => {},
       getEventsAsync: async () => [],

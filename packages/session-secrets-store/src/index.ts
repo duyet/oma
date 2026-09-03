@@ -17,4 +17,8 @@ export * from "./ports";
 export { SessionSecretService } from "./service";
 export type { SessionSecretServiceDeps } from "./service";
 
-export { createCfSessionSecretService, KvSessionSecretRepo } from "./adapters";
+export {
+  createCfSessionSecretService,
+  KvSessionSecretRepo,
+} from "./adapters";
+export type { SessionSecretKv } from "./adapters";

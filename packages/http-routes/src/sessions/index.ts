@@ -37,6 +37,7 @@ import {
   SessionResourceNotFoundError,
 } from "@duyet/oma-sessions-store";
 import type { SessionRouter, SessionInitParams } from "@duyet/oma-session-runtime";
+import type { SessionSecretService } from "@duyet/oma-session-secrets-store";
 import type { RouteServicesArg } from "../types";
 import { resolveSessionEnvironmentId } from "./resolve-environment";
 import { redactMcpServers } from "../mcp-server-redaction";
@@ -514,11 +515,14 @@ export function buildSessionRoutes(deps: SessionRoutesDeps) {
       ? await deps.fetchVaultCredentials({ tenantId: t, vaultIds })
       : [];
 
-    // Build initial resource inputs (non-file).
+    // Build initial resource inputs (non-file). Secret payloads stay off the
+    // resource row and are written to sessionSecrets after create, keyed by
+    // the minted resource id (issue #426).
     const nonFileInputs: Array<{
       type: "memory_store" | "github_repository" | "env";
       [k: string]: unknown;
     }> = [];
+    const secretValues: Array<string | undefined> = [];
     for (const res of body.resources ?? []) {
       if (res.type === "memory_store" && res.memory_store_id) {
         nonFileInputs.push({
@@ -531,6 +535,7 @@ export function buildSessionRoutes(deps: SessionRoutesDeps) {
               ? res.instructions.slice(0, 4096)
               : undefined,
         });
+        secretValues.push(undefined);
       } else if (
         (res.type === "github_repository" || res.type === "github_repo") &&
         (res.url || res.repo_url)
@@ -543,9 +548,18 @@ export function buildSessionRoutes(deps: SessionRoutesDeps) {
           mount_path: res.mount_path || "/workspace",
           checkout: res.checkout,
         });
+        secretValues.push(res.authorization_token || fastPathTokens.get(repoUrl));
       } else if ((res.type === "env" || res.type === "env_secret") && res.name && res.value) {
         nonFileInputs.push({ type: "env", name: res.name });
+        secretValues.push(res.value);
       }
+    }
+
+    if (
+      secretValues.some((v) => v !== undefined) &&
+      !services.sessionSecrets
+    ) {
+      return c.json({ error: "session secret store is not configured" }, 500);
     }
 
     let session;
@@ -568,6 +582,15 @@ export function buildSessionRoutes(deps: SessionRoutesDeps) {
       return mapSessionError(c, err);
     }
     const sessionId = session.id;
+
+    await persistCreatedResourceSecrets({
+      secrets: services.sessionSecrets,
+      tenantId: t,
+      sessionId,
+      rows: createdResources,
+      inputs: nonFileInputs,
+      values: secretValues,
+    });
 
     // Init the runtime layer (DO PUT /init or Node warm + init events).
     const initParams: SessionInitParams = {
@@ -898,6 +921,12 @@ export function buildSessionRoutes(deps: SessionRoutesDeps) {
       await services.sessions.delete({ tenantId: t, sessionId: id });
     } catch (err) {
       return mapSessionError(c, err);
+    }
+
+    if (services.sessionSecrets) {
+      await services.sessionSecrets
+        .deleteAllForSession({ tenantId: t, sessionId: id })
+        .catch(() => undefined);
     }
 
     if (deps.lifecycle?.cascadeDeleteFiles) {
@@ -1598,3 +1627,49 @@ async function openSse(
     },
   });
 }
+
+async function persistCreatedResourceSecrets(opts: {
+  secrets: SessionSecretService | undefined;
+  tenantId: string;
+  sessionId: string;
+  rows: Array<{ id: string; resource: SessionResource }>;
+  inputs: Array<{ type: string; name?: unknown; url?: unknown; repo_url?: unknown }>;
+  values: Array<string | undefined>;
+}): Promise<void> {
+  if (!opts.secrets) return;
+  // Match on resource identity rather than list order: create() re-reads
+  // rows via listResources (created_at ASC, ties unspecified).
+  const unused = opts.rows.slice();
+  const n = Math.min(opts.inputs.length, opts.values.length);
+  for (let i = 0; i < n; i++) {
+    const value = opts.values[i];
+    if (value === undefined) continue;
+    const input = opts.inputs[i];
+    const idx = unused.findIndex((row) => secretResourceMatches(row.resource, input));
+    if (idx < 0) continue;
+    const [row] = unused.splice(idx, 1);
+    await opts.secrets.put({
+      tenantId: opts.tenantId,
+      sessionId: opts.sessionId,
+      resourceId: row.id,
+      value,
+    });
+  }
+}
+
+function secretResourceMatches(
+  resource: SessionResource,
+  input: { type: string; name?: unknown; url?: unknown; repo_url?: unknown },
+): boolean {
+  if (input.type === "env") {
+    return resource.type === "env" && resource.name === input.name;
+  }
+  if (input.type === "github_repository") {
+    return (
+      resource.type === "github_repository" &&
+      (resource.url === input.url || resource.repo_url === input.url)
+    );
+  }
+  return false;
+}
+
