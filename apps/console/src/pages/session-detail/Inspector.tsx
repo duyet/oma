@@ -8,6 +8,7 @@ import { RuntimeKindBadge, agentRuntimeKind } from "../../lib/runtime-kind";
 import { ModelName } from "../../lib/model-provider";
 import { Button } from "@/components/ui/button";
 import { BrowserVmDetailDialog } from "../../lib/browser-vm/BrowserVmDetailDialog";
+import { ResponsiveRail } from "@/components/ResponsiveRail";
 import { browserVmStatusMeta, useBrowserVm } from "../../lib/browser-vm/BrowserVmProvider";
 import {
   estimateCostUsd,
@@ -842,10 +843,14 @@ export function SessionInspector({
   }, [analytics.latestModel, meta.agentSnapshot?.model]);
 
   return (
-    <aside
-      className="w-[360px] shrink-0 border-l border-border bg-bg-surface/30 flex flex-col min-h-0"
-      aria-label="Session inspector"
+    <ResponsiveRail
+      open
+      onClose={onClose}
+      title="Session inspector"
+      label="Session inspector"
+      desktopClassName="w-[360px] shrink-0 border-l border-border bg-bg-surface/30 flex flex-col min-h-0"
     >
+      <div className="flex min-h-0 flex-1 flex-col">
       <div className="px-4 py-3 flex items-start gap-3 shrink-0">
         <div className="min-w-0 flex-1">
           <div className="text-[10px] uppercase tracking-wide text-fg-subtle font-mono">
@@ -902,6 +907,7 @@ export function SessionInspector({
         )}
         {tab === "files" && <FilesTab sessionId={sessionId} />}
       </div>
-    </aside>
+      </div>
+    </ResponsiveRail>
   );
 }

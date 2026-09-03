@@ -44,4 +44,5 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 - [Landing home](./landing-home.md) covers the marketing homepage hero, identity, and primary CTAs.
 - [Landing features](./landing-features.md) covers the `/features/` index reached from home.
 - [Console login](./console-login.md) covers the unauthenticated Console sign-in screen.
+- [Console login (mobile)](./console-login-mobile.md) covers the same form at viewport 390×844.
 - [Console agents](./console-agents.md) covers the agents list. Requires a real session. Skip when none exists.

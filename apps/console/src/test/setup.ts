@@ -31,6 +31,25 @@ if (typeof Element !== "undefined") {
   Element.prototype.releasePointerCapture ??= () => {};
 }
 
+if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
+  window.matchMedia = (query: string) => {
+    const maxWidth = /max-width:\s*(\d+)px/.exec(query);
+    const matches = maxWidth ? window.innerWidth <= Number(maxWidth[1]) : false;
+    return {
+      matches,
+      media: query,
+      onchange: null,
+      addListener() {},
+      removeListener() {},
+      addEventListener() {},
+      removeEventListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    };
+  };
+}
+
 // Fail any test that fires a network request not explicitly handled —
 // prevents "why are my tests flaky" debugging sessions where a stray
 // fetch hits the real backend (or stalls forever).

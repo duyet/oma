@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
 import { useApi } from "../../lib/api";
+import { ResponsiveRail } from "@/components/ResponsiveRail";
 
 /**
  * Raw-record panel mounted from `SessionDetail`. Kept here so the main
@@ -59,7 +60,14 @@ export function ResourcePanel({
   const description = (data?.description as string | undefined) ?? null;
 
   return (
-    <aside className="w-[420px] shrink-0 bg-bg-surface/30 flex flex-col min-h-0">
+    <ResponsiveRail
+      open
+      onClose={onClose}
+      title={titleKind}
+      label={`${titleKind} panel`}
+      desktopClassName="w-[420px] shrink-0 bg-bg-surface/30 flex flex-col min-h-0"
+    >
+      <div className="flex min-h-0 flex-1 flex-col">
       <div className="px-4 py-3 flex items-start gap-3 shrink-0">
         <div className="min-w-0 flex-1">
           <div className="text-[10px] uppercase tracking-wide text-fg-subtle font-mono">
@@ -97,6 +105,7 @@ export function ResourcePanel({
           Go to {panel.kind} →
         </Link>
       </div>
-    </aside>
+      </div>
+    </ResponsiveRail>
   );
 }

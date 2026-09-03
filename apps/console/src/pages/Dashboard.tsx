@@ -26,7 +26,9 @@ import {
   dailyActivitySlot,
   dailyActivityTickIndices,
 } from "../lib/daily-activity-chart";
+import { SessionCard } from "../components/SessionCard";
 import { SortableTable } from "../components/SortableTable";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { cn, rowActivateKeyDown } from "@/lib/utils";
 
 // ── Usage wire shapes (mirror Usage.tsx) ──────────────────────────────────
@@ -106,6 +108,7 @@ function countLabel(n: number | null | undefined): string {
 
 export function Dashboard() {
   const nav = useNavigate();
+  const isMobile = useIsMobile();
   // Headline cards + recent panel each ride their own TQ query so the
   // dashboard renders the parts it has — a flaky /v1/stats no longer
   // blocks the recent-sessions panel and vice versa. The previous
@@ -538,6 +541,24 @@ export function Dashboard() {
                 </Button>
               }
             />
+          ) : isMobile ? (
+            <div className="flex flex-col gap-2">
+              {recentSessions.map((s) => (
+                <SessionCard
+                  key={s.id}
+                  session={{
+                    id: s.id,
+                    title: s.title,
+                    status: s.status,
+                    created_at: s.created_at,
+                    agentLabel: agentNameById.get(s.agent_id) ?? s.agent_id,
+                    input_tokens: s.input_tokens,
+                    output_tokens: s.output_tokens,
+                  }}
+                  onActivate={() => nav(`/sessions/${s.id}`)}
+                />
+              ))}
+            </div>
           ) : (
             /* The table — not the page — owns the horizontal overflow, so a
                narrow viewport scrolls this panel instead of the whole
@@ -702,7 +723,9 @@ export function Dashboard() {
             the conceptual map and the setup checklist in one panel.
             Set-up tenants get it collapsed by default so they aren't forced
             to scroll past the architecture map every visit. */}
-        <StackedAssembly defaultOpen={assemblyDefaultOpen} />
+        <div className="hidden md:block">
+          <StackedAssembly defaultOpen={assemblyDefaultOpen} />
+        </div>
       </div>
     </div>
   );

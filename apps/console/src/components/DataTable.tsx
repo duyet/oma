@@ -17,6 +17,7 @@ import {
   SettingsIcon,
   TriangleAlertIcon,
 } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   flexRender,
   getCoreRowModel,
@@ -118,6 +119,7 @@ export interface DataTableProps<T> {
   loadingMore?: boolean;
   renderExpandedRow?: (item: T) => ReactNode;
   getRowCanExpand?: (item: T) => boolean;
+  renderCard?: (item: T) => ReactNode;
   children?: ReactNode;
 }
 
@@ -233,8 +235,11 @@ export function DataTable<T>({
   loadingMore,
   renderExpandedRow,
   getRowCanExpand,
+  renderCard,
   children,
 }: DataTableProps<T>) {
+  const isMobile = useIsMobile();
+  const useCards = isMobile && !!renderCard;
   const { pathname } = useLocation();
   const colsStorageKey = `dt-cols:${pathname}`;
   const sortStorageKey = `dt-sort:${pathname}`;
@@ -324,7 +329,7 @@ export function DataTable<T>({
           />
         </InputGroup>
       )}
-      <ColumnVisibilityMenu table={table} />
+      {useCards ? null : <ColumnVisibilityMenu table={table} />}
     </>
   );
 
@@ -343,7 +348,7 @@ export function DataTable<T>({
     </colgroup>
   );
 
-  const frozenHeader = !loading && hasRows ? (
+  const frozenHeader = !useCards && !loading && hasRows ? (
     <div id="dt-header-scroll" className="overflow-x-hidden">
       <table className="w-full table-fixed text-muted-foreground">
         {colgroup}
@@ -431,6 +436,22 @@ export function DataTable<T>({
             icon={emptyIcon}
             size="lg"
           />
+        </div>
+      ) : useCards && renderCard ? (
+        <div className="flex flex-col gap-2 pb-4">
+          {filteredRows.map((row) => (
+            <div key={row.id}>{renderCard(row.original)}</div>
+          ))}
+          {onLoadMore && hasMore ? (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!!loadingMore}
+              onClick={onLoadMore}
+            >
+              {loadingMore ? "Loading…" : "Load more"}
+            </Button>
+          ) : null}
         </div>
       ) : (
         <div id="dt-body-scroll" className="pb-4 overflow-x-auto">

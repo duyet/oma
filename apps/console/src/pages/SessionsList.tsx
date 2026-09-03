@@ -15,6 +15,7 @@ import { DataTable, ExpandedDetail, type ColumnDef } from "../components/DataTab
 import { FilterBar } from "../components/FilterBar";
 import { EnvironmentPicker, VaultsPicker } from "../components/ResourcePicker";
 import { RowActionsMenu } from "../components/RowActionsMenu";
+import { SessionCard } from "../components/SessionCard";
 import { formatCompact, formatDuration } from "../lib/format";
 
 import type { SessionRecord as Session } from "../types/session";
@@ -1005,6 +1006,20 @@ export function SessionsList() {
       }
       columns={columns}
       renderExpandedRow={renderExpandedRow}
+      renderCard={(s) => (
+        <SessionCard
+          session={{
+            id: s.id,
+            title: s.title,
+            status: s.status,
+            created_at: s.created_at,
+            agentLabel: agentNameById.get(s.agent.id) ?? s.agent.id,
+            input_tokens: s.input_tokens,
+            output_tokens: s.output_tokens,
+          }}
+          onActivate={() => nav(`/sessions/${s.id}`)}
+        />
+      )}
     >
       <FormDialog
         open={showCreate}
