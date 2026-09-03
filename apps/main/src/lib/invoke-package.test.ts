@@ -119,3 +119,80 @@ describe("two-segment flat mounts (issue: /v1/integrations/telegram 404)", () =>
     expect(path).toBe("/integrations/telegram/link");
   });
 });
+
+describe("two-segment mount /v1/providers/anyrouter (issue #434)", () => {
+  it("flat rewrite leaves /anyrouter/connect, which matches no package route", () => {
+    expect(rewriteForPackage("/v1/providers/anyrouter/connect")).toEqual({
+      path: "/anyrouter/connect",
+      mountAt: "/",
+    });
+    expect(rewriteForPackage("/v1/providers/anyrouter/status")).toEqual({
+      path: "/anyrouter/status",
+      mountAt: "/",
+    });
+  });
+
+  it("keeps both segments when mountPath names them", () => {
+    expect(
+      rewriteForPackage("/v1/providers/anyrouter/connect", "/providers/anyrouter"),
+    ).toEqual({
+      path: "/providers/anyrouter/connect",
+      mountAt: "/providers/anyrouter",
+    });
+    expect(
+      rewriteForPackage("/v1/providers/anyrouter/status", "/providers/anyrouter"),
+    ).toEqual({
+      path: "/providers/anyrouter/status",
+      mountAt: "/providers/anyrouter",
+    });
+  });
+});
+
+describe("GET /v1/providers/anyrouter/status (two-segment mount, e2e)", () => {
+  function makeWorker(opts: { mountPath?: string }) {
+    const pkg = new Hono<{ Variables: { tenant_id: string } }>();
+    pkg.get("/status", (c) => {
+      const tenantId = c.get("tenant_id");
+      if (!tenantId) return c.json({ error: "authentication required" }, 401);
+      return c.json({ connected: false });
+    });
+    pkg.get("/connect", (c) => {
+      const tenantId = c.get("tenant_id");
+      if (!tenantId) return c.json({ error: "authentication required" }, 401);
+      return c.redirect("https://anyrouter.dev/oauth", 302);
+    });
+    const outer = new Hono();
+    outer.use("*", async (c, next) => {
+      c.set("tenant_id" as never, "tenant-a" as never);
+      await next();
+    });
+    const group = new Hono().all("*", (c) => invokePackage(c, pkg, opts.mountPath));
+    outer.route("/v1/providers/anyrouter", group);
+    const ctx = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
+    return {
+      request: (path: string) =>
+        outer.fetch(new Request(`https://api.test${path}`), {}, ctx),
+    };
+  }
+
+  it("404s when the nested mount path is not declared (the shipped bug)", async () => {
+    const res = await makeWorker({}).request("/v1/providers/anyrouter/status");
+    expect(res.status).toBe(404);
+  });
+
+  it("reaches /status with the outer tenant_id when mountPath names both segments", async () => {
+    const res = await makeWorker({ mountPath: "/providers/anyrouter" }).request(
+      "/v1/providers/anyrouter/status",
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ connected: false });
+  });
+
+  it("reaches /connect as a 302 when mountPath names both segments", async () => {
+    const res = await makeWorker({ mountPath: "/providers/anyrouter" }).request(
+      "/v1/providers/anyrouter/connect",
+    );
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("https://anyrouter.dev/oauth");
+  });
+});
