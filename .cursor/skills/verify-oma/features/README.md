@@ -45,3 +45,4 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 - [Landing features](./landing-features.md) covers the `/features/` index reached from home.
 - [Console login](./console-login.md) covers the unauthenticated Console sign-in screen.
 - [Console agents](./console-agents.md) covers the agents list. Requires a real session. Skip when none exists.
+- [Console session artifacts](./console-session-artifacts.md) covers the session-detail Artifacts tab. Requires a real session. Skip the tab when none exists.

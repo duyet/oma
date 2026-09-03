@@ -20,6 +20,8 @@ A **session** is a running conversation between a user and an agent. It owns an 
 
 Sessions can be streamed in real-time via SSE, resumed after crashes, and archived when complete.
 
+The Console session Inspector includes an **Artifacts** tab that aggregates agent-produced files from that event log (`write` / `edit` / `output_file`, image/document tool results, user uploads) plus `GET /v1/sessions/:id/outputs`. Operators browse, preview, and download from one panel. Nothing new is stored.
+
 ### Environment
 
 An **environment** defines the execution sandbox — what packages are installed, what networking is allowed, and what container image to use. Environments are reusable across sessions and agents.
