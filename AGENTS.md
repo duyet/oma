@@ -152,14 +152,13 @@ demos with pre-built Docker images).
 
 ### Built-in Toolset
 
-The `agent_toolset_20260401` provides 9 tools designed for general-purpose agent work:
+The `agent_toolset_20260401` provides these tools designed for general-purpose agent work:
 
 | Tool | Description | Key Behaviors |
 |---|---|---|
 | **bash** | Execute shell commands | 2min default timeout, 10min max. Auto-backgrounds long-running processes. SIGTERM on timeout. |
 | **read** | Read files | Returns file content with line numbers. Handles binary detection. |
 | **write** | Write files | Creates parent directories automatically. |
-| **output_file** | Write a persistent session output artifact | Writes to `/mnt/session/outputs/<filename>` — survives session end, downloadable via the Files panel and `GET /v1/sessions/:id/outputs`. Use for final artifacts the user should keep; scratch work belongs in `/workspace/`. |
 | **edit** | String replacement | Surgical find-and-replace. Fails if `old_str` not found or ambiguous. |
 | **glob** | File search | Pattern matching (e.g. `**/*.ts`). Returns sorted file list. |
 | **grep** | Content search | Regex search across files. Returns matching lines with context. |
@@ -176,7 +175,15 @@ runtime-specific path:
 | Tool | Description | Availability |
 |---|---|---|
 | **browser** | Full browser session (navigate / click / screenshot / fill). `web_fetch` + `web_search` cover most read-only research more cheaply. | CF (Browser Rendering) or Node self-host (playwright-core / CDP). |
+| **output_file** | Declare a session deliverable. The agent calls `{ path, description?, media_type?, data? }`; the harness emits `agent.output_declared` (OMA extension, not in model context). `GET /v1/sessions/:id` overlays `outputs[]` from the event log at read time. Console conversation view renders a compact deliverable card; the Inspector **Artifacts** tab badges it `★ Declared output`. Path is a best-effort sandbox cross-ref; `data` is inline base64 (no sandbox write required). Multiple declarations per turn are allowed. Legacy `filename` + `content` still writes under `/mnt/session/outputs/` (the Files panel / `GET /v1/sessions/:id/outputs` mount is a separate persistence path). | All runtimes. |
 | **run_dynamic_worker** | "Code Mode" — execute an ephemeral JS (or best-effort Python) snippet in a fresh Cloudflare **Dynamic Worker** (V8 isolate) and get the result back. A pure compute/eval primitive, distinct from the session sandbox: **no filesystem, no shell, no package installs, nothing persists between calls**. Lets the agent crunch/transform data programmatically instead of round-tripping through the LLM (Cloudflare's cited "up to 80% inference-token savings"). Network is blocked by default (`allow_network: false` ⇒ egress fully sandboxed); `allow_network: true` inherits the worker's default egress (vault credential-injection gateway for the eval sandbox is a follow-up). | **Cloudflare only** — needs the `LOADER` Worker Loader binding (`worker_loaders` in `wrangler.jsonc`). Absent binding (Node self-host, or CF without the entitlement) ⇒ tool omitted from `buildTools()`, so the model never sees it. |
+
+```json
+{
+  "type": "agent_toolset_20260401",
+  "configs": [{ "name": "output_file", "enabled": true }]
+}
+```
 
 ```json
 {
@@ -335,6 +342,7 @@ Sessions communicate through a typed event log. Events fall into four categories
 | `agent.mcp_tool_use` | Agent calls an MCP server tool |
 | `agent.mcp_tool_result` | Result from an MCP tool |
 | `agent.status` | Structured progress heartbeat (`state`, `summary`, `step`, `total_steps`, `blocked_on`) for long-running work. OMA extension — purely observational, excluded from model context. Emitted per model turn by `default`, and on a fixed cadence by the `long-running` harness. The Console **Monitor** tab on an agent (`/agents/:id/monitor`) surfaces these as a live step bar, blocked-on warning, and heartbeat log. The agent header health strip shows last/next run, success rate, and cost/run from schedules + session stats. |
+| `agent.output_declared` | Agent marked a file as a session deliverable via the opt-in `output_file` tool (`path`, `description?`, `media_type?`, `size_bytes?`, `tool_use_id`). OMA extension — observational, excluded from model context. `GET /v1/sessions/:id` projects these into `outputs[]` at read time. |
 
 **Session events** (lifecycle signals):
 

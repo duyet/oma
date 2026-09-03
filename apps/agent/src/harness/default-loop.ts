@@ -7,6 +7,7 @@ import { eventsToMessagesAsync } from "../runtime/history";
 import { SummarizeCompactionStrategy, resolveCompactionStrategy } from "./compaction";
 import type { CompactionStrategy } from "./compaction";
 import { ALL_TOOLS } from "./tools";
+import { maybeBroadcastOutputDeclared } from "./output-declared";
 import { llmLoggingMiddleware, llmLogKey } from "./llm-logging-middleware";
 
 // Single source of truth lives in ./tools.ts (ALL_TOOLS). Importing here so
@@ -152,6 +153,7 @@ export function resolvedModelOf(
 function emitToolResultEvent(
   runtime: HarnessContext["runtime"],
   part: ContentPart<any> & { type: "tool-result" | "tool-error" },
+  callInput?: Record<string, unknown>,
 ): void {
   const toolCallId = part.toolCallId;
   const toolName = part.toolName;
@@ -199,6 +201,16 @@ function emitToolResultEvent(
       parent_event_id: threadSentEventId(toolCallId),
     });
   }
+
+  const input = callInput
+    ?? ((part as { input?: Record<string, unknown> }).input);
+  maybeBroadcastOutputDeclared(
+    (event) => runtime.broadcast(event),
+    toolName,
+    toolCallId,
+    content,
+    input,
+  );
 }
 
 /**
@@ -392,6 +404,10 @@ export class DefaultHarness implements HarnessInterface {
       // canonical event landing is what tells the client to swap.
       const liveThinking = new Set<string>();
       const liveToolInput = new Set<string>();
+      // `output_file` inline `data` lives on the tool-call input, not the
+      // model-facing result. Stash across steps so the declaration event
+      // can recover it when the matching tool-result lands next.
+      const outputFileInputs = new Map<string, Record<string, unknown>>();
 
       // Per-step model_request span pair. We hook ai-sdk's
       // `experimental_onStepStart` (fires before each provider call) to mint
@@ -606,17 +622,35 @@ export class DefaultHarness implements HarnessInterface {
               break;
             }
             case "tool-call": {
-              const partTC = part as { type: "tool-call"; toolCallId: string };
+              const partTC = part as {
+                type: "tool-call";
+                toolCallId: string;
+                toolName?: string;
+                input?: unknown;
+              };
               if (liveToolInput.has(partTC.toolCallId)) {
                 await runtime.broadcastToolInputEnd(partTC.toolCallId, "completed");
                 liveToolInput.delete(partTC.toolCallId);
+              }
+              if (
+                partTC.toolName === "output_file"
+                && partTC.input
+                && typeof partTC.input === "object"
+                && !Array.isArray(partTC.input)
+              ) {
+                outputFileInputs.set(partTC.toolCallId, partTC.input as Record<string, unknown>);
               }
               emitToolCallEvent(runtime, tools, part);
               break;
             }
             case "tool-result":
             case "tool-error":
-              emitToolResultEvent(runtime, part);
+              emitToolResultEvent(
+                runtime,
+                part,
+                outputFileInputs.get(part.toolCallId),
+              );
+              outputFileInputs.delete(part.toolCallId);
               break;
             // source / file / tool-approval-request: not produced by current
             // tool surface; intentionally skipped. Add cases here if those

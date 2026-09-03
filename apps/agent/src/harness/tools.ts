@@ -4,6 +4,7 @@ import { z } from "zod";
 import { anthropic } from "@ai-sdk/anthropic";
 import type { LanguageModel } from "ai";
 import type { AgentConfig, ToolsetConfig, CustomToolConfig, SessionEvent, WorkerLoader } from "@duyet/oma-shared";
+import { guessSessionOutputMime } from "@duyet/oma-shared";
 import type { ToMarkdownProvider } from "@duyet/oma-markdown";
 import type { SandboxExecutor, ProcessHandle } from "./interface";
 import { nanoid } from "nanoid";
@@ -25,7 +26,7 @@ import { wrapToolsWithHooks, type HookDispatchDeps } from "./hooks";
 /** Tools enabled by default when an agent has no explicit tools config.
  *  Excludes opt-in tools that bias the LLM away from cheaper alternatives
  *  — see OPT_IN_TOOLS below. */
-export const DEFAULT_TOOLS = ["bash", "read", "write", "edit", "glob", "grep", "web_fetch", "web_search", "schedule", "cancel_schedule", "list_schedules", "output_file"];
+export const DEFAULT_TOOLS = ["bash", "read", "write", "edit", "glob", "grep", "web_fetch", "web_search", "schedule", "cancel_schedule", "list_schedules"];
 
 /** Tools recognised but NOT registered by default — agents must opt in
  *  via tools config (`{ name: "browser", enabled: true }`).
@@ -37,8 +38,11 @@ export const DEFAULT_TOOLS = ["bash", "read", "write", "edit", "glob", "grep", "
  *  - `run_dynamic_worker`: ephemeral JS/Python eval in a Cloudflare Dynamic
  *    Worker ("Code Mode"). Opt-in because it only works on the Cloudflare
  *    deployment (needs the `LOADER` Worker Loader binding) and biases the
- *    model toward writing code. Absent binding ⇒ tool omitted entirely. */
-export const OPT_IN_TOOLS = ["browser", "run_dynamic_worker"];
+ *    model toward writing code. Absent binding ⇒ tool omitted entirely.
+ *  - `output_file`: declare a session deliverable (`agent.output_declared`).
+ *    Opt-in so sessions that never produce artifacts don't grow an extra
+ *    tool that biases the model toward "declare something" on every turn. */
+export const OPT_IN_TOOLS = ["browser", "run_dynamic_worker", "output_file"];
 
 /** Backwards-compat union — used as the recognised-tool-name set for
  *  validation. New callers should prefer DEFAULT_TOOLS or OPT_IN_TOOLS. */
@@ -237,6 +241,97 @@ function safe<T>(fn: (args: T) => Promise<ToolResultValue>): (args: T) => Promis
       return `Error: ${truncated}`;
     }
   };
+}
+
+interface OutputFileArgs {
+  path?: string;
+  filename?: string;
+  description?: string;
+  media_type?: string;
+  data?: string;
+  content?: string;
+}
+
+/**
+ * Declare a session deliverable. Writes bytes when `data`/`content` is
+ * provided (best-effort for inline `data` — the event log keeps the
+ * payload even if the sandbox write is skipped). Path-only calls attach
+ * size/sha from a best-effort sandbox stat and never fail the declaration
+ * just because the file is missing.
+ */
+async function executeOutputFile(
+  sandbox: SandboxExecutor,
+  args: OutputFileArgs,
+): Promise<string> {
+  const path = args.path
+    ?? (typeof args.filename === "string" && args.filename.length > 0
+      ? `/mnt/session/outputs/${args.filename}`
+      : undefined);
+  if (!path) return "Error: path is required";
+
+  let bytes: Uint8Array | undefined;
+  if (typeof args.data === "string" && args.data.length > 0) {
+    try {
+      bytes = decodeBase64(args.data);
+    } catch {
+      return "Error: data is not valid base64";
+    }
+    if (typeof sandbox.writeFileBytes === "function") {
+      try {
+        await sandbox.writeFileBytes(path, bytes);
+      } catch {
+        // Inline data is enough; a sandbox write is best-effort.
+      }
+    }
+  } else if (typeof args.content === "string") {
+    bytes = new TextEncoder().encode(args.content);
+    await sandbox.writeFile(path, args.content);
+  } else {
+    bytes = await statSandboxFile(sandbox, path);
+  }
+
+  const mediaType = args.media_type || guessSessionOutputMime(path);
+  const result: Record<string, unknown> = {
+    ok: true,
+    path,
+    media_type: mediaType,
+  };
+  if (args.description) result.description = args.description;
+  if (bytes) {
+    result.size_bytes = bytes.byteLength;
+    result.sha256 = await sha256Hex(bytes);
+  }
+  return JSON.stringify(result);
+}
+
+function decodeBase64(data: string): Uint8Array {
+  const normalized = data.replace(/\s+/g, "");
+  const bin = atob(normalized);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  const digest = await crypto.subtle.digest("SHA-256", copy);
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function statSandboxFile(
+  sandbox: SandboxExecutor,
+  path: string,
+): Promise<Uint8Array | undefined> {
+  try {
+    if (typeof sandbox.readFileBytes === "function") {
+      return await sandbox.readFileBytes(path);
+    }
+    const text = await sandbox.readFile(path);
+    return new TextEncoder().encode(text);
+  } catch {
+    return undefined;
+  }
 }
 
 type WebSearchResultItem = { title: string; url: string; description: string };
@@ -947,19 +1042,23 @@ export async function buildTools(
   if (enabled.has("output_file")) {
     tools.output_file = tool({
       description:
-        "Write content to a persistent session output file, outside the sandbox workspace. " +
-        "Use this for artifacts the user should keep after the session ends: reports, exports, " +
-        "generated docs, packaged code. The file is stored under /mnt/session/outputs/ and " +
-        "is retrievable via the session outputs API and the Files panel.",
+        "Declare a file as a session deliverable — the result the operator should keep, " +
+        "not scratch work. Pass `path` of a file already written (size is attached " +
+        "best-effort from the sandbox). Pass `data` as base64 to store the bytes inline " +
+        "without requiring a sandbox write. You may call this multiple times in one turn.",
       inputSchema: z.object({
-        filename: z.string().describe("Output filename, e.g. report.md or analysis.json"),
-        content: z.string().describe("The complete file content to write"),
+        path: z.string().optional().describe(
+          "Sandbox path or logical identifier, e.g. /workspace/output/report.pdf",
+        ),
+        filename: z.string().optional().describe(
+          "Legacy alias: written under /mnt/session/outputs/<filename>",
+        ),
+        description: z.string().optional().describe("Human-readable label for the deliverable"),
+        media_type: z.string().optional().describe("MIME type; inferred from the path when omitted"),
+        data: z.string().optional().describe("Base64-encoded file bytes (no sandbox write required)"),
+        content: z.string().optional().describe("UTF-8 text to write at path (alternative to data)"),
       }),
-      execute: safe(async ({ filename, content }) => {
-        const target = `/mnt/session/outputs/${filename}`;
-        await sandbox.writeFile(target, content);
-        return `Wrote session output ${filename}`;
-      }),
+      execute: safe(async (args) => executeOutputFile(sandbox, args)),
     });
   }
 

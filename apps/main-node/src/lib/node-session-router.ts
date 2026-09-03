@@ -7,7 +7,7 @@
 import type { SqlClient } from "@duyet/oma-sql-client";
 import { SqlEventLog } from "@duyet/oma-event-log/sql";
 import type { SessionEvent, StoredEvent } from "@duyet/oma-shared";
-import { buildTrajectory, type SessionRecord, type EnvironmentConfig } from "@duyet/oma-shared";
+import { buildTrajectory, declaredOutputsFromEvents, type SessionRecord, type EnvironmentConfig } from "@duyet/oma-shared";
 import { isSpecEvent } from "@duyet/oma-api-types";
 import { getLogger } from "@duyet/oma-observability";
 
@@ -357,6 +357,7 @@ export class NodeSessionRouter implements SessionRouter {
       status: sess.status,
       usage: { input_tokens: input, output_tokens: output },
       sandbox_status: this.deps.registry.isPaused(sessionId) ? "paused" : "running",
+      outputs: declaredOutputsFromEvents(events),
     };
   }
 

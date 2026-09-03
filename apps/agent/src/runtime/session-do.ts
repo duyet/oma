@@ -26,6 +26,7 @@ import {
   delegateToRemoteAgent as remoteAgentDelegate,
   runRemoteTurn,
   assertFederationDepthAllowed,
+  declaredOutputsFromEvents,
 } from "@duyet/oma-shared";
 import {
   CfDoStreamRepo,
@@ -2801,6 +2802,7 @@ export class SessionDO extends DurableObject<Env> {
     // written before this change still surface their verdicts.
     if (request.method === "GET" && url.pathname === "/full-status") {
       const history = this.makeHistory();
+      const allEvents = history.getEvents();
 
       const stateEvaluations = this.state.outcome_evaluations ?? [];
       let outcomeEvaluations: PersistedOutcomeEvaluation[] = stateEvaluations;
@@ -2808,7 +2810,6 @@ export class SessionDO extends DurableObject<Env> {
         // Back-compat scan. Only runs for sessions whose supervisor never
         // wrote into state.outcome_evaluations[] (pre-Phase-4 emit
         // sites). Cheap because the event scan is local to this DO.
-        const allEvents = history.getEvents();
         outcomeEvaluations = allEvents
           .filter(
             (e) =>
@@ -2841,6 +2842,7 @@ export class SessionDO extends DurableObject<Env> {
         sandbox_usage: this.state.sandbox_usage,
         sandbox_status: this.state.sandbox_paused_at != null ? "paused" : "running",
         outcome_evaluations: outcomeEvaluations,
+        outputs: declaredOutputsFromEvents(allEvents),
       });
     }
 

@@ -751,6 +751,7 @@ export function buildSessionRoutes(deps: SessionRoutesDeps) {
       if (live.sandbox_usage) response.sandbox_usage = live.sandbox_usage;
       response.sandbox_status = live.sandbox_status ?? "none";
     }
+    response.outputs = live?.outputs ?? [];
     return c.json(response);
   });
 

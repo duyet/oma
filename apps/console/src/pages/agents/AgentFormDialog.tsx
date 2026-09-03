@@ -232,6 +232,7 @@ const BUILTIN_TOOLS: Array<{ name: string; label: string; description: string }>
   { name: "web_fetch", label: "web_fetch", description: "Fetch a URL → markdown. Default for any web read." },
   { name: "web_search", label: "web_search", description: "Web search via DuckDuckGo. Default for lookups." },
   { name: "browser", label: "browser (opt-in)", description: "Heavy multi-step browser session (navigate / click / screenshot). Off by default — LLMs over-reach for it on simple lookups. Enable only when you need interactive navigation, JS-rendered SPAs, or auth flows." },
+  { name: "output_file", label: "output_file (opt-in)", description: "Declare a session deliverable (agent.output_declared). Off by default so sessions that never produce artifacts don't grow an extra tool. Enable when the operator should see a ★ Declared output card in conversation and the Artifacts tab." },
 ];
 
 type ToolOverride = "default" | "always_allow" | "always_ask" | "disabled";

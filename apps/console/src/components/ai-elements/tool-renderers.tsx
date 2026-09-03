@@ -19,7 +19,8 @@ import { Attachment, isContentBlockArray, type ContentBlockLike } from "./attach
 
 /**
  * Rich per-tool renderers for the built-in `agent_toolset_20260401` suite
- * (bash/read/write/edit/glob/grep/web_fetch/web_search) plus a
+ * (bash/read/write/edit/glob/grep/web_fetch/web_search plus opt-in
+ * output_file) plus a
  * media-aware fallback for MCP and custom tools. Lives alongside
  * `tool.tsx` (the generic ToolInput/ToolOutput this extends) rather than
  * inside SessionDetail.tsx so the ~10 per-tool layouts don't bloat the
@@ -44,6 +45,8 @@ export interface RenderToolCallProps {
   errorText: string | undefined;
   state: ToolPart["state"];
   mcpServerName: string | undefined;
+  /** Optional ISO timestamp from the matching tool_use event. */
+  timestamp?: string;
 }
 
 // ---------------------------------------------------------------------
@@ -81,6 +84,10 @@ export function getToolTitle(
       return "Fetch";
     case "web_search":
       return "Search";
+    case "output_file": {
+      const p = asString(input?.path) ?? asString(input?.filename);
+      return p ? basename(p) : "Declared output";
+    }
     default:
       return name;
   }
@@ -534,6 +541,83 @@ function renderWebSearch(
   );
 }
 
+function formatOutputBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function formatUtcClock(iso?: string): string | undefined {
+  if (!iso) return undefined;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return undefined;
+  return `${d.toISOString().slice(11, 16)} UTC`;
+}
+
+function parseOutputFileResult(outputText: string | null): Record<string, unknown> | null {
+  if (!outputText) return null;
+  const trimmed = outputText.trim();
+  if (!trimmed.startsWith("{")) return null;
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function renderOutputFile(
+  input: Record<string, unknown>,
+  outputText: string | null,
+  errorText: string | undefined,
+  hasOutput: boolean,
+  timestamp?: string,
+): ReactNode {
+  const result = parseOutputFileResult(outputText);
+  const path = asString(result?.path) ?? asString(input.path) ?? asString(input.filename) ?? "deliverable";
+  const description = asString(result?.description) ?? asString(input.description);
+  const mediaType = asString(result?.media_type) ?? asString(input.media_type);
+  const size = typeof result?.size_bytes === "number" ? result.size_bytes : undefined;
+  const clock = formatUtcClock(timestamp);
+
+  const meta: string[] = [];
+  if (typeof size === "number") meta.push(formatOutputBytes(size));
+  else if (mediaType) meta.push(mediaType);
+  meta.push("declared output");
+  if (clock) meta.push(clock);
+
+  return (
+    <div
+      className="rounded-md border border-border bg-bg-surface/60 px-3 py-2.5 space-y-1"
+      data-testid="output-file-card"
+    >
+      <div className="flex items-start gap-2">
+        <FileIcon className="size-3.5 shrink-0 mt-0.5 text-fg-subtle" />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[13px] font-medium text-fg font-mono" title={path}>
+            {basename(path)}
+          </div>
+          {description && (
+            <div className="text-[12px] text-fg-muted mt-0.5 line-clamp-2">{description}</div>
+          )}
+        </div>
+        <span className="shrink-0 text-[10px] font-medium text-fg-subtle whitespace-nowrap">
+          ★ Declared output
+        </span>
+      </div>
+      <div className="text-[11px] text-fg-subtle">{meta.join(" · ")}</div>
+      {errorText && <OutputError errorText={errorText} />}
+      {hasOutput && outputText && !result && !errorText && (
+        <div className="text-[12px] text-fg-subtle">{outputText}</div>
+      )}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------
@@ -546,7 +630,7 @@ function renderWebSearch(
  * SessionDetail.tsx) so collapse state, the status pill, and the
  * paired-result lookup stay in one place.
  */
-export function renderToolCall({ name, input, output, errorText, state, mcpServerName }: RenderToolCallProps): ReactNode {
+export function renderToolCall({ name, input, output, errorText, state, mcpServerName, timestamp }: RenderToolCallProps): ReactNode {
   const safeInput = isRecord(input) ? input : {};
   const { text: outputText, media } = extractOutput(output);
   const hasOutput = state === "output-available" || state === "output-error" || state === "output-denied";
@@ -582,6 +666,8 @@ export function renderToolCall({ name, input, output, errorText, state, mcpServe
       return renderWebFetch(safeInput, outputText, media, errorText, hasOutput);
     case "web_search":
       return renderWebSearch(safeInput, outputText, errorText, hasOutput);
+    case "output_file":
+      return renderOutputFile(safeInput, outputText, errorText, hasOutput, timestamp);
     default:
       // Unknown/custom tool — generic JSON, but media blocks (e.g. a
       // computer-use screenshot returned by a custom tool) still render

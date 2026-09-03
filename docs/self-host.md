@@ -337,7 +337,7 @@ Things I'd document if I were the on-call who got paged:
   expects. Set a non-empty `system` on the agent.
 - **`tools=9` even when you set `tools:[]` on the agent.** main-node's
   `buildTools` always wires the harness's standard set (bash, read,
-  write, output_file, edit, glob, grep, web_fetch, web_search). Per-agent tool
+  write, edit, glob, grep, web_fetch, web_search). Per-agent tool
   filtering happens at routing time, not at build time. To disable a
   tool entirely, omit it from `agent.tools`; the harness will see it
   but never invoke it.

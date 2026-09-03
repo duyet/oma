@@ -28,6 +28,7 @@ import type {
   StoredEvent,
   AgentConfig,
   EnvironmentConfig,
+  SessionDeclaredOutput,
 } from "@duyet/oma-shared";
 
 export interface SessionInitParams {
@@ -99,6 +100,8 @@ export interface SessionFullStatus {
     processed_at?: string;
   }>;
   resources?: unknown[];
+  /** Agent-declared deliverables derived from `agent.output_declared` events. */
+  outputs?: SessionDeclaredOutput[];
 }
 
 export interface SessionExecResult {
@@ -211,9 +214,9 @@ export interface SessionRouter {
     body: { command: string; timeout_ms?: number },
   ): Promise<SessionExecResult>;
 
-  /** Read the live full-status (usage, outcome_evaluations, resources)
-   *  for GET /v1/sessions/:id overlay. Returns null when the runtime is
-   *  unreachable; route falls back to the stored row. */
+  /** Read the live full-status (usage, outcome_evaluations, resources,
+   *  declared outputs) for GET /v1/sessions/:id overlay. Returns null when
+   *  the runtime is unreachable; route falls back to the stored row. */
   getFullStatus(sessionId: string): Promise<SessionFullStatus | null>;
 
   /** Read a file out of the sandbox by path — used to promote sandbox
