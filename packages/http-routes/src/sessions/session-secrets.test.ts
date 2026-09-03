@@ -18,7 +18,7 @@ import type { RouteServices } from "../types";
 const TENANT = "tenant-1";
 const BASE = Date.UTC(2026, 0, 1, 0, 0, 0);
 
-function makeApp(service: SessionService, sessionSecrets: SessionSecretService) {
+function makeApp(service: SessionService, sessionSecrets?: SessionSecretService) {
   const app = new Hono<{ Variables: { tenant_id: string } }>();
   app.use("*", async (c, next) => {
     c.set("tenant_id", TENANT);
@@ -36,6 +36,7 @@ function makeApp(service: SessionService, sessionSecrets: SessionSecretService) 
   };
   const router = {
     init: async () => {},
+    destroy: async () => {},
     getFullStatus: async () => null,
   } as unknown as SessionRouter;
   app.route(
@@ -193,5 +194,48 @@ describe("POST /v1/sessions secret persistence (issue #426)", () => {
       resourceId: body.resources[0].id,
     });
     expect(stored).toBe(secret);
+  });
+
+  it("returns 500 when secret payloads are present but the store is unwired", async () => {
+    const { service } = createInMemorySessionService({ clock: new ManualClock(BASE) });
+    const app = makeApp(service);
+
+    const res = await postSession(app as never, {
+      agent: "agent_1",
+      environment_id: "env_1",
+      resources: [{ type: "env_secret", name: "UNWIRED", value: "must-not-drop" }],
+    });
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toMatch(/session secret store is not configured/);
+    expect(JSON.stringify(body)).not.toContain("must-not-drop");
+  });
+
+  it("DELETE cascades session secrets without echoing plaintext", async () => {
+    const { service } = createInMemorySessionService({ clock: new ManualClock(BASE) });
+    const { service: sessionSecrets } = createInMemorySessionSecretService();
+    const app = makeApp(service, sessionSecrets);
+
+    const secret = "delete-cascade-secret";
+    const created = await postSession(app as never, {
+      agent: "agent_1",
+      environment_id: "env_1",
+      resources: [{ type: "env_secret", name: "TO_DELETE", value: secret }],
+    });
+    expect(created.status).toBe(201);
+    const body = (await created.json()) as {
+      id: string;
+      resources: Array<{ id: string }>;
+    };
+
+    const del = await app.request(`/v1/sessions/${body.id}`, { method: "DELETE" });
+    expect(del.status).toBe(200);
+    expect(JSON.stringify(await del.json())).not.toContain(secret);
+
+    expect(await sessionSecrets.get({
+      tenantId: TENANT,
+      sessionId: body.id,
+      resourceId: body.resources[0].id,
+    })).toBeNull();
   });
 });
