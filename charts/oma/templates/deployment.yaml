@@ -66,6 +66,8 @@ spec:
               value: {{ .Values.vault.caDir | quote }}
             - name: OMA_VAULT_PORT
               value: {{ .Values.vault.port | quote }}
+            # Empty / * is wildcard (fail-closed when credentials span >1
+            # tenant). Set vault.tenant to a tn_* id for multi-user.
             - name: OMA_TENANT
               value: {{ .Values.vault.tenant | quote }}
             # PLATFORM_ROOT_SECRET: required by oma-vault to decrypt vault

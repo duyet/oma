@@ -215,6 +215,9 @@ export default defineConfig({
       "apps/console/**",
       "apps/k8s-bridge/test/**",
       "apps/main-node/**",
+      // oma-vault is a Node sidecar (better-sqlite3). Its tests run via
+      // `pnpm --filter @duyet/oma-vault test` in `test:packages`.
+      "apps/oma-vault/**",
       // The CLI (bridge daemon) is a plain Node process, not a Worker — it has
       // its own node-pool config (packages/cli/vitest.config.ts, pool:threads)
       // and already runs via `pnpm --filter @getoma/cli test` in

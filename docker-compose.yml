@@ -96,12 +96,11 @@ services:
       # rest under this secret (issue #187) and the proxy decrypts rows to
       # inject outbound Authorization headers. Refuses to start unset.
       PLATFORM_ROOT_SECRET: ${PLATFORM_ROOT_SECRET:-}
-      # Tenant scope. Default "*" matches active credentials across ALL
-      # tenants by hostname — fine for single-operator self-host (every
-      # vault belongs to "me"), unsafe for shared multi-tenant deploys
-      # where two tenants might both register the same host. Override
-      # with OMA_TENANT=tn_xxx in .env for multi-user prod.
-      OMA_TENANT: ${OMA_TENANT:-*}
+      # Tenant scope. Unset/empty/"*" is wildcard: single-operator
+      # installs boot; two or more distinct tenant_id values in
+      # credentials refuse to start. Set OMA_TENANT=tn_xxx in .env for
+      # multi-user deploys so lookup cannot cross tenants.
+      OMA_TENANT: ${OMA_TENANT:-}
     volumes:
       - ./data:/app/data
     restart: unless-stopped

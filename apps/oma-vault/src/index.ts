@@ -36,9 +36,17 @@ import {
   type SqlClient,
 } from "@duyet/oma-sql-client";
 import { buildCredentialCrypto } from "@duyet/oma-shared";
-import type { CredentialAuth } from "@duyet/oma-shared";
 import { createNodeLogger } from "@duyet/oma-observability/logger/node";
 import { setRootLogger, type Logger } from "@duyet/oma-observability";
+import {
+  findCredentialForUrl,
+  listActiveCredentialTenantIds,
+} from "./match-credential";
+import {
+  assertWildcardScopeAllowed,
+  parseTenantScope,
+  WildcardMultiTenantError,
+} from "./tenant-scope";
 
 const logger: Logger = await createNodeLogger({ bindings: { service: "oma-vault" } });
 setRootLogger(logger);
@@ -55,11 +63,10 @@ const usePostgres =
 const dbPath = process.env.DATABASE_PATH ?? "./data/oma.db";
 const caDir = process.env.OMA_VAULT_CA_DIR ?? "./data/oma-vault-ca";
 const port = Number(process.env.OMA_VAULT_PORT ?? 14322);
-// Tenant scoping: default "*" means look across ALL tenants by host. Set to
-// a specific `tn_xxx` id to lock the proxy to a single tenant — required
-// for multi-user prod deploys, since cross-tenant matching can leak a
-// credential between tenants when both register the same host.
-const scopeTenantId = process.env.OMA_TENANT ?? "*";
+// Unset / empty / "*" = wildcard (single-operator). A tn_* id locks
+// lookup to that tenant. Wildcard + more than one distinct tenant_id
+// in credentials refuses to start (issue #428).
+const scope = parseTenantScope(process.env.OMA_TENANT);
 
 // credentials.auth is encrypted at rest under PLATFORM_ROOT_SECRET (issue
 // #187) — main-node writes ciphertext, so this proxy must hold the same
@@ -89,6 +96,20 @@ logger.info(
   { op: "oma_vault.sql_backend", backend: usePostgres ? "postgres" : "sqlite", dsn: usePostgres ? new URL(dbUrl).host : dbPath },
   `sql backend: ${usePostgres ? `postgres ${new URL(dbUrl).host}` : `sqlite ${dbPath}`}`,
 );
+
+try {
+  assertWildcardScopeAllowed(scope, await listActiveCredentialTenantIds(sql));
+} catch (err) {
+  if (!(err instanceof WildcardMultiTenantError)) throw err;
+  logger.error(
+    {
+      op: "oma_vault.wildcard_multitenant",
+      distinct_tenants: err.distinctTenantCount,
+    },
+    err.message,
+  );
+  process.exit(1);
+}
 
 // ─── CA management ───────────────────────────────────────────────────────
 //
@@ -181,123 +202,24 @@ async function waitForCA(
 
 const ca = await loadOrCreateCA();
 
-// ─── Credential matching ─────────────────────────────────────────────────
-
-interface MatchedCred {
-  vaultId: string;
-  credentialId: string;
-  injectHeader: { name: string; value: string };
-}
-
-/**
- * Find the active credential whose mcp_server_url host matches the request
- * host. Returns the header to inject, or null when no credential applies.
- *
- * Today's matcher: exact hostname match against
- * URL(credential.mcp_server_url).host. Wildcards / suffix match TBD when
- * we hit a use case (e.g. `*.googleapis.com` for google credentials).
- */
-/**
- * Find the active credential whose mcp_server_url host matches the request
- * host. Returns the header to inject, or null when no credential applies.
- *
- * Today's matcher: exact hostname match against
- * URL(credential.mcp_server_url).host. Wildcards / suffix match TBD when
- * we hit a use case (e.g. `*.googleapis.com` for google credentials).
- *
- * Cross-tenant note: with better-auth multi-tenant, credentials live under
- * per-user tenants (tn_xxx), not under a static OMA_TENANT. The proxy
- * intercepts traffic from any sandbox and has no way to attribute the
- * request to a specific tenant from its hostname alone — we'd need a
- * per-session port or a sandbox-side header tag for that.
- *
- * For the PoC we look across ALL tenants by host, matching the first
- * active credential. SECURITY LIMITATION: if two tenants both register a
- * credential for the same host (e.g. `https://api.github.com`), the
- * second tenant's request can pick up the first tenant's token. Not OK
- * for shared multi-tenant deploys; OK for single-operator self-host
- * (every credential ultimately belongs to "me"). Document the limit.
- *
- * Setting OMA_TENANT to a specific tenant id locks lookup to that tenant
- * only — recommended for prod multi-user deploys until per-session
- * attribution lands.
- */
-async function findCredentialForUrl(url: string): Promise<MatchedCred | null> {
-  let host: string;
-  try {
-    host = new URL(url).host;
-  } catch {
-    return null;
-  }
-  // Cross-tenant lookup against the partial unique index
-  // idx_credentials_mcp_url_active. The index contains hostname-as-substring
-  // (LIKE) is unindexed; we materialize candidates by parsing mcp_server_url.
-  // Acceptable cost: typical deploys have O(10) credentials.
-  type Row = { id: string; tenant_id: string; vault_id: string; auth: string };
-  // Cross-tenant lookup. When OMA_TENANT="*" we accept any tenant; when
-  // it's a specific tenant id we filter to that one (recommended for
-  // multi-user prod deploys).
-  const result = await sql
-    .prepare(
-      `SELECT id, tenant_id, vault_id, auth
-         FROM credentials
-        WHERE archived_at IS NULL
-          AND mcp_server_url IS NOT NULL
-          AND ( ? = '*' OR tenant_id = ? )`,
-    )
-    .bind(scopeTenantId, scopeTenantId)
-    .all<Row>();
-  for (const row of result.results ?? []) {
-    // Decrypt (or pass through a legacy plaintext row), then parse. A row
-    // that fails both is skipped — e.g. written under a different
-    // PLATFORM_ROOT_SECRET — and logged so the operator can tell why a
-    // credential stopped injecting.
-    let auth: CredentialAuth;
-    try {
-      auth = JSON.parse(await credCrypto.decrypt(row.auth)) as CredentialAuth;
-    } catch (err) {
+function lookupCredential(url: string) {
+  return findCredentialForUrl(url, {
+    sql,
+    scope,
+    decrypt: (stored) => credCrypto.decrypt(stored),
+    onUndecryptable: (credentialId, err) => {
       logger.warn(
-        { op: "oma_vault.credential_undecryptable", credential_id: row.id },
-        `skipping credential ${row.id}: cannot decrypt/parse auth (is PLATFORM_ROOT_SECRET the same value oma-server uses?): ${(err as Error).message}`,
+        { op: "oma_vault.credential_undecryptable", credential_id: credentialId },
+        `skipping credential ${credentialId}: cannot decrypt/parse auth (is PLATFORM_ROOT_SECRET the same value oma-server uses?): ${err.message}`,
       );
-      continue;
-    }
-    if (!auth.mcp_server_url) continue;
-    let credHost: string;
-    try { credHost = new URL(auth.mcp_server_url).host; } catch { continue; }
-    if (credHost !== host) continue;
-    const headerSpec = authToHeader(auth);
-    if (!headerSpec) continue;
-    return {
-      vaultId: row.vault_id,
-      credentialId: row.id,
-      injectHeader: headerSpec,
-    };
-  }
-  return null;
-}
-
-function authToHeader(auth: CredentialAuth): { name: string; value: string } | null {
-  switch (auth.type) {
-    case "static_bearer":
-      return { name: "authorization", value: `Bearer ${auth.token}` };
-    case "cap_cli":
-      // cap_cli credentials are injected via cap's spec-driven enforcement
-      // (header_inject mode for most CLIs). The simple Bearer fallback
-      // here works for header-mode CLIs whose spec just sets Authorization;
-      // metadata_ep / exec_helper CLIs need richer routing — handled when
-      // self-host oma-vault adopts cap.handleHttp directly (follow-up PR).
-      if (typeof auth.token === "string" && auth.token.length > 0) {
-        return { name: "authorization", value: `Bearer ${auth.token}` };
-      }
-      return null;
-    case "mcp_oauth":
-      // OAuth would need refresh-token handling; not in PoC scope. Skip
-      // until the oma-vault supports it; the credential just gets ignored.
-      return null;
-    default:
-      return null;
-  }
+    },
+    onCrossTenantHostCollision: (host, tenantIds) => {
+      logger.error(
+        { op: "oma_vault.cross_tenant_host", host, tenant_ids: tenantIds },
+        `refusing to inject for ${host}: ${tenantIds.length} tenants have a credential for this host`,
+      );
+    },
+  });
 }
 
 // ─── Package-manager passthrough ─────────────────────────────────────────
@@ -368,7 +290,7 @@ for (const hostname of passthroughHosts) {
 // same handler thanks to mockttp's TLS termination.
 proxy.forAnyRequest().thenCallback(async (req: CompletedRequest) => {
   const url = req.url;
-  const matched = await findCredentialForUrl(url);
+  const matched = await lookupCredential(url);
 
   // Strip any incoming Authorization headers — the agent must not be able
   // to override the injected value or smuggle a stolen token. Mirrors the
@@ -455,7 +377,7 @@ logger.info(
   {
     op: "oma_vault.listening",
     port,
-    tenant_scope: scopeTenantId === "*" ? "all" : scopeTenantId,
+    tenant_scope: scope.kind === "wildcard" ? "all" : scope.id,
     ca_cert: resolve(caDir, "ca.crt"),
   },
   `listening on http://0.0.0.0:${port}`,

@@ -146,7 +146,10 @@ vault:
   databasePath: "/app/data/oma.db"
   caDir: "/app/data/oma-vault-ca"
   port: 14322
-  tenant: "*"
+  # Empty (default) is wildcard: single-operator boots; credentials
+  # spanning more than one tenant_id refuse to start. Set to a tn_* id
+  # for multi-user deploys so lookup cannot cross tenants.
+  tenant: ""
   resources:
     requests:
       cpu: 50m

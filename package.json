@@ -55,7 +55,7 @@
     "typecheck": "tsc --noEmit && pnpm run typecheck:node",
     "typecheck:node": "pnpm --filter @getoma/sandbox-sdk typecheck && pnpm --filter @duyet/oma-main-node typecheck && pnpm --filter @duyet/oma-vault typecheck && pnpm --filter @duyet/oma-cap typecheck",
     "test": "vitest run && pnpm run test:packages && pnpm run test:console",
-    "test:packages": "pnpm --filter @duyet/oma-session-runtime test && pnpm --filter @duyet/oma-main-node test && pnpm --filter @duyet/oma-cap test && pnpm --filter @duyet/oma-integrations-adapters-node test && pnpm --filter @getoma/sandbox-sdk test && pnpm --filter @duyet/oma-k8s-bridge test && pnpm --filter @duyet/oma-browser-harness test && pnpm --filter @duyet/oma-observability test && pnpm --filter @duyet/oma-vault-forward test && pnpm --filter @getoma/cli test",
+    "test:packages": "pnpm --filter @duyet/oma-session-runtime test && pnpm --filter @duyet/oma-main-node test && pnpm --filter @duyet/oma-cap test && pnpm --filter @duyet/oma-integrations-adapters-node test && pnpm --filter @getoma/sandbox-sdk test && pnpm --filter @duyet/oma-k8s-bridge test && pnpm --filter @duyet/oma-browser-harness test && pnpm --filter @duyet/oma-observability test && pnpm --filter @duyet/oma-vault-forward test && pnpm --filter @duyet/oma-vault test && pnpm --filter @getoma/cli test",
     "test:console": "pnpm --filter managed-agents-console test",
     "test:e2e": "playwright test --config=playwright.config.ts",
     "db:generate:cf-auth": "drizzle-kit generate --config=drizzle.cf-auth.config.ts",
