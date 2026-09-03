@@ -13,6 +13,7 @@ DELETE /v1/agents/:id                      # Delete agent
 POST   /v1/agents/:id/archive             # Archive agent
 GET    /v1/agents/:id/versions            # Version history
 GET    /v1/agents/:id/versions/:version   # Get specific version
+GET    /v1/agents/:id/daily-summary       # Scheduled-run daily summary (`?days=1|7|30`, default 7)
 ```
 
 ## Environments — Sandbox execution environments

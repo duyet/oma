@@ -29,6 +29,14 @@ agent hub shows last/next run, success rate, and uptime on the agent
 header health strip, and a **Monitor** tab (`/agents/:id/monitor`) for
 the live session plus `agent.status` heartbeats.
 
+The Console **Daily Summary** tab (`GET /v1/agents/:id/daily-summary?days=1|7|30`,
+default 7) rolls those firings up for one agent across the last 1 / 7 / 30
+UTC days: ok / error / skipped_concurrency counts, token totals and estimated
+model cost from `usage_events` on the sessions those firings opened, a per-day
+sparkline, and the last 20 firings. Interactive sessions stay on Observability.
+No new tables. `top_outputs` is reserved empty until declared-output events
+exist.
+
 Full reference in [`AGENTS.md` § Agent Schedules](../AGENTS.md#agent-schedules),
 including the `notify`/`on` filter semantics and the run-history schema.
 

@@ -1638,6 +1638,7 @@ PATCH  /v1/agents/:agentId/schedules/:scheduleId        # Partial update
 DELETE /v1/agents/:agentId/schedules/:scheduleId        # Delete
 POST   /v1/agents/:agentId/schedules/:scheduleId/run    # Run now → {status:"queued", next_run_at}
 GET    /v1/agents/:agentId/schedules/:scheduleId/runs   # Durable run history — cursor-paginated
+GET    /v1/agents/:id/daily-summary                     # Console Daily Summary (`?days=1|7|30`, default 7)
 ```
 
 `next_run_at` is seeded at create from the cron + timezone and advanced to the
@@ -1700,6 +1701,12 @@ response shape (`buildScheduleRoutes` in
 `packages/http-routes/src/schedules/index.ts`). `summary` is currently always
 `null` — a nullable slot reserved for a follow-up that fills in a short
 human-readable description of what the run did.
+
+The Console **Daily Summary** tab reads `GET /v1/agents/:id/daily-summary`
+(derived from `agent_schedule_runs` plus `usage_events` on those firings'
+sessions in the same UTC window; interactive sessions stay on Observability;
+no new tables). `top_outputs` is reserved empty until declared-output events
+exist.
 
 `PATCH` takes any subset of `cron_expression` / `input` / `environment_id` /
 `timezone` / `max_sessions` / `enabled` (at least one required; empty body →
