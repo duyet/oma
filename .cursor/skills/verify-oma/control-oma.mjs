@@ -482,12 +482,69 @@ async function driveConsoleLoginMobile(page, dir, state) {
   };
 }
 
+async function driveConsoleAnalytics(page, dir, state) {
+  const origin = originOf(state);
+  await page.goto(origin + "/analytics", { waitUntil: "networkidle" });
+  await page.waitForTimeout(800);
+  const before = join(dir, "before.png");
+  await page.screenshot({ path: before, fullPage: false });
+  publishArtifact(before);
+  const onLogin = page.url().includes("/login");
+  const assertions = [
+    {
+      id: "analytics-gate",
+      ok: onLogin,
+      detail: onLogin
+        ? "signed-out /analytics redirected to /login"
+        : "session present; charts path not skipped",
+    },
+  ];
+  if (onLogin) {
+    const welcome = page.getByRole("heading", { name: "Welcome back" });
+    await welcome.waitFor({ timeout: 30_000 }).catch(() => {});
+    assertions.push({
+      id: "analytics-login",
+      ok: await welcome.isVisible().catch(() => false),
+      detail: "Welcome back",
+    });
+    assertions.push({
+      id: "analytics-charts",
+      ok: true,
+      skipped: true,
+      detail: "skipped: no session",
+    });
+    assertions.push({
+      id: "analytics-empty",
+      ok: true,
+      skipped: true,
+      detail: "skipped: no session",
+    });
+  } else {
+    const heading = page.getByRole("heading", { name: "Analytics" }).first();
+    assertions.push({
+      id: "analytics-charts",
+      ok: await heading.isVisible().catch(() => false),
+      detail: "Analytics heading",
+    });
+  }
+  await writeProof(page, dir, {});
+  const skipped = assertions.filter((a) => a.skipped).map((a) => a.id);
+  return {
+    feature: "console-analytics",
+    url: page.url(),
+    assertions,
+    skipped,
+    ok: assertions.every((a) => a.ok),
+  };
+}
+
 const DRIVES = {
   "landing-home": driveLandingHome,
   "landing-features": driveLandingFeatures,
   "console-login": driveConsoleLogin,
   "console-login-mobile": driveConsoleLoginMobile,
   "console-agents": driveConsoleAgents,
+  "console-analytics": driveConsoleAnalytics,
 };
 
 const DRIVE_VIEWPORTS = {

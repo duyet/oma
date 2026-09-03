@@ -35,7 +35,7 @@ Starts `pnpm exec astro dev --host 127.0.0.1 --port <port>` from `apps/web`. Def
 node .cursor/skills/verify-oma/control-oma.mjs launch console
 ```
 
-Starts `pnpm exec vite --host 127.0.0.1 --port <port> --strictPort` from `apps/console`. Default port `5173`. Ready when `GET /login` returns HTTP 200. Does not start the worker. Login can render without a live API. Protected routes (`/`, `/agents`) redirect to `/login` when unauthenticated (`AppShell`).
+Starts `pnpm exec vite --host 127.0.0.1 --port <port> --strictPort` from `apps/console`. Default port `5173`. Ready when `GET /login` returns HTTP 200. Does not start the worker. Login can render without a live API. Protected routes (`/`, `/agents`, `/analytics`) redirect to `/login` when unauthenticated (`AppShell`).
 
 Pass `--port N` to either launch. Isolation: pick a free port. Do not reuse `4321`/`5173` if they already answer.
 
@@ -145,6 +145,6 @@ If launch failed partway, still run cleanup.
 | `status` | Print state.json |
 | `cleanup` | Stop what launch started |
 
-Feature ids: `landing-home`, `landing-features`, `console-login`, `console-login-mobile`, `console-agents`.
+Feature ids: `landing-home`, `landing-features`, `console-login`, `console-login-mobile`, `console-agents`, `console-analytics`.
 
 Keep the map honest with `/maintain-verification-skill` when routes, headings, or launch commands drift.
