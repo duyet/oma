@@ -3,6 +3,7 @@ import { env, exports } from "cloudflare:workers";
 import { describe, it, expect, beforeAll } from "vitest";
 import { registerHarness } from "../../apps/agent/src/harness/registry";
 import type { HarnessInterface, HarnessContext } from "../../apps/agent/src/harness/interface";
+import { mountResources } from "../../apps/agent/src/runtime/resource-mounter";
 
 // ---------- Test Harnesses ----------
 registerHarness("cross-noop", () => ({ async run() {} }));
@@ -992,7 +993,7 @@ describe("GitHub Repository + Env Secret resources", () => {
     expect(session.resources[0].checkout).toEqual({ type: "commit", sha: "abc123def456" });
   });
 
-  it.skip("env_secret resource stores name but not value", async () => {
+  it("env_secret resource stores name but not value", async () => {
     const s = await post("/v1/sessions", {
       agent: agentId,
       environment_id: envId,
@@ -1005,14 +1006,13 @@ describe("GitHub Repository + Env Secret resources", () => {
     expect(s.status).toBe(201);
     const session = (await s.json()) as any;
     expect(session.resources).toHaveLength(1);
-    expect(session.resources[0].type).toBe("env_secret");
+    expect(session.resources[0].type).toBe("env");
     expect(session.resources[0].name).toBe("MY_API_KEY");
-    // Value must NOT appear in response
     expect(session.resources[0].value).toBeUndefined();
     expect(JSON.stringify(session.resources[0])).not.toContain("secret_value_123");
   });
 
-  it.skip("env_secret value not in resource list response", async () => {
+  it("env_secret value not in resource list response", async () => {
     const s = await post("/v1/sessions", {
       agent: agentId,
       environment_id: envId,
@@ -1026,14 +1026,14 @@ describe("GitHub Repository + Env Secret resources", () => {
 
     const listRes = await get(`/v1/sessions/${session.id}/resources`);
     const body = (await listRes.json()) as any;
-    const envRes = body.data.find((r: any) => r.type === "env_secret");
+    const envRes = body.data.find((r: any) => r.type === "env");
     expect(envRes).toBeTruthy();
     expect(envRes.name).toBe("HIDDEN_TOKEN");
     expect(envRes.value).toBeUndefined();
     expect(JSON.stringify(body)).not.toContain("hidden_value_456");
   });
 
-  it.skip("multiple env_secrets on one session", async () => {
+  it("multiple env_secrets on one session", async () => {
     const s = await post("/v1/sessions", {
       agent: agentId,
       environment_id: envId,
@@ -1052,7 +1052,44 @@ describe("GitHub Repository + Env Secret resources", () => {
     expect(names).toContain("VAR_C");
   });
 
-  it.skip("mixed resource types: github + env_secret + file", async () => {
+  it("env_secret value persists to the secret store and reaches sandbox env", async () => {
+    const secret = "round_trip_env_secret";
+    const s = await post("/v1/sessions", {
+      agent: agentId,
+      environment_id: envId,
+      resources: [{
+        type: "env_secret",
+        name: "ROUND_TRIP_KEY",
+        value: secret,
+      }],
+    });
+    expect(s.status).toBe(201);
+    const session = (await s.json()) as any;
+    expect(JSON.stringify(session)).not.toContain(secret);
+
+    const resource = session.resources[0];
+    expect(resource.type).toBe("env");
+    expect(resource.id).toBeTruthy();
+
+    const stored = await env.CONFIG_KV.get(`t:default:secret:${session.id}:${resource.id}`);
+    expect(stored).toBe(secret);
+
+    const applied: Record<string, string> = {};
+    await mountResources(
+      {
+        setEnvVars: async (vars: Record<string, string>) => {
+          Object.assign(applied, vars);
+        },
+      } as never,
+      [resource],
+      env.CONFIG_KV,
+      new Map([[resource.id, stored as string]]),
+    );
+    expect(Object.keys(applied)).toEqual(["ROUND_TRIP_KEY"]);
+    expect(applied.ROUND_TRIP_KEY).toBe(stored);
+  });
+
+  it("mixed resource types: github + env_secret + file", async () => {
     const f = await post("/v1/files", { filename: "mixed.txt", content: "mixed content", media_type: "text/plain" });
     const file = (await f.json()) as any;
 
@@ -1071,7 +1108,7 @@ describe("GitHub Repository + Env Secret resources", () => {
 
     const types = session.resources.map((r: any) => r.type);
     expect(types).toContain("github_repository");
-    expect(types).toContain("env_secret");
+    expect(types).toContain("env");
     expect(types).toContain("file");
 
     // Secrets not leaked
