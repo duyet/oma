@@ -135,6 +135,7 @@ describe("<AgentDetail /> hub layout", () => {
     expect(screen.getByRole("link", { name: "Agent" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Sessions" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Deployments" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Daily Summary" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Monitor" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Observability" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Publishing" })).toBeInTheDocument();

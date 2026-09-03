@@ -43,6 +43,7 @@ const TABS: { label: string; to: string; end?: boolean }[] = [
   { label: "Sessions", to: "sessions" },
   { label: "Deployments", to: "deployments" },
   { label: "Schedules", to: "schedules" },
+  { label: "Daily Summary", to: "daily-summary" },
   { label: "Monitor", to: "monitor" },
   { label: "Observability", to: "observability" },
   { label: "Publishing", to: "publishing" },

@@ -1,11 +1,11 @@
 /**
  * Status pill — small colored chip that represents a state (idle / running /
- * completed / errored / terminated). Used in session header + turn cards.
+ * completed / errored / terminated / warning). Used in session header + turn cards.
  *
  * Tones map to design-system status colors. `running` gets an animated dot
  * to communicate "in progress" without users staring for a status change.
  */
-export type StatusTone = "idle" | "running" | "completed" | "errored" | "terminated" | "neutral";
+export type StatusTone = "idle" | "running" | "completed" | "errored" | "terminated" | "warning" | "neutral";
 
 const TONE_CLASS: Record<StatusTone, string> = {
   idle: "bg-muted text-muted-foreground",
@@ -13,6 +13,7 @@ const TONE_CLASS: Record<StatusTone, string> = {
   completed: "bg-success-subtle text-success",
   errored: "bg-danger-subtle text-danger",
   terminated: "bg-danger-subtle text-danger",
+  warning: "bg-warning-subtle text-warning",
   neutral: "bg-muted text-muted-foreground",
 };
 

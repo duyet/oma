@@ -16,6 +16,25 @@ export { resolveServices } from "./types";
 export { buildAgentRoutes } from "./agents";
 export type { AgentRoutesDeps } from "./agents";
 
+export {
+  buildDailySummaryRoutes,
+  parseDailySummaryDays,
+  buildDailySummary,
+} from "./agents/daily-summary";
+export type {
+  DailySummaryRoutesDeps,
+  DailySummaryDays,
+  ScheduleRunStatus,
+  TokenTotals,
+  DailySummaryDay,
+  DailySummaryRecentRun,
+  AgentDailySummary,
+  ParseDailySummaryDaysResult,
+  DailySummaryDaysError,
+  ScheduleRunRaw,
+  UsageEventRaw,
+} from "./agents/daily-summary";
+
 export { buildAnalyticsRoutes, parseAnalyticsRange } from "./analytics";
 export type { AnalyticsRoutesDeps } from "./analytics";
 

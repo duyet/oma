@@ -7,19 +7,15 @@ import { useApi } from "../../lib/api";
 import { useApiQuery } from "../../lib/useApiQuery";
 import { DataTable, ExpandedDetail, type ColumnDef } from "../../components/DataTable";
 import { RowActionsMenu } from "../../components/RowActionsMenu";
+import { StatusPill } from "../../components/StatusPill";
 import { FormDialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/useConfirm";
 import { formatRelative } from "../../lib/format";
 import { useAgentHub } from "../AgentDetail";
 import { CreateScheduleDialog } from "./CreateScheduleDialog";
+import { scheduleStatusTone } from "./schedule-status";
 import type { AgentSchedule, ScheduleRun } from "./schedule-types";
-
-function lastRunCls(status: string | null | undefined) {
-  if (status === "ok") return "text-success";
-  if (status === "error" || status === "skipped_concurrency") return "text-danger";
-  return "text-fg-subtle";
-}
 
 /**
  * Tab — cron schedules scoped to this agent (see AGENTS.md "Agent
@@ -123,8 +119,12 @@ export function AgentSchedulesTab() {
           if (!s.last_run_at) return <span className="text-fg-subtle text-xs">Never</span>;
           const rel = formatRelative(Date.now() - new Date(s.last_run_at).getTime());
           const label = (
-            <span className={`text-xs ${lastRunCls(s.last_run_status)}`}>
-              {s.last_run_status ?? "—"} · {rel}
+            <span className="inline-flex items-center gap-1.5 text-xs">
+              <StatusPill
+                status={scheduleStatusTone(s.last_run_status)}
+                label={s.last_run_status ?? "—"}
+              />
+              <span className="text-fg-muted">{rel}</span>
             </span>
           );
           return s.last_session_id ? (
@@ -198,21 +198,7 @@ export function AgentSchedulesTab() {
         emptySubtitle="Run this agent on a cron cadence — recurring maintenance, digests, or polling jobs."
         emptyAction={<Button onClick={() => setShowCreate(true)}>+ Create schedule</Button>}
         columns={columns}
-        renderExpandedRow={(s) => (
-          <ExpandedDetail
-            rows={[
-              { label: "ID", value: <span className="font-mono text-xs">{s.id}</span> },
-              { label: "Cron", value: s.cron_expression },
-              { label: "Timezone", value: s.timezone },
-              { label: "Environment", value: s.environment_id },
-              { label: "Enabled", value: s.enabled ? "Yes" : "No" },
-              {
-                label: "Next run",
-                value: s.next_run_at ? new Date(s.next_run_at).toLocaleString() : "Never",
-              },
-            ]}
-          />
-        )}
+        renderExpandedRow={(s) => <ExpandedScheduleDetail agentId={agent.id} schedule={s} />}
       />
 
       <CreateScheduleDialog
@@ -249,10 +235,72 @@ interface RunsResponse {
   next_cursor?: string;
 }
 
-function runStatusCls(status: string) {
-  if (status === "ok") return "text-success";
-  if (status === "error" || status === "skipped_concurrency") return "text-danger";
-  return "text-fg-subtle";
+function ExpandedScheduleDetail({
+  agentId,
+  schedule,
+}: {
+  agentId: string;
+  schedule: AgentSchedule;
+}) {
+  const { data, isLoading } = useApiQuery<{ data: ScheduleRun[] }>(
+    `/v1/agents/${agentId}/schedules/${schedule.id}/runs`,
+    { limit: "20" },
+    { refetchInterval: 15000 },
+  );
+  const runs = data?.data ?? [];
+
+  return (
+    <div className="space-y-4">
+      <ExpandedDetail
+        rows={[
+          { label: "ID", value: <span className="font-mono text-xs">{schedule.id}</span> },
+          { label: "Cron", value: schedule.cron_expression },
+          { label: "Timezone", value: schedule.timezone },
+          { label: "Environment", value: schedule.environment_id },
+          { label: "Enabled", value: schedule.enabled ? "Yes" : "No" },
+          {
+            label: "Next run",
+            value: schedule.next_run_at ? new Date(schedule.next_run_at).toLocaleString() : "Never",
+          },
+        ]}
+      />
+      <div>
+        <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium mb-2">
+          Recent runs
+        </div>
+        {isLoading && runs.length === 0 ? (
+          <p className="text-xs text-fg-subtle">Loading…</p>
+        ) : runs.length === 0 ? (
+          <p className="text-xs text-fg-subtle">No runs yet.</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {runs.map((r) => {
+              const ts = r.started_at ?? r.created_at;
+              return (
+                <li key={r.id} className="flex items-center gap-2 text-xs min-w-0">
+                  <span className="text-fg-subtle tabular-nums whitespace-nowrap">
+                    {formatRelative(Date.now() - new Date(ts).getTime())}
+                  </span>
+                  <StatusPill status={scheduleStatusTone(r.status)} label={r.status} />
+                  {r.session_id ? (
+                    <Link
+                      to={`/sessions/${r.session_id}`}
+                      className="hover:underline font-mono truncate"
+                    >
+                      {r.session_id}
+                    </Link>
+                  ) : (
+                    <span className="text-fg-subtle">—</span>
+                  )}
+                  {r.error && <span className="text-danger truncate">{r.error}</span>}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -325,9 +373,7 @@ function ScheduleRunsDialog({
               className="border border-border rounded-md px-3 py-2 flex flex-col gap-1"
             >
               <div className="flex items-center justify-between gap-2">
-                <span className={`text-sm font-medium ${runStatusCls(r.status)}`}>
-                  {r.status}
-                </span>
+                <StatusPill status={scheduleStatusTone(r.status)} label={r.status} />
                 <span className="text-xs text-fg-subtle">
                   {r.started_at
                     ? formatRelative(Date.now() - new Date(r.started_at).getTime())
