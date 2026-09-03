@@ -7,7 +7,7 @@ import { DEFAULT_AGENT_MODEL } from "@duyet/oma-agents-store";
 import {
   ANYROUTER_API_BASE,
   ANYROUTER_API_COMPAT,
-  toGatewayModelId,
+  toAnyRouterCallableModelId,
 } from "@duyet/oma-anyrouter";
 
 export const PLATFORM_DEFAULT_CARD_ID = "platform_default";
@@ -43,7 +43,7 @@ export function buildPlatformDefaultCard(opts: {
   // ANYROUTER_API_KEY binding): still advertise the gateway wire id —
   // that's the production env-credential fallback the agent worker uses.
   const provider = useAnthropic ? "ant" : ANYROUTER_API_COMPAT;
-  const model = useAnthropic ? handle : toGatewayModelId(handle);
+  const model = useAnthropic ? handle : toAnyRouterCallableModelId(handle);
   return {
     id: PLATFORM_DEFAULT_CARD_ID,
     model_id: handle,

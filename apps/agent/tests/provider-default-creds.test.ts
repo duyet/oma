@@ -5,7 +5,7 @@
 
 import { describe, it, expect } from "vitest";
 import { resolveDefaultProviderCreds } from "../src/harness/provider";
-import { ANYROUTER_API_BASE, ANYROUTER_API_COMPAT } from "@duyet/oma-anyrouter";
+import { ANYROUTER_API_BASE, ANYROUTER_API_COMPAT, ANYROUTER_FREE_MODEL_ID, toAnyRouterCallableModelId } from "@duyet/oma-anyrouter";
 
 describe("resolveDefaultProviderCreds", () => {
   it("uses ANTHROPIC_API_KEY when set", () => {
@@ -35,5 +35,12 @@ describe("resolveDefaultProviderCreds", () => {
 
   it("returns null when neither is configured", () => {
     expect(resolveDefaultProviderCreds({})).toBeNull();
+  });
+
+  it("pairs AnyRouter fallback with anyrouter/free for seeded sonnet", () => {
+    const creds = resolveDefaultProviderCreds({ ANYROUTER_API_KEY: "sk-ar-test" });
+    expect(creds?.apiCompat).toBe(ANYROUTER_API_COMPAT);
+    expect(toAnyRouterCallableModelId("claude-sonnet-4-6")).toBe(ANYROUTER_FREE_MODEL_ID);
+    expect(toAnyRouterCallableModelId("anthropic/claude-sonnet-4-6")).not.toContain("claude-sonnet-4.6");
   });
 });

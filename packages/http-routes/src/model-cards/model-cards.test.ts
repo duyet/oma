@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { Hono } from "hono";
-import { ANYROUTER_API_COMPAT, toGatewayModelId } from "@duyet/oma-anyrouter";
+import { ANYROUTER_API_COMPAT, ANYROUTER_FREE_MODEL_ID, toAnyRouterCallableModelId } from "@duyet/oma-anyrouter";
 import { DEFAULT_AGENT_MODEL } from "@duyet/oma-agents-store";
 import { buildModelCardRoutes } from "./index";
 import { PLATFORM_DEFAULT_CARD_ID } from "./platform-default";
@@ -161,8 +161,10 @@ describe("model_cards routes", () => {
       const card = json.data[0];
       expect(card.id).toBe(PLATFORM_DEFAULT_CARD_ID);
       expect(card.model_id).toBe(DEFAULT_AGENT_MODEL);
-      expect(card.model).toBe(toGatewayModelId(DEFAULT_AGENT_MODEL));
+      expect(card.model).toBe(toAnyRouterCallableModelId(DEFAULT_AGENT_MODEL));
+      expect(card.model).toBe(ANYROUTER_FREE_MODEL_ID);
       expect(card.model).not.toContain("claude-sonnet-4.6");
+      expect(card.model).not.toContain("claude-sonnet-4-6");
       expect(card.provider).toBe(ANYROUTER_API_COMPAT);
       expect(card.source).toBe("platform");
       expect(card.is_default).toBe(true);

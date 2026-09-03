@@ -1,11 +1,12 @@
 // Bare `claude-*` handles (seeded General agent) must go to OpenAI-compat
-// gateways as `anthropic/claude-*`. Sending the hyphenated Anthropic id
-// unchanged lets AnyRouter alias it to the dotted BYOK-only catalog entry
-// (`anthropic/claude-sonnet-4.6`) and 404 with model_unavailable (#435).
+// gateways as `anthropic/claude-*`. AnyRouter then aliases hyphenated
+// sonnet-4-6 to dotted BYOK-only `anthropic/claude-sonnet-4.6` (#452), so
+// the env-fallback path runs `toAnyRouterCallableModelId` first and sends
+// `anyrouter/free`. Tenant cards still hit resolveModel with card.model.
 
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { resolveModel } from "../src/harness/provider";
-import { ANYROUTER_API_BASE } from "@duyet/oma-anyrouter";
+import { ANYROUTER_API_BASE, ANYROUTER_FREE_MODEL_ID, toAnyRouterCallableModelId } from "@duyet/oma-anyrouter";
 
 const realFetch = globalThis.fetch;
 
@@ -59,5 +60,19 @@ describe("OpenAI-compat gateway model ids", () => {
       resolveModel("gpt-4o", "sk-test", "https://api.openai.com/v1", "oai"),
     );
     expect(body.model).toBe("gpt-4o");
+  });
+
+  it("env-fallback sonnet is anyrouter/free, never dotted 4.6", async () => {
+    const body = await captureBody(
+      resolveModel(
+        toAnyRouterCallableModelId("claude-sonnet-4-6"),
+        "sk-ar-test",
+        ANYROUTER_API_BASE,
+        "oai",
+      ),
+    );
+    expect(body.model).toBe(ANYROUTER_FREE_MODEL_ID);
+    expect(String(body.model)).not.toContain("claude-sonnet-4.6");
+    expect(String(body.model)).not.toContain("claude-sonnet-4-6");
   });
 });
