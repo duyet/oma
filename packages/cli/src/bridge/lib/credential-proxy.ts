@@ -67,7 +67,22 @@ const CREDENTIAL_TTL_MS = 60_000;
 const GIT_PROBE_TIMEOUT_MS = 5_000;
 
 /** Hosts we probe for a credential when building a session's git config. */
-export const GIT_HOSTS = ["github.com", "gitlab.com", "bitbucket.org"];
+export const GIT_HOSTS = ["github.com", "gist.github.com", "gitlab.com", "bitbucket.org"];
+
+/**
+ * Git HTTPS hosts whose vault credential lives on a different API hostname.
+ *
+ * cap_cli `gh` matches `api.github.com` / `uploads.github.com`, not
+ * `github.com` (`packages/cap/src/builtin/gh.ts` vs `git.ts`). A session
+ * that only holds a gh token would otherwise skip the git `insteadOf`
+ * rewrite and keep using the machine's helper — the gap issue #318 named.
+ * The daemon still asks the platform for the aliased host. It never
+ * invents a token.
+ */
+export const HOST_CREDENTIAL_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  "github.com": ["api.github.com"],
+  "gist.github.com": ["api.github.com"],
+};
 
 /** Hop-by-hop headers that must not be forwarded (RFC 7230 §6.1). */
 const HOP_BY_HOP = [
@@ -156,11 +171,24 @@ export class LocalCredentialProxy {
 
   /** Cached credential lookup. Returns null when nothing matches. */
   async credentialFor(host: string): Promise<string | null> {
-    const hit = this.#cache.get(host);
+    const key = host.toLowerCase();
+    const hit = this.#cache.get(key);
     if (hit && Date.now() - hit.at < CREDENTIAL_TTL_MS) return hit.token;
-    const token = await this.#resolve(host);
-    this.#cache.set(host, { token, at: Date.now() });
+    const token = await this.#resolveWithAliases(key);
+    this.#cache.set(key, { token, at: Date.now() });
     return token;
+  }
+
+  async #resolveWithAliases(host: string): Promise<string | null> {
+    const seen = new Set<string>();
+    for (const candidate of [host, ...(HOST_CREDENTIAL_ALIASES[host] ?? [])]) {
+      const h = candidate.toLowerCase();
+      if (seen.has(h)) continue;
+      seen.add(h);
+      const token = await this.#resolve(h);
+      if (token) return token;
+    }
+    return null;
   }
 
   /** True when the platform has a credential for `host`. */

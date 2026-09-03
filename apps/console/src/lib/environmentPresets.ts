@@ -165,7 +165,7 @@ export const PROVIDER_GUIDANCE: ProviderGuidance[] = [
       note: "Direct Node child_process on the host. Zero isolation — trusted local dev only.",
     },
     limitations: [
-      "No outbound vault-credential MITM proxy on the paired machine — outbound HTTP is un-injected.",
+      "Loopback credential proxy injects vault tokens for git HTTPS and plain http://. gh, curl https://…, and other own-TLS tools still use the machine's credentials (OMA does not install a CA).",
       "Memory-store and session-outputs mounts aren't wired.",
     ],
   },

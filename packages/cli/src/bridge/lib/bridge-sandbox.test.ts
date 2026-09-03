@@ -136,3 +136,49 @@ describe("outbound credential lookup relay (issue #318)", () => {
     await expect(pending).rejects.toThrow("unavailable on this deployment");
   });
 });
+
+describe("subprocess child env with credential proxy on (issue #318)", () => {
+  it("exports HTTP_PROXY and a git rewrite for a gh API token, never the token itself", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "oma-sbx-cred-"));
+    const frames: Array<Record<string, unknown>> = [];
+    const credMgr = new BridgeSandboxManager(
+      (m) => {
+        frames.push(m);
+        if (m.type === "sandbox.outbound.credential") {
+          const host = m.host as string;
+          queueMicrotask(() =>
+            credMgr.handleCredentialResult({
+              request_id: m.request_id as string,
+              ok: true,
+              token: host === "api.github.com" ? "fake-token-not-a-real-credential" : null,
+            }),
+          );
+        }
+      },
+      { baseDir: dir, credentialProxy: true },
+    );
+    try {
+      await credMgr.handle({
+        type: "sandbox.op",
+        op: "exec",
+        request_id: "r_env",
+        session_id: "sess_cred",
+        command:
+          'printf "%s\\n%s\\n" "$HTTP_PROXY" "$GIT_CONFIG_GLOBAL"; ' +
+          'test -n "$GIT_CONFIG_GLOBAL" && grep insteadOf "$GIT_CONFIG_GLOBAL"; ' +
+          'env | grep -F fake-token-not-a-real-credential || true',
+      });
+      const result = frames.find((m) => m.type === "sandbox.result") as
+        | { ok?: boolean; result?: { output?: string } }
+        | undefined;
+      expect(result?.ok).toBe(true);
+      const output = result?.result?.output ?? "";
+      expect(output).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/m);
+      expect(output).toContain("insteadOf = https://github.com/");
+      expect(output).not.toContain("fake-token-not-a-real-credential");
+    } finally {
+      await credMgr.destroyAll();
+      try { rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
+    }
+  });
+});

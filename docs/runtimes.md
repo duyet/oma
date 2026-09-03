@@ -274,6 +274,11 @@ written for hosts that actually have a matching vault credential — if none
 does, git is left completely untouched and your own credential helper keeps
 working exactly as before.
 
+A `cap_cli` `gh` credential is enough for `github.com` git remotes. The
+platform matches that token on `api.github.com`, not `github.com`, so the
+proxy asks for the API host as an alias and rewrites git anyway. The token
+still never lands on disk.
+
 **What is NOT injected**
 
 Anything that opens its own TLS session: `gh`, `curl https://…`, language HTTP

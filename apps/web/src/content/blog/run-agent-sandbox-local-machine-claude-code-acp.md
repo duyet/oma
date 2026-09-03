@@ -176,13 +176,16 @@ first turn and reuses it for subsequent turns in the same session.
 Both paths trade platform guarantees for running on hardware OMA
 doesn't control:
 
-- **No outbound vault-credential proxy on your machine.** Vault
-  credentials are injected by an outbound MITM proxy inside the
-  platform's own sandbox — that proxy doesn't exist on your laptop, so
-  outbound HTTP from a local `subprocess` sandbox or a locally-spawned
-  ACP child is un-injected. MCP server calls are unaffected — those go
-  through `/v1/mcp-proxy` regardless of where the agent loop runs, so
-  MCP credentials still never touch your machine.
+- **Vault injection on `subprocess` is loopback, not TLS MITM.** The
+  daemon runs a per-session credential proxy on `127.0.0.1`. git over
+  HTTPS and plain `http://` calls receive the session's vault token
+  (a `cap_cli` `gh` token on `api.github.com` is enough to rewrite
+  `github.com` remotes). `gh`, `curl https://…`, and any other tool
+  that opens its own TLS session still use the machine's credentials —
+  OMA does not install a CA. ACP children (`acp-proxy`) do not go
+  through that proxy at all. MCP server calls are unaffected: those
+  still go through `/v1/mcp-proxy`, so MCP credentials never touch
+  your machine.
 - **Memory-store and session-outputs mounts aren't wired** for either
   path. If an agent depends on `/mnt/memory/<store>/`, don't route it
   through `subprocess` or `acp-proxy` yet.
