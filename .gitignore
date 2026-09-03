@@ -46,6 +46,9 @@ rl/tasks/terminal-bench/findings-*.md
 # IDE
 .vscode/
 .idea/
+# Verification skill runtime (proof artifacts live here; never commit)
+.cursor/skills/verify-oma/.run/
+.cursor/skills/verify-oma/artifacts/
 *.swp
 .DS_Store
 .claude/worktrees/
