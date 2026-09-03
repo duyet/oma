@@ -23,6 +23,15 @@ curl -sX POST $BASE/v1/sessions -H "x-api-key: $KEY" \
 # Inside the sandbox: curl https://api.github.com/user → 200, Authorization injected at the network layer
 ```
 
+**Session injection.** An operator can bind an existing vault credential to a
+newly discovered host on a *running* session (`POST /v1/sessions/:id/injections`
+`{ type: "credential_inject", host, credential_id }`) without restarting or
+mutating the agent. The outbound resolver re-reads the session overlay on
+every call, so the bind takes effect immediately. Overlay, events, GET bodies,
+and the Console Inject tab carry `credential_id` + host only — the token never
+enters the sandbox and is never logged. The credential must already belong to
+one of the session's `vault_ids`.
+
 Three credential types share one resolver:
 
 | Type | Match by | Refresh |

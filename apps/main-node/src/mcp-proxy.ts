@@ -27,6 +27,10 @@
  */
 
 import type { AgentConfig } from "@duyet/oma-shared";
+import {
+  overlayFromMetadata,
+  pickMcpServer,
+} from "@duyet/oma-api-types";
 import type { KvStore } from "@duyet/oma-kv-store";
 import type { SessionService } from "@duyet/oma-sessions-store";
 import type { CredentialService } from "@duyet/oma-credentials-store";
@@ -63,19 +67,20 @@ async function resolveProxyTarget(
 
   const agent = session.agent_snapshot as AgentConfig | null;
   if (!agent) return null;
-  const server = (agent.mcp_servers ?? []).find((s) => s.name === serverName);
+  const overlay = overlayFromMetadata(session.metadata);
+  const server = pickMcpServer(agent.mcp_servers, overlay, serverName);
   if (!server) return null;
 
-  // Inline url wins over registry_id; a registry entry may pin a vault
-  // credential id to inject.
+  // Inline url wins over registry_id; overlay or registry credential_id
+  // pins the vault credential to inject.
   let upstreamUrl = server.url;
-  let pinnedCredentialId: string | undefined;
-  const registryId = (server as { registry_id?: string }).registry_id;
+  let pinnedCredentialId: string | undefined = server.credential_id;
+  const registryId = server.registry_id;
   if (!upstreamUrl && registryId) {
     const registered = await resolveRegisteredMcpServer(deps.kv, tenantId, registryId);
     if (registered) {
       upstreamUrl = registered.url;
-      pinnedCredentialId = registered.credential_id;
+      if (!pinnedCredentialId) pinnedCredentialId = registered.credential_id;
     }
   }
   if (!upstreamUrl) return null;

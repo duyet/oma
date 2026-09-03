@@ -105,6 +105,17 @@ export class NodeSessionRouter implements SessionRouter {
     return { status: 200, body: JSON.stringify({ sandbox_status: "running" }) };
   }
 
+  async recordConfigUpdated(
+    sessionId: string,
+    event: SessionEvent,
+  ): Promise<{ status: number; body: string }> {
+    const log = this.deps.newEventLog(sessionId);
+    await log.appendAsync(event);
+    const stored = await log.getEventsAsync();
+    this.deps.hub.publish(sessionId, stored[stored.length - 1]);
+    return { status: 200, body: "{}" };
+  }
+
   async appendEvent(
     sessionId: string,
     event: SessionEvent,

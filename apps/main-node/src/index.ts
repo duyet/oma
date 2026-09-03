@@ -62,6 +62,9 @@ import {
   formatLeakedSecretError,
   isAuthDisabled,
   AUTH_DISABLED_HTTP,
+  applyOverlayToAgent,
+  overlayFromMetadata,
+  injectionReminders,
 } from "@duyet/oma-shared";
 import { DefaultHarness } from "@duyet/oma-agent/harness/default-loop";
 import { ClaudeAgentSdkHarness } from "@duyet/oma-agent/harness/claude-agent-sdk-loop";
@@ -957,7 +960,12 @@ const sessionRegistry = new SessionRegistry({
   },
   buildTools: async (agent, sandbox, ctx) => {
     const { apiKey, baseUrl } = resolveProviderCreds(agent);
-    return buildTools(agent, sandbox, {
+    const sessionRow = await sessionsService
+      .get({ tenantId: ctx.tenantId, sessionId: ctx.sessionId })
+      .catch(() => null);
+    const overlay = overlayFromMetadata(sessionRow?.metadata);
+    const injected = applyOverlayToAgent(agent, overlay);
+    return buildTools(injected, sandbox, {
       ANTHROPIC_API_KEY: apiKey,
       ANTHROPIC_BASE_URL: baseUrl,
       WEB_FETCH_ALLOW_PRIVATE: process.env.WEB_FETCH_ALLOW_PRIVATE,
@@ -1046,6 +1054,11 @@ const sessionRegistry = new SessionRegistry({
     });
     await runtime.refreshHistory();
     const rawSystemPrompt = input.agent.system ?? "";
+    const sessionRow = await sessionsService
+      .get({ tenantId: input.tenantId, sessionId: input.sessionId })
+      .catch(() => null);
+    const overlay = overlayFromMetadata(sessionRow?.metadata);
+    const injectedAgent = applyOverlayToAgent(input.agent, overlay);
     // Load the session's environment so the system prompt carries the same
     // sandbox facts as the Cloudflare SessionDO path (provider, paths,
     // networking). Best-effort — a missing env just omits the block.
@@ -1076,12 +1089,16 @@ const sessionRegistry = new SessionRegistry({
       );
     }
     return {
-      agent: input.agent,
+      agent: injectedAgent,
       userMessage: input.userMessage,
       session_id: input.sessionId,
       tools: input.tools as HarnessContext["tools"],
       model: input.model,
-      systemPrompt: composeSystemPrompt(rawSystemPrompt, undefined, sandboxEnv),
+      systemPrompt: composeSystemPrompt(
+        rawSystemPrompt,
+        injectionReminders(overlay),
+        sandboxEnv,
+      ),
       rawSystemPrompt,
       env: {
         ANTHROPIC_API_KEY: apiKey,

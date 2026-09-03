@@ -2493,6 +2493,29 @@ function EventRender({
         </div>
       );
 
+    case "session.config_updated": {
+      const changes = Array.isArray(event.changes) ? event.changes as string[] : [];
+      const labels = changes.map((c) => {
+        switch (c) {
+          case "system_prompt_append":
+            return "system prompt";
+          case "mcp_server_added":
+            return "MCP server";
+          case "tools_updated":
+            return "tools";
+          case "credential_injected":
+            return "credential";
+          default:
+            return c.replace(/_/g, " ");
+        }
+      });
+      return (
+        <div className="max-w-2xl bg-bg-surface rounded-lg px-4 py-2.5 text-sm text-fg-muted">
+          Operator injection: {labels.join(", ") || "config"}
+        </div>
+      );
+    }
+
     case "span.model_request_end": {
       // Per-model-call token usage, emitted once per step by
       // default-loop.ts: { model, model_usage: { input_tokens,

@@ -169,6 +169,15 @@ export interface SessionRouter {
     settings: { model?: string | null; reasoningEffort?: string | null },
   ): Promise<{ status: number; body: string }>;
 
+  /** Persist + broadcast a `session.config_updated` audit event after an
+   *  operator injection. Overlay state is already on the session row —
+   *  this is observational. Runtimes that cannot append to the event log
+   *  may omit the method; the injection still takes effect. */
+  recordConfigUpdated?(
+    sessionId: string,
+    event: Extract<SessionEvent, { type: "session.config_updated" }>,
+  ): Promise<{ status: number; body: string }>;
+
   /** Submit a user.* event. Returns the underlying status + body so
    *  routes can pass non-202 (terminated 409) verbatim. */
   appendEvent(

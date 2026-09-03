@@ -1010,6 +1010,29 @@ export interface SessionWarningEvent extends EventBase {
   details?: Record<string, unknown>;
 }
 
+/**
+ * Operator mid-session injection (issue #346). OMA extension — not in
+ * SPEC_EVENT_TYPES; SSE consumers must pass `?include=chunks` to see it.
+ * Overlay state lives on `session.metadata._oma_injections`; this event is
+ * the audit trail. `detail` never carries credential tokens.
+ */
+export interface SessionConfigUpdatedEvent extends EventBase {
+  type: "session.config_updated";
+  changes: Array<
+    | "system_prompt_append"
+    | "mcp_server_added"
+    | "tools_updated"
+    | "credential_injected"
+  >;
+  operator_injection: true;
+  detail: {
+    system_prompt_append?: { id: string };
+    mcp_server_added?: { name: string; url?: string; registry_id?: string };
+    tools_updated?: { enabled: string[]; disabled: string[] };
+    credential_injected?: { host: string; credential_id: string };
+  };
+}
+
 export interface SessionThreadCreatedEvent extends EventBase {
   type: "session.thread_created";
   session_thread_id: string;
@@ -1344,6 +1367,7 @@ export type SessionEvent =
   | SessionStatusEvent
   | SessionErrorEvent
   | SessionWarningEvent
+  | SessionConfigUpdatedEvent
   | SessionOutcomeEvaluatedEvent
   | SessionThreadCreatedEvent
   | SessionThreadIdleEvent

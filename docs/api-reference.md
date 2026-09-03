@@ -43,6 +43,13 @@ GET    /v1/sessions/:id/events/stream      # SSE stream
 POST   /v1/sessions/:id/resources          # Attach resource
 GET    /v1/sessions/:id/resources          # List resources
 DELETE /v1/sessions/:id/resources/:resId   # Remove resource
+
+POST   /v1/sessions/:id/pause              # Snapshot workspace and destroy the sandbox
+POST   /v1/sessions/:id/resume             # Reprovision sandbox and restore workspace
+
+GET    /v1/sessions/:id/injections         # Session-scoped operator injection overlay
+POST   /v1/sessions/:id/injections         # Append prompt / mount MCP / toggle tools / bind credential
+PATCH  /v1/sessions/:id/tools              # Alias for POST /injections { type: "tools_update" }
 ```
 
 ## Vaults — Secure credential storage

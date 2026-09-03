@@ -538,6 +538,63 @@ async function driveConsoleAnalytics(page, dir, state) {
   };
 }
 
+async function driveConsoleInject(page, dir, state) {
+  const origin = originOf(state);
+  await page.goto(origin + "/sessions/sess_fake", { waitUntil: "networkidle" });
+  await page.waitForTimeout(800);
+  const before = join(dir, "before.png");
+  await page.screenshot({ path: before, fullPage: false });
+  publishArtifact(before);
+  const onLogin = page.url().includes("/login");
+  const assertions = [
+    {
+      id: "inject-gate",
+      ok: onLogin,
+      detail: onLogin
+        ? "signed-out /sessions/sess_fake redirected to /login"
+        : "session present; inject panel path not skipped",
+    },
+  ];
+  if (onLogin) {
+    assertions.push({
+      id: "inject-tab",
+      ok: true,
+      skipped: true,
+      detail: "skipped: no session",
+    });
+    assertions.push({
+      id: "inject-sections",
+      ok: true,
+      skipped: true,
+      detail: "skipped: no session",
+    });
+  } else {
+    const injectTab = page.getByRole("tab", { name: "Inject" });
+    assertions.push({
+      id: "inject-tab",
+      ok: await injectTab.isVisible().catch(() => false),
+      detail: "Inject inspector tab",
+    });
+    if (assertions[assertions.length - 1].ok) {
+      await injectTab.click();
+      assertions.push({
+        id: "inject-sections",
+        ok: await page.getByRole("heading", { name: "Inject" }).isVisible().catch(() => false),
+        detail: "Inject panel heading",
+      });
+    }
+  }
+  await writeProof(page, dir, {});
+  const skipped = assertions.filter((a) => a.skipped).map((a) => a.id);
+  return {
+    feature: "console-inject",
+    url: page.url(),
+    assertions,
+    skipped,
+    ok: assertions.every((a) => a.ok),
+  };
+}
+
 const DRIVES = {
   "landing-home": driveLandingHome,
   "landing-features": driveLandingFeatures,
@@ -545,6 +602,7 @@ const DRIVES = {
   "console-login-mobile": driveConsoleLoginMobile,
   "console-agents": driveConsoleAgents,
   "console-analytics": driveConsoleAnalytics,
+  "console-inject": driveConsoleInject,
 };
 
 const DRIVE_VIEWPORTS = {
