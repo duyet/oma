@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { timingSafeEqualStr } from "@duyet/oma-auth/timing-safe-equal";
 
 /**
  * Shared internal-secret gate for service-to-service `x-internal-secret`
@@ -16,6 +17,6 @@ export function checkInternalSecret(
 ): Response | null {
   if (!expected) return c.json({ error: "internal endpoints not configured" }, 503);
   const provided = c.req.header("x-internal-secret");
-  if (!provided || provided !== expected) return c.json({ error: "unauthorized" }, 401);
+  if (!provided || !timingSafeEqualStr(provided, expected)) return c.json({ error: "unauthorized" }, 401);
   return null;
 }

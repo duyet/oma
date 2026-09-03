@@ -51,6 +51,8 @@
 //     the next auth method (which could mask the attempt behind an
 //     ordinary "no session cookie" 401).
 
+import { timingSafeEqualStr } from "./timing-safe-equal";
+
 export interface TrustedProxyGuardConfig {
   /** Master switch. Every function in this module is a no-op (returns
    *  false/null) when this is false — that is what makes the feature
@@ -134,22 +136,4 @@ export function extractTrustedProxyIdentity(
     email.split("@")[0] ||
     subject;
   return { subject, email, name };
-}
-
-/**
- * Constant-time-ish string comparison — avoids leaking the secret's
- * length/content via early-exit timing. Deliberately avoids Node-only
- * crypto APIs (e.g. `node:crypto`'s timingSafeEqual) so this module stays
- * portable between Cloudflare Workers and Node.
- */
-function timingSafeEqualStr(a: string, b: string): boolean {
-  const enc = new TextEncoder();
-  const ab = enc.encode(a);
-  const bb = enc.encode(b);
-  const len = Math.max(ab.length, bb.length, 1);
-  let diff = ab.length ^ bb.length;
-  for (let i = 0; i < len; i++) {
-    diff |= (ab[i] ?? 0) ^ (bb[i] ?? 0);
-  }
-  return diff === 0;
 }

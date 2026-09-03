@@ -1226,6 +1226,9 @@ importers:
       '@duyet/oma-api-types':
         specifier: workspace:*
         version: link:../api-types
+      '@duyet/oma-auth':
+        specifier: workspace:*
+        version: link:../auth
       '@duyet/oma-blob-store':
         specifier: workspace:*
         version: link:../blob-store
