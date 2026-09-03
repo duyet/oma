@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { useApi } from "../../lib/api";
 import { formatDuration, formatRelative, shortenId } from "../../lib/format";
 import type { Event } from "../../lib/events";
+import { declaredOutputsFromEvents } from "@duyet/oma-api-types";
 import { RuntimeKindBadge, agentRuntimeKind } from "../../lib/runtime-kind";
 import { ModelName } from "../../lib/model-provider";
 import { Button } from "@/components/ui/button";
@@ -37,13 +38,14 @@ import {
  *      sandbox provider, packages, networking).
  */
 
-export type InspectorTab = "overview" | "usage" | "tools" | "sandbox" | "files";
+export type InspectorTab = "overview" | "usage" | "tools" | "sandbox" | "files" | "artifacts";
 
 const TABS: Array<{ id: InspectorTab; label: string }> = [
   { id: "overview", label: "Overview" },
   { id: "usage", label: "Usage" },
   { id: "tools", label: "Tools" },
   { id: "sandbox", label: "Sandbox" },
+  { id: "artifacts", label: "Artifacts" },
   { id: "files", label: "Files" },
 ];
 
@@ -723,6 +725,57 @@ function SandboxTab({
   );
 }
 
+export function DeclaredOutputsList({ events }: { events: Event[] }) {
+  const outputs = useMemo(() => declaredOutputsFromEvents(events), [events]);
+  if (outputs.length === 0) {
+    return (
+      <div className="space-y-2">
+        <p className="text-xs text-fg-subtle">
+          Files the agent marked as deliverables with the opt-in{" "}
+          <code className="font-mono">output_file</code> tool. Distinct from
+          sandbox writes and the Files tab mount.
+        </p>
+        <div className="text-xs text-fg-subtle">No declared outputs yet.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-fg-subtle">
+        Agent-declared deliverables from this session&apos;s event log.
+      </p>
+      <ul className="space-y-1.5" data-testid="declared-outputs-list">
+        {outputs.map((o) => (
+          <li key={o.tool_use_id} className="py-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="truncate font-mono text-xs text-fg" title={o.path}>
+                {o.path.split("/").pop() || o.path}
+              </span>
+              <span className="shrink-0 text-[10px] font-medium text-fg-subtle">
+                ★ Declared output
+              </span>
+            </div>
+            {o.description && (
+              <div className="text-[11px] text-fg-muted mt-0.5 line-clamp-2">
+                {o.description}
+              </div>
+            )}
+            <div className="text-[10px] text-fg-subtle mt-0.5">
+              {[
+                typeof o.size_bytes === "number" ? formatBytes(o.size_bytes) : null,
+                o.media_type,
+                o.declared_at ? new Date(o.declared_at).toLocaleString() : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function FilesTab({ sessionId }: { sessionId: string }) {
   const { api } = useApi();
   const [files, setFiles] = useState<SessionOutputFile[] | null>(null);
@@ -905,6 +958,7 @@ export function SessionInspector({
         {tab === "sandbox" && (
           <SandboxTab meta={meta} environment={environment} sandboxStatus={sandboxStatus} />
         )}
+        {tab === "artifacts" && <DeclaredOutputsList events={events} />}
         {tab === "files" && <FilesTab sessionId={sessionId} />}
       </div>
       </div>

@@ -2423,6 +2423,7 @@ function EventRender({
               errorText,
               state,
               mcpServerName,
+              timestamp: event.ts,
             })}
           </ToolContent>
         </Tool>

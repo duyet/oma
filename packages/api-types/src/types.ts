@@ -821,6 +821,45 @@ export interface AgentStatusEvent extends EventBase {
   blocked_on?: string;
 }
 
+/**
+ * OMA extension (not in Anthropic's wire spec). Emitted when the agent
+ * calls the opt-in `output_file` tool to mark a file as a session
+ * deliverable. Purely observational — NOT part of the model context
+ * (`eventsToMessages` skips it, same as `agent.status`).
+ *
+ * `GET /v1/sessions/:id` derives `outputs[]` from these events at read
+ * time. Inline `data` (base64) is persisted on the event for crash
+ * recovery and stripped from the session GET list.
+ */
+export interface AgentOutputDeclaredEvent extends EventBase {
+  type: "agent.output_declared";
+  /** Sandbox path or logical identifier. */
+  path: string;
+  /** Agent-provided human-readable label. */
+  description?: string;
+  /** MIME type; inferred from extension when the agent omits it. */
+  media_type?: string;
+  /** Populated from sandbox stat or decoded `data` when known. */
+  size_bytes?: number;
+  /** Hex SHA-256 of the bytes when the platform had them. */
+  sha256?: string;
+  /** Links back to the `output_file` `agent.tool_use` id. */
+  tool_use_id: string;
+  /** Inline base64 payload when the agent passed `data`. Omitted from GET `outputs[]`. */
+  data?: string;
+}
+
+/** Read-time projection of `agent.output_declared` on GET /v1/sessions/:id. */
+export interface SessionDeclaredOutput {
+  path: string;
+  description?: string;
+  media_type?: string;
+  size_bytes?: number;
+  sha256?: string;
+  declared_at?: string;
+  tool_use_id: string;
+}
+
 export interface AgentToolUseEvent extends EventBase {
   type: "agent.tool_use";
   id: string;
@@ -1287,6 +1326,7 @@ export type SessionEvent =
   | AgentThinkingEvent
   | AgentCustomToolUseEvent
   | AgentStatusEvent
+  | AgentOutputDeclaredEvent
   | AgentToolUseEvent
   | AgentToolResultEvent
   | AgentMcpToolUseEvent

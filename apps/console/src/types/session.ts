@@ -1,3 +1,5 @@
+import type { SessionDeclaredOutput } from "@duyet/oma-api-types";
+
 /**
  * Console-side Session list/detail row. Differs from
  * `@duyet/oma-api-types`' `SessionMeta` (wire-format) — the
@@ -54,4 +56,7 @@ export interface SessionRecord {
    *  the pause/resume backend contract is landing separately; older rows
    *  simply omit the field and the UI treats that as "running". */
   sandbox_status?: "running" | "paused" | "none";
+  /** Agent-declared deliverables overlaid by GET /v1/sessions/:id from
+   *  `agent.output_declared` events. Empty when none were declared. */
+  outputs?: SessionDeclaredOutput[];
 }

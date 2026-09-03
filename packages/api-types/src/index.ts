@@ -7,6 +7,7 @@
 // Anything importing only types should depend on this package, not @oma/shared.
 
 export * from "./types";
+export * from "./declared-outputs";
 export * from "./notify-schema";
 export * from "./mcp-servers-schema";
 export * from "./hooks-schema";
