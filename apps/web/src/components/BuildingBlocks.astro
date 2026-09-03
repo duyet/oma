@@ -15,7 +15,7 @@ const blocks: { name: string; icon: "book" | "globe" | "box"; body: string }[] =
   {
     name: "Artifacts",
     icon: "box",
-    body: "What agents produce: files in /workspace, memory-store notes, generated reports/charts, opened PRs. An agent can mark a keep-this deliverable with the opt-in output_file tool (`agent.output_declared`); those land in the session event log and the Console Artifacts tab.",
+    body: "What agents produce: files in /workspace, session outputs, memory-store notes, generated reports and charts. The Console session Inspector aggregates them on the Artifacts tab from the event log — no extra storage layer. An agent can mark a keep-this deliverable with the opt-in output_file tool (`agent.output_declared`); those are badged ★ Declared output.",
   },
 ];
 ---

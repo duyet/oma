@@ -20,6 +20,7 @@ import {
   type SessionAnalytics,
 } from "./analytics";
 import { InjectPanel } from "./InjectPanel";
+import { ArtifactsPanel } from "./ArtifactsPanel";
 
 /**
  * Right-rail session Inspector.
@@ -970,7 +971,7 @@ export function SessionInspector({
         {tab === "inject" && (
           <InjectPanel sessionId={sessionId} agent={agent} vaultIds={meta.vaultIds} />
         )}
-        {tab === "artifacts" && <DeclaredOutputsList events={events} />}
+        {tab === "artifacts" && <ArtifactsPanel sessionId={sessionId} events={events} />}
         {tab === "files" && <FilesTab sessionId={sessionId} />}
       </div>
       </div>
