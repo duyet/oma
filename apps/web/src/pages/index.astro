@@ -42,11 +42,11 @@ const sectionIntro =
 const concepts = [
   {
     name: "Agent",
-    body: "A versioned config: model, prompt, tools, skills, MCP, harness. Sessions pin a version at creation; updates never rewrite live runs.",
+    body: "A versioned teammate: model, prompt, tools, skills, MCP, harness. Opening an Agent lands on its home session — a pinned inbox that survives crash and reconnect.",
   },
   {
     name: "Session",
-    body: "A conversation with a durable event log. Streaming, crash recovery, and lifecycle all hang off this state — not an ephemeral chat window.",
+    body: "A conversation with a durable event log (SessionDO, persist-before-broadcast). Home is long-lived; extra sessions stay ephemeral for isolated work.",
   },
   {
     name: "Environment",
@@ -86,19 +86,24 @@ const explore = [
       <h1
         class="mt-3 text-balance text-3xl font-semibold tracking-tighter text-foreground sm:text-4xl"
       >
-        The self-hosted agent platform for any LLM provider and any sandbox
+        Your Agent has a computer — and a durable inbox
       </h1>
       <p
         class="mt-4 max-w-xl text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base"
       >
-        Run agent fleets you control — durable sessions, sandboxed tools, and
-        vault-backed credentials. Deploy on Cloudflare Workers, or self-host
-        with Docker. Bring your own models and sandboxes.
+        Message a teammate, not a throwaway chat. The home session keeps the
+        event log across crash and reconnect. A long-lived home runtime
+        (bridge or herdr) keeps working when the laptop is closed. Isolated
+        turns still get ephemeral sandboxes — this is not an always-on shared
+        VM. Any LLM provider, any sandbox, self-hosted.
       </p>
 
       <div class="mt-6 flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5">
-        <a href="https://docs.oma.duyet.net" class={btnPrimary}
-          ><Icon name="book" size={16} /> Read the docs</a
+        <a href="https://app.oma.duyet.net/" class={btnPrimary}
+          ><Icon name="server" size={16} /> Open Console</a
+        >
+        <a href="https://docs.oma.duyet.net" class={btnOutline}
+          ><Icon name="book" size={16} /> Install CLI / docs</a
         >
         {/* App root (not /login): signed-in land on the shell; signed-out
             bounce to login — matches nav + footer CTAs. */}

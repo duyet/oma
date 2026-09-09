@@ -47,6 +47,7 @@ function mockAssemblyDeps() {
         total_active_seconds: 0,
       }),
     ),
+    http.get("/v1/runtimes", () => HttpResponse.json({ runtimes: [] })),
   );
 }
 
@@ -93,6 +94,47 @@ function metricCard(label: string) {
 }
 
 describe("<Dashboard />", () => {
+  it("shows home runtime provisioning and does not call idle sessions working", async () => {
+    mockAssemblyDeps();
+    mockSessions({
+      recent: [
+        {
+          id: "sess_idle",
+          title: "Idle inbox",
+          agent_id: "agent_1",
+          status: "idle",
+          created_at: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+      running: [],
+    });
+    server.use(
+      http.get("/v1/stats", () =>
+        HttpResponse.json({
+          agents: 1,
+          sessions: 1,
+          environments: 1,
+          vaults: 0,
+          skills: 0,
+          model_cards: 0,
+          api_keys: 0,
+          total_sandbox_seconds: 0,
+          total_usage_sessions: 1,
+        }),
+      ),
+    );
+    renderPage();
+    expect(await screen.findByTestId("home-runtime-strip")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId("home-runtime-status").textContent).toMatch(
+        /No home runtime/i,
+      );
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("open-sessions-count").textContent).toMatch(/0 open/i);
+    });
+  });
+
   it("renders Overview (not Get started) as the page title", async () => {
     mockAssemblyDeps();
     mockSessions({ recent: [], running: [] });

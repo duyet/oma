@@ -290,7 +290,7 @@ async function driveLandingHome(page, dir, state) {
   await page.screenshot({ path: before, fullPage: false });
   publishArtifact(before);
   const heading =
-    "The self-hosted agent platform for any LLM provider and any sandbox";
+    "Your Agent has a computer — and a durable inbox";
   const assertions = [];
   const h1 = page.getByRole("heading", { name: heading });
   assertions.push({ id: "home-load", ok: await h1.isVisible(), detail: heading });

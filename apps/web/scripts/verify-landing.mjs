@@ -118,7 +118,7 @@ if (!base.includes("Try hosted") || !footer.includes("Try hosted") || !index.inc
 if (!index.includes("HowItFits") || !index.includes("self-hosted agent platform")) {
   fail("landing hero must include HowItFits + product pitch");
 }
-const h1Needle = "The self-hosted agent platform for any LLM provider and any sandbox";
+const h1Needle = "Your Agent has a computer — and a durable inbox";
 const h1Pos = index.indexOf(h1Needle);
 const fitsPos = index.indexOf("<HowItFits");
 const productPos = index.indexOf('id="what-is-oma"');

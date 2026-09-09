@@ -295,6 +295,30 @@ it. See [Memory Stores](#memory-stores) below.)
 - **rescheduled** — Container is being provisioned; will resume automatically
 - **terminated** — Session ended (explicit termination or error)
 
+### Home / pinned session
+
+Each Agent can own one long-lived **home session** (`metadata.home: true`) — a
+Bot-like inbox. Opening the Agent lands on that session; messages go there by
+default. Crash / reconnect keep the SessionDO event log (persist-before-broadcast
+is unchanged). Extra sessions remain creatable for isolated work.
+
+```bash
+# Get-or-create the Agent's home inbox
+curl -s -X POST $BASE/v1/sessions/home \
+  -H "x-api-key: $KEY" -H "content-type: application/json" \
+  -d '{"agent":"agent_xxx"}'
+
+curl -s "$BASE/v1/sessions/home?agent_id=agent_xxx" -H "x-api-key: $KEY"
+```
+
+The response includes `runtime` presence when a paired home machine has
+heartbeated (`online` | `offline` | `provisioning`). See
+[`docs/home-session.md`](docs/home-session.md).
+
+**Computer matrix:** home runtime = long-lived bridge/herdr (OpenShell optional);
+session sandboxes = ephemeral isolation; CLI relay bootstraps until home is
+paired. Not an always-on shared VM.
+
 ### Sandbox Pause & Resume
 
 Orthogonal to the lifecycle above: `sandbox_status` (`"running"` | `"paused"` |

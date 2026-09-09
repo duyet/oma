@@ -1,6 +1,6 @@
 # Fleet & Advanced Features
 
-Open Managed Agents is built to run multi-agent workloads, orchestrate a fleet of parallel sessions, monitor long-running tasks, and safely isolate untrusted runtimes.
+Open Managed Agents is built to run multi-agent workloads, orchestrate a fleet of parallel sessions, monitor long-running tasks, and safely isolate untrusted runtimes. Each Agent also has a **home session** (durable inbox) and can attach a **home runtime** (bridge/herdr) while risky work still uses ephemeral session sandboxes — see [Home session](home-session.md).
 
 ---
 

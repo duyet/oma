@@ -82,6 +82,10 @@ function mountHubHandlers() {
       HttpResponse.json({ data: [{ id: "env_1", name: "Default" }] }),
     ),
     http.get("/v1/vaults", () => HttpResponse.json({ data: [] })),
+    http.get("/v1/runtimes", () => HttpResponse.json({ runtimes: [] })),
+    http.get("/v1/sessions/home", () =>
+      HttpResponse.json({ error: "Home session not found" }, { status: 404 }),
+    ),
   );
 }
 
@@ -108,6 +112,11 @@ function renderHub(initial = "/agents/agent_1") {
 
 describe("<AgentDetail /> hub layout", () => {
   beforeEach(mountHubHandlers);
+
+  it("exposes Open home for the pinned inbox", async () => {
+    renderHub();
+    expect(await screen.findByRole("button", { name: /open home/i })).toBeInTheDocument();
+  });
 
   it("renders run readiness with a deep-link to session create", async () => {
     renderHub();

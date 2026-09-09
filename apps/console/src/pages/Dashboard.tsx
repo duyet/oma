@@ -27,6 +27,12 @@ import {
   dailyActivityTickIndices,
 } from "../lib/daily-activity-chart";
 import { SessionCard } from "../components/SessionCard";
+import {
+  deriveHomeRuntimePresence,
+  pickHomeRuntime,
+  sessionStatusKind,
+  type RuntimeHeartbeatRow,
+} from "../lib/home-runtime";
 import { SortableTable } from "../components/SortableTable";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn, rowActivateKeyDown } from "@/lib/utils";
@@ -135,6 +141,11 @@ export function Dashboard() {
   const agentsQuery = useApiQuery<{ data: { id: string; name: string }[] }>(
     "/v1/agents",
     { limit: "100" },
+  );
+  const runtimesQuery = useApiQuery<{ runtimes: RuntimeHeartbeatRow[] }>(
+    "/v1/runtimes",
+    undefined,
+    { refetchInterval: 15_000 },
   );
   const agentNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -307,6 +318,59 @@ export function Dashboard() {
         {/* Onboarding checklist — first-run only. Hides itself once any
             session exists so this page isn't a second Launch wizard. */}
         {!isMature ? <GettingStartedGuide /> : null}
+
+        <section
+          aria-label="Home runtime"
+          data-testid="home-runtime-strip"
+          className="rounded-2xl border border-border bg-card px-5 py-4"
+        >
+          {(() => {
+            const picked = pickHomeRuntime(runtimesQuery.data?.runtimes);
+            const presence = deriveHomeRuntimePresence(
+              picked,
+              Math.floor(Date.now() / 1000),
+            );
+            const open = runningSessionsQuery.data?.data ?? [];
+            return (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Home computer
+                  </p>
+                  <p className="mt-1 text-sm text-foreground" data-testid="home-runtime-status">
+                    {runtimesQuery.isLoading
+                      ? "Checking home runtime…"
+                      : presence === "provisioning"
+                        ? "No home runtime paired yet. Pair a bridge or herdr machine, or use CLI relay to bootstrap."
+                        : presence === "online"
+                          ? `Online${picked?.hostname ? ` · ${picked.hostname}` : ""}`
+                          : `Offline${picked?.hostname ? ` · ${picked.hostname}` : ""}`}
+                  </p>
+                </div>
+                <div className="text-sm text-muted-foreground" data-testid="open-sessions-count">
+                  {runningSessionsQuery.isLoading
+                    ? "…"
+                    : `${open.length}${runningSessionsQuery.data?.next_page ? "+" : ""} open ${open.length === 1 ? "session" : "sessions"}`}
+                  {open.length > 0 ? (
+                    <ul className="mt-1 space-y-0.5">
+                      {open.slice(0, 5).map((s) => (
+                        <li key={s.id}>
+                          <button
+                            type="button"
+                            className="text-foreground hover:underline"
+                            onClick={() => nav(`/sessions/${s.id}`)}
+                          >
+                            {s.title || s.id} · {sessionStatusKind(s.status)}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })()}
+        </section>
 
         {/* Headline metrics — number-forward strip. Cards that map to a list
             page are activatable (keyboard + click) so the numbers double as

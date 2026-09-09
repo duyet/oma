@@ -97,6 +97,8 @@ export function softwareApplicationSchema() {
     keywords:
       "self-hosted agent platform, any LLM provider, any sandbox platform, BYOK, MCP, Claude Managed Agents alternative, Claude Tag alternative, open-source Claude Tag, self-hosted Claude Tag",
     featureList: [
+      "Agent with a durable home session inbox and a home computer (bridge/herdr)",
+      "Ephemeral session sandboxes for isolated work — not an always-on shared VM",
       "Any LLM provider — Anthropic, OpenAI-compatible gateways, or a private model gateway",
       "Any sandbox platform — Cloudflare Containers, Kubernetes, E2B, Daytona, subprocess, or OpenShell",
       "Claude Managed Agents API compatibility",

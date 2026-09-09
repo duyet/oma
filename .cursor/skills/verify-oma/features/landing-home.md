@@ -22,7 +22,7 @@ Preconditions:
 - `control-oma doctor` reports surface `web` and HTTP 200 on `/`.
 - Viewport is `1280x800`.
 
-- **Open home.** Go to `/`. Run `node .cursor/skills/verify-oma/control-oma.mjs drive landing-home`. The heading `The self-hosted agent platform for any LLM provider and any sandbox` is visible.
+- **Open home.** Go to `/`. Run `node .cursor/skills/verify-oma/control-oma.mjs drive landing-home`. The heading `Your Agent has a computer — and a durable inbox` is visible.
 - **Identity.** The accessible name `Open Managed Agents — home` is present (header and footer both use it; assert the first). The body contains `Open Managed Agents`.
 - **CTA.** A `Try hosted` link is visible.
 - **Nav.** `nav[aria-label="Primary"]` is visible. A `Features` control exists inside it.
