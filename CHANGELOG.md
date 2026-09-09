@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.1.4](https://github.com/duyet/oma/compare/root-v0.1.3...root-v0.1.4) (2026-09-09)
+
+
+### ✨ Features
+
+* **agent:** opt-in output_file declares session deliverables ([#447](https://github.com/duyet/oma/issues/447)) ([2988ab7](https://github.com/duyet/oma/commit/2988ab72982de34f9a9ae52fc0b6280bb78e2a4a)), closes [#341](https://github.com/duyet/oma/issues/341)
+* **console:** add agent Monitor tab and health strip ([#444](https://github.com/duyet/oma/issues/444)) ([3fea811](https://github.com/duyet/oma/commit/3fea8118773e09dac7c5e842ebc0d05e784f117c)), closes [#345](https://github.com/duyet/oma/issues/345)
+* **console:** Analytics dashboard for cross-agent spend ([#344](https://github.com/duyet/oma/issues/344)) ([#446](https://github.com/duyet/oma/issues/446)) ([da8c163](https://github.com/duyet/oma/commit/da8c16332e3119af88eaaf0250b50a2592f54d6b))
+* **console:** compact HITL approvals, session cards, and notice bell ([#448](https://github.com/duyet/oma/issues/448)) ([b85fd70](https://github.com/duyet/oma/commit/b85fd7027c3bae20c0831258eca9937e78896111))
+* **console:** daily summary tab for scheduled agent runs ([#449](https://github.com/duyet/oma/issues/449)) ([9becde8](https://github.com/duyet/oma/commit/9becde8a30389a9ba3ab3f8357ff444909ea055d))
+* **console:** inject prompts, MCP, tools, and credentials into a running session ([#451](https://github.com/duyet/oma/issues/451)) ([1ec5be2](https://github.com/duyet/oma/commit/1ec5be26a848deab923e4f562c8e8bfb9cf91908))
+* **sessions:** home inbox, runtime presence, Agent+computer landing ([#464](https://github.com/duyet/oma/issues/464)) ([b54a470](https://github.com/duyet/oma/commit/b54a470838b60520a9e9d3cdc2d9c3bc86d87b02)), closes [#460](https://github.com/duyet/oma/issues/460) [#461](https://github.com/duyet/oma/issues/461) [#462](https://github.com/duyet/oma/issues/462) [#463](https://github.com/duyet/oma/issues/463)
+
+
+### 🐛 Bug Fixes
+
+* **ci:** skip automerge for release-please and changeset version PRs ([#440](https://github.com/duyet/oma/issues/440)) ([d940a59](https://github.com/duyet/oma/commit/d940a59ec172b2637b9e2931e34e71df04d59562))
+* **cli:** inject gh vault tokens on github.com git via the bridge proxy ([#441](https://github.com/duyet/oma/issues/441)) ([6d95304](https://github.com/duyet/oma/commit/6d953042f4a6a8b50f1debcb0f87391ced1310b0))
+* **console:** clearer UX for AnyRouter Gemini tool-combo 400 ([#424](https://github.com/duyet/oma/issues/424)) ([331cb6b](https://github.com/duyet/oma/commit/331cb6b7eb4b8a957d049f42e4b07f858ae97004))
+* **harness:** route env-fallback Claude models through the gateway catalog ([#439](https://github.com/duyet/oma/issues/439)) ([9f5dab6](https://github.com/duyet/oma/commit/9f5dab6f8fad434e6f46b0346547a4e95d635fab))
+* **harness:** send anyrouter/free for env-fallback sonnet on AnyRouter ([#453](https://github.com/duyet/oma/issues/453)) ([7e26c96](https://github.com/duyet/oma/commit/7e26c960326276471e2cf8d038c3babf0a246ae0))
+* **harness:** send anyrouter/free from resolveModel on AnyRouter ([#455](https://github.com/duyet/oma/issues/455)) ([c5cdaa8](https://github.com/duyet/oma/commit/c5cdaa853cb8a668a5268ecc86253eb52e17e585))
+* **harness:** send anyrouter/free on Anthropic AnyRouter /messages ([#457](https://github.com/duyet/oma/issues/457)) ([b52328c](https://github.com/duyet/oma/commit/b52328ce9b18ce830261465a260d24074e1fe1a1))
+* **http-routes:** compare internal secret with timingSafeEqualStr ([#443](https://github.com/duyet/oma/issues/443)) ([0e887df](https://github.com/duyet/oma/commit/0e887df6d32c3cd6e2d4c224eb1e4a258bd3d246))
+* **main:** dispatch AnyRouter routes through invokePackage ([#438](https://github.com/duyet/oma/issues/438)) ([22a0466](https://github.com/duyet/oma/commit/22a04666b0ef010e1b679de28e0b5cb5ebf0de3d))
+* **oma-vault:** fail closed when OMA_TENANT is wildcard across tenants ([#450](https://github.com/duyet/oma/issues/450)) ([25fb976](https://github.com/duyet/oma/commit/25fb976da4a46f7a4eeb828345dd003e9ebd7445))
+* **sessions:** persist env_secret values to the session secret store ([#445](https://github.com/duyet/oma/issues/445)) ([6561f56](https://github.com/duyet/oma/commit/6561f562641aef57175e7b300a0f3d523d55bdb6))
+
 ## [0.1.3](https://github.com/duyet/oma/compare/root-v0.1.2...root-v0.1.3) (2026-08-19)
 
 
