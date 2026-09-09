@@ -12,6 +12,7 @@ import {
   CoinsIcon,
 } from "lucide-react";
 import { formatQueryError, useApiQuery } from "../lib/useApiQuery";
+import { useApi } from "../lib/api";
 import { StatusPill } from "@/components/StatusPill";
 import { EmptyState } from "../components/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,8 +29,8 @@ import {
 } from "../lib/daily-activity-chart";
 import { SessionCard } from "../components/SessionCard";
 import {
-  deriveHomeRuntimePresence,
   pickHomeRuntime,
+  resolveHomePresence,
   sessionStatusKind,
   type RuntimeHeartbeatRow,
 } from "../lib/home-runtime";
@@ -114,6 +115,7 @@ function countLabel(n: number | null | undefined): string {
 
 export function Dashboard() {
   const nav = useNavigate();
+  const { api } = useApi();
   const isMobile = useIsMobile();
   // Headline cards + recent panel each ride their own TQ query so the
   // dashboard renders the parts it has — a flaky /v1/stats no longer
@@ -146,6 +148,15 @@ export function Dashboard() {
     "/v1/runtimes",
     undefined,
     { refetchInterval: 15_000 },
+  );
+  const homeAgentId = agentsQuery.data?.data[0]?.id;
+  const homeQuery = useApiQuery<{
+    session: { id: string; status?: string; title?: string | null } | null;
+    runtime: { status?: string | null; last_heartbeat?: number | null; hostname?: string | null } | null;
+  }>(
+    "/v1/sessions/home",
+    { agent_id: homeAgentId },
+    { enabled: Boolean(homeAgentId), refetchInterval: 15_000 },
   );
   const agentNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -325,12 +336,17 @@ export function Dashboard() {
           className="rounded-2xl border border-border bg-card px-5 py-4"
         >
           {(() => {
-            const picked = pickHomeRuntime(runtimesQuery.data?.runtimes);
-            const presence = deriveHomeRuntimePresence(
-              picked,
-              Math.floor(Date.now() / 1000),
-            );
+            const presence = resolveHomePresence({
+              homeRuntime: homeQuery.data?.runtime ?? null,
+              runtimes: runtimesQuery.data?.runtimes,
+              nowSeconds: Math.floor(Date.now() / 1000),
+            });
+            const hostname =
+              homeQuery.data?.runtime?.hostname ??
+              pickHomeRuntime(runtimesQuery.data?.runtimes)?.hostname;
+            const homeSession = homeQuery.data?.session ?? null;
             const open = runningSessionsQuery.data?.data ?? [];
+            const checking = runtimesQuery.isLoading || (!!homeAgentId && homeQuery.isLoading);
             return (
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -338,14 +354,42 @@ export function Dashboard() {
                     Home computer
                   </p>
                   <p className="mt-1 text-sm text-foreground" data-testid="home-runtime-status">
-                    {runtimesQuery.isLoading
+                    {checking
                       ? "Checking home runtime…"
                       : presence === "provisioning"
                         ? "No home runtime paired yet. Pair a bridge or herdr machine, or use CLI relay to bootstrap."
                         : presence === "online"
-                          ? `Online${picked?.hostname ? ` · ${picked.hostname}` : ""}`
-                          : `Offline${picked?.hostname ? ` · ${picked.hostname}` : ""}`}
+                          ? `Online${hostname ? ` · ${hostname}` : ""}`
+                          : `Offline${hostname ? ` · ${hostname}` : ""}`}
                   </p>
+                  {homeSession ? (
+                    <button
+                      type="button"
+                      className="mt-1 text-sm text-foreground hover:underline"
+                      data-testid="home-session-link"
+                      onClick={() => nav(`/sessions/${homeSession.id}`)}
+                    >
+                      inbox {sessionStatusKind(homeSession.status)}
+                    </button>
+                  ) : homeAgentId ? (
+                    <button
+                      type="button"
+                      className="mt-1 text-sm text-foreground hover:underline"
+                      data-testid="open-home"
+                      onClick={async () => {
+                        const res = await api<{ session: { id: string } }>(
+                          "/v1/sessions/home",
+                          {
+                            method: "POST",
+                            body: JSON.stringify({ agent: homeAgentId }),
+                          },
+                        );
+                        nav(`/sessions/${res.session.id}`);
+                      }}
+                    >
+                      Open home
+                    </button>
+                  ) : null}
                 </div>
                 <div className="text-sm text-muted-foreground" data-testid="open-sessions-count">
                   {runningSessionsQuery.isLoading

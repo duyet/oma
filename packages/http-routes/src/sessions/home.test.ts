@@ -38,4 +38,13 @@ describe("deriveHomeRuntimePresence", () => {
       deriveHomeRuntimePresence({ status: "offline", last_heartbeat: now - 1 }, now),
     ).toBe("offline");
   });
+
+  it("treats a missing heartbeat as online only when the row says so", () => {
+    expect(deriveHomeRuntimePresence({ status: "online", last_heartbeat: null }, now)).toBe(
+      "online",
+    );
+    expect(deriveHomeRuntimePresence({ status: "idle", last_heartbeat: null }, now)).toBe(
+      "offline",
+    );
+  });
 });

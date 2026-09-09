@@ -16,12 +16,12 @@ import {
   type AgentStatsLike,
 } from "./agent-health";
 import {
-  deriveHomeRuntimePresence,
-  pickHomeRuntime,
+  resolveHomePresence,
   sessionStatusKind,
   type RuntimeHeartbeatRow,
 } from "../../lib/home-runtime";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
+import { useApi } from "../../lib/api";
 
 const KIND_LABEL: Record<AgentHealthKind, string> = {
   running: "running",
@@ -53,6 +53,8 @@ export function AgentHealthStrip({
   agentId: string;
   now?: number;
 }) {
+  const { api } = useApi();
+  const nav = useNavigate();
   const schedulesQuery = useApiQuery<{ data: AgentSchedule[] }>(
     `/v1/agents/${agentId}/schedules`,
     undefined,
@@ -75,9 +77,9 @@ export function AgentHealthStrip({
     { refetchInterval: 15_000 },
   );
   const homeQuery = useApiQuery<{
-    session: SessionRecord;
-    runtime: { status?: string } | null;
-  }>(`/v1/sessions/home?agent_id=${encodeURIComponent(agentId)}`, undefined, {
+    session: SessionRecord | null;
+    runtime: { status?: string | null; last_heartbeat?: number | null } | null;
+  }>("/v1/sessions/home", { agent_id: agentId }, {
     refetchInterval: 15_000,
   });
   const analyticsQuery = useApiQuery<AgentAnalyticsLike>(
@@ -192,12 +194,12 @@ export function AgentHealthStrip({
         ·
       </span>
       {(() => {
-        const picked = pickHomeRuntime(runtimesQuery.data?.runtimes);
-        const presence = deriveHomeRuntimePresence(
-          picked,
-          Math.floor(now / 1000),
-        );
-        const homeSession = homeQuery.data?.session;
+        const presence = resolveHomePresence({
+          homeRuntime: homeQuery.data?.runtime ?? null,
+          runtimes: runtimesQuery.data?.runtimes,
+          nowSeconds: Math.floor(now / 1000),
+        });
+        const homeSession = homeQuery.data?.session ?? null;
         const homeKind = homeSession
           ? sessionStatusKind(homeSession.status)
           : null;
@@ -220,7 +222,28 @@ export function AgentHealthStrip({
                 </Link>
               </>
             ) : (
-              <span className="text-fg-subtle">no home session</span>
+              <>
+                <span className="text-fg-subtle" aria-hidden>
+                  ·
+                </span>
+                <button
+                  type="button"
+                  className="text-fg hover:underline"
+                  data-testid="open-home"
+                  onClick={async () => {
+                    const res = await api<{ session: { id: string } }>(
+                      "/v1/sessions/home",
+                      {
+                        method: "POST",
+                        body: JSON.stringify({ agent: agentId }),
+                      },
+                    );
+                    nav(`/sessions/${res.session.id}`);
+                  }}
+                >
+                  Open home
+                </button>
+              </>
             )}
           </>
         );
