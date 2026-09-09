@@ -1,5 +1,11 @@
 # @getoma/cli
 
+## 0.1.11
+
+### Patch Changes
+
+- 6d95304: Route github.com git remotes through the bridge credential proxy when the session only has a gh cap_cli token.
+
 ## 0.1.10
 
 ### Patch Changes
