@@ -10,6 +10,11 @@ sandbox image is fine) is a config change, not a code change.
 model. Full rule + resolution order:
 [sandbox-runtime-selection.md](./sandbox-runtime-selection.md).
 
+**Home vs ephemeral:** the Agent's home session is the durable inbox; its
+environment is the home computer (bridge/herdr, OpenShell optional). Other
+sessions stay ephemeral sandboxes. CLI relay is bootstrap only. Product
+write-up: [home-session.md](./home-session.md).
+
 | Choice | Config field | Where it runs |
 |---|---|---|
 | **Harness** (model loop) | `agent.harness` | Platform (`apps/agent` for CF, `apps/main-node` for self-host — the self-host Node.js server, same control-plane API as `apps/main`) |

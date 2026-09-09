@@ -15,6 +15,13 @@ import {
   type AgentHealthKind,
   type AgentStatsLike,
 } from "./agent-health";
+import {
+  deriveHomeRuntimePresence,
+  pickHomeRuntime,
+  sessionStatusKind,
+  type RuntimeHeartbeatRow,
+} from "../../lib/home-runtime";
+import { Link } from "react-router";
 
 const KIND_LABEL: Record<AgentHealthKind, string> = {
   running: "running",
@@ -62,6 +69,17 @@ export function AgentHealthStrip({
     { refetchInterval: 15_000 },
   );
   const statsQuery = useApiQuery<AgentStatsLike>(`/v1/agents/${agentId}/stats`);
+  const runtimesQuery = useApiQuery<{ runtimes: RuntimeHeartbeatRow[] }>(
+    "/v1/runtimes",
+    undefined,
+    { refetchInterval: 15_000 },
+  );
+  const homeQuery = useApiQuery<{
+    session: SessionRecord;
+    runtime: { status?: string } | null;
+  }>(`/v1/sessions/home?agent_id=${encodeURIComponent(agentId)}`, undefined, {
+    refetchInterval: 15_000,
+  });
   const analyticsQuery = useApiQuery<AgentAnalyticsLike>(
     `/v1/agents/${agentId}/analytics`,
     { range: "30d" },
@@ -170,6 +188,43 @@ export function AgentHealthStrip({
         ·
       </span>
       <Metric label="Cost" value={cost} />
+      <span className="text-fg-subtle" aria-hidden>
+        ·
+      </span>
+      {(() => {
+        const picked = pickHomeRuntime(runtimesQuery.data?.runtimes);
+        const presence = deriveHomeRuntimePresence(
+          picked,
+          Math.floor(now / 1000),
+        );
+        const homeSession = homeQuery.data?.session;
+        const homeKind = homeSession
+          ? sessionStatusKind(homeSession.status)
+          : null;
+        return (
+          <>
+            <span data-testid="home-runtime-presence">
+              <Metric label="Home" value={presence} />
+            </span>
+            {homeSession ? (
+              <>
+                <span className="text-fg-subtle" aria-hidden>
+                  ·
+                </span>
+                <Link
+                  to={`/sessions/${homeSession.id}`}
+                  className="text-fg hover:underline"
+                  data-testid="home-session-link"
+                >
+                  inbox {homeKind ?? homeSession.status}
+                </Link>
+              </>
+            ) : (
+              <span className="text-fg-subtle">no home session</span>
+            )}
+          </>
+        );
+      })()}
     </div>
   );
 }

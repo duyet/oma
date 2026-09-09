@@ -57,6 +57,10 @@ function mountAgentHandlers() {
     http.get("/v1/agents/agent_1/analytics", () =>
       HttpResponse.json({ completed_sessions: 0, error_count: 0 }),
     ),
+    http.get("/v1/runtimes", () => HttpResponse.json({ runtimes: [] })),
+    http.get("/v1/sessions/home", () =>
+      HttpResponse.json({ error: "Home session not found" }, { status: 404 }),
+    ),
   );
 }
 

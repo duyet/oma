@@ -66,6 +66,16 @@ export type {
   SessionLifecycleHooks,
   OutputsAdapter,
 } from "./sessions";
+export {
+  HOME_SESSION_METADATA_KEY,
+  HOME_RUNTIME_STALE_SECONDS,
+  isHomeSessionMetadata,
+  homeSessionMetadata,
+  findHomeSession,
+  deriveHomeRuntimePresence,
+  loadHomeRuntime,
+} from "./sessions/home";
+export type { HomeRuntimePresence, HomeRuntimeView } from "./sessions/home";
 
 export { buildMemoryRoutes } from "./memory";
 export type { MemoryRoutesDeps } from "./memory";

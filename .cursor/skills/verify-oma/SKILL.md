@@ -71,7 +71,7 @@ One-shot browser steps (same Chrome, one session):
 
 ```bash
 node .cursor/skills/verify-oma/control-oma.mjs screenshot --path / --out home.png
-node .cursor/skills/verify-oma/control-oma.mjs assert --path / --heading "The self-hosted agent platform for any LLM provider and any sandbox"
+node .cursor/skills/verify-oma/control-oma.mjs assert --path / --heading "Your Agent has a computer — and a durable inbox"
 node .cursor/skills/verify-oma/control-oma.mjs landing-check
 ```
 
@@ -82,7 +82,7 @@ Stable handles on the marketing site:
 - Home link: `a[aria-label="Open Managed Agents — home"]`
 - Primary nav: `nav[aria-label="Primary"]`
 - Features menu: `nav[aria-label="Features"]`
-- H1 on `/`: `The self-hosted agent platform for any LLM provider and any sandbox`
+- H1 on `/`: `Your Agent has a computer — and a durable inbox`
 - H1 on `/features/`: `Everything you need to run agent fleets`
 
 Stable handles on Console login (`/login`):

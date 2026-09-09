@@ -43,6 +43,7 @@ function mockAssemblyDeps() {
         total_active_seconds: 0,
       }),
     ),
+    http.get("/v1/runtimes", () => HttpResponse.json({ runtimes: [] })),
   );
 }
 
@@ -63,8 +64,12 @@ describe("<Dashboard /> on a phone viewport", () => {
           total_usage_sessions: 1,
         }),
       ),
-      http.get("/v1/sessions", () =>
-        HttpResponse.json({
+      http.get("/v1/sessions", ({ request }) => {
+        const url = new URL(request.url);
+        if (url.searchParams.get("status") === "running") {
+          return HttpResponse.json({ data: [] });
+        }
+        return HttpResponse.json({
           data: [
             {
               id: "sess_1",
@@ -76,8 +81,8 @@ describe("<Dashboard /> on a phone viewport", () => {
               output_tokens: 20,
             },
           ],
-        }),
-      ),
+        });
+      }),
     );
 
     const queryClient = new QueryClient({

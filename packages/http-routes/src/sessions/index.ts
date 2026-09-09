@@ -50,6 +50,11 @@ import type { SessionRouter, SessionInitParams } from "@duyet/oma-session-runtim
 import type { SessionSecretService } from "@duyet/oma-session-secrets-store";
 import type { RouteServices, RouteServicesArg } from "../types";
 import { resolveSessionEnvironmentId } from "./resolve-environment";
+import {
+  findHomeSession,
+  homeSessionMetadata,
+  loadHomeRuntime,
+} from "./home";
 import { redactMcpServers } from "../mcp-server-redaction";
 import { resolveServices } from "../types";
 import { federatedListBody } from "../federation-fanout";
@@ -541,6 +546,17 @@ export function buildSessionRoutes(deps: SessionRoutesDeps) {
       ? stripInjectionsFromMetadata(body.metadata)
       : undefined;
 
+    if (metadata && metadata.home === true) {
+      const existingHome = await findHomeSession({
+        sessions: services.sessions,
+        tenantId: t,
+        agentId,
+      });
+      if (existingHome) {
+        return c.json({ ...toApiSession(existingHome as never) }, 200);
+      }
+    }
+
     const memCount = (body.resources ?? []).filter((r) => r.type === "memory_store").length;
     if (memCount > 8) {
       return c.json({ error: "Maximum 8 memory_store resources per session" }, 422);
@@ -802,6 +818,162 @@ export function buildSessionRoutes(deps: SessionRoutesDeps) {
       response.resources = createdResources.map((r) => r.resource);
     }
     return c.json(response, 201);
+  });
+
+  app.get("/home", async (c) => {
+    const services = resolveServices(deps.services, c);
+    const agentId = c.req.query("agent_id");
+    if (!agentId) return c.json({ error: "agent_id is required" }, 400);
+    const agentRow = await services.agents.get({
+      tenantId: c.var.tenant_id,
+      agentId,
+    });
+    if (!agentRow) return c.json({ error: "Agent not found" }, 404);
+    const session = await findHomeSession({
+      sessions: services.sessions,
+      tenantId: c.var.tenant_id,
+      agentId,
+    });
+    if (!session) return c.json({ error: "Home session not found" }, 404);
+    const runtime = await loadHomeRuntime(services.sql, c.var.tenant_id);
+    return c.json({
+      session: toApiSession(session as never),
+      runtime,
+      created: false,
+    });
+  });
+
+  app.post("/home", async (c) => {
+    const services = resolveServices(deps.services, c);
+    const router = resolveRouter(deps.router, c);
+    const t = c.var.tenant_id;
+    let body: {
+      agent?: string | { id: string };
+      environment_id?: string;
+      environment?: string | { id: string };
+      title?: string;
+      vault_ids?: string[];
+      metadata?: Record<string, unknown>;
+    };
+    try {
+      body = (await c.req.json()) as typeof body;
+    } catch {
+      return c.json({ error: "Invalid JSON body" }, 400);
+    }
+    const agentId = typeof body.agent === "string" ? body.agent : body.agent?.id;
+    if (!agentId) return c.json({ error: "agent is required" }, 400);
+    const agentRow = await services.agents.get({ tenantId: t, agentId });
+    if (!agentRow) return c.json({ error: "Agent not found" }, 404);
+
+    const existing = await findHomeSession({
+      sessions: services.sessions,
+      tenantId: t,
+      agentId,
+    });
+    if (existing) {
+      const runtime = await loadHomeRuntime(services.sql, t);
+      return c.json({
+        session: toApiSession(existing as never),
+        runtime,
+        created: false,
+      });
+    }
+
+    if (deps.lifecycle?.preCreateRateLimit) {
+      const r = await deps.lifecycle.preCreateRateLimit({ tenantId: t });
+      if (r) return c.json(r.body as object, r.status as 429);
+    }
+
+    const envResolved = resolveSessionEnvironmentId({
+      bodyEnvironmentId:
+        body.environment_id ??
+        (typeof body.environment === "string" ? body.environment : body.environment?.id),
+      agentMetadata: (agentRow as { metadata?: Record<string, unknown> }).metadata,
+    });
+    const envId = envResolved.environmentId;
+    if (!envId) {
+      return c.json(
+        {
+          error: "environment_id is required",
+          hint:
+            "Pass environment_id on the request, or set agent.metadata.default_environment_id",
+        },
+        400,
+      );
+    }
+    const { tenant_id: _atid, ...agentSnapshot } = agentRow;
+    const envSnap = deps.loadEnvironment
+      ? await deps.loadEnvironment({ tenantId: t, environmentId: envId })
+      : null;
+    if (!envSnap) {
+      return c.json(
+        envResolved.source === "agent_default"
+          ? {
+              error:
+                "agent.metadata.default_environment_id points to a missing or inaccessible environment",
+              environment_id: envId,
+            }
+          : { error: "Environment not found" },
+        envResolved.source === "agent_default" ? 422 : 404,
+      );
+    }
+    const isLocalRuntime = envSnap.config?.kind === "local";
+    if (deps.lifecycle?.preCreateGate) {
+      const gate = await deps.lifecycle.preCreateGate({
+        tenantId: t,
+        agentId,
+        isLocalRuntime,
+      });
+      if (gate) return c.json(gate.body as object, gate.status as 402);
+    }
+    const vaultIds = body.vault_ids ?? [];
+    const metadata = homeSessionMetadata(
+      body.metadata ? stripInjectionsFromMetadata(body.metadata) : undefined,
+    );
+    let session;
+    try {
+      const result = await services.sessions.create({
+        tenantId: t,
+        agentId,
+        environmentId: envId,
+        title: body.title ?? "Home",
+        vaultIds,
+        agentSnapshot: agentSnapshot as AgentConfig,
+        environmentSnapshot: envSnap ?? undefined,
+        metadata,
+        resources: [],
+      });
+      session = result.session;
+    } catch (err) {
+      return mapSessionError(c, err);
+    }
+    const vaultCreds = deps.fetchVaultCredentials
+      ? await deps.fetchVaultCredentials({ tenantId: t, vaultIds })
+      : [];
+    await router
+      .init(session.id, {
+        agentId,
+        environmentId: envId,
+        title: body.title ?? "Home",
+        tenantId: t,
+        vaultIds,
+        agentSnapshot: agentSnapshot as AgentConfig,
+        environmentSnapshot: envSnap ?? undefined,
+        vaultCredentials: vaultCreds,
+        metadata: session.metadata ?? undefined,
+      })
+      .catch((err) => {
+        console.warn(`[sessions] router.init failed for ${session.id}:`, err);
+      });
+    const runtime = await loadHomeRuntime(services.sql, t);
+    return c.json(
+      {
+        session: toApiSession(session as never),
+        runtime,
+        created: true,
+      },
+      201,
+    );
   });
 
   // ── List / Get / Update / Archive / Delete ────────────────────────────

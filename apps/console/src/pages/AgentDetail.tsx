@@ -165,6 +165,19 @@ export function AgentDetail() {
           <AgentHealthStrip agentId={agent.id} />
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              const res = await api<{ session: { id: string } }>("/v1/sessions/home", {
+                method: "POST",
+                body: JSON.stringify({ agent: agent.id }),
+              });
+              nav(`/sessions/${res.session.id}`);
+            }}
+          >
+            Open home
+          </Button>
           <Button variant="default" size="sm" onClick={() => setNewSessionOpen(true)}>
             + New Session
           </Button>
