@@ -6,7 +6,11 @@ import { http, HttpResponse } from "msw";
 import { server } from "../../mocks/server";
 import { AgentHealthStrip } from "./AgentHealthStrip";
 
-function mountStripHandlers(home: unknown) {
+function mountStripHandlers(home: {
+  session: { id: string; status: string } | null;
+  runtime: { status?: string; last_heartbeat?: number } | null;
+  created: boolean;
+}) {
   server.use(
     http.get("/v1/agents/agent_1/schedules", () => HttpResponse.json({ data: [] })),
     http.get("/v1/sessions", () => HttpResponse.json({ data: [] })),
