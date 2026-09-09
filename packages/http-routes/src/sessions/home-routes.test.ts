@@ -94,11 +94,15 @@ describe("GET/POST /v1/sessions/home (issue #460)", () => {
     expect(body.created).toBe(false);
   });
 
-  it("GET without a home session is 404", async () => {
+  it("GET without a home session is 200 with session null (runtime still returned)", async () => {
     const { service } = createInMemorySessionService({ clock: new ManualClock(BASE) });
     const app = makeApp(service, []);
     const res = await app.request("/v1/sessions/home?agent_id=agent_1");
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { session: null; runtime: null; created: boolean };
+    expect(body.session).toBeNull();
+    expect(body.runtime).toBeNull();
+    expect(body.created).toBe(false);
   });
 
   it("POST /v1/sessions with metadata.home reuses the same row", async () => {

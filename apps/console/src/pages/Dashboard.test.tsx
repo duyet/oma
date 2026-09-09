@@ -135,6 +135,69 @@ describe("<Dashboard />", () => {
     });
   });
 
+  it("shows inbox when GET /v1/sessions/home returns a session", async () => {
+    mockAssemblyDeps();
+    mockSessions({ recent: [], running: [] });
+    server.use(
+      http.get("/v1/stats", () =>
+        HttpResponse.json({
+          agents: 1,
+          sessions: 1,
+          environments: 1,
+          vaults: 0,
+          skills: 0,
+          model_cards: 0,
+          api_keys: 0,
+          total_sandbox_seconds: 0,
+          total_usage_sessions: 1,
+        }),
+      ),
+      http.get("/v1/agents", () =>
+        HttpResponse.json({ data: [{ id: "agent_1", name: "Inbox agent" }] }),
+      ),
+      http.get("/v1/sessions/home", () =>
+        HttpResponse.json({
+          session: { id: "sess_home", status: "idle", title: "Home" },
+          runtime: { id: "rt_1", hostname: "desk", status: "online", last_heartbeat: 1_700_000_000 },
+          created: false,
+        }),
+      ),
+    );
+    renderPage();
+    expect(await screen.findByTestId("home-session-link")).toHaveTextContent(/inbox idle/i);
+    await waitFor(() => {
+      expect(screen.getByTestId("home-runtime-status").textContent).toMatch(/Online/i);
+    });
+  });
+
+  it("shows Open home when the agent has no home session yet", async () => {
+    mockAssemblyDeps();
+    mockSessions({ recent: [], running: [] });
+    server.use(
+      http.get("/v1/stats", () =>
+        HttpResponse.json({
+          agents: 1,
+          sessions: 0,
+          environments: 1,
+          vaults: 0,
+          skills: 0,
+          model_cards: 0,
+          api_keys: 0,
+          total_sandbox_seconds: 0,
+          total_usage_sessions: 0,
+        }),
+      ),
+      http.get("/v1/agents", () =>
+        HttpResponse.json({ data: [{ id: "agent_1", name: "Inbox agent" }] }),
+      ),
+      http.get("/v1/sessions/home", () =>
+        HttpResponse.json({ session: null, runtime: null, created: false }),
+      ),
+    );
+    renderPage();
+    expect(await screen.findByTestId("open-home")).toHaveTextContent(/Open home/i);
+  });
+
   it("renders Overview (not Get started) as the page title", async () => {
     mockAssemblyDeps();
     mockSessions({ recent: [], running: [] });

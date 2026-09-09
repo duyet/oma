@@ -7,6 +7,6 @@ import { http, HttpResponse, type HttpHandler } from "msw";
 export const handlers: HttpHandler[] = [
   http.get("/v1/runtimes", () => HttpResponse.json({ runtimes: [] })),
   http.get("/v1/sessions/home", () =>
-    HttpResponse.json({ error: "Home session not found" }, { status: 404 }),
+    HttpResponse.json({ session: null, runtime: null, created: false }),
   ),
 ];

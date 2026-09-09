@@ -47,7 +47,11 @@ This is **not** an always-on shared account VM.
 
 ## Console
 
-Overview shows home online / offline / provisioning from runtime heartbeat, plus
-open sessions with truthful working / idle / error. Agent detail **Open home**
-get-or-creates the inbox and navigates to it. `AgentHealthStrip` extends the
-existing health glance with home presence.
+Overview shows home online / offline / provisioning from the home-session
+payload's `runtime` (falling back to `/v1/runtimes` heartbeats), plus open
+sessions with truthful working / idle / error. GET `/v1/sessions/home` is
+**200** with `session: null` when the inbox does not exist yet — that still
+returns `runtime` so the strip is not stuck on provisioning and can offer
+**Open home**. Agent detail **Open home** get-or-creates the inbox and
+navigates to it. `AgentHealthStrip` extends the existing health glance with
+home presence and an inbox link when the session exists.

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   deriveHomeRuntimePresence,
   pickHomeRuntime,
+  resolveHomePresence,
   sessionStatusKind,
 } from "./home-runtime";
 
@@ -34,5 +35,35 @@ describe("pickHomeRuntime", () => {
       { id: "new", last_heartbeat: 20 },
     ]);
     expect(picked?.id).toBe("new");
+  });
+});
+
+describe("resolveHomePresence", () => {
+  const now = 1_700_000_090;
+
+  it("uses the home payload runtime over the user-scoped list", () => {
+    expect(
+      resolveHomePresence({
+        homeRuntime: { status: "online", last_heartbeat: now - 5 },
+        runtimes: [],
+        nowSeconds: now,
+      }),
+    ).toBe("online");
+  });
+
+  it("falls back to /v1/runtimes when the home payload has no runtime", () => {
+    expect(
+      resolveHomePresence({
+        homeRuntime: null,
+        runtimes: [{ id: "rt_1", status: "online", last_heartbeat: now - 5 }],
+        nowSeconds: now,
+      }),
+    ).toBe("online");
+  });
+
+  it("is provisioning when neither source has a machine", () => {
+    expect(
+      resolveHomePresence({ homeRuntime: null, runtimes: [], nowSeconds: now }),
+    ).toBe("provisioning");
   });
 });

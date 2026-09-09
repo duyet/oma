@@ -312,7 +312,9 @@ curl -s "$BASE/v1/sessions/home?agent_id=agent_xxx" -H "x-api-key: $KEY"
 ```
 
 The response includes `runtime` presence when a paired home machine has
-heartbeated (`online` | `offline` | `provisioning`). See
+heartbeated (`online` | `offline` | `provisioning`). GET without an inbox
+yet is **200** `{ session: null, runtime, created: false }` (not 404) so
+the Console can still paint presence + Open home. See
 [`docs/home-session.md`](docs/home-session.md).
 
 **Computer matrix:** home runtime = long-lived bridge/herdr (OpenShell optional);

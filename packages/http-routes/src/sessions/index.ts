@@ -834,10 +834,16 @@ export function buildSessionRoutes(deps: SessionRoutesDeps) {
       tenantId: c.var.tenant_id,
       agentId,
     });
-    if (!session) return c.json({ error: "Home session not found" }, 404);
-    const runtime = await loadHomeRuntime(services.sql, c.var.tenant_id);
+    // 200 with session: null so the Console can still paint runtime presence
+    // (and an Open home CTA). 404 hid both the inbox link and the heartbeat.
+    const runtime = await loadHomeRuntime(
+      services.sql,
+      c.var.tenant_id,
+      Math.floor(Date.now() / 1000),
+      c.var.user_id,
+    );
     return c.json({
-      session: toApiSession(session as never),
+      session: session ? toApiSession(session as never) : null,
       runtime,
       created: false,
     });
@@ -871,7 +877,12 @@ export function buildSessionRoutes(deps: SessionRoutesDeps) {
       agentId,
     });
     if (existing) {
-      const runtime = await loadHomeRuntime(services.sql, t);
+      const runtime = await loadHomeRuntime(
+        services.sql,
+        t,
+        Math.floor(Date.now() / 1000),
+        c.var.user_id,
+      );
       return c.json({
         session: toApiSession(existing as never),
         runtime,
@@ -965,7 +976,12 @@ export function buildSessionRoutes(deps: SessionRoutesDeps) {
       .catch((err) => {
         console.warn(`[sessions] router.init failed for ${session.id}:`, err);
       });
-    const runtime = await loadHomeRuntime(services.sql, t);
+    const runtime = await loadHomeRuntime(
+      services.sql,
+      t,
+      Math.floor(Date.now() / 1000),
+      c.var.user_id,
+    );
     return c.json(
       {
         session: toApiSession(session as never),
