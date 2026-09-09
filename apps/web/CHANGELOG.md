@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.0.3](https://github.com/duyet/oma/compare/web-v0.0.2...web-v0.0.3) (2026-09-09)
+
+
+### ✨ Features
+
+* **agent:** opt-in output_file declares session deliverables ([#447](https://github.com/duyet/oma/issues/447)) ([2988ab7](https://github.com/duyet/oma/commit/2988ab72982de34f9a9ae52fc0b6280bb78e2a4a)), closes [#341](https://github.com/duyet/oma/issues/341)
+* **console:** add agent Monitor tab and health strip ([#444](https://github.com/duyet/oma/issues/444)) ([3fea811](https://github.com/duyet/oma/commit/3fea8118773e09dac7c5e842ebc0d05e784f117c)), closes [#345](https://github.com/duyet/oma/issues/345)
+* **console:** Analytics dashboard for cross-agent spend ([#344](https://github.com/duyet/oma/issues/344)) ([#446](https://github.com/duyet/oma/issues/446)) ([da8c163](https://github.com/duyet/oma/commit/da8c16332e3119af88eaaf0250b50a2592f54d6b))
+* **console:** daily summary tab for scheduled agent runs ([#449](https://github.com/duyet/oma/issues/449)) ([9becde8](https://github.com/duyet/oma/commit/9becde8a30389a9ba3ab3f8357ff444909ea055d))
+* **sessions:** home inbox, runtime presence, Agent+computer landing ([#464](https://github.com/duyet/oma/issues/464)) ([b54a470](https://github.com/duyet/oma/commit/b54a470838b60520a9e9d3cdc2d9c3bc86d87b02)), closes [#460](https://github.com/duyet/oma/issues/460) [#461](https://github.com/duyet/oma/issues/461) [#462](https://github.com/duyet/oma/issues/462) [#463](https://github.com/duyet/oma/issues/463)
+
+
+### 🐛 Bug Fixes
+
+* **cli:** inject gh vault tokens on github.com git via the bridge proxy ([#441](https://github.com/duyet/oma/issues/441)) ([6d95304](https://github.com/duyet/oma/commit/6d953042f4a6a8b50f1debcb0f87391ced1310b0))
+
 ## [0.0.2](https://github.com/duyet/oma/compare/web-v0.0.1...web-v0.0.2) (2026-08-19)
 
 
