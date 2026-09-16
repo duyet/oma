@@ -71,9 +71,12 @@ export interface SessionRegistryDeps {
    *  LocalSubprocess / E2B / Daytona / etc., the machine doesn't. */
   buildSandbox(sessionId: string, workdir: string): Promise<SandboxExecutor>;
 
-  /** Build the LanguageModel for the agent. Reads env, applies custom
-   *  headers, picks the right provider. */
-  buildModel(agent: AgentConfig): LanguageModel;
+  /** Build the LanguageModel for the agent using its tenant's model
+   *  card or deployment fallback, with provider and custom headers. */
+  buildModel(
+    agent: AgentConfig,
+    ctx: { sessionId: string; tenantId: string },
+  ): LanguageModel | Promise<LanguageModel>;
 
   /** Build harness tools. Returns the tools dict the harness expects.
    *  `ctx` carries the sessionId/tenantId so the shell can thread MCP
@@ -317,7 +320,7 @@ export class SessionRegistry {
       // Node passes no-ops since the work has already been done.
       mountMemoryStores: async () => {},
       mountSessionOutputs: async () => {},
-      buildModel: (agent) => this.deps.buildModel(agent),
+      buildModel: (agent) => this.deps.buildModel(agent, { sessionId, tenantId }),
       buildTools: (agent, sb) => this.deps.buildTools(agent, sb, { sessionId, tenantId }),
       buildHarness: () => this.deps.buildHarness(),
       buildHarnessContext: (input) =>

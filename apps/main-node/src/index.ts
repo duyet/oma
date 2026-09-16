@@ -55,7 +55,7 @@ import { createSqlitePublicationService } from "@duyet/oma-publications-store";
 import { createSqliteModelCardService } from "@duyet/oma-model-cards-store";
 import { toFileRecord } from "@duyet/oma-files-store";
 import { SqlEventLog } from "@duyet/oma-event-log/sql";
-import type { SessionEvent } from "@duyet/oma-shared";
+import type { AgentConfig, SessionEvent } from "@duyet/oma-shared";
 import {
   generateEventId,
   findLeakedPlaceholderSecrets,
@@ -215,7 +215,7 @@ import {
 import { PgEventStreamHub } from "./lib/pg-event-stream-hub";
 import { NodeHarnessRuntime } from "./lib/node-harness-runtime";
 import { selectHarnessName } from "./lib/harness-select";
-import { resolveAgentModelBinding } from "./lib/claude-sdk-model";
+import { resolveAgentProvider } from "./lib/model-provider";
 import { SessionRegistry } from "./registry.js";
 import {
   TelegramClient,
@@ -857,55 +857,20 @@ if (["k8s", "kubernetes"].includes((process.env.SANDBOX_PROVIDER ?? "").toLowerC
 
 // ─── Session registry ───────────────────────────────────────────────────
 
-// An OAuth-connected AnyRouter credential (Console "Connect to AnyRouter"
-// button → packages/http-routes providers/anyrouter.ts) takes priority over
-// the static env vars below — it's the same "one active provider for this
-// node" model, just populated at runtime instead of deploy time. Shared by
-// buildModel/buildTools/buildHarnessContext so all three agree on which
-// provider is active. Falls back to ANTHROPIC_API_KEY/ANTHROPIC_BASE_URL
-// when nothing is connected.
-//
-// `agent` is optional and only consulted for the CLAUDE_CODE_OAUTH_TOKEN
-// carve-out below — every other harness (Default) still hard-requires
-// ANTHROPIC_API_KEY, since only ClaudeAgentSdkHarness's CLI subprocess can
-// authenticate with the OAuth token instead.
-function resolveProviderCreds(
-  agent?: { metadata?: Record<string, unknown> },
-): { apiKey: string; baseUrl: string | undefined } {
-  const anyrouter = getActiveAnyRouterProvider();
-  if (anyrouter) return { apiKey: anyrouter.apiKey, baseUrl: anyrouter.baseUrl };
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (apiKey) return { apiKey, baseUrl: process.env.ANTHROPIC_BASE_URL };
-
-  // ClaudeAgentSdkHarness authenticates its CLI subprocess directly via
-  // CLAUDE_CODE_OAUTH_TOKEN (see claude-agent-sdk-loop.ts's
-  // resolveClaudeSdkAuth) instead of the ai-sdk ANTHROPIC_API_KEY path every
-  // other harness needs — so it alone may boot with an empty apiKey here
-  // when that token is set. buildHarnessContext below threads the token
-  // itself into ctx.env; buildModel/buildTools never use this empty-string
-  // result because ClaudeAgentSdkHarness ignores ctx.model/ctx.tools.
-  if (
-    selectHarnessName(agent?.metadata?.harness, process.env.DEFAULT_HARNESS) === "claude-agent-sdk" &&
-    process.env.CLAUDE_CODE_OAUTH_TOKEN
-  ) {
-    return { apiKey: "", baseUrl: process.env.ANTHROPIC_BASE_URL };
-  }
-
-  // Same escape for the "poolside" harness: it resolves its own
-  // OpenAI-compatible model from POOLSIDE_API_KEY/POOLSIDE_BASE_URL inside
-  // run() and never reads ctx.model, so an Anthropic key is not required.
-  if (
-    selectHarnessName(agent?.metadata?.harness, process.env.DEFAULT_HARNESS) === "poolside" &&
-    process.env.POOLSIDE_API_KEY
-  ) {
-    return { apiKey: "", baseUrl: undefined };
-  }
-
-  throw new Error(
-    "ANTHROPIC_API_KEY env var required for harness turns (or connect AnyRouter via the Console, " +
-      "or set CLAUDE_CODE_OAUTH_TOKEN for a claude-agent-sdk agent, " +
-      "or POOLSIDE_API_KEY for a poolside agent)",
-  );
+// Card credentials take precedence over the connected AnyRouter provider
+// and deployment env. Share the resolver across every turn builder.
+function resolveProviderCreds(agent: AgentConfig, tenantId: string) {
+  return resolveAgentProvider({
+    modelCards: modelCardsService,
+    tenantId,
+    agent,
+    env: process.env,
+    activeProvider: getActiveAnyRouterProvider(),
+    logger: {
+      warn: (ctx, msg) => logger.warn(ctx, msg),
+      info: (ctx, msg) => logger.info(ctx, msg),
+    },
+  });
 }
 
 // Built here (rather than down in the services bundle) because
@@ -933,33 +898,18 @@ const sessionRegistry = new SessionRegistry({
   buildSandbox,
   sandboxWorkdirRoot: process.env.SANDBOX_WORKDIR ?? "./data/sandboxes",
   sqlDialect: dialect,
-  buildModel: (agent) => {
-    const anyrouter = getActiveAnyRouterProvider();
-    if (anyrouter) {
-      return resolveModel(agent.model, anyrouter.apiKey, anyrouter.baseUrl, anyrouter.compat);
-    }
-    const { apiKey, baseUrl } = resolveProviderCreds(agent);
-    // OMA_API_COMPAT selects the wire format for every model on this node
-    // self-host (which has no D1 model cards to choose per-model). Set it to
-    // "oai"/"oai-compatible" to talk to an OpenAI-compatible gateway
-    // (e.g. AnyRouter /chat/completions) instead of the Anthropic /messages
-    // default. Unset → undefined → "ant" (unchanged behavior).
-    const apiCompat = process.env.OMA_API_COMPAT as
-      | "ant"
-      | "ant-compatible"
-      | "oai"
-      | "oai-compatible"
-      | undefined;
+  buildModel: async (agent, ctx) => {
+    const { model, apiKey, baseUrl, apiCompat, customHeaders } = await resolveProviderCreds(agent, ctx.tenantId);
     return resolveModel(
-      agent.model,
+      model,
       apiKey,
       baseUrl,
       apiCompat,
-      parseCustomHeaders(process.env.ANTHROPIC_CUSTOM_HEADERS),
+      customHeaders,
     );
   },
   buildTools: async (agent, sandbox, ctx) => {
-    const { apiKey, baseUrl } = resolveProviderCreds(agent);
+    const { apiKey, baseUrl } = await resolveProviderCreds(agent, ctx.tenantId);
     const sessionRow = await sessionsService
       .get({ tenantId: ctx.tenantId, sessionId: ctx.sessionId })
       .catch(() => null);
@@ -1026,25 +976,16 @@ const sessionRegistry = new SessionRegistry({
     };
   },
   buildHarnessContext: async (input) => {
-    const { apiKey, baseUrl } = resolveProviderCreds(input.agent);
-    // Per-agent model + provider for the claude-agent-sdk harness (issue
-    // #316): resolve the agent's model card into a binding the harness maps
-    // onto its CLI subprocess env. Only that harness consumes it; every
-    // other harness still routes through buildModel's process-global
-    // provider, so this is a no-op for them. A null binding (no card, or a
-    // lookup failure) leaves the pre-#316 global-env behavior untouched.
+    const provider = await resolveProviderCreds(input.agent, input.tenantId);
+    const { apiKey, baseUrl } = provider;
+    // The Claude Code subprocess uses the same card as model/tools.
     const harnessName = selectHarnessName(
       (input.agent as { metadata?: Record<string, unknown> })?.metadata?.harness,
       process.env.DEFAULT_HARNESS,
     );
     const modelProvider =
-      harnessName === "claude-agent-sdk"
-        ? ((await resolveAgentModelBinding({
-            modelCards: modelCardsService,
-            tenantId: input.tenantId,
-            agent: input.agent as { model?: string | { id?: string }; metadata?: Record<string, unknown> },
-            logger: { warn: (ctx, msg) => logger.warn(ctx, msg) },
-          })) ?? undefined)
+      harnessName === "claude-agent-sdk" && provider.source
+        ? provider
         : undefined;
     const runtime = new NodeHarnessRuntime({
       sessionId: input.sessionId,
@@ -2840,17 +2781,6 @@ process.on("SIGTERM", () => void shutdown("SIGTERM"));
 process.on("SIGINT", () => void shutdown("SIGINT"));
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
-
-function parseCustomHeaders(raw: string | undefined): Record<string, string> | undefined {
-  if (!raw) return undefined;
-  const out: Record<string, string> = {};
-  for (const part of raw.split(",")) {
-    const [name, ...rest] = part.split(":");
-    if (!name || rest.length === 0) continue;
-    out[name.trim()] = rest.join(":").trim();
-  }
-  return Object.keys(out).length > 0 ? out : undefined;
-}
 
 function randomFallback(): string {
   // Pre-bootstrap fallback — logger is built before BetterAuth in the
