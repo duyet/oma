@@ -28,7 +28,7 @@ This directory is the maintained source for verifying user-facing behavior of Op
 - Record the feature ID and entry point in `report.json`.
 - Report an unreachable path with the attempted command and the unmet precondition.
 - Do not report a skipped entry point as verified through a different path.
-- `console-agents`, `console-analytics`, and `console-inject` are unreachable without a real session. Skip them when no auth exists. Do not mint one.
+- `console-agents`, `console-analytics`, `console-inject`, and `console-session-artifacts` are unreachable without a real session. Skip them when no auth exists. Do not mint one.
 - `console-analytics`: a login redirect from `/analytics` is proof of the auth wall, not of spend charts.
 
 ## Feature entry contract
@@ -49,3 +49,4 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 - [Console agents](./console-agents.md) covers the agents list. Requires a real session. Skip when none exists.
 - [Console analytics](./console-analytics.md) covers `/analytics`. Requires a real session for charts. Skip signed-in paths when none exists.
 - [Console inject](./console-inject.md) covers the session Inspector Inject tab. Requires a real session. Skip when none exists. Proof of the panel itself is the component test; the browser drive proves the auth gate.
+- [Console session artifacts](./console-session-artifacts.md) covers the session-detail Artifacts tab. Requires a real session. Skip the tab when none exists.
