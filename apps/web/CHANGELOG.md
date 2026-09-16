@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.4](https://github.com/duyet/oma/compare/web-v0.0.3...web-v0.0.4) (2026-09-16)
+
+
+### ✨ Features
+
+* **console:** add Artifacts tab to session inspector ([#442](https://github.com/duyet/oma/issues/442)) ([161068c](https://github.com/duyet/oma/commit/161068c1ea43742143f4a6189652801f14551bcf))
+
 ## [0.0.3](https://github.com/duyet/oma/compare/web-v0.0.2...web-v0.0.3) (2026-09-09)
 
 
