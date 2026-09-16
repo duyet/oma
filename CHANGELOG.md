@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.5](https://github.com/duyet/oma/compare/root-v0.1.4...root-v0.1.5) (2026-09-16)
+
+
+### 🐛 Bug Fixes
+
+* **console:** home strip presence and inbox link ([#467](https://github.com/duyet/oma/issues/467)) ([#468](https://github.com/duyet/oma/issues/468)) ([89c3fc3](https://github.com/duyet/oma/commit/89c3fc37285b28a12e42b61e73e8be4cdbc4a9f2))
+* **node:** use model card credentials for session turns ([#470](https://github.com/duyet/oma/issues/470)) ([db9b387](https://github.com/duyet/oma/commit/db9b387c718ecfafa2fc204b7537e9433e620f26))
+
 ## [0.1.4](https://github.com/duyet/oma/compare/root-v0.1.3...root-v0.1.4) (2026-09-09)
 
 
