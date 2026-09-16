@@ -80,9 +80,9 @@ export interface SessionMachineDeps {
    *  Optional — sandboxes / hosts that don't support it skip silently. */
   mountSessionOutputs?(opts: { sandbox: SandboxExecutor }): Promise<void>;
 
-  /** Build the LanguageModel for this turn. CF reads env from
-   *  bindings; Node from process.env. */
-  buildModel(agent: AgentConfig): LanguageModel;
+  /** Build the LanguageModel for this turn, optionally resolving
+   *  per-tenant model-card credentials asynchronously. */
+  buildModel(agent: AgentConfig): LanguageModel | Promise<LanguageModel>;
 
   /** Build harness tools. The harness package owns the tool list; the
    *  machine doesn't know which tools exist, just hands the result to
@@ -183,7 +183,7 @@ export class SessionStateMachine {
       }
 
       const tools = await this.deps.buildTools(agent, this.deps.sandbox);
-      const model = this.deps.buildModel(agent);
+      const model = await this.deps.buildModel(agent);
       const ctx = await this.deps.buildHarnessContext({
         agent,
         userMessage,

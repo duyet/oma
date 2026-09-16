@@ -1,14 +1,9 @@
 // In-process cache for an OAuth-connected AnyRouter credential.
 //
-// Node self-host has no per-tenant model routing (see `buildModel` in
-// index.ts) — the model provider is process-global env vars
-// (ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL / OMA_API_COMPAT), set once at
-// deploy time. This cache extends that same "process-global, single active
-// provider" model to the OAuth-connected case: whichever tenant most
-// recently completed the AnyRouter connect flow becomes the node's active
-// upstream, exactly as if an operator had set the env vars by hand — just
-// without a restart. Multi-tenant per-agent provider selection is out of
-// scope here; that's the CF-side D1 model-cards system's job.
+// Used as the process-global fallback when the agent has no matching
+// tenant model card. Whichever tenant most recently completed the
+// AnyRouter connect flow supplies that fallback, just as deployment env
+// vars do, without a restart. Per-agent cards take precedence.
 
 import {
   ANYROUTER_API_BASE,

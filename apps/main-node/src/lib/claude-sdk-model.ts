@@ -1,5 +1,4 @@
-// Per-agent model/provider resolution for the self-host Node
-// `claude-agent-sdk` harness (issue #316).
+// Per-agent model-card resolution shared by the self-host Node harnesses.
 //
 // Before #316 the Claude Code CLI subprocess only ever saw the node's
 // process-global ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN /
@@ -14,6 +13,7 @@
 // and the harness keeps its pre-#316 global-env behavior exactly.
 
 import type { ModelCardRow } from "@duyet/oma-model-cards-store";
+import type { ApiCompat } from "@duyet/oma-agent/harness/provider";
 import {
   providerToApiCompat,
   type ClaudeSdkModelBinding,
@@ -26,6 +26,12 @@ export interface ModelCardLookup {
   getApiKey(opts: { tenantId: string; cardId: string }): Promise<string | null>;
 }
 
+export interface ModelCardBinding extends ClaudeSdkModelBinding {
+  apiKey: string;
+  apiCompat: ApiCompat;
+  customHeaders?: Record<string, string>;
+}
+
 export async function resolveAgentModelBinding(input: {
   modelCards: ModelCardLookup;
   tenantId: string;
@@ -33,8 +39,11 @@ export async function resolveAgentModelBinding(input: {
     model?: string | { id?: string } | null;
     metadata?: Record<string, unknown> | null;
   };
-  logger?: { warn: (ctx: Record<string, unknown>, msg: string) => void };
-}): Promise<ClaudeSdkModelBinding | null> {
+  logger?: {
+    warn: (ctx: Record<string, unknown>, msg: string) => void;
+    info?: (ctx: Record<string, unknown>, msg: string) => void;
+  };
+}): Promise<ModelCardBinding | null> {
   const { modelCards, tenantId, agent } = input;
   const handle = typeof agent.model === "string" ? agent.model : (agent.model?.id ?? "");
   // AgentConfig has no typed `model_card_id` column; the documented field
@@ -51,7 +60,7 @@ export async function resolveAgentModelBinding(input: {
     if (!card) return null;
     if (card.archived_at) {
       input.logger?.warn(
-        { op: "claude_agent_sdk.model_card_archived", cardId: card.id },
+        { op: "model_card.archived", cardId: card.id },
         "model card is archived — falling back to global env provider",
       );
       return null;
@@ -59,21 +68,26 @@ export async function resolveAgentModelBinding(input: {
     const apiKey = await modelCards.getApiKey({ tenantId, cardId: card.id });
     if (!apiKey) {
       input.logger?.warn(
-        { op: "claude_agent_sdk.model_card_key_unavailable", cardId: card.id },
+        { op: "model_card.key_unavailable", cardId: card.id },
         "model card key missing or undecryptable — falling back to global env provider",
       );
       return null;
     }
+    input.logger?.info?.(
+      { op: "model_card.resolved", tenantId, cardId: card.id, model: card.model || handle, provider: card.provider },
+      "resolved model card for harness turn",
+    );
     return {
       model: card.model || handle,
       apiKey,
       baseUrl: card.base_url ?? undefined,
-      apiCompat: providerToApiCompat(card.provider),
+      apiCompat: providerToApiCompat(card.provider) as ApiCompat,
+      ...(card.custom_headers ? { customHeaders: card.custom_headers } : {}),
       source: card.id,
     };
   } catch (err) {
     input.logger?.warn(
-      { op: "claude_agent_sdk.model_card_lookup_failed", err: err instanceof Error ? err.message : String(err) },
+      { op: "model_card.lookup_failed", err: err instanceof Error ? err.message : String(err) },
       "model card lookup failed — falling back to global env provider",
     );
     return null;

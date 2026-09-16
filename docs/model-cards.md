@@ -2,6 +2,13 @@
 
 Per-tenant LLM credentials. An agent references one by setting `agent.model = "<model_id>"` — the worker looks up the card and signs the outbound request with its api_key, base_url, and headers. This is the canonical replacement for the global `ANTHROPIC_API_KEY` env var.
 
+The self-host Node server also resolves cards per tenant before checking
+connected AnyRouter or deployment credentials. A matching card supplies
+the wire model, provider, key, base URL, and custom headers; no global
+`ANTHROPIC_API_KEY` is required. The `default` harness supports both
+Anthropic and OpenAI-compatible cards. The `claude-agent-sdk` harness
+requires an Anthropic-compatible card because its CLI uses that protocol.
+
 When a tenant has **no** cards, `GET /v1/model_cards` still returns a
 read-only `source: "platform"` row for the inherited deployment fallback
 (handle `claude-sonnet-4-6`, the same id the seeded General agent uses).
