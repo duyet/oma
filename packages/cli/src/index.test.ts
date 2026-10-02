@@ -70,6 +70,78 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe("oma sessions message", () => {
+  /** Respond with exactly what the platform sends back: `202` + no body. */
+  function stubEmptyAccepted() {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        captured.push({
+          url,
+          method: init?.method ?? "GET",
+          body: init?.body ? JSON.parse(init.body as string) : undefined,
+        });
+        return new Response(null, { status: 202 });
+      }),
+    );
+  }
+
+  it("succeeds on an empty 2xx instead of failing to parse JSON", async () => {
+    stubEmptyAccepted();
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    // The event IS accepted server-side; reporting a parse failure here is
+    // what made scripts retry and duplicate turns (issue #436).
+    await expect(
+      cmd("sessions", "message").run(config, ["sess_k5k22ukwqusq2wfx", "follow-up smoke turn"]),
+    ).resolves.toBeUndefined();
+
+    expect(error).not.toHaveBeenCalled();
+    expect(vi.mocked(console.log).mock.calls.flat().join(" ")).toContain("Message sent.");
+  });
+
+  it("POSTs the user.message payload the route expects", async () => {
+    stubEmptyAccepted();
+
+    await cmd("sessions", "message").run(config, ["sess_1", "hello"]);
+
+    expect(captured).toHaveLength(1);
+    expect(captured[0].method).toBe("POST");
+    expect(captured[0].url).toBe("https://api.test/v1/sessions/sess_1/events");
+    expect(captured[0].body).toEqual({
+      events: [{ type: "user.message", content: [{ type: "text", text: "hello" }] }],
+    });
+  });
+
+  it("still parses a JSON 2xx body", async () => {
+    // Same shared helper, JSON-returning route: the body must still be
+    // handed to the caller, so `sessions create` can read `id` back.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        captured.push({
+          url,
+          method: init?.method ?? "GET",
+          body: init?.body ? JSON.parse(init.body as string) : undefined,
+        });
+        return new Response(JSON.stringify({ id: "sess_9" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+
+    await cmd("sessions", "create").run(config, [
+      "--agent",
+      "agent_1",
+      "--env",
+      "env_1",
+    ]);
+
+    expect(vi.mocked(console.log).mock.calls.flat().join(" ")).toContain("Session created: sess_9");
+  });
+});
+
 describe("oma schedules", () => {
   it("create POSTs the schedule body to the agent-scoped route", async () => {
     await cmd("schedules", "create").run(config, [
