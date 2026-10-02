@@ -71,8 +71,25 @@ afterEach(() => {
 });
 
 describe("oma sessions message", () => {
-  /** Respond with exactly what the platform sends back: `202` + no body. */
-  function stubEmptyAccepted() {
+  /** A stand-in for `Response` that can carry a body on any status. The fetch
+   *  spec lists 204 as a null-body status, so `new Response("\n", { status:
+   *  204 })` throws — the real constructor cannot express a stray byte on a
+   *  204 at all. `apiFetch` only reads `ok` / `status` / `statusText` /
+   *  `headers.get` / `text`, so a literal reproduces it faithfully. */
+  function responseWithBody(status: number, body: string): Response {
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      statusText: "",
+      headers: { get: () => null },
+      text: async () => body,
+    } as unknown as Response;
+  }
+
+  /** Respond with exactly what the platform sends back for an accepted
+   *  mutation: a 2xx with no body. `status`/`body` are overridable so the
+   *  same stub can stand in for a 204, or for a body that is only whitespace. */
+  function stubAccepted(status = 202, body: string | null = null) {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, init?: RequestInit) => {
@@ -81,13 +98,13 @@ describe("oma sessions message", () => {
           method: init?.method ?? "GET",
           body: init?.body ? JSON.parse(init.body as string) : undefined,
         });
-        return new Response(null, { status: 202 });
+        return body === null ? new Response(null, { status }) : responseWithBody(status, body);
       }),
     );
   }
 
   it("succeeds on an empty 2xx instead of failing to parse JSON", async () => {
-    stubEmptyAccepted();
+    stubAccepted();
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
 
     // The event IS accepted server-side; reporting a parse failure here is
@@ -101,7 +118,7 @@ describe("oma sessions message", () => {
   });
 
   it("POSTs the user.message payload the route expects", async () => {
-    stubEmptyAccepted();
+    stubAccepted();
 
     await cmd("sessions", "message").run(config, ["sess_1", "hello"]);
 
@@ -139,6 +156,49 @@ describe("oma sessions message", () => {
     ]);
 
     expect(vi.mocked(console.log).mock.calls.flat().join(" ")).toContain("Session created: sess_9");
+  });
+
+  it("treats a whitespace-only 202 body as no content", async () => {
+    // A gateway or trailing-newline server can answer the accepted mutation
+    // with a stray blank instead of a truly zero-length body. `JSON.parse(" ")`
+    // throws the exact same "Unexpected end of JSON input" as `JSON.parse("")`,
+    // so an untrimmed check still reports a turn the server already queued.
+    stubAccepted(202, "  \n\t  ");
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await expect(
+      cmd("sessions", "message").run(config, ["sess_1", "hello"]),
+    ).resolves.toBeUndefined();
+
+    expect(error).not.toHaveBeenCalled();
+    expect(vi.mocked(console.log).mock.calls.flat().join(" ")).toContain("Message sent.");
+  });
+
+  it("treats a whitespace-only 204 body as no content", async () => {
+    // Same contract on the delete path. A conforming server cannot send this
+    // (204 is a null-body status), but a proxy that appends a trailing byte
+    // would, and the helper's contract is "empty after trimming", not
+    // "falsy" — so pin it rather than leave it to a truthiness refactor.
+    stubAccepted(204, "\n");
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await expect(cmd("agents", "delete").run(config, ["agent_1"])).resolves.toBeUndefined();
+
+    expect(error).not.toHaveBeenCalled();
+    expect(vi.mocked(console.log).mock.calls.flat().join(" ")).toContain("Agent deleted: agent_1");
+  });
+
+  it("still throws a status-prefixed error on a non-2xx", async () => {
+    // Widening "empty" to "empty after trimming" must not swallow a real
+    // failure or soften its message: a 404 body still surfaces verbatim.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("agent not found", { status: 404, statusText: "Not Found" })),
+    );
+
+    await expect(cmd("agents", "delete").run(config, ["agent_x"])).rejects.toThrow(
+      "404 Not Found: agent not found",
+    );
   });
 });
 

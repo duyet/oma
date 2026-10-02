@@ -243,6 +243,9 @@ async function apiFetch<T = unknown>(config: Config, path: string, init?: Reques
   // on those, which reports a failed turn the server already accepted (and
   // invites scripts to retry it into a duplicate). Read the text and only
   // parse when there is something to parse; an empty body is `undefined`.
+  // The trim is load-bearing, not cosmetic — JSON.parse(" ") throws exactly
+  // what JSON.parse("") does, so a whitespace-only 2xx (a padded 204, a stray
+  // newline off a proxy) must take the same no-content path.
   const text = await res.text();
   return (text.trim() ? JSON.parse(text) : undefined) as T;
 }
