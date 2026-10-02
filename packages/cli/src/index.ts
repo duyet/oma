@@ -7,6 +7,7 @@ import { mkdirSync, readFileSync, writeFileSync, unlinkSync, existsSync, chmodSy
 import { randomBytes } from "node:crypto";
 import type { AgentConfig, ModelCard, SessionMeta } from "@duyet/oma-api-types";
 import { currentProfile } from "./bridge/lib/platform.js";
+import { PKG_VERSION } from "./bridge/lib/version.js";
 import { recordCommand, telemetryStatus, setTelemetryEnabled } from "./telemetry.js";
 import { bumpCommand } from "./counters.js";
 
@@ -429,6 +430,20 @@ function table(rows: string[][]) {
   }
 }
 
+/** Print `value` as JSON when the caller passed `--json`, and report whether
+ *  it did. `--json` is stripped from argv globally and lands on `config.json`
+ *  (see main), so every command that prints structured output has to opt in
+ *  here — one that forgets prints a padded human table and exits 0, which is
+ *  a silent lie to a script parsing stdout (issue #431).
+ *
+ *  Call it BEFORE the empty-result check so an empty list stays `[]` rather
+ *  than a "No rows." sentence no parser accepts. */
+function emitJson(config: Config, value: unknown): boolean {
+  if (!config.json) return false;
+  console.log(JSON.stringify(value, null, 2));
+  return true;
+}
+
 function capsPreview(caps: string[]): string {
   if (!caps.length) return "0";
   if (caps.length <= 2) return caps.join(",");
@@ -849,6 +864,7 @@ export const commands: Cmd[] = [
     http: "GET    /v1/me/tenants",
     async run(config) {
       const { data } = await apiFetch<{ data: Array<{ id: string; name: string; role: string }> }>(config, "/v1/me/tenants");
+      if (emitJson(config, data)) return;
       if (!data.length) { console.log("No tenants on this account."); return; }
       const stored = readCredentials();
       const active = stored?.active_tenant_id;
@@ -898,6 +914,7 @@ export const commands: Cmd[] = [
     http: "GET    /v1/agents?limit=N&order=asc|desc",
     async run(config) {
       const { data } = await apiFetch<{ data: Array<{ id: string; name: string; model: any; created_at: string }> }>(config, "/v1/agents?limit=100");
+      if (emitJson(config, data)) return;
       if (!data.length) { console.log("No agents. Create one with: oma agents create"); return; }
       table([["NAME", "ID", "MODEL", "CREATED"], ...data.map(a => [a.name, a.id, typeof a.model === "string" ? a.model : a.model?.id || "", new Date(a.created_at).toLocaleDateString()])]);
     },
@@ -996,6 +1013,7 @@ export const commands: Cmd[] = [
     http: "GET    /v1/sessions?agent_id=X&limit=N",
     async run(config) {
       const { data } = await apiFetch<{ data: Array<{ id: string; title: string; agent_id: string; status: string; created_at: string }> }>(config, "/v1/sessions?limit=20");
+      if (emitJson(config, data)) return;
       if (!data.length) { console.log("No sessions."); return; }
       table([["TITLE", "ID", "STATUS", "AGENT", "CREATED"], ...data.map(s => [s.title || "Untitled", s.id, s.status || "idle", s.agent_id, new Date(s.created_at).toLocaleDateString()])]);
     },
@@ -1059,6 +1077,7 @@ export const commands: Cmd[] = [
     http: "GET    /v1/environments",
     async run(config) {
       const { data } = await apiFetch<{ data: Array<{ id: string; name: string; status: string }> }>(config, "/v1/environments");
+      if (emitJson(config, data)) return;
       if (!data.length) { console.log("No environments. Create one with: oma envs create <name>"); return; }
       table([["NAME", "ID", "STATUS"], ...data.map(e => [e.name, e.id, e.status || "ready"])]);
     },
@@ -1069,6 +1088,7 @@ export const commands: Cmd[] = [
     http: "POST   /v1/environments {name, config:{type:\"cloud\"}}",
     async run(config, args) {
       const env = await apiFetch<{ id: string; name: string }>(config, "/v1/environments", { method: "POST", body: JSON.stringify({ name: args.join(" "), config: { type: "cloud" } }) });
+      if (emitJson(config, env)) return;
       console.log(`Environment created: ${env.name} (${env.id})`);
     },
   },
@@ -1080,6 +1100,7 @@ export const commands: Cmd[] = [
     http: "GET    /v1/model_cards",
     async run(config) {
       const { data } = await apiFetch<{ data: Array<{ id: string; model_id: string; model: string; provider: string; api_key_preview: string; is_default: boolean }> }>(config, "/v1/model_cards");
+      if (emitJson(config, data)) return;
       if (!data.length) { console.log("No model cards. Create one with: oma models create"); return; }
       table([["MODEL_ID", "PROVIDER", "WIRE MODEL", "KEY", "DEFAULT"], ...data.map(c => [c.model_id, c.provider, c.model === c.model_id ? "(same)" : c.model, `****${c.api_key_preview || ""}`, c.is_default ? "yes" : ""])]);
     },
@@ -1103,6 +1124,7 @@ export const commands: Cmd[] = [
     http: "GET    /v1/api_keys",
     async run(config) {
       const { data } = await apiFetch<{ data: Array<{ id: string; name: string; prefix: string; created_at: string }> }>(config, "/v1/api_keys");
+      if (emitJson(config, data)) return;
       if (!data.length) { console.log("No API keys. Create one with: oma keys create"); return; }
       table([["NAME", "ID", "PREFIX", "CREATED"], ...data.map(k => [k.name, k.id, k.prefix + "...", new Date(k.created_at).toLocaleDateString()])]);
     },
@@ -2514,6 +2536,55 @@ Stored credentials live at ~/.config/oma/credentials.json (created by
 `);
 }
 
+// ─── Help (group + leaf) ───
+
+/** Print help for the verb the user asked about, and report whether anything
+ *  matched. `["sessions"]` documents the whole group; `["sessions","list"]`
+ *  documents one command; `[]` (bare `oma help <group>` with no group) falls
+ *  back to the global usage.
+ *
+ *  This exists because group help used to be unreachable: `oma sessions --help`
+ *  had no matching command, fell through the dispatcher, and died with
+ *  "Unknown command: sessions --help" plus the full global dump — for every
+ *  group, so the surface was undiscoverable from the CLI itself (issue #431).
+ *  Returns false only when the leading token names no command at all, so the
+ *  caller can keep the existing unknown-command path (and `oma bridge …`,
+ *  which has its own richer help above this point). */
+function printHelp(args: string[]): boolean {
+  // `oma help sessions` and `oma sessions --help` reach the same place; drop
+  // the leading `help` word and any trailing help flags. Other flags are left
+  // alone — the group path only reads the first token, so `oma sessions
+  // --json --help` still documents `sessions`.
+  const verb = (args[0] === "help" ? args.slice(1) : args)
+    .filter((a) => a !== "--help" && a !== "-h");
+  if (!verb.length) { usage(); return true; }
+
+  // Longest exact match wins, so `oma memory stores list --help` documents
+  // that verb rather than every command under the `memory` group.
+  let exact: Cmd | undefined;
+  for (const c of commands) {
+    if (c.match.length > verb.length) continue;
+    if (c.match.every((tok, i) => verb[i] === tok) && (!exact || c.match.length > exact.match.length)) {
+      exact = c;
+    }
+  }
+  if (exact && exact.match.length === verb.length) {
+    console.log(`\n${exact.usage}\n  ${exact.desc}\n\n  HTTP: ${exact.http}\n`);
+    return true;
+  }
+
+  // No exact command — treat the leading token as a group. Every command that
+  // starts with it is listed, so multi-token groups (`memory stores …`) and
+  // split ones (`vaults` / `creds` / `cli` all under Vaults) each document
+  // just the spelling the user typed.
+  const rows = commands.filter((c) => c.match[0] === verb[0]);
+  if (!rows.length) return false;
+  console.log(`\noma ${verb[0]} — ${rows[0].group}\n`);
+  for (const c of rows) console.log(`  ${c.usage.padEnd(50)} ${c.desc}`);
+  console.log(`\n  'oma ${verb[0]} <command> --help' for one command · 'oma --help' for everything\n`);
+  return true;
+}
+
 // ─── Main ───
 
 /** Cheap base-URL resolution for the public (unauthenticated) telemetry
@@ -2522,9 +2593,20 @@ function telemetryBase(): string {
   return (process.env.OMA_BASE_URL || readCredentials()?.base_url || "https://app.oma.duyet.net").replace(/\/+$/, "");
 }
 
-async function main() {
+/** CLI entry point. Exported so the argv-level dispatch — `--version` and the
+ *  group `--help` paths — can be driven directly in tests. Both of those bugs
+ *  lived in this function's ordering rather than in any command handler, so
+ *  testing `commands` alone would never have caught them (issue #431). */
+export async function main() {
   let args = process.argv.slice(2);
   if (["-h", "--help", "help"].includes(args[0])) { usage(); process.exit(0); }
+  // Bare version, no flags — the shell convention `VERSION=$(oma --version)`
+  // depends on, and it has to answer with no credentials, no profile, and no
+  // network. Keep it beside the help check and ahead of everything else.
+  if (["--version", "-V", "version"].includes(args[0])) {
+    console.log(PKG_VERSION);
+    process.exit(0);
+  }
 
   // Bare invocation: interactive menu on a real terminal, plain help
   // otherwise (piped / non-TTY / CI). The menu just resolves to an argv
@@ -2682,6 +2764,23 @@ async function main() {
         process.exit(sub ? 1 : 0);
       }
     }
+  }
+
+  // Group / leaf help for a known verb (`oma sessions --help`,
+  // `oma sessions list --help`, `oma help envs`). Checked before loadConfig so
+  // asking how a command works never requires being logged in — and before the
+  // --json strip so `oma sessions --json --help` still documents `sessions`.
+  // `bridge` is handled above with its own help and never reaches here.
+  if (args[0] === "help" || args.includes("--help") || args.includes("-h")) {
+    if (printHelp(args)) return;
+    // Help was asked for but nothing matched (`oma nope --help`). Report the
+    // unknown verb here rather than falling through: the fall-through reaches
+    // loadConfig first, so an unauthenticated `oma nope --help` died with
+    // "not authenticated." instead of naming the typo it actually made.
+    const shown = args.filter((a) => a !== "--help" && a !== "-h" && a !== "help");
+    console.error(`Unknown command: ${shown.join(" ") || args.join(" ")}`);
+    usage();
+    process.exit(1);
   }
 
   // Strip --json from args so subcommand matchers don't see it.

@@ -54,7 +54,25 @@ npx @getoma/cli sessions tail <session-id>     # follow the event stream live
 
 ## Command tree
 
-Run `npx @getoma/cli --help` for flags and details on every command.
+Run `npx @getoma/cli --help` for flags and details on every command. The same
+help is reachable per group and per command, so you never have to page the
+full dump:
+
+```bash
+npx @getoma/cli --version          # print the CLI version (also -V, or `oma version`)
+npx @getoma/cli sessions --help    # every command in the sessions group
+npx @getoma/cli help sessions      # same thing, spelled the other way
+npx @getoma/cli agents list --help # one command, with the endpoint it calls
+```
+
+`--json` on any list command prints the raw array instead of the human table,
+so you can pipe it into `jq`. It works on an empty result too (`[]`, not a
+"No rows." sentence), and it applies to `agents list`, `sessions list`,
+`envs list`, `models list`, `keys list`, and `whoami`.
+
+```bash
+npx @getoma/cli agents list --json | jq -r '.[].id'
+```
 
 | Group | Commands |
 |---|---|
