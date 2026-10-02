@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.8](https://github.com/duyet/oma/compare/root-v0.1.7...root-v0.1.8) (2026-10-02)
+
+
+### ✨ Features
+
+* **cli:** envs get and delete (Partial [#484](https://github.com/duyet/oma/issues/484)) ([#488](https://github.com/duyet/oma/issues/488)) ([5c5c917](https://github.com/duyet/oma/commit/5c5c9178965a22b207b4fd1625d06e4e81e775ce))
+
+
+### 🐛 Bug Fixes
+
+* **cli:** version, group --help, and --json ([#431](https://github.com/duyet/oma/issues/431)) ([#483](https://github.com/duyet/oma/issues/483)) ([27cc4b2](https://github.com/duyet/oma/commit/27cc4b296f6f22c5353e1446aaee0c5b5a9f2e30))
+
 ## [0.1.7](https://github.com/duyet/oma/compare/root-v0.1.6...root-v0.1.7) (2026-10-02)
 
 
