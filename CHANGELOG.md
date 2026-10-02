@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.7](https://github.com/duyet/oma/compare/root-v0.1.6...root-v0.1.7) (2026-10-02)
+
+
+### 🐛 Bug Fixes
+
+* **agent:** honor a model card's vendor `provider` on the CF wire ([#473](https://github.com/duyet/oma/issues/473)) ([3b84d86](https://github.com/duyet/oma/commit/3b84d86dd1fa2cdab66220b007ac71494e466e1f))
+* **cli:** stop reporting a failed turn when the API returns an empty 2xx ([#474](https://github.com/duyet/oma/issues/474)) ([3d1fdf5](https://github.com/duyet/oma/commit/3d1fdf53213bab00b372475b9846837c2b7dff29))
+
 ## [0.1.6](https://github.com/duyet/oma/compare/root-v0.1.5...root-v0.1.6) (2026-09-16)
 
 
