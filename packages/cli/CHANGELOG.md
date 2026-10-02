@@ -1,5 +1,11 @@
 # @getoma/cli
 
+## 0.1.14
+
+### Patch Changes
+
+- 5c5c917: Add `oma envs get <id>` and `oma envs delete <id>`, both honoring `--json` (Partial #484).
+
 ## 0.1.13
 
 ### Patch Changes
