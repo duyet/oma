@@ -2770,10 +2770,17 @@ export async function main() {
   // `oma sessions list --help`, `oma help envs`). Checked before loadConfig so
   // asking how a command works never requires being logged in — and before the
   // --json strip so `oma sessions --json --help` still documents `sessions`.
-  // `bridge` is handled above with its own help, and printHelp returns false
-  // for it, so both spellings keep working.
+  // `bridge` is handled above with its own help and never reaches here.
   if (args[0] === "help" || args.includes("--help") || args.includes("-h")) {
     if (printHelp(args)) return;
+    // Help was asked for but nothing matched (`oma nope --help`). Report the
+    // unknown verb here rather than falling through: the fall-through reaches
+    // loadConfig first, so an unauthenticated `oma nope --help` died with
+    // "not authenticated." instead of naming the typo it actually made.
+    const shown = args.filter((a) => a !== "--help" && a !== "-h" && a !== "help");
+    console.error(`Unknown command: ${shown.join(" ") || args.join(" ")}`);
+    usage();
+    process.exit(1);
   }
 
   // Strip --json from args so subcommand matchers don't see it.
