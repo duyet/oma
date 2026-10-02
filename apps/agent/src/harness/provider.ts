@@ -60,6 +60,35 @@ export function resolveDefaultProviderCreds(env: {
   return null;
 }
 
+/**
+ * Normalize a model card's `provider` column (or the `OMA_API_COMPAT`
+ * deployment default) onto a wire tag.
+ *
+ * A card carries either a wire tag (`ant` | `ant-compatible` | `oai` |
+ * `oai-compatible` — what the Console picker and `oma models create` write)
+ * or a bare vendor name (`openai` / `anthropic` — accepted by
+ * `POST /v1/model_cards`, routed on by the create-time capability probe,
+ * documented in AGENTS.md, and still present on rows written before the
+ * picker narrowed). The vendor names must resolve to the same wire format
+ * as their tags: `provider: "openai"` means `/chat/completions`, not
+ * `/messages`.
+ *
+ * Returns `undefined` for anything that is not a recognized wire tag (e.g.
+ * `"custom"`, `""`) so callers can still apply their own fallback instead of
+ * silently committing to a wire format.
+ */
+export function cardProviderToApiCompat(
+  provider: string | null | undefined,
+): ApiCompat | undefined {
+  const p = (provider ?? "").trim().toLowerCase();
+  if (p === "anthropic") return "ant";
+  if (p === "openai") return "oai";
+  if (p === "ant" || p === "ant-compatible" || p === "oai" || p === "oai-compatible") {
+    return p;
+  }
+  return undefined;
+}
+
 const KNOWN_CLAUDE_PREFIX = "claude-";
 
 // Cap for non-Claude models on the Anthropic-compat path. The SDK hard-codes
