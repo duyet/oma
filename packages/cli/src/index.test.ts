@@ -427,3 +427,139 @@ describe("oma --json on list commands (issue #431)", () => {
     expect(JSON.parse(vi.mocked(console.log).mock.calls[0][0] as string)).toEqual(sessions);
   });
 });
+
+describe("oma envs get / delete (issue #484)", () => {
+  /** Respond with `body`; the default stub's schedule-flavored envelope would
+   *  make every assertion below vacuous. */
+  function stubJson(body: unknown, status = 200) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        captured.push({
+          url,
+          method: init?.method ?? "GET",
+          body: init?.body ? JSON.parse(init.body as string) : undefined,
+        });
+        return new Response(JSON.stringify(body), {
+          status,
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+  }
+
+  const ENV = {
+    type: "environment",
+    id: "env_abc",
+    name: "data-science",
+    description: "Pandas + matplotlib",
+    status: "ready",
+    created_at: "2026-07-20T09:00:00Z",
+    config: { type: "cloud", sandbox_provider: "boxrun", harness: "default" },
+  };
+
+  it("get GETs the environment by id", async () => {
+    stubJson(ENV);
+
+    await cmd("envs", "get").run(config, ["env_abc"]);
+
+    expect(captured).toHaveLength(1);
+    expect(captured[0].method).toBe("GET");
+    expect(captured[0].url).toBe("https://api.test/v1/environments/env_abc");
+  });
+
+  it("get prints the sandbox provider bits when present", async () => {
+    // `envs list` only shows name/id/status, so the detail view is the only
+    // place an operator can see WHICH sandbox an env actually resolves to.
+    stubJson(ENV);
+
+    await cmd("envs", "get").run(config, ["env_abc"]);
+
+    const out = vi.mocked(console.log).mock.calls.flat().join(" ");
+    expect(out).toContain("data-science");
+    expect(out).toContain("env_abc");
+    expect(out).toContain("cloud");
+    expect(out).toContain("boxrun");
+  });
+
+  it("get omits the optional rows a minimal environment does not set", async () => {
+    // `toEnvironmentConfig` drops null description/updated_at rather than
+    // sending them null, so a minimal env must not render empty label rows.
+    stubJson({
+      id: "env_min",
+      name: "bare",
+      created_at: "2026-07-20T09:00:00Z",
+      config: { type: "cloud" },
+    });
+
+    await cmd("envs", "get").run(config, ["env_min"]);
+
+    const out = vi.mocked(console.log).mock.calls.flat().join(" ");
+    expect(out).toContain("bare");
+    expect(out).not.toMatch(/Sandbox:/);
+    expect(out).not.toMatch(/Desc:/);
+  });
+
+  it("get emits the raw object under --json", async () => {
+    stubJson(ENV);
+
+    await cmd("envs", "get").run({ ...config, json: true }, ["env_abc"]);
+
+    expect(JSON.parse(vi.mocked(console.log).mock.calls[0][0] as string)).toEqual(ENV);
+  });
+
+  it("delete DELETEs the environment by id", async () => {
+    stubJson({ type: "environment_deleted", id: "env_abc" });
+
+    await cmd("envs", "delete").run(config, ["env_abc"]);
+
+    expect(captured).toHaveLength(1);
+    expect(captured[0].method).toBe("DELETE");
+    expect(captured[0].url).toBe("https://api.test/v1/environments/env_abc");
+    expect(vi.mocked(console.log).mock.calls.flat().join(" ")).toContain(
+      "Environment deleted: env_abc",
+    );
+  });
+
+  it("delete still emits a parseable envelope when the body is empty", async () => {
+    // Same contract as the 204 handling in the shared `apiFetch` helper: a
+    // bodiless 2xx must not print a bare `undefined` under `--json`.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        captured.push({ url, method: init?.method ?? "GET", body: undefined });
+        return new Response(null, { status: 204 });
+      }),
+    );
+
+    await cmd("envs", "delete").run({ ...config, json: true }, ["env_abc"]);
+
+    expect(JSON.parse(vi.mocked(console.log).mock.calls[0][0] as string)).toEqual({
+      type: "environment_deleted",
+      id: "env_abc",
+    });
+  });
+
+  it("delete surfaces the 409 raised by active sessions", async () => {
+    // The route refuses a hard delete while the environment still has active
+    // sessions; the CLI must relay that verbatim rather than swallow it into
+    // a success line.
+    stubJson(
+      { error: "Cannot delete environment with active sessions. Archive or delete sessions first." },
+      409,
+    );
+
+    await expect(cmd("envs", "delete").run(config, ["env_busy"])).rejects.toThrow(
+      /Cannot delete environment with active sessions/,
+    );
+    expect(vi.mocked(console.log)).not.toHaveBeenCalled();
+  });
+
+  it("delete surfaces a 404 for an unknown id", async () => {
+    stubJson({ error: "Environment not found" }, 404);
+
+    await expect(cmd("envs", "delete").run(config, ["env_nope"])).rejects.toThrow(
+      "404",
+    );
+  });
+});
