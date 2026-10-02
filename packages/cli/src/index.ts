@@ -1092,6 +1092,47 @@ export const commands: Cmd[] = [
       console.log(`Environment created: ${env.name} (${env.id})`);
     },
   },
+  {
+    group: "Environments", match: ["envs", "get"], needsArg: true,
+    usage: "oma envs get <id>", desc: "Get environment details",
+    http: "GET    /v1/environments/:id",
+    async run(config, args) {
+      // `toEnvironmentConfig` projects the row: `config` carries the hosting
+      // `type` plus the optional sandbox_provider / harness / kind overrides,
+      // and `description` / `updated_at` are omitted rather than null. Print
+      // the optional ones only when present so a minimal env doesn't render
+      // a wall of "—".
+      const env = await apiFetch<{
+        id: string; name: string; description?: string; status?: string; created_at?: string;
+        config?: { type?: string; sandbox_provider?: string; harness?: string; kind?: string };
+      }>(config, `/v1/environments/${args[0]}`);
+      if (emitJson(config, env)) return;
+      const cfg = env.config ?? {};
+      console.log(`Name:    ${env.name}\nID:      ${env.id}\nType:    ${cfg.type || "—"}`);
+      if (cfg.sandbox_provider) console.log(`Sandbox: ${cfg.sandbox_provider}`);
+      if (cfg.harness) console.log(`Harness: ${cfg.harness}`);
+      if (env.status) console.log(`Status:  ${env.status}`);
+      if (cfg.kind) console.log(`Kind:    ${cfg.kind}`);
+      if (env.description) console.log(`Desc:    ${env.description}`);
+      if (env.created_at) console.log(`Created: ${new Date(env.created_at).toLocaleDateString()}`);
+    },
+  },
+  {
+    group: "Environments", match: ["envs", "delete"], needsArg: true,
+    usage: "oma envs delete <id>", desc: "Delete environment",
+    // Hard delete. The route answers 409 while the environment still has
+    // active sessions — that surfaces through apiFetch's status-prefixed
+    // throw rather than a second, CLI-side preflight that could disagree
+    // with the server about what "active" means.
+    http: "DELETE /v1/environments/:id  (409 while active sessions exist)",
+    async run(config, args) {
+      const res = await apiFetch<{ type?: string; id?: string } | undefined>(config, `/v1/environments/${args[0]}`, { method: "DELETE" });
+      // Fall back to the same envelope the route returns if the body is
+      // empty (a 204) — `--json` must not print a bare `undefined`.
+      if (emitJson(config, res ?? { type: "environment_deleted", id: args[0] })) return;
+      console.log(`Environment deleted: ${res?.id ?? args[0]}`);
+    },
+  },
 
   // Model Cards
   {
