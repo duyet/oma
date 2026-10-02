@@ -237,7 +237,14 @@ async function apiFetch<T = unknown>(config: Config, path: string, init?: Reques
     const body = await res.text();
     throw new Error(`${res.status} ${res.statusText}: ${body}`);
   }
-  return res.json() as Promise<T>;
+  // An accepted mutation is not a failure. POST /v1/sessions/:id/events
+  // answers `202` with an empty body once the event is queued, and 204s are
+  // empty by definition — `res.json()` throws "Unexpected end of JSON input"
+  // on those, which reports a failed turn the server already accepted (and
+  // invites scripts to retry it into a duplicate). Read the text and only
+  // parse when there is something to parse; an empty body is `undefined`.
+  const text = await res.text();
+  return (text.trim() ? JSON.parse(text) : undefined) as T;
 }
 
 // ─── SSE helpers ───
