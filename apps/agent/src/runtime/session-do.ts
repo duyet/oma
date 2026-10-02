@@ -74,7 +74,7 @@ import type {
 import type { HarnessContext, HarnessInterface, HistoryStore, SandboxExecutor, ProcessHandle, FileResolver } from "../harness/interface";
 import { resolveHarness } from "../harness/registry";
 import { composeSystemPrompt } from "../harness/platform-guidance";
-import { resolveModel, resolveDefaultProviderCreds } from "../harness/provider";
+import { resolveModel, resolveDefaultProviderCreds, cardProviderToApiCompat } from "../harness/provider";
 import type { ApiCompat } from "../harness/provider";
 import type { LanguageModel } from "ai";
 import { generateText } from "ai";
@@ -4463,13 +4463,20 @@ export class SessionDO extends DurableObject<Env> {
       }
     }
 
-    const OAI_PROVIDERS = new Set(["oai", "oai-compatible"]);
-    const ANT_PROVIDERS = new Set(["ant", "ant-compatible"]);
+    const cardCompat = cardProviderToApiCompat(provider);
     let apiCompat: ApiCompat = "ant";
-    if (provider && (OAI_PROVIDERS.has(provider) || ANT_PROVIDERS.has(provider))) {
-      apiCompat = provider as ApiCompat;
+    if (cardCompat) {
+      // A card whose `provider` is a wire tag (`oai`) or the vendor name
+      // that card's own wire format follows (`openai` → `/chat/completions`).
+      // Previously only the four wire tags were honored, so a card stored as
+      // `provider: "openai"` silently fell through to "ant" here and the turn
+      // POSTed to `/messages` — while the same card on self-host Node
+      // (providerToApiCompat in claude-agent-sdk/model.ts) ran on the OpenAI
+      // wire. Same card, same key, different wire depending on deployment.
+      apiCompat = cardCompat;
     } else {
-      // Node self-host has no D1 model cards, so there's no per-model way to
+      // No card provider (or an unrecognized one such as "custom"). Node
+      // self-host has no D1 model cards, so there's no per-model way to
       // select the OpenAI-compatible wire format. OMA_API_COMPAT lets the
       // deployment default every model to "oai"/"oai-compatible" (e.g. to
       // reach an OpenAI-compatible gateway like AnyRouter /chat/completions).
@@ -4477,9 +4484,7 @@ export class SessionDO extends DurableObject<Env> {
       // fixed allowlist that doesn't carry this key.
       const envCompat =
         typeof process !== "undefined" ? process.env.OMA_API_COMPAT : undefined;
-      if (envCompat && (OAI_PROVIDERS.has(envCompat) || ANT_PROVIDERS.has(envCompat))) {
-        apiCompat = envCompat as ApiCompat;
-      }
+      apiCompat = cardProviderToApiCompat(envCompat) ?? "ant";
     }
 
     return { model: wireModel, apiKey, baseURL, apiCompat, customHeaders };

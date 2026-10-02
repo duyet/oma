@@ -17,11 +17,10 @@
  */
 
 import { resolveClaudeSdkAuth } from "./auth";
+import { cardProviderToApiCompat } from "../provider";
 
-/** Anthropic-wire-compatible API compat tags — the only ones Claude Code's
- *  CLI can talk to (it speaks the Anthropic `/v1/messages` protocol). */
-const ANT_COMPAT = new Set(["ant", "ant-compatible"]);
-/** OpenAI-wire compat tags — cannot drive the CLI at all. */
+/** OpenAI-wire compat tags — cannot drive the CLI at all (it speaks the
+ *  Anthropic `/v1/messages` protocol and nothing else). */
 const OAI_COMPAT = new Set(["oai", "oai-compatible"]);
 
 /**
@@ -137,10 +136,11 @@ export function resolveClaudeSdkProvider(input: {
   };
 }
 
-/** Normalize a model-card `provider` column onto an ApiCompat tag. Mirrors
- *  resolveModelCardCredentials in session-do.ts: the four wire tags pass
- *  through, `anthropic`/`openai` map onto their wire format, and anything
- *  else (e.g. "custom") defaults to Anthropic-wire. */
+/** Normalize a model-card `provider` column onto an ApiCompat tag. Shares
+ *  `cardProviderToApiCompat` with resolveModelCardCredentials in
+ *  session-do.ts so the Cloudflare and Node paths cannot disagree on which
+ *  wire format a card selects; anything unrecognized (e.g. "custom")
+ *  defaults to Anthropic-wire, which is what the Claude Code CLI speaks. */
 // One place owns the OpenAI-wire rejection message — it's long, and tests
 // assert on its pieces.
 export function oaiCompatError(binding: { apiCompat: string; source?: string }): string {
@@ -155,11 +155,7 @@ export function oaiCompatError(binding: { apiCompat: string; source?: string }):
 }
 
 export function providerToApiCompat(provider: string | null | undefined): string {
-  const p = (provider ?? "").toLowerCase();
-  if (ANT_COMPAT.has(p) || OAI_COMPAT.has(p)) return p;
-  if (p === "anthropic") return "ant";
-  if (p === "openai") return "oai";
-  return "ant";
+  return cardProviderToApiCompat(provider) ?? "ant";
 }
 
 function agentModelId(model: string | { id?: string } | null | undefined): string {
