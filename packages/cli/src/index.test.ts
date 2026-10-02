@@ -1,10 +1,13 @@
-// Command-level tests for the `oma schedules …` verbs. Importing `index.ts`
-// is safe because the module skips its `main()` auto-exec when VITEST is set
-// (see the guard at the bottom of index.ts). We look each command up by its
-// `match` tokens and drive its `run` with a stubbed global fetch.
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+// Command-level tests for the `oma` verbs, plus argv-level dispatch (`--version`,
+// group `--help`). Importing `index.ts` is safe because the module skips its
+// `main()` auto-exec when VITEST is set (see the guard at the bottom of
+// index.ts). Commands are looked up by their `match` tokens and driven with a
+// stubbed global fetch; the argv-level paths call `main()` with a rewritten
+// `process.argv`.
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 
-import { commands } from "./index";
+import { commands, main } from "./index";
+import { PKG_VERSION } from "./bridge/lib/version.js";
 
 const config = {
   baseUrl: "https://api.test",
@@ -260,5 +263,167 @@ describe("oma schedules", () => {
     await cmd("schedules", "delete").run(config, ["agent_1", "sch_abc"]);
     expect(captured[0].method).toBe("DELETE");
     expect(captured[0].url).toBe("https://api.test/v1/agents/agent_1/schedules/sch_abc");
+  });
+});
+
+/** Thrown by the `process.exit` stub below. Mocking exit as a no-op is not
+ *  enough: the real `process.exit` never returns, so a mocked one lets
+ *  `main()` keep running past a terminal branch (the `--version` path falls
+ *  straight through into the config load and the unknown-command dump) and
+ *  the assertions would pass while the code after `exit` still executed. */
+class ProcessExit extends Error {}
+
+describe("oma --version / group --help (issue #431)", () => {
+  let home: string | undefined;
+
+  beforeAll(() => {
+    // `main()` bumps the local command counter before dispatching, and the
+    // counter lives at `~/.oma/bridge/counters.json` (homedir-based, not XDG).
+    // Redirect HOME so driving argv in a test can't scribble on the developer's
+    // real counters. `os.homedir()` reads $HOME on POSIX, so this is enough.
+    home = process.env.HOME;
+    process.env.HOME = `${process.env.TMPDIR ?? "/tmp"}/oma-test-home-431`;
+  });
+
+  afterAll(() => {
+    if (home === undefined) delete process.env.HOME;
+    else process.env.HOME = home;
+  });
+
+  /** Run `main()` with `argv`, returning the code it exited with. A path that
+   *  returns normally (group help) reports 0 — `main()` exiting early is the
+   *  success signal there, not an explicit `process.exit(0)`. */
+  async function runMain(argv: string[]): Promise<number> {
+    const prevArgv = process.argv;
+    process.argv = ["node", "oma", ...argv];
+    let code: number | undefined;
+    const exit = vi.spyOn(process, "exit").mockImplementation(((c?: number) => {
+      code = c;
+      throw new ProcessExit();
+    }) as never);
+    try {
+      await main();
+    } catch (e) {
+      if (!(e instanceof ProcessExit)) throw e;
+    } finally {
+      exit.mockRestore();
+      process.argv = prevArgv;
+    }
+    return code ?? 0;
+  }
+
+  it("--version prints PKG_VERSION and exits 0", async () => {
+    expect(await runMain(["--version"])).toBe(0);
+    expect(vi.mocked(console.log).mock.calls.map((c) => c[0])).toContain(PKG_VERSION);
+  });
+
+  it("-V and version aliases work", async () => {
+    for (const alias of ["-V", "version"]) {
+      vi.mocked(console.log).mockClear();
+      expect(await runMain([alias])).toBe(0);
+      expect(vi.mocked(console.log).mock.calls.map((c) => c[0])).toContain(PKG_VERSION);
+    }
+  });
+
+  it("sessions --help shows group help, not Unknown command", async () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    expect(await runMain(["sessions", "--help"])).toBe(0);
+
+    const out = vi.mocked(console.log).mock.calls.flat().join("\n");
+    expect(out).toMatch(/sessions/i);
+    // The bug: no command matches `["sessions","--help"]`, so it fell through
+    // to "Unknown command" plus the full global dump — for every group, which
+    // made the surface undiscoverable from the CLI itself.
+    expect(out).not.toMatch(/Unknown command/);
+    expect(err).not.toHaveBeenCalled();
+  });
+
+  it("agents --help shows group help", async () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    expect(await runMain(["agents", "--help"])).toBe(0);
+
+    const out = vi.mocked(console.log).mock.calls.flat().join("\n");
+    expect(out).toMatch(/agents/i);
+    expect(out).not.toMatch(/Unknown command/);
+    expect(err).not.toHaveBeenCalled();
+  });
+
+  it("leaf help documents one command", async () => {
+    expect(await runMain(["sessions", "list", "--help"])).toBe(0);
+    const out = vi.mocked(console.log).mock.calls.flat().join("\n");
+    expect(out).toMatch(/GET {4}\/v1\/sessions/);
+  });
+
+  it("oma help <group> reaches the same help as <group> --help", async () => {
+    expect(await runMain(["help", "agents"])).toBe(0);
+    expect(vi.mocked(console.log).mock.calls.flat().join("\n")).toMatch(/agents/i);
+  });
+
+  it("an unknown group still reports Unknown command", async () => {
+    // printHelp returning false must not swallow the real error path.
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    expect(await runMain(["nope", "--help"])).toBe(1);
+    expect(err).toHaveBeenCalledWith(expect.stringMatching(/Unknown command/));
+  });
+});
+
+describe("oma --json on list commands (issue #431)", () => {
+  /** Respond with `body` and record nothing else. */
+  function stubJson(body: unknown) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+  }
+
+  it("agents list emits the raw array when config.json is true", async () => {
+    // A script parsing stdout got a padded human table and exit 0 — a silent
+    // lie. `--json` has to change the shape, not just set a flag.
+    const agents = [
+      { id: "agent_1", name: "Researcher", model: "claude-sonnet-4-6", created_at: "2026-07-20T09:00:00Z" },
+    ];
+    stubJson({ data: agents });
+
+    await cmd("agents", "list").run({ ...config, json: true }, []);
+
+    expect(JSON.parse(vi.mocked(console.log).mock.calls[0][0] as string)).toEqual(agents);
+  });
+
+  it("an empty list is [] rather than a human sentence", async () => {
+    // The check has to run before the empty-result branch, or `--json` on an
+    // empty list prints "No agents. Create one with: oma agents create" —
+    // which no parser accepts, and reports success while doing it.
+    stubJson({ data: [] });
+
+    await cmd("agents", "list").run({ ...config, json: true }, []);
+
+    expect(JSON.parse(vi.mocked(console.log).mock.calls[0][0] as string)).toEqual([]);
+  });
+
+  it("still prints the human table without --json", async () => {
+    stubJson({ data: [{ id: "agent_1", name: "Researcher", model: "claude-sonnet-4-6", created_at: "2026-07-20T09:00:00Z" }] });
+
+    await cmd("agents", "list").run({ ...config, json: false }, []);
+
+    const out = vi.mocked(console.log).mock.calls.flat().join(" ");
+    expect(out).toContain("NAME");
+    expect(out).toContain("Researcher");
+  });
+
+  it("sessions list honors --json too", async () => {
+    const sessions = [{ id: "sess_1", title: "T", agent_id: "agent_1", status: "idle", created_at: "2026-07-20T09:00:00Z" }];
+    stubJson({ data: sessions });
+
+    await cmd("sessions", "list").run({ ...config, json: true }, []);
+
+    expect(JSON.parse(vi.mocked(console.log).mock.calls[0][0] as string)).toEqual(sessions);
   });
 });
