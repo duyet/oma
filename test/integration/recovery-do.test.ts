@@ -977,8 +977,7 @@ describe("SessionDO recovery — DO-level", () => {
 
     const setAlarmInside: number[] = [];
     let deleteCallsInside = 0;
-    let spyArmed = false;
-    await runInDurableObject(stub, async (instance, state) => {
+    await runInDurableObject(stub, async (instance, _state) => {
       const set = (instance as { _activeTurnIds: Set<string> })._activeTurnIds;
       set.add(ownTurnId);
 
@@ -988,25 +987,22 @@ describe("SessionDO recovery — DO-level", () => {
       } } }).ctx;
       const origSet = ctx.storage.setAlarm.bind(ctx.storage);
       const origDel = ctx.storage.deleteAlarm.bind(ctx.storage);
-
-      // Trigger the alarm BEFORE installing spies so the trigger
-      // setAlarm/deleteAlarm calls aren't counted.
-      await state.storage.deleteAlarm();
-      await state.storage.setAlarm(Date.now() - 1000);
-
-      spyArmed = true;
       ctx.storage.setAlarm = async (t: number) => {
-        if (spyArmed) setAlarmInside.push(t);
+        setAlarmInside.push(t);
         return origSet(t);
       };
       ctx.storage.deleteAlarm = async () => {
-        if (spyArmed) deleteCallsInside++;
+        deleteCallsInside++;
         return origDel();
       };
+
+      // Drive alarm() from inside THIS callback rather than via a
+      // separate runDurableObjectAlarm. The DO can be reconstructed
+      // between two entry points, which drops both the spy and the
+      // in-memory _activeTurnIds above — setAlarm then lands on a
+      // fresh instance's storage while the spy array stays empty.
+      await (instance as unknown as { alarm: () => Promise<void> }).alarm();
     });
-    await runDurableObjectAlarm(stub);
-    await new Promise((r) => setTimeout(r, 50));
-    spyArmed = false;
 
     // setAlarm fired — heartbeat scheduled ~30s out.
     expect(setAlarmInside.length).toBeGreaterThan(0);
@@ -1026,31 +1022,26 @@ describe("SessionDO recovery — DO-level", () => {
 
     const setAlarmInside: number[] = [];
     let deleteCallsInside = 0;
-    let spyArmed = false;
-    await runInDurableObject(stub, async (_instance, state) => {
-      const ctx = (_instance as unknown as { ctx: { storage: {
+    await runInDurableObject(stub, async (instance, _state) => {
+      const ctx = (instance as unknown as { ctx: { storage: {
         setAlarm: (t: number) => Promise<void>;
         deleteAlarm: () => Promise<void>;
       } } }).ctx;
       const origSet = ctx.storage.setAlarm.bind(ctx.storage);
       const origDel = ctx.storage.deleteAlarm.bind(ctx.storage);
-
-      await state.storage.deleteAlarm();
-      await state.storage.setAlarm(Date.now() - 1000);
-
-      spyArmed = true;
       ctx.storage.setAlarm = async (t: number) => {
-        if (spyArmed) setAlarmInside.push(t);
+        setAlarmInside.push(t);
         return origSet(t);
       };
       ctx.storage.deleteAlarm = async () => {
-        if (spyArmed) deleteCallsInside++;
+        deleteCallsInside++;
         return origDel();
       };
+
+      // Same-instance trigger — see the note in the sibling test
+      // above. Keeps the spy bound to the instance that runs alarm().
+      await (instance as unknown as { alarm: () => Promise<void> }).alarm();
     });
-    await runDurableObjectAlarm(stub);
-    await new Promise((r) => setTimeout(r, 50));
-    spyArmed = false;
 
     // No setAlarm — nothing to keep alive.
     expect(setAlarmInside.length).toBe(0);
@@ -1485,7 +1476,7 @@ describe("SessionDO recovery — DO-level", () => {
       .run();
 
     const setAlarmInside: number[] = [];
-    let spyArmed = false;
+    let armedAt: number | null = null;
     await runInDurableObject(stub, async (instance, state) => {
       (instance as { _activeTurnIds: Set<string> })._activeTurnIds.add(ownTurnId);
       // Plant a one-shot schedule 1 hour in the future. Heartbeat is
@@ -1501,20 +1492,26 @@ describe("SessionDO recovery — DO-level", () => {
       const ctx = (instance as unknown as { ctx: { storage: {
         setAlarm: (t: number) => Promise<void>;
         deleteAlarm: () => Promise<void>;
+        getAlarm: () => Promise<number | null>;
       } } }).ctx;
       const origSet = ctx.storage.setAlarm.bind(ctx.storage);
-      // Trigger setAlarm BEFORE arming the spy so the trigger isn't counted.
-      await state.storage.setAlarm(Date.now() - 1000);
-      spyArmed = true;
       ctx.storage.setAlarm = async (t: number) => {
-        if (spyArmed) setAlarmInside.push(t);
+        setAlarmInside.push(t);
         return origSet(t);
       };
-    });
 
-    await runDurableObjectAlarm(stub);
-    await new Promise((r) => setTimeout(r, 50));
-    spyArmed = false;
+      // Same-instance trigger: a separate runDurableObjectAlarm lets
+      // the DO be reconstructed between the two entry points, which
+      // drops the spy AND the in-memory _activeTurnIds — setAlarm then
+      // lands on a fresh instance (spy array stays empty, and the row
+      // looks like a dead-incarnation orphan that gets reaped, so no
+      // heartbeat is armed at all).
+      await (instance as unknown as { alarm: () => Promise<void> }).alarm();
+
+      // Durable cross-check, immune to any reincarnation: whatever
+      // the slot actually holds must be the heartbeat, not 1h out.
+      armedAt = await ctx.storage.getAlarm();
+    });
 
     // The rearm should be the heartbeat (~30s out), not the 1h schedule.
     expect(setAlarmInside.length).toBeGreaterThan(0);
@@ -1522,6 +1519,11 @@ describe("SessionDO recovery — DO-level", () => {
     const deltaMs = lastT - Date.now();
     expect(deltaMs).toBeLessThan(60_000); // heartbeat horizon
     expect(deltaMs).toBeGreaterThan(0);
+    // Same bound on the durable slot the platform will actually use.
+    expect(armedAt).not.toBeNull();
+    const armedDelta = (armedAt as number) - Date.now();
+    expect(armedDelta).toBeLessThan(60_000);
+    expect(armedDelta).toBeGreaterThan(0);
 
     // Cleanup
     await env.AUTH_DB.prepare(
@@ -1543,7 +1545,6 @@ describe("SessionDO recovery — DO-level", () => {
 
     const setAlarmInside: number[] = [];
     let deleteCallsInside = 0;
-    let spyArmed = false;
     const targetSec = Math.floor(Date.now() / 1000) + 300; // 5 min out
     await runInDurableObject(stub, async (instance, state) => {
       state.storage.sql.exec(
@@ -1558,21 +1559,19 @@ describe("SessionDO recovery — DO-level", () => {
       } } }).ctx;
       const origSet = ctx.storage.setAlarm.bind(ctx.storage);
       const origDel = ctx.storage.deleteAlarm.bind(ctx.storage);
-      await state.storage.setAlarm(Date.now() - 1000);
-      spyArmed = true;
       ctx.storage.setAlarm = async (t: number) => {
-        if (spyArmed) setAlarmInside.push(t);
+        setAlarmInside.push(t);
         return origSet(t);
       };
       ctx.storage.deleteAlarm = async () => {
-        if (spyArmed) deleteCallsInside++;
+        deleteCallsInside++;
         return origDel();
       };
-    });
 
-    await runDurableObjectAlarm(stub);
-    await new Promise((r) => setTimeout(r, 50));
-    spyArmed = false;
+      // Same-instance trigger — see the note in the sibling test
+      // above. Keeps the spy bound to the instance that runs alarm().
+      await (instance as unknown as { alarm: () => Promise<void> }).alarm();
+    });
 
     // setAlarm fired at the schedule's time (or close to it). The
     // load-bearing assertion: the LAST setAlarm wins (workerd uses
