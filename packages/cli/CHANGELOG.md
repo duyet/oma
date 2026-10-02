@@ -1,5 +1,11 @@
 # @getoma/cli
 
+## 0.1.13
+
+### Patch Changes
+
+- 27cc4b2: Fix `oma --version`, group `--help`, and `--json` on list commands (issue #431).
+
 ## 0.1.12
 
 ### Patch Changes
