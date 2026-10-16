@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.9](https://github.com/duyet/oma/compare/root-v0.1.8...root-v0.1.9) (2026-10-16)
+
+
+### 🐛 Bug Fixes
+
+* gate enforcement for boot secret ([e31aa0a](https://github.com/duyet/oma/commit/e31aa0a7ba39624ea2e328f7839ca1317facda59))
+
 ## [0.1.8](https://github.com/duyet/oma/compare/root-v0.1.7...root-v0.1.8) (2026-10-02)
 
 
