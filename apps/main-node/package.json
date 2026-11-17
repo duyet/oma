@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@boxlite-ai/boxlite": "^0.9.3",
-    "@hono/node-server": "^2.1.6",
+    "@hono/node-server": "^2.1.8",
     "@duyet/oma-agent": "workspace:*",
     "@duyet/oma-agents-store": "workspace:*",
     "@duyet/oma-anyrouter": "workspace:*",
