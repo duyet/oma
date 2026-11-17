@@ -454,8 +454,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/sandbox-sdk
       '@hono/node-server':
-        specifier: ^2.1.8
-        version: 2.1.8(hono@4.13.16)
+        specifier: ^2.1.9
+        version: 2.1.9(hono@4.13.16)
       '@kubernetes/client-node':
         specifier: ^1.0.0
         version: 1.4.0
@@ -752,8 +752,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/sandbox-sdk
       '@hono/node-server':
-        specifier: ^2.1.8
-        version: 2.1.8(hono@4.13.16)
+        specifier: ^2.1.9
+        version: 2.1.9(hono@4.13.16)
       ai:
         specifier: ^6.0.158
         version: 6.0.158(zod@4.6.7)
@@ -3602,8 +3602,8 @@ packages:
     peerDependencies:
       hono: ^4
 
-  '@hono/node-server@2.1.8':
-    resolution: {integrity: sha512-jdf7FHh6A1lzjpHHQUgxsg2GeER2vMetnAOfeActzcoli6jamlK+NAwL6Dsr5Fl3BS3tYUQzCdtZjU8Qxv7bEA==}
+  '@hono/node-server@2.1.9':
+    resolution: {integrity: sha512-Sk4NQd3GFY0WZWCzndwFMPwJhtD0y9qjsQ+pjID0/03nK9pxyBCUoUHCho8QYBLBVhi0ssL8UkNPHqbgSOFPIQ==}
     engines: {node: '>=20'}
     peerDependencies:
       hono: ^4 || ^5.0.0-0
@@ -14032,7 +14032,7 @@ snapshots:
     dependencies:
       hono: 4.13.19
 
-  '@hono/node-server@2.1.8(hono@4.13.16)':
+  '@hono/node-server@2.1.9(hono@4.13.16)':
     dependencies:
       hono: 4.13.16
 
