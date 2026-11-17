@@ -46,7 +46,7 @@
     "@agentclientprotocol/sdk": "^0.20.0",
     "@grpc/grpc-js": "^1.14.7",
     "@grpc/proto-loader": "^0.7.13",
-    "@inquirer/checkbox": "^5.1.4",
+    "@inquirer/checkbox": "^5.3.0",
     "@inquirer/input": "^4.1.4",
     "@inquirer/select": "^4.1.4",
     "@duyet/oma-acp-runtime": "workspace:*",
