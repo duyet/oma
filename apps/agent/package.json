@@ -61,7 +61,7 @@
     "cron-schedule": "^6.0.0",
     "hono": "^4.13.16",
     "nanoid": "^5.1.0",
-    "zod": "^4.6.6"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@earendil-works/pi-ai": "^0.80.2"
