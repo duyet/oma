@@ -51,7 +51,7 @@
     "@inquirer/select": "^4.1.4",
     "@duyet/oma-acp-runtime": "workspace:*",
     "@duyet/oma-api-types": "workspace:*",
-    "@types/node": "^22.0.0",
+    "@types/node": "^26.6.6",
     "@types/ws": "^8.5.0",
     "esbuild": "^0.25.0",
     "tsx": "^4.19.0",

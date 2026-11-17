@@ -85,7 +85,7 @@
     "@cloudflare/vitest-pool-workers": "^0.14.7",
     "@cloudflare/workers-types": "^4.20250410.0",
     "@playwright/test": "^1.59.1",
-    "@types/node": "^25.6.0",
+    "@types/node": "^26.6.6",
     "drizzle-kit": "^0.31.5",
     "hono": "^4.13.16",
     "fflate": "^0.8.2",
