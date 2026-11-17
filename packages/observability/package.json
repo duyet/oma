@@ -45,6 +45,6 @@
     "@opentelemetry/semantic-conventions": { "optional": true }
   },
   "devDependencies": {
-    "vitest": "^4.1.3"
+    "vitest": "^4.1.11"
   }
 }
