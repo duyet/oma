@@ -9,6 +9,6 @@
   "dependencies": {
     "@duyet/oma-email": "workspace:*",
     "@duyet/oma-sql-client": "workspace:*",
-    "better-auth": "^1.6.3"
+    "better-auth": "^1.7.7"
   }
 }
