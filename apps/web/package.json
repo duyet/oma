@@ -23,7 +23,7 @@
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@fontsource/instrument-serif": "^5.3.0",
     "@tailwindcss/vite": "^4.1.0",
-    "astro": "^5.13.0",
+    "astro": "^7.4.12",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.2.3",
     "lucide-react": "^1.16.0",
