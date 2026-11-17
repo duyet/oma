@@ -68,7 +68,7 @@
     "croner": "^9.0.0",
     "hono": "^4.13.16",
     "nanoid": "^5.1.16",
-    "pg": "^8.20.0",
+    "pg": "^8.23.1",
     "pino": "^9.5.0",
     "pino-pretty": "^11.2.2",
     "postgres": "^3.4.0",
@@ -77,7 +77,7 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
-    "@types/pg": "^8.20.0",
+    "@types/pg": "^8.23.1",
     "@types/turndown": "^5.0.5",
     "tsx": "^4.19.0",
     "vitest": "^4.1.11"
