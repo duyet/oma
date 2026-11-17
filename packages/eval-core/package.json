@@ -8,6 +8,6 @@
   },
   "dependencies": {
     "@duyet/oma-api-types": "workspace:*",
-    "nanoid": "^5.1.0"
+    "nanoid": "^5.1.16"
   }
 }

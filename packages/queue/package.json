@@ -14,6 +14,6 @@
     "@duyet/oma-shared": "workspace:*",
     "@duyet/oma-sql-client": "workspace:*",
     "@duyet/oma-memory-store": "workspace:*",
-    "nanoid": "^5.1.0"
+    "nanoid": "^5.1.16"
   }
 }
