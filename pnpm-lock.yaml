@@ -454,8 +454,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/sandbox-sdk
       '@hono/node-server':
-        specifier: ^1.13.0
-        version: 1.19.14(hono@4.13.16)
+        specifier: ^2.1.6
+        version: 2.1.6(hono@4.13.16)
       '@kubernetes/client-node':
         specifier: ^1.0.0
         version: 1.4.0
@@ -752,8 +752,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/sandbox-sdk
       '@hono/node-server':
-        specifier: ^1.13.0
-        version: 1.19.14(hono@4.13.16)
+        specifier: ^2.1.6
+        version: 2.1.6(hono@4.13.16)
       ai:
         specifier: ^6.0.158
         version: 6.0.158(zod@4.6.7)
@@ -3437,6 +3437,12 @@ packages:
     engines: {node: '>=18.14.1'}
     peerDependencies:
       hono: ^4
+
+  '@hono/node-server@2.1.6':
+    resolution: {integrity: sha512-p/KH9MnfNcsm3sR6x4lNgm5j+QN4Et8srKredl9DZfXiyZ1UQ3aQ2YVpFLbqktYN5JI+DB+VZFKM2PqE5hLKjQ==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      hono: ^4 || ^5.0.0-0
 
   '@hookform/resolvers@5.2.2':
     resolution: {integrity: sha512-A/IxlMLShx3KjV/HeTcTfaMxdwy690+L/ZADoeaTltLx+CVuzkeVIPuybK3jrRfw7YZnmdKsVVHAlEPIAEUNlA==}
@@ -13787,13 +13793,13 @@ snapshots:
       protobufjs: 7.6.6
       yargs: 17.7.3
 
-  '@hono/node-server@1.19.14(hono@4.13.16)':
-    dependencies:
-      hono: 4.13.16
-
   '@hono/node-server@1.19.14(hono@4.13.19)':
     dependencies:
       hono: 4.13.19
+
+  '@hono/node-server@2.1.6(hono@4.13.16)':
+    dependencies:
+      hono: 4.13.16
 
   '@hookform/resolvers@5.2.2(react-hook-form@7.75.0(react@19.2.5))':
     dependencies:
