@@ -26,7 +26,7 @@
     "@cloudflare/containers": "^0.3.0",
     "@cloudflare/playwright": "^1.3.0",
     "@cloudflare/sandbox": "^0.9.1",
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.32.0",
     "@duyet/oma-agents-store": "workspace:*",
     "@duyet/oma-anyrouter": "workspace:*",
     "@duyet/oma-api-types": "workspace:*",
