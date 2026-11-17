@@ -8,6 +8,6 @@
     "./notify-schema": "./src/notify-schema.ts"
   },
   "dependencies": {
-    "zod": "4.3.6"
+    "zod": "4.6.6"
   }
 }
