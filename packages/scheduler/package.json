@@ -22,7 +22,7 @@
     "@duyet/oma-memory-store": "workspace:*",
     "@duyet/oma-observability": "workspace:*",
     "croner": "^9.0.0",
-    "nanoid": "^5.1.0",
+    "nanoid": "^5.1.16",
     "@duyet/oma-services": "workspace:*"
   },
   "peerDependencies": {

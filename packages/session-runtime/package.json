@@ -21,7 +21,7 @@
     "@duyet/oma-shared": "workspace:*",
     "@duyet/oma-sql-client": "workspace:*",
     "ai": "^6.0.158",
-    "nanoid": "^5.1.0"
+    "nanoid": "^5.1.16"
   },
   "devDependencies": {
     "better-sqlite3": "^11.5.0",

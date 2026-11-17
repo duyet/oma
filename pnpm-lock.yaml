@@ -199,8 +199,8 @@ importers:
         specifier: ^4.13.16
         version: 4.13.16
       nanoid:
-        specifier: ^5.1.0
-        version: 5.1.7
+        specifier: ^5.1.16
+        version: 5.1.16
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -290,8 +290,8 @@ importers:
         specifier: ^12.38.0
         version: 12.38.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       nanoid:
-        specifier: ^5.1.9
-        version: 5.1.9
+        specifier: ^5.1.16
+        version: 5.1.16
       radix-ui:
         specifier: ^1.4.3
         version: 1.4.3(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -608,8 +608,8 @@ importers:
         specifier: ^4.13.16
         version: 4.13.16
       nanoid:
-        specifier: ^5.1.0
-        version: 5.1.9
+        specifier: ^5.1.16
+        version: 5.1.16
 
   apps/main-node:
     dependencies:
@@ -773,8 +773,8 @@ importers:
         specifier: ^4.13.16
         version: 4.13.16
       nanoid:
-        specifier: ^5.1.0
-        version: 5.1.9
+        specifier: ^5.1.16
+        version: 5.1.16
       pg:
         specifier: ^8.20.0
         version: 8.20.0
@@ -1142,8 +1142,8 @@ importers:
         specifier: workspace:*
         version: link:../api-types
       nanoid:
-        specifier: ^5.1.0
-        version: 5.1.9
+        specifier: ^5.1.16
+        version: 5.1.16
 
   packages/evals-runner:
     dependencies:
@@ -1314,8 +1314,8 @@ importers:
         specifier: ^4.13.16
         version: 4.13.16
       nanoid:
-        specifier: ^5.1.0
-        version: 5.1.9
+        specifier: ^5.1.16
+        version: 5.1.16
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -1561,8 +1561,8 @@ importers:
         specifier: workspace:*
         version: link:../sql-client
       nanoid:
-        specifier: ^5.1.0
-        version: 5.1.9
+        specifier: ^5.1.16
+        version: 5.1.16
 
   packages/quotas:
     dependencies:
@@ -1631,8 +1631,8 @@ importers:
         specifier: ^9.0.0
         version: 9.1.0
       nanoid:
-        specifier: ^5.1.0
-        version: 5.1.9
+        specifier: ^5.1.16
+        version: 5.1.16
 
   packages/schema:
     dependencies:
@@ -1740,8 +1740,8 @@ importers:
         specifier: ^6.0.158
         version: 6.0.158(zod@4.6.7)
       nanoid:
-        specifier: ^5.1.0
-        version: 5.1.9
+        specifier: ^5.1.16
+        version: 5.1.16
     devDependencies:
       better-sqlite3:
         specifier: ^11.5.0
@@ -1780,8 +1780,8 @@ importers:
         specifier: workspace:*
         version: link:../eval-core
       nanoid:
-        specifier: ^5.1.0
-        version: 5.1.7
+        specifier: ^5.1.16
+        version: 5.1.16
 
   packages/slack:
     dependencies:
@@ -9719,13 +9719,8 @@ packages:
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
-  nanoid@5.1.7:
-    resolution: {integrity: sha512-ua3NDgISf6jdwezAheMOk4mbE1LXjm1DfMUDMuJf4AqxLFK3ccGpgWizwa5YV7Yz9EpXwEaWoRXSb/BnV0t5dQ==}
-    engines: {node: ^18 || >=20}
-    hasBin: true
-
-  nanoid@5.1.9:
-    resolution: {integrity: sha512-ZUvP7KeBLe3OZ1ypw6dI/TzYJuvHP77IM4Ry73waSQTLn8/g8rpdjfyVAh7t1/+FjBtG4lCP42MEbDxOsRpBMw==}
+  nanoid@5.1.16:
+    resolution: {integrity: sha512-kVrnsrJqMR8+oLJnGEmSWw9BivK5mt7H3FZatVRjrc5wGqFYuBxX1yG7+A7Gi5AefkX6t/oCkizcQgpu0cY1dQ==}
     engines: {node: ^18 || >=20}
     hasBin: true
 
@@ -21195,9 +21190,7 @@ snapshots:
 
   nanoid@3.3.20: {}
 
-  nanoid@5.1.7: {}
-
-  nanoid@5.1.9: {}
+  nanoid@5.1.16: {}
 
   nanostores@1.5.5: {}
 

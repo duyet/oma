@@ -47,6 +47,6 @@
     "@duyet/oma-vaults-store": "workspace:*",
     "fflate": "^0.8.2",
     "hono": "^4.13.16",
-    "nanoid": "^5.1.0"
+    "nanoid": "^5.1.16"
   }
 }
