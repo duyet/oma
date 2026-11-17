@@ -14,7 +14,7 @@
   "dependencies": {
     "@astrojs/check": "^0.9.9",
     "@astrojs/react": "^4.2.0",
-    "@astrojs/rss": "^4.0.10",
+    "@astrojs/rss": "^4.0.19",
     "@astrojs/sitemap": "^3.4.1",
     "@duyet/oma-fit-diagram": "workspace:*",
     "@fontsource-variable/geist": "^5.2.8",
