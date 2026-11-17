@@ -10,7 +10,7 @@
     "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
-    "hono": "^4.7.0",
+    "hono": "^4.13.16",
     "@hono/node-server": "^1.13.0",
     "@kubernetes/client-node": "^1.0.0",
     "@getoma/sandbox-sdk": "workspace:*",

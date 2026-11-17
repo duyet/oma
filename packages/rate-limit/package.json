@@ -9,6 +9,6 @@
     "./adapters/memory": "./src/adapters/memory.ts"
   },
   "dependencies": {
-    "hono": "^4.7.0"
+    "hono": "^4.13.16"
   }
 }

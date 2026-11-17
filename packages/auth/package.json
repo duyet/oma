@@ -8,6 +8,6 @@
     "./timing-safe-equal": "./src/timing-safe-equal.ts"
   },
   "dependencies": {
-    "hono": "^4.7.0"
+    "hono": "^4.13.16"
   }
 }
