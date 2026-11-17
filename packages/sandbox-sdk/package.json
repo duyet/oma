@@ -29,7 +29,7 @@
     "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
-    "@grpc/grpc-js": "^1.14.5",
+    "@grpc/grpc-js": "^1.14.7",
     "@grpc/proto-loader": "^0.7.13",
     "@duyet/oma-observability": "workspace:*",
     "@duyet/oma-shared": "workspace:*"
