@@ -20,7 +20,7 @@
     "@duyet/oma-webhooks": "workspace:*",
     "@duyet/oma-shared": "workspace:*",
     "@duyet/oma-sql-client": "workspace:*",
-    "ai": "^6.0.158",
+    "ai": "^7.0.173",
     "nanoid": "^5.1.16"
   },
   "devDependencies": {
