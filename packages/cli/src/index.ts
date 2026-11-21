@@ -969,14 +969,32 @@ export const commands: Cmd[] = [
   // Used as the spawn host for ACP-proxy agents (claude-code etc.).
   {
     group: "Runtimes", match: ["runtime", "list"],
-    usage: "oma runtime list", desc: "List registered local runtimes",
-    http: "GET    /v1/runtimes",
-    async run(config) {
+    usage: "oma runtime list [--hosted]",
+    desc: "List registered local runtimes, or hosted sandbox providers with --hosted",
+    http: "GET    /v1/runtimes | GET /v1/hosting_types (--hosted)",
+    async run(config, args) {
+      if (args.includes("--hosted")) {
+        const h = await apiFetch<{ runtime?: string; data?: Array<{ type: string; name?: string; availability?: { state: string; reason?: string }; health?: { status: string; reason?: string } }> } | Array<{ type: string; name?: string; availability?: { state: string; reason?: string }; health?: { status: string; reason?: string } }>>(config, "/v1/hosting_types");
+        const data = Array.isArray(h) ? h : (h.data ?? []);
+        if (emitJson(config, Array.isArray(h) ? h : { ...h, data })) return;
+        if (!data.length) { console.log("No hosted sandbox providers reported."); return; }
+        table([
+          ["TYPE", "NAME", "AVAILABILITY", "HEALTH", "REASON"],
+          ...data.map((p) => [
+            p.type,
+            p.name || "",
+            p.availability?.state || "",
+            p.health?.status || "",
+            p.availability?.reason || p.health?.reason || "",
+          ]),
+        ]);
+        return;
+      }
       const { runtimes } = await apiFetch<{ runtimes: Array<{
         id: string; hostname: string; os: string; status: string;
         version: string; agents: Array<{ id: string }>; last_heartbeat: number | null;
       }> }>(config, "/v1/runtimes");
-      if (config.json) { console.log(JSON.stringify(runtimes, null, 2)); return; }
+      if (emitJson(config, runtimes)) return;
       if (!runtimes.length) {
         console.log("No runtimes. Register one with `oma bridge setup` on the target machine.");
         return;
@@ -1084,10 +1102,54 @@ export const commands: Cmd[] = [
   },
   {
     group: "Environments", match: ["envs", "create"], needsArg: true,
-    usage: "oma envs create <name>", desc: "Create environment",
-    http: "POST   /v1/environments {name, config:{type:\"cloud\"}}",
+    usage: "oma envs create <name> [--type cloud|local] [--sandbox-provider <id>] [--networking unrestricted|limited|none] [--allowed-host <host>]... [--apt <pkg>]... [--pip <pkg>]... [--npm <pkg>]...",
+    desc: "Create environment with optional config (packages/networking/sandbox provider)",
+    http: "POST   /v1/environments {name, config:{type, sandbox_provider?, networking?, packages?}}",
     async run(config, args) {
-      const env = await apiFetch<{ id: string; name: string }>(config, "/v1/environments", { method: "POST", body: JSON.stringify({ name: args.join(" "), config: { type: "cloud" } }) });
+      const flagsWithValue = new Set(["--type", "--sandbox-provider", "--networking", "--allowed-host", "--apt", "--pip", "--npm", "--cargo", "--gem", "--go", "--description"]);
+      const nameParts: string[] = [];
+      const allowedHosts: string[] = [];
+      const packages: Record<string, string[]> = {};
+      const addPkg = (eco: string, v: string | undefined) => {
+        if (!v) return;
+        (packages[eco] ??= []).push(v);
+      };
+      for (let i = 0; i < args.length; i++) {
+        const a = args[i];
+        if (a.startsWith("--")) {
+          const [k, inline] = a.includes("=") ? a.split(/=(.*)/, 2) : [a, undefined];
+          const takeValue = () => inline ?? (i + 1 < args.length && !args[i + 1].startsWith("--") ? args[++i] : undefined);
+          if (k === "--allowed-host") { const v = takeValue(); if (v) allowedHosts.push(v); continue; }
+          if (k === "--apt" || k === "--pip" || k === "--npm" || k === "--cargo" || k === "--gem" || k === "--go") {
+            addPkg(k.slice(2), takeValue());
+            continue;
+          }
+          if (flagsWithValue.has(k)) { takeValue(); continue; } // consumed below via flag()
+          // unknown flag: skip its value if it looks like it has one
+          if (inline === undefined && i + 1 < args.length && !args[i + 1].startsWith("--")) i++;
+          continue;
+        }
+        nameParts.push(a);
+      }
+      const name = nameParts.join(" ").trim();
+      if (!name) { console.error("Usage: oma envs create <name> [--type cloud|local] [--sandbox-provider <id>] [--networking unrestricted|limited|none] [--allowed-host <host>]... [--apt <pkg>]... [--pip <pkg>]... [--npm <pkg>]..."); process.exit(1); }
+      const type = flag(args, "--type") || "cloud";
+      const sandboxProvider = flag(args, "--sandbox-provider");
+      const networkingType = flag(args, "--networking");
+      const description = flag(args, "--description");
+      const envConfig: Record<string, unknown> = { type };
+      if (sandboxProvider) envConfig.sandbox_provider = sandboxProvider;
+      if (networkingType) {
+        const networking: Record<string, unknown> = { type: networkingType };
+        if (allowedHosts.length) networking.allowed_hosts = allowedHosts;
+        envConfig.networking = networking;
+      } else if (allowedHosts.length) {
+        envConfig.networking = { type: "limited", allowed_hosts: allowedHosts };
+      }
+      if (Object.keys(packages).length) envConfig.packages = packages;
+      const body: Record<string, unknown> = { name, config: envConfig };
+      if (description) body.description = description;
+      const env = await apiFetch<{ id: string; name: string }>(config, "/v1/environments", { method: "POST", body: JSON.stringify(body) });
       if (emitJson(config, env)) return;
       console.log(`Environment created: ${env.name} (${env.id})`);
     },
@@ -1131,6 +1193,47 @@ export const commands: Cmd[] = [
       // empty (a 204) — `--json` must not print a bare `undefined`.
       if (emitJson(config, res ?? { type: "environment_deleted", id: args[0] })) return;
       console.log(`Environment deleted: ${res?.id ?? args[0]}`);
+    },
+  },
+
+  // Usage
+  {
+    group: "Usage", match: ["usage"],
+    usage: "oma usage [--days <n>] [--group-by agent]",
+    desc: "Show aggregated tenant usage (sandbox seconds, tokens, sessions)",
+    http: "GET    /v1/usage?days=N&group_by=agent",
+    async run(config, args) {
+      const days = flag(args, "--days");
+      const groupBy = flag(args, "--group-by");
+      const qs = new URLSearchParams();
+      if (days) qs.set("days", days);
+      if (groupBy) qs.set("group_by", groupBy);
+      const suffix = qs.toString() ? `?${qs}` : "";
+      const u = await apiFetch<{
+        period: { days: number; since: string | null };
+        total_active_seconds: number;
+        total_sessions: number;
+        by_kind: Array<{ kind: string; total: number }>;
+        by_instance_type: Array<{ instance_type: string | null; total_seconds: number }>;
+        daily: Array<{ date: string; active_seconds: number; runs: number }>;
+        by_agent?: Array<{ agent_id: string | null; agent_name: string | null; total_active_seconds: number; total_sessions: number }>;
+      }>(config, `/v1/usage${suffix}`);
+      if (emitJson(config, u)) return;
+      console.log(`Usage period: ${u.period.days === 0 ? "all-time" : `last ${u.period.days} days`}${u.period.since ? ` (since ${u.period.since.slice(0,10)})` : ""}`);
+      console.log(`Total active seconds: ${u.total_active_seconds}`);
+      console.log(`Total sessions: ${u.total_sessions}`);
+      if (u.by_kind.length) {
+        console.log("");
+        table([["KIND", "TOTAL"], ...u.by_kind.map(k => [k.kind, String(k.total)])]);
+      }
+      if (u.by_instance_type.length) {
+        console.log("");
+        table([["INSTANCE TYPE", "SECONDS"], ...u.by_instance_type.map(k => [k.instance_type || "unknown", String(k.total_seconds)])]);
+      }
+      if (u.by_agent?.length) {
+        console.log("");
+        table([["AGENT", "AGENT ID", "ACTIVE SECONDS", "SESSIONS"], ...u.by_agent.map(a => [a.agent_name || "(unknown)", a.agent_id || "(none)", String(a.total_active_seconds), String(a.total_sessions)])]);
+      }
     },
   },
 

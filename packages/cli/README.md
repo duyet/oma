@@ -79,7 +79,7 @@ npx @getoma/cli agents list --json | jq -r '.[].id'
 | **Auth** | `auth login` (browser / `--device` / `--paste-token`), `auth logout`, `whoami`, `auth tenant ls`, `auth tenant use <id>` |
 | **Agents** | `agents list` · `create <name> [--model <id>]` · `get <id>` · `delete <id>` |
 | **Sessions** | `sessions list` · `create --agent <id> --env <id>` · `message <id> <text>` · `chat <id> <text>` (streamed) · `tail <id>` · `logs <id>` |
-| **Environments** | `envs list` · `envs create <name>` · `envs get <id>` · `envs delete <id>` |
+| **Environments** | `envs list` · `envs create <name> [--type ...] [--sandbox-provider ...] [--networking ...] [--apt/pip/npm ...]` · `envs get <id>` · `envs delete <id>` |
 | **Model cards** | `models list` · `models create --model-id <id> --api-key <key>` |
 | **API keys** | `keys list` · `keys create [name]` · `keys revoke <id>` |
 | **Vaults** | `vaults list` · `vaults create <name>` · `creds list <vault-id>` · `cli add --vault <id> --cli-id <gh\|aws\|…> --token <t>` |
@@ -87,7 +87,8 @@ npx @getoma/cli agents list --json | jq -r '.[].id'
 | **MCP** | `connect <server\|url> --vault <id>` (OAuth) |
 | **Memory** | `memory stores create/list/get/archive/delete` · `memory write/read/ls/update/rm` · `memory versions/version/redact` |
 | **Schedules** | `schedules create <agent-id> --cron <expr> --env <id> --input <text>` · `list` · `run` · `delete` |
-| **Runtimes** | `runtime list` · `runtime rm <id>` |
+| **Runtimes** | `runtime list [--hosted]` · `runtime rm <id>` |
+| **Usage** | `usage [--days <n>] [--group-by agent]` |
 | **Linear** | `linear list/pubs/get/publish/submit/handoff/update/unpublish/install-pat` · `linear rules list/create/patch/delete` |
 | **GitHub** | `github list/pubs/get/bind/submit/handoff/update/unpublish` |
 | **Slack** | `slack list/pubs/get/publish/submit/handoff/update/unpublish` |
