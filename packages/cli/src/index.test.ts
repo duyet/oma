@@ -339,13 +339,18 @@ describe("oma --version / group --help (issue #431)", () => {
     expect(err).not.toHaveBeenCalled();
   });
 
-  it("agents --help shows group help", async () => {
+  it("agents --help shows group help, not the global dump", async () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
 
     expect(await runMain(["agents", "--help"])).toBe(0);
 
     const out = vi.mocked(console.log).mock.calls.flat().join("\n");
-    expect(out).toMatch(/agents/i);
+    // Group help shape: lists agent commands and the group footer hint.
+    expect(out).toMatch(/oma agents list/);
+    expect(out).toMatch(/'oma agents <command> --help' for one command/);
+    // Must not be the global usage dump (issue #486: global dump also matches /agents/i).
+    expect(out).not.toMatch(/Open Managed Agents CLI/);
+    expect(out).not.toMatch(/Environment:/);
     expect(out).not.toMatch(/Unknown command/);
     expect(err).not.toHaveBeenCalled();
   });
@@ -356,9 +361,13 @@ describe("oma --version / group --help (issue #431)", () => {
     expect(out).toMatch(/GET {4}\/v1\/sessions/);
   });
 
-  it("oma help <group> reaches the same help as <group> --help", async () => {
+  it("oma help <group> reaches group help (not global dump)", async () => {
     expect(await runMain(["help", "agents"])).toBe(0);
-    expect(vi.mocked(console.log).mock.calls.flat().join("\n")).toMatch(/agents/i);
+    const out = vi.mocked(console.log).mock.calls.flat().join("\n");
+    expect(out).toMatch(/oma agents list/);
+    expect(out).toMatch(/'oma agents <command> --help' for one command/);
+    expect(out).not.toMatch(/Open Managed Agents CLI/);
+    expect(out).not.toMatch(/Environment:/);
   });
 
   it("an unknown group still reports Unknown command", async () => {

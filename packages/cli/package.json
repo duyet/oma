@@ -53,9 +53,9 @@
     "@duyet/oma-api-types": "workspace:*",
     "@types/node": "^26.6.6",
     "@types/ws": "^8.5.0",
-    "esbuild": "^0.25.0",
+    "esbuild": "^0.28.1",
     "tsx": "^4.19.0",
     "typescript": "^5.8.0",
-    "ws": "^8.18.0"
+    "ws": "^8.21.0"
   }
 }

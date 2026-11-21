@@ -2640,7 +2640,14 @@ function telemetryBase(): string {
  *  testing `commands` alone would never have caught them (issue #431). */
 export async function main() {
   let args = process.argv.slice(2);
-  if (["-h", "--help", "help"].includes(args[0])) { usage(); process.exit(0); }
+  // Bare global help. `oma help` / `oma --help` show the full usage, but
+  // `oma help <group|cmd>` must fall through to printHelp() so issue #486's
+  // group-help path is reachable (and `oma help` with extra args is never
+  // treated as the global dump).
+  if (args[0] === "-h" || args[0] === "--help" || (args[0] === "help" && args.length === 1)) {
+    usage();
+    process.exit(0);
+  }
   // Bare version, no flags — the shell convention `VERSION=$(oma --version)`
   // depends on, and it has to answer with no credentials, no profile, and no
   // network. Keep it beside the help check and ahead of everything else.
