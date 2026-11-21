@@ -65,10 +65,10 @@ npx @getoma/cli help sessions      # same thing, spelled the other way
 npx @getoma/cli agents list --help # one command, with the endpoint it calls
 ```
 
-`--json` on any list command prints the raw array instead of the human table,
+`--json` on supported list commands prints the raw array instead of the human table,
 so you can pipe it into `jq`. It works on an empty result too (`[]`, not a
-"No rows." sentence), and it applies to `agents list`, `sessions list`,
-`envs list`, `models list`, `keys list`, and `whoami`.
+"No rows." sentence). Supported: `agents list`, `sessions list`, `envs list`,
+`models list`, `keys list`, and `auth tenant ls`.
 
 ```bash
 npx @getoma/cli agents list --json | jq -r '.[].id'
