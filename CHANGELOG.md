@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.10](https://github.com/duyet/oma/compare/root-v0.1.9...root-v0.1.10) (2026-11-21)
+
+
+### 🐛 Bug Fixes
+
+* **cli,deps:** Dependabot overrides and `oma help <group>` ([#486](https://github.com/duyet/oma/issues/486)) ([#535](https://github.com/duyet/oma/issues/535)) ([cfd5152](https://github.com/duyet/oma/commit/cfd51520881c713571e6424b386c67e2ddd76047))
+* **cli:** cover remaining [#484](https://github.com/duyet/oma/issues/484) envs/usage/runtime commands ([b71da9b](https://github.com/duyet/oma/commit/b71da9bbab18a2c53049a96ce6425dc04dbb1a38))
+
 ## [0.1.9](https://github.com/duyet/oma/compare/root-v0.1.8...root-v0.1.9) (2026-10-16)
 
 
