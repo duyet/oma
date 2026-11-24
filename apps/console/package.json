@@ -42,7 +42,7 @@
     "radix-ui": "^1.8.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "react-hook-form": "^7.75.0",
+    "react-hook-form": "^7.92.0",
     "react-markdown": "^10.1.0",
     "react-router": "^8.5.1",
     "remark-gfm": "^4.0.1",
