@@ -52,7 +52,7 @@
     "@duyet/oma-acp-runtime": "workspace:*",
     "@duyet/oma-api-types": "workspace:*",
     "@types/node": "^26.6.6",
-    "@types/ws": "^8.5.0",
+    "@types/ws": "^8.18.2",
     "esbuild": "^0.28.1",
     "tsx": "^4.19.0",
     "typescript": "^5.8.0",
